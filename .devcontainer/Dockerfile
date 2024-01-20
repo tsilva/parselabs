@@ -1,20 +1,26 @@
-FROM node:16.19.0-bullseye-slim
+# Use the official Python image based on Alpine for minimal size
+FROM python:3.9-alpine
 
 # Set the working directory to /workspace
 WORKDIR /workspace
 
-# Install system packages
-RUN apt-get update && \
-    apt-get install -y \
-    npm \
+# Install Tesseract and other system dependencies
+RUN apk add --no-cache \
+    git \
     gettext \
-    iputils-ping \
+    iputils \
     wget \
     curl \
-    python3 \
-    python3-pip && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-data-eng \
+    msttcorefonts-installer \
+    fontconfig && \
+    update-ms-fonts && \
+    fc-cache -f
+
+# Install pytesseract via pip
+RUN pip install --no-cache-dir pytesseract
 
 # Set the working directory to /workspaces/labs-parser
 WORKDIR /workspaces/labs-parser
@@ -23,7 +29,8 @@ WORKDIR /workspaces/labs-parser
 COPY . .
 
 # Install python packages
-RUN pip3 install --no-cache-dir -r ./backend/requirements.txt
+# If pytesseract is in the requirements.txt, you can remove the separate pip install command above.
+RUN pip install --no-cache-dir -r ./backend/requirements.txt
 
 # Set the default command to run when the container starts
-CMD ["/bin/bash"]
+CMD ["/bin/ash"]

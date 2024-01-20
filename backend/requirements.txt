@@ -2,3 +2,6 @@ PyPDF2
 langchain
 langchain_openai
 openai
+Pillow
+pdf2image
+python-dotenv
