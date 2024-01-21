@@ -12,11 +12,24 @@ load_dotenv()
 
 # Configure logger
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 # Define constants
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_CLIENT = OpenAI()
+
+def load_labs_specs():
+    with open("labs_specs.json", "r", encoding='utf-8') as function_file: _labs_specs = json.load(function_file)
+    labs_specs = {}
+    for spec in _labs_specs:
+        name = spec["name"]
+        alternatives = spec["alternatives"]
+        names = [name] + alternatives
+        names_u = [name.upper() for name in names]
+        names_l = [name.lower() for name in names]
+        names = names + names_u + names_l
+        for name in names: labs_specs[name] = spec
+    return labs_specs
 
 def convert_pdfs_to_images(directory):
     for file in os.listdir(directory):
@@ -88,7 +101,7 @@ def _convert_images_to_text(input_path: str, output_path: str):
     if len(lines) < 2: raise Exception(f"Could not extract text from image: {input_path}")
 
     # Save the image as a JPEG with high quality
-    with open(output_path, "w") as text_file: text_file.write(content)
+    with open(output_path, "w", encoding='utf-8') as text_file: text_file.write(content)
 
 def convert_texts_to_json(directory):
     for file in os.listdir(directory):
@@ -104,10 +117,10 @@ def convert_texts_to_json(directory):
         else: logging.info(f"Successfully extracted JSON from TXT: `{input_path}`.")
 
 def _convert_texts_to_json(input_path: str, output_path: str):
-    with open(input_path, "r") as text_file: 
+    with open(input_path, "r", encoding='utf-8') as text_file: 
         text = text_file.read()
 
-    with open("tools/save_extract_blood_lab_results.json", "r") as function_file: 
+    with open("tools/save_extract_blood_lab_results.json", "r", encoding='utf-8') as function_file: 
         save_extract_blood_lab_results_tool = json.load(function_file)
     
     response = OPENAI_CLIENT.chat.completions.create(
@@ -138,23 +151,89 @@ def _convert_texts_to_json(input_path: str, output_path: str):
         for key, value in result.items():
             if value == "": raise Exception(f"Empty value for key `{key}`: {input_path}")
 
-    with open(output_path, "w") as json_file:
-        json.dump(results, json_file, indent=4)
+    with open(output_path, "w", encoding='utf-8') as json_file:
+        json.dump(results, json_file, indent=4, ensure_ascii=False)
+
+def validate_jsons(directory):
+
+    def _is_valid_date(date_string):
+        from datetime import datetime
+        try: datetime.strptime(date_string, '%Y-%m-%d'); return True
+        except ValueError: return False
+
+    def _validate_result(result):
+        errors = {}
+
+        date = result.get("date")
+        if not date: errors["date"] = "Missing date"
+        elif not _is_valid_date(date): errors["date"] = "Invalid date"
+
+        name = result.get("name")
+        if not name: errors["name"] = "Missing name"
+
+        value = result.get("value")
+        if value in ["", None]: errors["value"] = "Missing value"
+        elif not isinstance(value, int) and not isinstance(value, float): errors["value"] = "Invalid value"
+
+        unit = result.get("unit")
+        if not unit: errors["unit"] = "Missing unit"
+
+        range_minimum = result.get("range_minimum")
+        if range_minimum and not isinstance(value, int) and not isinstance(value, float): errors["range_minimum"] = "Invalid range_minimum"
+
+        range_maximum = result.get("range_maximum")
+        if range_maximum and not isinstance(value, int) and not isinstance(value, float): errors["range_maximum"] = "Invalid range_maximum"
+
+        if not errors: return None
+        return errors
+
+    errors = {}
+    for file in os.listdir(directory):
+        if not file.endswith('.json'): continue
+        json_path = os.path.join(directory, file)
+        with open(json_path, "r", encoding='utf-8') as json_file: _results = json.load(json_file)
+        for _result in _results: 
+            _errors = _validate_result(_result)
+            if not _errors: continue
+            errors[json_path] = _errors
+            break
+
+    if errors:
+        for json_path, _errors in errors.items():
+            logging.error(f"Invalid JSON: {json_path} - {_errors}")
+        raise Exception("Invalid JSONs")
 
 def merge_jsons(directory):
+    specs = load_labs_specs()
+
     results = []
     for file in os.listdir(directory):
         if not file.endswith('.json'): continue
         json_path = os.path.join(directory, file)
-        with open(json_path, "r") as json_file: _results = json.load(json_file)
+        print(json_path)
+        with open(json_path, "r", encoding='utf-8') as json_file: _results = json.load(json_file)
         for _result in _results: 
             print(_result)
             results.append(_result)
     sorted(results, key=lambda x: x.get("date") or "01-01-1900")
-    with open("data/blood_labs.json", "w") as json_file:
-        json.dump(results, json_file, indent=4)
+
+    missing_specs = []
+    for result in results:
+        name = result["name"]
+        spec = specs.get(name)
+        if not spec:
+            missing_specs.append(name)
+            continue
+
+    if missing_specs: raise Exception(f"Missing specs for: {missing_specs}")
+
+    with open("exports/blood_labs.json", "w", encoding='utf-8') as json_file:
+        json.dump(results, json_file, indent=4, ensure_ascii=False)
 
 #convert_pdfs_to_images("input") # @tsilva TODO: parallelize this
-convert_images_to_text("input")
-#convert_texts_to_json("input")
-#merge_jsons("input")
+#convert_images_to_text("output")
+#convert_texts_to_json("output")
+#validate_jsons("output")
+merge_jsons("output")
+        
+# @tsilva TODO: validate the results
