@@ -1,8 +1,10 @@
 import os
+import re
 import json
 import base64
 import logging
 import requests 
+import pandas as pd
 from openai import OpenAI
 from dotenv import load_dotenv
 from pdf2image import convert_from_path
@@ -19,17 +21,8 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_CLIENT = OpenAI()
 
 def load_labs_specs():
-    with open("labs_specs.json", "r", encoding='utf-8') as function_file: _labs_specs = json.load(function_file)
-    labs_specs = {}
-    for spec in _labs_specs:
-        name = spec["name"]
-        alternatives = spec["alternatives"]
-        names = [name] + alternatives
-        names_u = [name.upper() for name in names]
-        names_l = [name.lower() for name in names]
-        names = names + names_u + names_l
-        for name in names: labs_specs[name] = spec
-    return labs_specs
+    with open("mappings.json", "r", encoding='utf-8') as function_file: mappings = json.load(function_file)
+    return mappings
 
 def convert_pdfs_to_images(directory):
     for file in os.listdir(directory):
@@ -164,19 +157,12 @@ def validate_jsons(directory):
     def _validate_result(result):
         errors = {}
 
-        date = result.get("date")
-        if not date: errors["date"] = "Missing date"
-        elif not _is_valid_date(date): errors["date"] = "Invalid date"
-
         name = result.get("name")
         if not name: errors["name"] = "Missing name"
 
         value = result.get("value")
         if value in ["", None]: errors["value"] = "Missing value"
         elif not isinstance(value, int) and not isinstance(value, float): errors["value"] = "Invalid value"
-
-        unit = result.get("unit")
-        if not unit: errors["unit"] = "Missing unit"
 
         range_minimum = result.get("range_minimum")
         if range_minimum and not isinstance(value, int) and not isinstance(value, float): errors["range_minimum"] = "Invalid range_minimum"
@@ -204,36 +190,41 @@ def validate_jsons(directory):
         raise Exception("Invalid JSONs")
 
 def merge_jsons(directory):
-    specs = load_labs_specs()
+    mappings = load_labs_specs()
 
     results = []
     for file in os.listdir(directory):
         if not file.endswith('.json'): continue
         json_path = os.path.join(directory, file)
-        print(json_path)
+        date_pattern = r'\d{4}-\d{2}-\d{2}'
+        dates = re.findall(date_pattern, json_path)
+        date = dates[0] if dates else None
+        if not date: raise Exception(f"Could not find date in path: {json_path}")
         with open(json_path, "r", encoding='utf-8') as json_file: _results = json.load(json_file)
         for _result in _results: 
+            _result["date"] = date
             print(_result)
             results.append(_result)
-    sorted(results, key=lambda x: x.get("date") or "01-01-1900")
+    results = sorted(results, key=lambda x: x["date"])
 
-    missing_specs = []
     for result in results:
         name = result["name"]
-        spec = specs.get(name)
-        if not spec:
-            missing_specs.append(name)
-            continue
-
-    if missing_specs: raise Exception(f"Missing specs for: {missing_specs}")
+        fixed_name = mappings.get(name)
+        if fixed_name: result["name"] = fixed_name
 
     with open("exports/blood_labs.json", "w", encoding='utf-8') as json_file:
         json.dump(results, json_file, indent=4, ensure_ascii=False)
+
+def json_to_csv():
+    with open("exports/blood_labs.json", "r", encoding='utf-8') as file: labs = json.load(file)
+    df = pd.DataFrame(labs)
+    df.to_csv("exports/blood_labs.csv", index=False)
 
 #convert_pdfs_to_images("input") # @tsilva TODO: parallelize this
 #convert_images_to_text("output")
 #convert_texts_to_json("output")
 #validate_jsons("output")
 merge_jsons("output")
-        
+json_to_csv()
+
 # @tsilva TODO: validate the results

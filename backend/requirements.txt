@@ -3,5 +3,6 @@ langchain
 langchain_openai
 openai
 Pillow
+pandas
 pdf2image
 python-dotenv
