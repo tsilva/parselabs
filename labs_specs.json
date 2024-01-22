@@ -436,22 +436,6 @@
         "digest": "01b8c16db6772d325e413a167f2abcfb"
     },
     {
-        "name": "Média de Hemoglobina Globular",
-        "digest": "9a4c287ba06411774270dadafaf4d1e2"
-    },
-    {
-        "name": "Mét. Colorimétrica (HK)",
-        "digest": "bcd3732f425b703de223ad51a9ff96b5"
-    },
-    {
-        "name": "Mét. Colorimétrica (Jaffé modif.)",
-        "digest": "25335a1be47868ea7330384bc4fde31e"
-    },
-    {
-        "name": "Mét. UV Cinético (Urease)",
-        "digest": "51f05580a2d1b0bfc60296768fdd5bfb"
-    },
-    {
         "name": "Leucograma - Monócitos",
         "digest": "d34e9d666a1b317ee6eb393338eb2c55"
     },
@@ -604,11 +588,7 @@
         "digest": "56fa00b24c41a7ee726b34b97de9bc2b"
     },
     {
-        "name": "Triglicerídeos",
-        "digest": "df62a6e4780a263179a98e557042c6fb"
-    },
-    {
-        "name": "TRIGLICÉRIDOS",
+        "name": "Triglicéridos",
         "digest": "b27bc80a7d221394795199b088f030a4"
     },
     {
