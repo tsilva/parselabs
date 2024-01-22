@@ -11,10 +11,6 @@
           "items": {
             "type": "object",
             "properties": {
-              "date": {
-                "type": "string",
-                "description": "The date when the lab test was performed, with 'YYYY-mm-dd' format, usually any of the dates at the beginning of the lab test report"
-              },
               "name": {
                 "type": "string",
                 "description": "The name of the lab test (sometimes above a line describing which method was used to perform the text)"
@@ -37,7 +33,6 @@
               }
             },
             "required": [
-              "date",
               "name",
               "value",
               "unit",

@@ -1,9 +1,710 @@
 [
-  {
-    "name": "Ferritina",
-    "units" : [
-
-    ],
-    "alternatives": []
-  }
+    {
+        "name": "17-alfa-hidroxiprogesterona",
+        "digest": "4f653b8fb5caf4ba1f6f4580c0fcda1b"
+    },
+    {
+        "name": "17 Beta Estradiol",
+        "digest": "6ce42a4691878ee58236ebda451e27d3"
+    },
+    {
+        "name": "Ac. Anti-Fator Intrínseco",
+        "digest": "9d5d4ea17d8715a4c99ddd17bc976f49"
+    },
+    {
+        "name": "Ac. Anti-Gliadina (IgA)",
+        "digest": "d216991348138f0c3e7bfba573df532e"
+    },
+    {
+        "name": "Ac. Anti-Gliadina (IgG)",
+        "digest": "dfebc4d800c316b1f4b674ea93805c8e"
+    },
+    {
+        "name": "Ac. Anti-Microssomas",
+        "digest": "c2d445fe209c59e17ba1e757e6a637d4"
+    },
+    {
+        "name": "Ac. Anti-T TG (IgG)",
+        "digest": "d8e7e8cb56181153fee10fddc08602c6"
+    },
+    {
+        "name": "Ac. Anti-tireoglobulina",
+        "digest": "3bb8383779823efb14081b79a9fd232c"
+    },
+    {
+        "name": "Ac. Anti-TPO (Peroxidase Tireoidiana) (IgG)",
+        "digest": "51d13d8cbe31c452a0f2ddf1cbecc660"
+    },
+    {
+        "name": "Ac. Anti-Transglutaminase (IgA)",
+        "digest": "eaf3021382b21b67ab89bff26da456ed"
+    },
+    {
+        "name": "Ac. Anti-Triglobulina (IgG)",
+        "digest": "92449fa8f6d15f2ca9bdacac9a7e4f4b"
+    },
+    {
+        "name": "Ácido Ascórbico",
+        "digest": "763998927707375dd33685ddcd36d344"
+    },
+    {
+        "name": "Ácido Fólico",
+        "digest": "a9a89a3e7f774e35aba6ff288ccd8496"
+    },
+    {
+        "name": "Ácido úrico",
+        "digest": "13ecb747ddb3ba6a1a1d2869d03f5574"
+    },
+    {
+        "name": "Alanina aminotransferase - ALT/GPT",
+        "digest": "5cdf651a01d124970663de5324d8b463"
+    },
+    {
+        "name": "Albumina",
+        "digest": "8fbecf2cf38ef461bc62b07e07e3d62a"
+    },
+    {
+        "name": "Alfa-1",
+        "digest": "d8af5619c302d40bd445f4c03371050b"
+    },
+    {
+        "name": "Alfa-1-Globulina",
+        "digest": "181cb55aa3a001950e89d75b8867c02f"
+    },
+    {
+        "name": "Alfa-2",
+        "digest": "59ba558761048433dfa2a2949e84a611"
+    },
+    {
+        "name": "Alfa-2-Globulina",
+        "digest": "5045098a618e44b39b9bdfa68eaeb33e"
+    },
+    {
+        "name": "Amilase",
+        "digest": "42c75d35405c1b61df2d36017ee30215"
+    },
+    {
+        "name": "Amónia",
+        "digest": "aaa8416a6feb47b8c636ba78eb3c9ac3"
+    },
+    {
+        "name": "anisocitose",
+        "digest": "f084a391507e7108b9b7882304b04d88"
+    },
+    {
+        "name": "Aspartato aminotransferase - AST/GOT",
+        "digest": "11b0b77dd3fc52dff1e5668cc92075cc"
+    },
+    {
+        "name": "Baixo conteúdo de RNA",
+        "digest": "4b4f47da162df4f37816b271415685e8"
+    },
+    {
+        "name": "Basófilos",
+        "digest": "c8d2856ef962e1a2e74f25a1f5b36c2b"
+    },
+    {
+        "name": "Beta-1-Globulina",
+        "digest": "dfe2fa023d5b5b854544846dba04f770"
+    },
+    {
+        "name": "Beta-2-Globulina",
+        "digest": "59473ef07cde8e80b10d670a3c355935"
+    },
+    {
+        "name": "Beta (pt)",
+        "digest": "c25f0c6be0c54e0f2e849ac68557e2fe"
+    },
+    {
+        "name": "Bilirrubina",
+        "digest": "aafbca3c6c132885cb51da2b0f5c0c03"
+    },
+    {
+        "name": "Bilirrubina Direta",
+        "digest": "7a0b7477909f70fd29a1ef7bfcf36a75"
+    },
+    {
+        "name": "Bilirrubina Total",
+        "digest": "32a2bdde811326aa3e8ae908d99c6ddb"
+    },
+    {
+        "name": "Cálcio",
+        "digest": "657cd0659a8d7ccfd0793cbb6f1459f0"
+    },
+    {
+        "name": "Calprotectina",
+        "digest": "1f27906caaff72244cf747ae5e626000"
+    },
+    {
+        "name": "Capacidade Total de Fixação de Ferro",
+        "digest": "212461fe323bbb541b659c63706e6796"
+    },
+    {
+        "name": "Células escamosas epiteliais",
+        "digest": "14346cdaf009d011dda5f3dab90e1df3"
+    },
+    {
+        "name": "Ceruloplasmina",
+        "digest": "70a9df04818f894a018d43fc4835048f"
+    },
+    {
+        "name": "CK Total (Atividade Enzimática)",
+        "digest": "37992437e18c57861c7cd0f5ab97683e"
+    },
+    {
+        "name": "Cloreto",
+        "digest": "4d0e729834b14d6cad1bc45529c34a7a"
+    },
+    {
+        "name": "Cloro",
+        "digest": "19c07169cea93ce2ed256139d955ace0"
+    },
+    {
+        "name": "Cobre",
+        "digest": "00ba07369691a570d13bf6fe4e1a5595"
+    },
+    {
+        "name": "Cobre eritrocitário",
+        "digest": "b0acdaf15313359a4ec1cbaabd3cd6fb"
+    },
+    {
+        "name": "Colesterol HDL",
+        "digest": "93001f5665118530844a164444c20735"
+    },
+    {
+        "name": "Colesterol LDL",
+        "digest": "a6a4f0f77fb770f4dd6adcfb9ec92cce"
+    },
+    {
+        "name": "Colesterol Total",
+        "digest": "c61f20b27f2212bd42f29ae68a248992"
+    },
+    {
+        "name": "Concentração de Hemoglobina Globular Média - CHGM",
+        "digest": "581cd3335fc4c6e7bef685a61b94341e"
+    },
+    {
+        "name": "Contagem de leucócitos",
+        "digest": "c913ad9fb1de47c7f95e4001909bd077"
+    },
+    {
+        "name": "Contagem de plaquetas",
+        "digest": "15fadb3855de17e96570dd080d3444c0"
+    },
+    {
+        "name": "Corpos cetónicos",
+        "digest": "49bd68067850e067c45c69da072d4242"
+    },
+    {
+        "name": "Cortisol livre",
+        "digest": "575bcf0229ea06fce686382df4fb9110"
+    },
+    {
+        "name": "Creatinina",
+        "digest": "b704a0b5b2ac818f88f8f7a35e72cb00"
+    },
+    {
+        "name": "Crómio",
+        "digest": "333eb4d07037d80978c2fd2aaad38015"
+    },
+    {
+        "name": "Dehidroepiandrosterona",
+        "digest": "b88268d90f3b6ce8e0f77043da386acf"
+    },
+    {
+        "name": "DELTA-4-ANDROSTENEDIONA",
+        "digest": "81759f3d8d50f64d5d8567e80e96b191"
+    },
+    {
+        "name": "DHEA-s",
+        "digest": "5839355637520ccb56cdf21bbc72895d"
+    },
+    {
+        "name": "Dihidrotestosterona",
+        "digest": "a71cb679136c4aedf9be6d2b965622be"
+    },
+    {
+        "name": "Dosagem de Proteína C reativa",
+        "digest": "bcbd29dd8fc7b57ef1516db5804a983e"
+    },
+    {
+        "name": "Elastase pancreática",
+        "digest": "46804c63e598e9581387fda10fcc1212"
+    },
+    {
+        "name": "Elevado teor de RNA",
+        "digest": "4889aaf27e71e7847b7a0a4859f77d50"
+    },
+    {
+        "name": "Eosinófilos",
+        "digest": "def98e2716d610fec640efc72874eab8"
+    },
+    {
+        "name": "Eritrócitos",
+        "digest": "8c4629903a62cd7595bc488ed1d8f40f"
+    },
+    {
+        "name": "Eritrócitos hipercrómicos",
+        "digest": "b537b58f6a4c805cd4478ea8fd2b2b3d"
+    },
+    {
+        "name": "Eritrócitos hipocrómicos",
+        "digest": "3c53b10b87f434fc227701a0fdb008bc"
+    },
+    {
+        "name": "Eritropoietina",
+        "digest": "6d15fbf2c79a6e7efaedec8ee8f87103"
+    },
+    {
+        "name": "Estradiol",
+        "digest": "0a5c943f0421dd65679582a932e0c687"
+    },
+    {
+        "name": "Estradiol Total - E3",
+        "digest": "450a392e718d98c41f8398d57deb433c"
+    },
+    {
+        "name": "Fator Reumatoide",
+        "digest": "ae425f2064fc502feffc7766943a285c"
+    },
+    {
+        "name": "Ferritina",
+        "digest": "19b33c9b351513b76fde2deb25140d30"
+    },
+    {
+        "name": "Ferro",
+        "digest": "d8a1238ea725543b45d0154c5be0cd11"
+    },
+    {
+        "name": "Fosfatase Alcalina",
+        "digest": "5c62b8ab1bdd78f71d4a5a1e6c356d82"
+    },
+    {
+        "name": "Fósforo",
+        "digest": "3368f0eb1f24cc0228b4938f965e7e17"
+    },
+    {
+        "name": "FSH-Hormônio Folículo Estimulante",
+        "digest": "5b0b310e6eacfb8ea291d7a99d3a9150"
+    },
+    {
+        "name": "Gama-Globulina",
+        "digest": "389fbaa570ba5f609a255ff08cac6a1c"
+    },
+    {
+        "name": "Gama Glutamil-Transferase - GGT",
+        "digest": "10d56474f56e8931d9cfaf60bc3a1110"
+    },
+    {
+        "name": "Glicemia",
+        "digest": "e24b885dd7651b8d83bcd6113b429b8f"
+    },
+    {
+        "name": "Glicemia média estimada (GME - ADA)",
+        "digest": "372f542e91990ef5978e398ca925b147"
+    },
+    {
+        "name": "Glicose",
+        "digest": "39d96affdd90be39b52d937c44fd19a2"
+    },
+    {
+        "name": "Globulina Ligada às Hormonas Sexuais (SHBG) Basal",
+        "digest": "525987bc922064613d3469a8cfbba3cd"
+    },
+    {
+        "name": "Granulócitos Imaturos",
+        "digest": "4d7baad86347e3a213d487682411972a"
+    },
+    {
+        "name": "HCM",
+        "digest": "cdc8773b0f1541ecfdbb5465a66f184d"
+    },
+    {
+        "name": "HDL Colesterol",
+        "digest": "2299fdb98610cc8e8a8e5e9c63c97699"
+    },
+    {
+        "name": "Hematócitos",
+        "digest": "ca0be54f111e7b3f709a1f28ba82d248"
+    },
+    {
+        "name": "Hematócrito",
+        "digest": "48e3517138a9b2752fc71fdc6fe72257"
+    },
+    {
+        "name": "Hemoglobina",
+        "digest": "77cd344f52ad8bf18e57bec6a8dff0bf"
+    },
+    {
+        "name": "Hemoglobina Glicada - HbA1C",
+        "digest": "db9d6611c139cd61c883894479836e6b"
+    },
+    {
+        "name": "Hemoglobina Globular Média - HGM",
+        "digest": "6a5f672cbc41c766f7084ba1a1f46e82"
+    },
+    {
+        "name": "HGM",
+        "digest": "6b5b55308bf14a20869ffcb4cef15bf5"
+    },
+    {
+        "name": "Homocisteína",
+        "digest": "c19dfcebfe8ed63eaeb7ebaa96cffaba"
+    },
+    {
+        "name": "Hormona Folículo Estimulante - FSH",
+        "digest": "69fd94e4f697f68cf6aa3d5ad9a4efcd"
+    },
+    {
+        "name": "Hormona Luteotrófica - LH",
+        "digest": "538d12c4c9f1ac5f9d7631a988401d0e"
+    },
+    {
+        "name": "Hormona Paratiroideia Intacta - PTH-I",
+        "digest": "c86afce7290f5731e95b67e6e5ec9459"
+    },
+    {
+        "name": "IDH (Índice de Distribuição da Hemoglobina)",
+        "digest": "759ce525c8891ecc1be00536edbeabf4"
+    },
+    {
+        "name": "IgA",
+        "digest": "35c49e991ef88746da2256eacfcae94a"
+    },
+    {
+        "name": "IgA secretora",
+        "digest": "0f9d1e7d66c754ddc728cede180f1147"
+    },
+    {
+        "name": "IgG",
+        "digest": "ff2c7130f5cf4a53cc5fea6aeba26822"
+    },
+    {
+        "name": "IgM",
+        "digest": "ddb16b63a2d9d130019c1ef0ad718ec2"
+    },
+    {
+        "name": "Índice de Anisocitose RBC - RDW - CV",
+        "digest": "6d2e018361b097d329fa1d9f42cef1ab"
+    },
+    {
+        "name": "Índice de Anisocitose RBC - RDW - SD",
+        "digest": "964546f13bda211dab2cb551f9a6442a"
+    },
+    {
+        "name": "Índice de Distribuição da Hemoglobina - HDW",
+        "digest": "8b09d6c5023ce26f08bcb945f7441496"
+    },
+    {
+        "name": "Índice de Distribuição dos Eritrócitos - RDW",
+        "digest": "7ab28e2f938ec68f4bdc219e0930ee5d"
+    },
+    {
+        "name": "Índice de Distribuição Plaquetária - PDW",
+        "digest": "644a0de98a630b4a6c6c44c589be5876"
+    },
+    {
+        "name": "Índice de Protrombina",
+        "digest": "bc6e5d0a85da3afbac089ea1ee74891a"
+    },
+    {
+        "name": "Insulina",
+        "digest": "872ef88982f2617a460a268b0918a4b6"
+    },
+    {
+        "name": "L.E.D.W. (Líquido Extracelular e Desequilíbrio de Água)",
+        "digest": "29712650feffa6ea211f7022217e8c1e"
+    },
+    {
+        "name": "Lactato desidrogenase - LDH",
+        "digest": "01fc934a711b777eaa441b01a66fea01"
+    },
+    {
+        "name": "Leucócitos",
+        "digest": "98578c0adb00bdb4539930eb87d9938c"
+    },
+    {
+        "name": "Leucócitos (sedimento urinário)",
+        "digest": "d7f06a31036cd8f353f88ac5daf95e3c"
+    },
+    {
+        "name": "Linfócitos",
+        "digest": "27813225c3d2d31aca712d4dda0ddb3c"
+    },
+    {
+        "name": "Lítio",
+        "digest": "637e7afb8efa7121d5136cdad5a304a1"
+    },
+    {
+        "name": "Luteína estimulante plasmática - LH",
+        "digest": "3f856221df0cf3f35100e335d013a1e6"
+    },
+    {
+        "name": "Macrocitose",
+        "digest": "35662f116e7112594af88ac906095852"
+    },
+    {
+        "name": "Magnésio",
+        "digest": "4385dbcae4444d7d1b494bfc6c1bb611"
+    },
+    {
+        "name": "Magnésio Eritrocitário",
+        "digest": "01b8c16db6772d325e413a167f2abcfb"
+    },
+    {
+        "name": "Média de Hemoglobina Globular",
+        "digest": "9a4c287ba06411774270dadafaf4d1e2"
+    },
+    {
+        "name": "Mét. Colorimétrica (HK)",
+        "digest": "bcd3732f425b703de223ad51a9ff96b5"
+    },
+    {
+        "name": "Mét. Colorimétrica (Jaffé modif.)",
+        "digest": "25335a1be47868ea7330384bc4fde31e"
+    },
+    {
+        "name": "Mét. UV Cinético (Urease)",
+        "digest": "51f05580a2d1b0bfc60296768fdd5bfb"
+    },
+    {
+        "name": "Monócitos",
+        "digest": "1c06aa82df4ee8b90445704a129f5128"
+    },
+    {
+        "name": "Neutrófilos",
+        "digest": "aa7734278f07605f0d264546c6af1bce"
+    },
+    {
+        "name": "pH",
+        "digest": "da984e42a5899bbdac496ef0cbadcee2"
+    },
+    {
+        "name": "Plaquetas",
+        "digest": "10681151bb5874b251a5e2cb4fb280a2"
+    },
+    {
+        "name": "Plaquetocrito - PCT",
+        "digest": "0c62cf3f83617aee6bcf223254c3d6d7"
+    },
+    {
+        "name": "Potássio",
+        "digest": "fe1e7c66fac51ea473eeee35176db261"
+    },
+    {
+        "name": "Progesterona (P4)",
+        "digest": "37ae5d0824a53cd10492b8bd6c6aa473"
+    },
+    {
+        "name": "Prolactina",
+        "digest": "4fe8ff88ea81cbd01e67f0e472d27204"
+    },
+    {
+        "name": "Proteína Albumina",
+        "digest": "6e42e73481b977bb14165cd51fd54cad"
+    },
+    {
+        "name": "Proteína C Reativa",
+        "digest": "9f1eb53fe4a79c54f61141a0ab392f81"
+    },
+    {
+        "name": "PROTEÍNA C REATIVA (QUANTITATIVA)",
+        "digest": "32576fbb41432ba6f80ea91e510d557a"
+    },
+    {
+        "name": "Proteínas Totais",
+        "digest": "85ef66a70292cc7123e5dfcaabec5457"
+    },
+    {
+        "name": "PTI - I",
+        "digest": "74d4ca5f76e603b6c2c8d0de22d99c9a"
+    },
+    {
+        "name": "Quimotripsina",
+        "digest": "93613adeee99cb1484991e1c3767b501"
+    },
+    {
+        "name": "RDW",
+        "digest": "4559adfc323e82f49c24a5496859abc4"
+    },
+    {
+        "name": "RDW-CV",
+        "digest": "a921958eb01a85c6ff25be83a7380f13"
+    },
+    {
+        "name": "Reticulócitos",
+        "digest": "24388825766915c6c1d93398953b96c2"
+    },
+    {
+        "name": "RT3",
+        "digest": "2f21bde5f7ac9ead70fe44d0a7c0f2a9"
+    },
+    {
+        "name": "Saturação da Transferrina",
+        "digest": "7a9073f1def7cd423e20791ae845943e"
+    },
+    {
+        "name": "Selénio",
+        "digest": "f2a9884e8f353befb5d9d3535cc8b307"
+    },
+    {
+        "name": "Sódio",
+        "digest": "2fc267a9fc867a115c50f0a2e75577fb"
+    },
+    {
+        "name": "Somatomedina Basal - IGF-1",
+        "digest": "439f0d048800f77d3f26b5fe85020fba"
+    },
+    {
+        "name": "T3",
+        "digest": "0b8854ad38f0a6c65807928d28195609"
+    },
+    {
+        "name": "T3 Livre",
+        "digest": "6442291edb780fa5f5e9310af7291696"
+    },
+    {
+        "name": "T3 Total",
+        "digest": "4049b2c46193503b23604c7b5978de64"
+    },
+    {
+        "name": "T4",
+        "digest": "1051527638b9da6fe99e4242795a10ea"
+    },
+    {
+        "name": "T4 Livre",
+        "digest": "453235f239e02e06ac13cc4a84892686"
+    },
+    {
+        "name": "T4 Total",
+        "digest": "e8aae83358b40b6b0016c902518ea3a9"
+    },
+    {
+        "name": "Tempo de Protrombina",
+        "digest": "00578c09dc061aaa6db0e1d887ffe8c8"
+    },
+    {
+        "name": "Tempo de Protrombina - RNI",
+        "digest": "e5208202b152b04322c3bd12b7ff761d"
+    },
+    {
+        "name": "Teor médio de RNA",
+        "digest": "3a83c3cd29879978560dce4c80900adf"
+    },
+    {
+        "name": "Teste de Magnésio",
+        "digest": "43e515af7dd76fa71b1d43caa891f876"
+    },
+    {
+        "name": "Teste de Proteínas",
+        "digest": "38b22551d493a48759db3b5a23dea42a"
+    },
+    {
+        "name": "Testosterona Livre",
+        "digest": "f54d717ffd919a4ec8489406c8924bf2"
+    },
+    {
+        "name": "Testosterona Total",
+        "digest": "00427e1a4e6265f0912d5ae10f20f5ad"
+    },
+    {
+        "name": "Testosterona Total Plasmática (TTP)",
+        "digest": "cc902f1ea5f778c0f29936c6748069f0"
+    },
+    {
+        "name": "Transaminase Glutâmico-Oxalacética (TGO)",
+        "digest": "08f81e09134ef02693e855137aa2cb75"
+    },
+    {
+        "name": "Transaminase Glutâmico-Pirúvica (TGP)",
+        "digest": "1215c9705a05c881b91935cc9720760f"
+    },
+    {
+        "name": "Transferrina",
+        "digest": "56fa00b24c41a7ee726b34b97de9bc2b"
+    },
+    {
+        "name": "Triglicerídeos",
+        "digest": "df62a6e4780a263179a98e557042c6fb"
+    },
+    {
+        "name": "TRIGLICÉRIDOS",
+        "digest": "b27bc80a7d221394795199b088f030a4"
+    },
+    {
+        "name": "TSH",
+        "digest": "aa1aeb8da792a08776a9ce8af7fd5373"
+    },
+    {
+        "name": "Ureia",
+        "digest": "5e4ebfae4f189b00faaf5662a14bdc27"
+    },
+    {
+        "name": "VCM",
+        "digest": "1792a83be1825d512c0ad13593801266"
+    },
+    {
+        "name": "Velocidade de Sedimentação",
+        "digest": "f0492b53f1c6efcd9df71aacb2becab8"
+    },
+    {
+        "name": "VGM",
+        "digest": "fb0b3c0612ee7ebe40e432fe44815a73"
+    },
+    {
+        "name": "Vídeo de Alta Definição (VHD)",
+        "digest": "17c763e1383056e07a002e07633f5b05"
+    },
+    {
+        "name": "Vitamina A",
+        "digest": "3d16b8611fc29b7de307073f89ac66f2"
+    },
+    {
+        "name": "Vitamina B12",
+        "digest": "ea6ebf6592796e2e8122dd18cf64cf3e"
+    },
+    {
+        "name": "Vitamina B6",
+        "digest": "7257705b565ccec1e3168651ff73efed"
+    },
+    {
+        "name": "Vitamina C",
+        "digest": "b027619a73e34118c8a6a60b3daf2d23"
+    },
+    {
+        "name": "Vitamina D3",
+        "digest": "06e79db426cca61483501418e6a306a1"
+    },
+    {
+        "name": "Vitamina E",
+        "digest": "ae4a70f5092dcdb068cdf4f4fc95b5bf"
+    },
+    {
+        "name": "Volume de urina em 24 horas",
+        "digest": "c964263630e564a98966fc0a5d5adb79"
+    },
+    {
+        "name": "Volume Globular / Hematócrito (Ht)",
+        "digest": "4e7d2a47adc62d2ea177295cacba2eb5"
+    },
+    {
+        "name": "Volume Globular Médio - VGM",
+        "digest": "fe29f6bbc2ae16fc087625e4f061934a"
+    },
+    {
+        "name": "Volume Hematócrito",
+        "digest": "80a5f37db39bd83a15c677f8008c0440"
+    },
+    {
+        "name": "Volume Plaquetário Médio - VPM",
+        "digest": "9c953ba92f22baecf4205fcdc17c963c"
+    },
+    {
+        "name": "VSG - Método de Westergreen - Primeira hora",
+        "digest": "9c87caa23b8960f755b5a2e1cf84bfb9"
+    },
+    {
+        "name": "Zinco",
+        "digest": "4ae8cde26bdd8620847a388e968d0f43"
+    }
 ]
