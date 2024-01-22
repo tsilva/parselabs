@@ -54,7 +54,7 @@ def load_labs_specs():
 @functools.lru_cache(maxsize=None)
 def lab_spec_by_name(name):
     labs_specs = load_labs_specs()
-    for spec in labs_specs.values():
+    for spec in labs_specs:
         names = [spec["name"]] + spec.get("alternatives", [])
         names_l = [x.lower() for x in names]
         names_u = [x.upper() for x in names]

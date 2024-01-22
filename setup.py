@@ -9,7 +9,7 @@ CACHE_EMBEDDINGS_DIR = "cache/embeddings"
 
 def initialize_labs_specs():
     with open("labs_specs.json", "r", encoding="utf-8") as f: specs = json.load(f)
-    for spec in specs.items():
+    for spec in specs:
         name = spec["name"]
         slug = slugify(name)
         spec["digest"] = md5(slug.encode()).hexdigest()

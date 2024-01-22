@@ -284,8 +284,8 @@
         "digest": "3368f0eb1f24cc0228b4938f965e7e17"
     },
     {
-        "name": "FSH-Hormônio Folículo Estimulante",
-        "digest": "5b0b310e6eacfb8ea291d7a99d3a9150"
+        "name": "Hormona Folículo Estimulante - FSH",
+        "digest": "69fd94e4f697f68cf6aa3d5ad9a4efcd"
     },
     {
         "name": "Gama-Globulina",
@@ -361,7 +361,7 @@
     },
     {
         "name": "Hormona Paratiroideia Intacta - PTH-I",
-        "digest": "c86afce7290f5731e95b67e6e5ec9459"
+        "digest": "776691c39ebf2d15f81bd8f14fb86c9f"
     },
     {
         "name": "IDH (Índice de Distribuição da Hemoglobina)",
@@ -508,16 +508,8 @@
         "digest": "9f1eb53fe4a79c54f61141a0ab392f81"
     },
     {
-        "name": "PROTEÍNA C REATIVA (QUANTITATIVA)",
-        "digest": "32576fbb41432ba6f80ea91e510d557a"
-    },
-    {
         "name": "Proteínas Totais",
         "digest": "85ef66a70292cc7123e5dfcaabec5457"
-    },
-    {
-        "name": "PTI - I",
-        "digest": "74d4ca5f76e603b6c2c8d0de22d99c9a"
     },
     {
         "name": "Quimotripsina",
@@ -690,10 +682,6 @@
     {
         "name": "Volume Globular Médio - VGM",
         "digest": "fe29f6bbc2ae16fc087625e4f061934a"
-    },
-    {
-        "name": "Volume Hematócrito",
-        "digest": "80a5f37db39bd83a15c677f8008c0440"
     },
     {
         "name": "Volume Plaquetário Médio - VPM",

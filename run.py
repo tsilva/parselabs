@@ -36,7 +36,7 @@ def convert_pdfs_to_images(directory):
 def _convert_pdfs_to_images(input_path: str, output_path_format: str):
     images = convert_from_path(input_path, dpi=300, poppler_path='/usr/bin')
     for i, image in enumerate(images):
-        output_path = output_path_format.replace("000", f"{i+1:03}").replace("input/", "output/")
+        output_path = output_path_format.replace("000", f"{i+1:03}").replace("input/", "outputs/")
         image.save(output_path, 'JPEG', quality=100)
 
 def convert_images_to_text(directory: str):
@@ -45,7 +45,7 @@ def convert_images_to_text(directory: str):
         if not "analises" in file.lower(): continue
         
         input_path = os.path.join(directory, file)
-        output_path = input_path.replace(".jpg", ".txt").replace("input/", "output/")
+        output_path = input_path.replace(".jpg", ".txt").replace("input/", "outputs/")
         if os.path.exists(output_path): continue
 
         try: _convert_images_to_text(input_path, output_path)
@@ -212,13 +212,13 @@ def merge_jsons(directory):
         fixed_name = mappings.get(name)
         if fixed_name: result["name"] = fixed_name
 
-    with open("exports/blood_labs.json", "w", encoding='utf-8') as json_file:
+    with open("outputs/blood_labs.json", "w", encoding='utf-8') as json_file:
         json.dump(results, json_file, indent=4, ensure_ascii=False)
 
 def json_to_csv():
-    with open("exports/blood_labs.json", "r", encoding='utf-8') as file: labs = json.load(file)
+    with open("outputs/blood_labs.json", "r", encoding='utf-8') as file: labs = json.load(file)
     df = pd.DataFrame(labs)
-    df.to_csv("exports/blood_labs.csv", index=False)
+    df.to_csv("outputs/blood_labs.csv", index=False)
 
 #convert_pdfs_to_images("input") # @tsilva TODO: parallelize this
 #convert_images_to_text("output")
