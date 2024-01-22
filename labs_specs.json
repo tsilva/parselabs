@@ -100,8 +100,8 @@
         "digest": "4b4f47da162df4f37816b271415685e8"
     },
     {
-        "name": "Basófilos",
-        "digest": "c8d2856ef962e1a2e74f25a1f5b36c2b"
+        "name": "Leucograma - Basófilos",
+        "digest": "f1add2733da5105e5d960984f42acbc1"
     },
     {
         "name": "Beta-1-Globulina",
@@ -180,8 +180,8 @@
         "digest": "c61f20b27f2212bd42f29ae68a248992"
     },
     {
-        "name": "Concentração de Hemoglobina Globular Média - CHGM",
-        "digest": "581cd3335fc4c6e7bef685a61b94341e"
+        "name": "Eritrograma - Concentração de Hemoglobina Globular Média - CHGM",
+        "digest": "c7249a53118c4c68a067378bcd18ddb9"
     },
     {
         "name": "Contagem de leucócitos",
@@ -224,10 +224,6 @@
         "digest": "a71cb679136c4aedf9be6d2b965622be"
     },
     {
-        "name": "Dosagem de Proteína C reativa",
-        "digest": "bcbd29dd8fc7b57ef1516db5804a983e"
-    },
-    {
         "name": "Elastase pancreática",
         "digest": "46804c63e598e9581387fda10fcc1212"
     },
@@ -236,20 +232,20 @@
         "digest": "4889aaf27e71e7847b7a0a4859f77d50"
     },
     {
-        "name": "Eosinófilos",
-        "digest": "def98e2716d610fec640efc72874eab8"
+        "name": "Leucograma - Eosinófilos",
+        "digest": "760b751d06c6c26998c212beae6c4389"
     },
     {
-        "name": "Eritrócitos",
-        "digest": "8c4629903a62cd7595bc488ed1d8f40f"
+        "name": "Eritrograma - Eritrócitos",
+        "digest": "977d9df59473fa282f6ed57bd2517e1d"
     },
     {
-        "name": "Eritrócitos hipercrómicos",
-        "digest": "b537b58f6a4c805cd4478ea8fd2b2b3d"
+        "name": "Eritrograma - Eritrócitos hipercrómicos",
+        "digest": "4a6ea11d9ddd8b2271c0c3de238d51ac"
     },
     {
-        "name": "Eritrócitos hipocrómicos",
-        "digest": "3c53b10b87f434fc227701a0fdb008bc"
+        "name": "Eritrograma - Eritrócitos hipocrómicos",
+        "digest": "b5d2193dd2d1b796d54cdd7241214a02"
     },
     {
         "name": "Eritropoietina",
@@ -316,36 +312,24 @@
         "digest": "4d7baad86347e3a213d487682411972a"
     },
     {
-        "name": "HCM",
-        "digest": "cdc8773b0f1541ecfdbb5465a66f184d"
-    },
-    {
-        "name": "HDL Colesterol",
-        "digest": "2299fdb98610cc8e8a8e5e9c63c97699"
-    },
-    {
         "name": "Hematócitos",
         "digest": "ca0be54f111e7b3f709a1f28ba82d248"
     },
     {
-        "name": "Hematócrito",
-        "digest": "48e3517138a9b2752fc71fdc6fe72257"
+        "name": "Eritrograma - Hematócrito",
+        "digest": "fcb5b1cc71f41160f7dba43da919ae1e"
     },
     {
-        "name": "Hemoglobina",
-        "digest": "77cd344f52ad8bf18e57bec6a8dff0bf"
+        "name": "Eritrograma - Hemoglobina",
+        "digest": "be660e82efa31b731a9c2b75a1d53ee0"
     },
     {
         "name": "Hemoglobina Glicada - HbA1C",
         "digest": "db9d6611c139cd61c883894479836e6b"
     },
     {
-        "name": "Hemoglobina Globular Média - HGM",
-        "digest": "6a5f672cbc41c766f7084ba1a1f46e82"
-    },
-    {
-        "name": "HGM",
-        "digest": "6b5b55308bf14a20869ffcb4cef15bf5"
+        "name": "Eritrograma - Hemoglobina Globular Média - HGM",
+        "digest": "06e1442e1761c1e699788e486738ead0"
     },
     {
         "name": "Homocisteína",
@@ -368,20 +352,20 @@
         "digest": "759ce525c8891ecc1be00536edbeabf4"
     },
     {
-        "name": "IgA",
-        "digest": "35c49e991ef88746da2256eacfcae94a"
+        "name": "Imunoglobulina A - IgA",
+        "digest": "93026613b0fbc43063213cf34227f467"
     },
     {
-        "name": "IgA secretora",
-        "digest": "0f9d1e7d66c754ddc728cede180f1147"
+        "name": "Imunoglobulina A secretora - IgA secretora",
+        "digest": "dcb7e22abc92dbe10774712dc4b4a0ee"
     },
     {
-        "name": "IgG",
-        "digest": "ff2c7130f5cf4a53cc5fea6aeba26822"
+        "name": "Imunoglobulina G - IgG",
+        "digest": "e387ae6c02ada8d681f68a6276f1695a"
     },
     {
-        "name": "IgM",
-        "digest": "ddb16b63a2d9d130019c1ef0ad718ec2"
+        "name": "Imunoglobulina M - IgM",
+        "digest": "2b68e2dcb83a70e5e23f69cb925c8b5a"
     },
     {
         "name": "Índice de Anisocitose RBC - RDW - CV",
@@ -392,16 +376,16 @@
         "digest": "964546f13bda211dab2cb551f9a6442a"
     },
     {
-        "name": "Índice de Distribuição da Hemoglobina - HDW",
-        "digest": "8b09d6c5023ce26f08bcb945f7441496"
+        "name": "Eritrograma - Índice de Distribuição da Hemoglobina - HDW",
+        "digest": "c02048b15c9042357260ed056a463eb9"
     },
     {
-        "name": "Índice de Distribuição dos Eritrócitos - RDW",
-        "digest": "7ab28e2f938ec68f4bdc219e0930ee5d"
+        "name": "Eritrograma - Índice de Distribuição dos Eritrócitos - RDW",
+        "digest": "a662f24376d8c3ba48532c821f135b95"
     },
     {
-        "name": "Índice de Distribuição Plaquetária - PDW",
-        "digest": "644a0de98a630b4a6c6c44c589be5876"
+        "name": "Eritrograma - Índice de Distribuição Plaquetária - PDW",
+        "digest": "9cd98b10ed67137823913aee444b8fa5"
     },
     {
         "name": "Índice de Protrombina",
@@ -420,16 +404,16 @@
         "digest": "01fc934a711b777eaa441b01a66fea01"
     },
     {
-        "name": "Leucócitos",
-        "digest": "98578c0adb00bdb4539930eb87d9938c"
+        "name": "Leucograma - Leucócitos",
+        "digest": "e691c48f36f28a72bd8334a9cbe24c88"
     },
     {
         "name": "Leucócitos (sedimento urinário)",
         "digest": "d7f06a31036cd8f353f88ac5daf95e3c"
     },
     {
-        "name": "Linfócitos",
-        "digest": "27813225c3d2d31aca712d4dda0ddb3c"
+        "name": "Leucograma - Linfócitos",
+        "digest": "71e0c21f3184aa601f0c06f142599df1"
     },
     {
         "name": "Lítio",
@@ -468,12 +452,12 @@
         "digest": "51f05580a2d1b0bfc60296768fdd5bfb"
     },
     {
-        "name": "Monócitos",
-        "digest": "1c06aa82df4ee8b90445704a129f5128"
+        "name": "Leucograma - Monócitos",
+        "digest": "d34e9d666a1b317ee6eb393338eb2c55"
     },
     {
-        "name": "Neutrófilos",
-        "digest": "aa7734278f07605f0d264546c6af1bce"
+        "name": "Leucograma - Neutrófilos",
+        "digest": "988312d026f22b51cadb9db32c5e93d6"
     },
     {
         "name": "pH",
@@ -504,8 +488,8 @@
         "digest": "6e42e73481b977bb14165cd51fd54cad"
     },
     {
-        "name": "Proteína C Reativa",
-        "digest": "9f1eb53fe4a79c54f61141a0ab392f81"
+        "name": "Proteína C Reativa - PCR",
+        "digest": "01f4671a2e060765a3bd11aebd6a6a15"
     },
     {
         "name": "Proteínas Totais",
@@ -514,14 +498,6 @@
     {
         "name": "Quimotripsina",
         "digest": "93613adeee99cb1484991e1c3767b501"
-    },
-    {
-        "name": "RDW",
-        "digest": "4559adfc323e82f49c24a5496859abc4"
-    },
-    {
-        "name": "RDW-CV",
-        "digest": "a921958eb01a85c6ff25be83a7380f13"
     },
     {
         "name": "Reticulócitos",
@@ -544,32 +520,36 @@
         "digest": "2fc267a9fc867a115c50f0a2e75577fb"
     },
     {
+        "name": "Urobilinogénio",
+        "digest": "d52c0713f2ea167750068da56a6a3cbf"
+    },
+    {
         "name": "Somatomedina Basal - IGF-1",
         "digest": "439f0d048800f77d3f26b5fe85020fba"
     },
     {
-        "name": "T3",
-        "digest": "0b8854ad38f0a6c65807928d28195609"
+        "name": "Triiodotironina - T3",
+        "digest": "8c8fd4f0ae5e8a52b56589bf05ee5d52"
     },
     {
-        "name": "T3 Livre",
-        "digest": "6442291edb780fa5f5e9310af7291696"
+        "name": "Triiodotironina Livre - T3 Livre",
+        "digest": "28bf2c24383c85f7dc9ab6fb2e914734"
     },
     {
-        "name": "T3 Total",
-        "digest": "4049b2c46193503b23604c7b5978de64"
+        "name": "Triiodotironina Total - T3 Total",
+        "digest": "8e052908f1499a11362e3f8be4bfe009"
     },
     {
-        "name": "T4",
-        "digest": "1051527638b9da6fe99e4242795a10ea"
+        "name": "Tiroxina - T4",
+        "digest": "9d29dfb231a7a5a173ebcd49b4abac8e"
     },
     {
-        "name": "T4 Livre",
-        "digest": "453235f239e02e06ac13cc4a84892686"
+        "name": "Tiroxina Livre - T4 Livre",
+        "digest": "797aa35aaf1d4b92c4071c2adf0ff68d"
     },
     {
-        "name": "T4 Total",
-        "digest": "e8aae83358b40b6b0016c902518ea3a9"
+        "name": "Tiroxina Total - T4 Total",
+        "digest": "ee0ed0f68f0dcb75f8fd669dd2a9f109"
     },
     {
         "name": "Tempo de Protrombina",
@@ -590,6 +570,14 @@
     {
         "name": "Teste de Proteínas",
         "digest": "38b22551d493a48759db3b5a23dea42a"
+    },
+    {
+        "name": "Calcitonina",
+        "digest": "bedbb59af633357f725eaeb88666c93f"
+    },
+    {
+        "name": "Osteocalcina",
+        "digest": "ec968a9eb968d80e8d6e029a13800f7f"
     },
     {
         "name": "Testosterona Livre",
@@ -624,24 +612,16 @@
         "digest": "b27bc80a7d221394795199b088f030a4"
     },
     {
-        "name": "TSH",
-        "digest": "aa1aeb8da792a08776a9ce8af7fd5373"
+        "name": "Hormona Tiro-Estimulante - TSH",
+        "digest": "95354b11ce729f5ba52734e00f2e3f94"
     },
     {
         "name": "Ureia",
         "digest": "5e4ebfae4f189b00faaf5662a14bdc27"
     },
     {
-        "name": "VCM",
-        "digest": "1792a83be1825d512c0ad13593801266"
-    },
-    {
-        "name": "Velocidade de Sedimentação",
-        "digest": "f0492b53f1c6efcd9df71aacb2becab8"
-    },
-    {
-        "name": "VGM",
-        "digest": "fb0b3c0612ee7ebe40e432fe44815a73"
+        "name": "Eritrograma - Velocidade de Sedimentação",
+        "digest": "e664348ea3465925fdc5773ddc621788"
     },
     {
         "name": "Vídeo de Alta Definição (VHD)",
@@ -652,8 +632,8 @@
         "digest": "3d16b8611fc29b7de307073f89ac66f2"
     },
     {
-        "name": "Vitamina B12",
-        "digest": "ea6ebf6592796e2e8122dd18cf64cf3e"
+        "name": "Vitamina B12 - Cianocobalamina",
+        "digest": "06579c371fa7e26b63985532853a84c9"
     },
     {
         "name": "Vitamina B6",
@@ -680,12 +660,12 @@
         "digest": "4e7d2a47adc62d2ea177295cacba2eb5"
     },
     {
-        "name": "Volume Globular Médio - VGM",
-        "digest": "fe29f6bbc2ae16fc087625e4f061934a"
+        "name": "Eritrograma - Volume Globular Médio - VGM",
+        "digest": "afc3292c1fe6ec802a210dd887422aac"
     },
     {
-        "name": "Volume Plaquetário Médio - VPM",
-        "digest": "9c953ba92f22baecf4205fcdc17c963c"
+        "name": "Eritrograma - Volume Plaquetário Médio - VPM",
+        "digest": "983efe0b527da692b1941ad84fd1e645"
     },
     {
         "name": "VSG - Método de Westergreen - Primeira hora",
