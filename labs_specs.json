@@ -1,658 +1,2992 @@
 [
-    {
-        "name": "17-alfa-hidroxiprogesterona",
-        "digest": "4f653b8fb5caf4ba1f6f4580c0fcda1b"
-    },
-    {
-        "name": "17 Beta Estradiol",
-        "digest": "6ce42a4691878ee58236ebda451e27d3"
-    },
-    {
-        "name": "Ac. Anti-Fator Intrínseco",
-        "digest": "9d5d4ea17d8715a4c99ddd17bc976f49"
-    },
-    {
-        "name": "Ac. Anti-Gliadina (IgA)",
-        "digest": "d216991348138f0c3e7bfba573df532e"
-    },
-    {
-        "name": "Ac. Anti-Gliadina (IgG)",
-        "digest": "dfebc4d800c316b1f4b674ea93805c8e"
-    },
-    {
-        "name": "Ac. Anti-Microssomas",
-        "digest": "c2d445fe209c59e17ba1e757e6a637d4"
-    },
-    {
-        "name": "Ac. Anti-T TG (IgG)",
-        "digest": "d8e7e8cb56181153fee10fddc08602c6"
-    },
-    {
-        "name": "Ac. Anti-tireoglobulina",
-        "digest": "3bb8383779823efb14081b79a9fd232c"
-    },
-    {
-        "name": "Ac. Anti-TPO (Peroxidase Tireoidiana) (IgG)",
-        "digest": "51d13d8cbe31c452a0f2ddf1cbecc660"
-    },
-    {
-        "name": "Ac. Anti-Transglutaminase (IgA)",
-        "digest": "eaf3021382b21b67ab89bff26da456ed"
-    },
-    {
-        "name": "Ac. Anti-Triglobulina (IgG)",
-        "digest": "92449fa8f6d15f2ca9bdacac9a7e4f4b"
-    },
-    {
-        "name": "Ácido Ascórbico",
-        "digest": "763998927707375dd33685ddcd36d344"
-    },
-    {
-        "name": "Ácido Fólico",
-        "digest": "a9a89a3e7f774e35aba6ff288ccd8496"
-    },
-    {
-        "name": "Ácido úrico",
-        "digest": "13ecb747ddb3ba6a1a1d2869d03f5574"
-    },
-    {
-        "name": "Alanina aminotransferase - ALT/GPT",
-        "digest": "5cdf651a01d124970663de5324d8b463"
-    },
-    {
-        "name": "Albumina",
-        "digest": "8fbecf2cf38ef461bc62b07e07e3d62a"
-    },
-    {
-        "name": "Alfa-1",
-        "digest": "d8af5619c302d40bd445f4c03371050b"
-    },
-    {
-        "name": "Alfa-1-Globulina",
-        "digest": "181cb55aa3a001950e89d75b8867c02f"
-    },
-    {
-        "name": "Alfa-2",
-        "digest": "59ba558761048433dfa2a2949e84a611"
-    },
-    {
-        "name": "Alfa-2-Globulina",
-        "digest": "5045098a618e44b39b9bdfa68eaeb33e"
-    },
-    {
-        "name": "Amilase",
-        "digest": "42c75d35405c1b61df2d36017ee30215"
-    },
-    {
-        "name": "Amónia",
-        "digest": "aaa8416a6feb47b8c636ba78eb3c9ac3"
-    },
-    {
-        "name": "anisocitose",
-        "digest": "f084a391507e7108b9b7882304b04d88"
-    },
-    {
-        "name": "Aspartato aminotransferase - AST/GOT",
-        "digest": "11b0b77dd3fc52dff1e5668cc92075cc"
-    },
-    {
-        "name": "Baixo conteúdo de RNA",
-        "digest": "4b4f47da162df4f37816b271415685e8"
-    },
-    {
-        "name": "Leucograma - Basófilos",
-        "digest": "f1add2733da5105e5d960984f42acbc1"
-    },
-    {
-        "name": "Beta-1-Globulina",
-        "digest": "dfe2fa023d5b5b854544846dba04f770"
-    },
-    {
-        "name": "Beta-2-Globulina",
-        "digest": "59473ef07cde8e80b10d670a3c355935"
-    },
-    {
-        "name": "Beta (pt)",
-        "digest": "c25f0c6be0c54e0f2e849ac68557e2fe"
-    },
-    {
-        "name": "Bilirrubina",
-        "digest": "aafbca3c6c132885cb51da2b0f5c0c03"
-    },
-    {
-        "name": "Bilirrubina Direta",
-        "digest": "7a0b7477909f70fd29a1ef7bfcf36a75"
-    },
-    {
-        "name": "Bilirrubina Total",
-        "digest": "32a2bdde811326aa3e8ae908d99c6ddb"
-    },
-    {
-        "name": "Cálcio",
-        "digest": "657cd0659a8d7ccfd0793cbb6f1459f0"
-    },
-    {
-        "name": "Calprotectina",
-        "digest": "1f27906caaff72244cf747ae5e626000"
-    },
-    {
-        "name": "Capacidade Total de Fixação de Ferro",
-        "digest": "212461fe323bbb541b659c63706e6796"
-    },
-    {
-        "name": "Células escamosas epiteliais",
-        "digest": "14346cdaf009d011dda5f3dab90e1df3"
-    },
-    {
-        "name": "Ceruloplasmina",
-        "digest": "70a9df04818f894a018d43fc4835048f"
-    },
-    {
-        "name": "CK Total (Atividade Enzimática)",
-        "digest": "37992437e18c57861c7cd0f5ab97683e"
-    },
-    {
-        "name": "Cloreto",
-        "digest": "4d0e729834b14d6cad1bc45529c34a7a"
-    },
-    {
-        "name": "Cloro",
-        "digest": "19c07169cea93ce2ed256139d955ace0"
-    },
-    {
-        "name": "Cobre",
-        "digest": "00ba07369691a570d13bf6fe4e1a5595"
-    },
-    {
-        "name": "Cobre eritrocitário",
-        "digest": "b0acdaf15313359a4ec1cbaabd3cd6fb"
-    },
-    {
-        "name": "Colesterol HDL",
-        "digest": "93001f5665118530844a164444c20735"
-    },
-    {
-        "name": "Colesterol LDL",
-        "digest": "a6a4f0f77fb770f4dd6adcfb9ec92cce"
-    },
-    {
-        "name": "Colesterol Total",
-        "digest": "c61f20b27f2212bd42f29ae68a248992"
-    },
-    {
-        "name": "Eritrograma - Concentração de Hemoglobina Globular Média - CHGM",
-        "digest": "c7249a53118c4c68a067378bcd18ddb9"
-    },
-    {
-        "name": "Contagem de leucócitos",
-        "digest": "c913ad9fb1de47c7f95e4001909bd077"
-    },
-    {
-        "name": "Contagem de plaquetas",
-        "digest": "15fadb3855de17e96570dd080d3444c0"
-    },
-    {
-        "name": "Corpos cetónicos",
-        "digest": "49bd68067850e067c45c69da072d4242"
-    },
-    {
-        "name": "Cortisol livre",
-        "digest": "575bcf0229ea06fce686382df4fb9110"
-    },
-    {
-        "name": "Creatinina",
-        "digest": "b704a0b5b2ac818f88f8f7a35e72cb00"
-    },
-    {
-        "name": "Crómio",
-        "digest": "333eb4d07037d80978c2fd2aaad38015"
-    },
-    {
-        "name": "Dehidroepiandrosterona",
-        "digest": "b88268d90f3b6ce8e0f77043da386acf"
-    },
-    {
-        "name": "DELTA-4-ANDROSTENEDIONA",
-        "digest": "81759f3d8d50f64d5d8567e80e96b191"
-    },
-    {
-        "name": "DHEA-s",
-        "digest": "5839355637520ccb56cdf21bbc72895d"
-    },
-    {
-        "name": "Dihidrotestosterona",
-        "digest": "a71cb679136c4aedf9be6d2b965622be"
-    },
-    {
-        "name": "Elastase pancreática",
-        "digest": "46804c63e598e9581387fda10fcc1212"
-    },
-    {
-        "name": "Elevado teor de RNA",
-        "digest": "4889aaf27e71e7847b7a0a4859f77d50"
-    },
-    {
-        "name": "Leucograma - Eosinófilos",
-        "digest": "760b751d06c6c26998c212beae6c4389"
-    },
-    {
-        "name": "Eritrograma - Eritrócitos",
-        "digest": "977d9df59473fa282f6ed57bd2517e1d"
-    },
-    {
-        "name": "Eritrograma - Eritrócitos hipercrómicos",
-        "digest": "4a6ea11d9ddd8b2271c0c3de238d51ac"
-    },
-    {
-        "name": "Eritrograma - Eritrócitos hipocrómicos",
-        "digest": "b5d2193dd2d1b796d54cdd7241214a02"
-    },
-    {
-        "name": "Eritropoietina",
-        "digest": "6d15fbf2c79a6e7efaedec8ee8f87103"
-    },
-    {
-        "name": "Estradiol",
-        "digest": "0a5c943f0421dd65679582a932e0c687"
-    },
-    {
-        "name": "Estradiol Total - E3",
-        "digest": "450a392e718d98c41f8398d57deb433c"
-    },
-    {
-        "name": "Fator Reumatoide",
-        "digest": "ae425f2064fc502feffc7766943a285c"
-    },
-    {
-        "name": "Ferritina",
-        "digest": "19b33c9b351513b76fde2deb25140d30"
-    },
-    {
-        "name": "Ferro",
-        "digest": "d8a1238ea725543b45d0154c5be0cd11"
-    },
-    {
-        "name": "Fosfatase Alcalina",
-        "digest": "5c62b8ab1bdd78f71d4a5a1e6c356d82"
-    },
-    {
-        "name": "Fósforo",
-        "digest": "3368f0eb1f24cc0228b4938f965e7e17"
-    },
-    {
-        "name": "Hormona Folículo Estimulante - FSH",
-        "digest": "69fd94e4f697f68cf6aa3d5ad9a4efcd"
-    },
-    {
-        "name": "Gama-Globulina",
-        "digest": "389fbaa570ba5f609a255ff08cac6a1c"
-    },
-    {
-        "name": "Gama Glutamil-Transferase - GGT",
-        "digest": "10d56474f56e8931d9cfaf60bc3a1110"
-    },
-    {
-        "name": "Glicemia",
-        "digest": "e24b885dd7651b8d83bcd6113b429b8f"
-    },
-    {
-        "name": "Glicemia média estimada (GME - ADA)",
-        "digest": "372f542e91990ef5978e398ca925b147"
-    },
-    {
-        "name": "Glicose",
-        "digest": "39d96affdd90be39b52d937c44fd19a2"
-    },
-    {
-        "name": "Globulina Ligada às Hormonas Sexuais (SHBG) Basal",
-        "digest": "525987bc922064613d3469a8cfbba3cd"
-    },
-    {
-        "name": "Granulócitos Imaturos",
-        "digest": "4d7baad86347e3a213d487682411972a"
-    },
-    {
-        "name": "Hematócitos",
-        "digest": "ca0be54f111e7b3f709a1f28ba82d248"
-    },
-    {
-        "name": "Eritrograma - Hematócrito",
-        "digest": "fcb5b1cc71f41160f7dba43da919ae1e"
-    },
-    {
-        "name": "Eritrograma - Hemoglobina",
-        "digest": "be660e82efa31b731a9c2b75a1d53ee0"
-    },
-    {
-        "name": "Hemoglobina Glicada - HbA1C",
-        "digest": "db9d6611c139cd61c883894479836e6b"
-    },
-    {
-        "name": "Eritrograma - Hemoglobina Globular Média - HGM",
-        "digest": "06e1442e1761c1e699788e486738ead0"
-    },
-    {
-        "name": "Homocisteína",
-        "digest": "c19dfcebfe8ed63eaeb7ebaa96cffaba"
-    },
-    {
-        "name": "Hormona Folículo Estimulante - FSH",
-        "digest": "69fd94e4f697f68cf6aa3d5ad9a4efcd"
-    },
-    {
-        "name": "Hormona Luteotrófica - LH",
-        "digest": "538d12c4c9f1ac5f9d7631a988401d0e"
-    },
-    {
-        "name": "Hormona Paratiroideia Intacta - PTH-I",
-        "digest": "776691c39ebf2d15f81bd8f14fb86c9f"
-    },
-    {
-        "name": "IDH (Índice de Distribuição da Hemoglobina)",
-        "digest": "759ce525c8891ecc1be00536edbeabf4"
-    },
-    {
-        "name": "Imunoglobulina A - IgA",
-        "digest": "93026613b0fbc43063213cf34227f467"
-    },
-    {
-        "name": "Imunoglobulina A secretora - IgA secretora",
-        "digest": "dcb7e22abc92dbe10774712dc4b4a0ee"
-    },
-    {
-        "name": "Imunoglobulina G - IgG",
-        "digest": "e387ae6c02ada8d681f68a6276f1695a"
-    },
-    {
-        "name": "Imunoglobulina M - IgM",
-        "digest": "2b68e2dcb83a70e5e23f69cb925c8b5a"
-    },
-    {
-        "name": "Índice de Anisocitose RBC - RDW - CV",
-        "digest": "6d2e018361b097d329fa1d9f42cef1ab"
-    },
-    {
-        "name": "Índice de Anisocitose RBC - RDW - SD",
-        "digest": "964546f13bda211dab2cb551f9a6442a"
-    },
-    {
-        "name": "Eritrograma - Índice de Distribuição da Hemoglobina - HDW",
-        "digest": "c02048b15c9042357260ed056a463eb9"
-    },
-    {
-        "name": "Eritrograma - Índice de Distribuição dos Eritrócitos - RDW",
-        "digest": "a662f24376d8c3ba48532c821f135b95"
-    },
-    {
-        "name": "Eritrograma - Índice de Distribuição Plaquetária - PDW",
-        "digest": "9cd98b10ed67137823913aee444b8fa5"
-    },
-    {
-        "name": "Índice de Protrombina",
-        "digest": "bc6e5d0a85da3afbac089ea1ee74891a"
-    },
-    {
-        "name": "Insulina",
-        "digest": "872ef88982f2617a460a268b0918a4b6"
-    },
-    {
-        "name": "L.E.D.W. (Líquido Extracelular e Desequilíbrio de Água)",
-        "digest": "29712650feffa6ea211f7022217e8c1e"
-    },
-    {
-        "name": "Lactato desidrogenase - LDH",
-        "digest": "01fc934a711b777eaa441b01a66fea01"
-    },
-    {
-        "name": "Leucograma - Leucócitos",
-        "digest": "e691c48f36f28a72bd8334a9cbe24c88"
-    },
-    {
-        "name": "Leucócitos (sedimento urinário)",
-        "digest": "d7f06a31036cd8f353f88ac5daf95e3c"
-    },
-    {
-        "name": "Leucograma - Linfócitos",
-        "digest": "71e0c21f3184aa601f0c06f142599df1"
-    },
-    {
-        "name": "Lítio",
-        "digest": "637e7afb8efa7121d5136cdad5a304a1"
-    },
-    {
-        "name": "Luteína estimulante plasmática - LH",
-        "digest": "3f856221df0cf3f35100e335d013a1e6"
-    },
-    {
-        "name": "Macrocitose",
-        "digest": "35662f116e7112594af88ac906095852"
-    },
-    {
-        "name": "Magnésio",
-        "digest": "4385dbcae4444d7d1b494bfc6c1bb611"
-    },
-    {
-        "name": "Magnésio Eritrocitário",
-        "digest": "01b8c16db6772d325e413a167f2abcfb"
-    },
-    {
-        "name": "Leucograma - Monócitos",
-        "digest": "d34e9d666a1b317ee6eb393338eb2c55"
-    },
-    {
-        "name": "Leucograma - Neutrófilos",
-        "digest": "988312d026f22b51cadb9db32c5e93d6"
-    },
-    {
-        "name": "pH",
-        "digest": "da984e42a5899bbdac496ef0cbadcee2"
-    },
-    {
-        "name": "Plaquetas",
-        "digest": "10681151bb5874b251a5e2cb4fb280a2"
-    },
-    {
-        "name": "Plaquetocrito - PCT",
-        "digest": "0c62cf3f83617aee6bcf223254c3d6d7"
-    },
-    {
-        "name": "Potássio",
-        "digest": "fe1e7c66fac51ea473eeee35176db261"
-    },
-    {
-        "name": "Progesterona (P4)",
-        "digest": "37ae5d0824a53cd10492b8bd6c6aa473"
-    },
-    {
-        "name": "Prolactina",
-        "digest": "4fe8ff88ea81cbd01e67f0e472d27204"
-    },
-    {
-        "name": "Proteína Albumina",
-        "digest": "6e42e73481b977bb14165cd51fd54cad"
-    },
-    {
-        "name": "Proteína C Reativa - PCR",
-        "digest": "01f4671a2e060765a3bd11aebd6a6a15"
-    },
-    {
-        "name": "Proteínas Totais",
-        "digest": "85ef66a70292cc7123e5dfcaabec5457"
-    },
-    {
-        "name": "Quimotripsina",
-        "digest": "93613adeee99cb1484991e1c3767b501"
-    },
-    {
-        "name": "Reticulócitos",
-        "digest": "24388825766915c6c1d93398953b96c2"
-    },
-    {
-        "name": "RT3",
-        "digest": "2f21bde5f7ac9ead70fe44d0a7c0f2a9"
-    },
-    {
-        "name": "Saturação da Transferrina",
-        "digest": "7a9073f1def7cd423e20791ae845943e"
-    },
-    {
-        "name": "Selénio",
-        "digest": "f2a9884e8f353befb5d9d3535cc8b307"
-    },
-    {
-        "name": "Sódio",
-        "digest": "2fc267a9fc867a115c50f0a2e75577fb"
-    },
-    {
-        "name": "Urobilinogénio",
-        "digest": "d52c0713f2ea167750068da56a6a3cbf"
-    },
-    {
-        "name": "Somatomedina Basal - IGF-1",
-        "digest": "439f0d048800f77d3f26b5fe85020fba"
-    },
-    {
-        "name": "Triiodotironina - T3",
-        "digest": "8c8fd4f0ae5e8a52b56589bf05ee5d52"
-    },
-    {
-        "name": "Triiodotironina Livre - T3 Livre",
-        "digest": "28bf2c24383c85f7dc9ab6fb2e914734"
-    },
-    {
-        "name": "Triiodotironina Total - T3 Total",
-        "digest": "8e052908f1499a11362e3f8be4bfe009"
-    },
-    {
-        "name": "Tiroxina - T4",
-        "digest": "9d29dfb231a7a5a173ebcd49b4abac8e"
-    },
-    {
-        "name": "Tiroxina Livre - T4 Livre",
-        "digest": "797aa35aaf1d4b92c4071c2adf0ff68d"
-    },
-    {
-        "name": "Tiroxina Total - T4 Total",
-        "digest": "ee0ed0f68f0dcb75f8fd669dd2a9f109"
-    },
-    {
-        "name": "Tempo de Protrombina",
-        "digest": "00578c09dc061aaa6db0e1d887ffe8c8"
-    },
-    {
-        "name": "Tempo de Protrombina - RNI",
-        "digest": "e5208202b152b04322c3bd12b7ff761d"
-    },
-    {
-        "name": "Teor médio de RNA",
-        "digest": "3a83c3cd29879978560dce4c80900adf"
-    },
-    {
-        "name": "Teste de Magnésio",
-        "digest": "43e515af7dd76fa71b1d43caa891f876"
-    },
-    {
-        "name": "Teste de Proteínas",
-        "digest": "38b22551d493a48759db3b5a23dea42a"
-    },
-    {
-        "name": "Calcitonina",
-        "digest": "bedbb59af633357f725eaeb88666c93f"
-    },
-    {
-        "name": "Osteocalcina",
-        "digest": "ec968a9eb968d80e8d6e029a13800f7f"
-    },
-    {
-        "name": "Testosterona Livre",
-        "digest": "f54d717ffd919a4ec8489406c8924bf2"
-    },
-    {
-        "name": "Testosterona Total",
-        "digest": "00427e1a4e6265f0912d5ae10f20f5ad"
-    },
-    {
-        "name": "Testosterona Total Plasmática (TTP)",
-        "digest": "cc902f1ea5f778c0f29936c6748069f0"
-    },
-    {
-        "name": "Transaminase Glutâmico-Oxalacética (TGO)",
-        "digest": "08f81e09134ef02693e855137aa2cb75"
-    },
-    {
-        "name": "Transaminase Glutâmico-Pirúvica (TGP)",
-        "digest": "1215c9705a05c881b91935cc9720760f"
-    },
-    {
-        "name": "Transferrina",
-        "digest": "56fa00b24c41a7ee726b34b97de9bc2b"
-    },
-    {
-        "name": "Triglicéridos",
-        "digest": "b27bc80a7d221394795199b088f030a4"
-    },
-    {
-        "name": "Hormona Tiro-Estimulante - TSH",
-        "digest": "95354b11ce729f5ba52734e00f2e3f94"
-    },
-    {
-        "name": "Ureia",
-        "digest": "5e4ebfae4f189b00faaf5662a14bdc27"
-    },
-    {
-        "name": "Eritrograma - Velocidade de Sedimentação",
-        "digest": "e664348ea3465925fdc5773ddc621788"
-    },
-    {
-        "name": "Vídeo de Alta Definição (VHD)",
-        "digest": "17c763e1383056e07a002e07633f5b05"
-    },
-    {
-        "name": "Vitamina A",
-        "digest": "3d16b8611fc29b7de307073f89ac66f2"
-    },
-    {
-        "name": "Vitamina B12 - Cianocobalamina",
-        "digest": "06579c371fa7e26b63985532853a84c9"
-    },
-    {
-        "name": "Vitamina B6",
-        "digest": "7257705b565ccec1e3168651ff73efed"
-    },
-    {
-        "name": "Vitamina C",
-        "digest": "b027619a73e34118c8a6a60b3daf2d23"
-    },
-    {
-        "name": "Vitamina D3",
-        "digest": "06e79db426cca61483501418e6a306a1"
-    },
-    {
-        "name": "Vitamina E",
-        "digest": "ae4a70f5092dcdb068cdf4f4fc95b5bf"
-    },
-    {
-        "name": "Volume de urina em 24 horas",
-        "digest": "c964263630e564a98966fc0a5d5adb79"
-    },
-    {
-        "name": "Volume Globular / Hematócrito (Ht)",
-        "digest": "4e7d2a47adc62d2ea177295cacba2eb5"
-    },
-    {
-        "name": "Eritrograma - Volume Globular Médio - VGM",
-        "digest": "afc3292c1fe6ec802a210dd887422aac"
-    },
-    {
-        "name": "Eritrograma - Volume Plaquetário Médio - VPM",
-        "digest": "983efe0b527da692b1941ad84fd1e645"
-    },
-    {
-        "name": "VSG - Método de Westergreen - Primeira hora",
-        "digest": "9c87caa23b8960f755b5a2e1cf84bfb9"
-    },
-    {
-        "name": "Zinco",
-        "digest": "4ae8cde26bdd8620847a388e968d0f43"
+  {
+    "name": "17-alfa-hidroxiprogesterona",
+    "digest": "4f653b8fb5caf4ba1f6f4580c0fcda1b",
+    "units": {
+      "ng/dL": {
+        "min": 15.0,
+        "max": 70.0
+      },
+      "ng/mL": {
+        "min": 0.2,
+        "max": 2.0
+      },
+      "µg/L": {
+        "min": 0.2,
+        "max": 2.0
+      }
     }
+  },
+  {
+    "name": "17 Beta Estradiol",
+    "digest": "6ce42a4691878ee58236ebda451e27d3",
+    "units": {
+      "pg/mL": {
+        "min": 12.5,
+        "max": 200.0
+      },
+      "pmol/L": {
+        "min": 91.7,
+        "max": 861.0
+      },
+      "ng/dL": {
+        "min": 15.0,
+        "max": 350.0
+      }
+    }
+  },
+  {
+    "name": "Ac. Anti-Fator Intrínseco",
+    "digest": "9d5d4ea17d8715a4c99ddd17bc976f49",
+    "units": {
+      "UI/mL": {
+        "min": 0.0,
+        "max": 20.0
+      },
+      "ng/mL": {
+        "min": null,
+        "max": 20.0
+      },
+      "U/mL": {
+        "min": null,
+        "max": 20.0
+      }
+    }
+  },
+  {
+    "name": "Ac. Anti-Gliadina (IgA)",
+    "digest": "d216991348138f0c3e7bfba573df532e",
+    "units": {
+      "U/mL": {
+        "min": null,
+        "max": 20.0
+      },
+      "AU/mL": {
+        "min": 0.0,
+        "max": 20.0
+      },
+      "mg/dL": {
+        "min": null,
+        "max": 20.0
+      }
+    }
+  },
+  {
+    "name": "Ac. Anti-Gliadina (IgG)",
+    "digest": "dfebc4d800c316b1f4b674ea93805c8e",
+    "units": {
+      "U/mL": {
+        "min": null,
+        "max": 20.0
+      },
+      "AU/mL": {
+        "min": 5.0,
+        "max": 100.0
+      },
+      "mg/dL": {
+        "min": null,
+        "max": 20.0
+      }
+    }
+  },
+  {
+    "name": "Ac. Anti-Microssomas",
+    "digest": "c2d445fe209c59e17ba1e757e6a637d4",
+    "units": {
+      "UI/mL": {
+        "min": 0.0,
+        "max": 34.0
+      },
+      "U/mL": {
+        "min": 0.0,
+        "max": 34.0
+      },
+      "ng/mL": {
+        "min": null,
+        "max": 34.0
+      }
+    }
+  },
+  {
+    "name": "Ac. Anti-T TG (IgG)",
+    "digest": "d8e7e8cb56181153fee10fddc08602c6",
+    "units": {
+      "U/mL": {
+        "min": 0.4,
+        "max": 1.5
+      }
+    }
+  },
+  {
+    "name": "Ac. Anti-tireoglobulina",
+    "digest": "3bb8383779823efb14081b79a9fd232c",
+    "units": {
+      "UI/mL": {
+        "min": 10.0,
+        "max": 115.0
+      },
+      "ng/mL": {
+        "min": 10.0,
+        "max": 115.0
+      },
+      "µUI/mL": {
+        "min": 0.9,
+        "max": 4.0
+      }
+    }
+  },
+  {
+    "name": "Ac. Anti-TPO (Peroxidase Tireoidiana) (IgG)",
+    "digest": "51d13d8cbe31c452a0f2ddf1cbecc660",
+    "units": {
+      "UI/mL": {
+        "min": 0.0,
+        "max": 34.0
+      },
+      "UI/L": {
+        "min": 0.0,
+        "max": 34.0
+      },
+      "UI/dL": {
+        "min": 0.0,
+        "max": 34.0
+      }
+    }
+  },
+  {
+    "name": "Ac. Anti-Transglutaminase (IgA)",
+    "digest": "eaf3021382b21b67ab89bff26da456ed",
+    "units": {
+      "U/mL": {
+        "min": 0.0,
+        "max": 4.0
+      },
+      "AU/mL": {
+        "min": 0.0,
+        "max": 10.0
+      },
+      "mg/dL": {
+        "min": 0.0,
+        "max": 4.0
+      }
+    }
+  },
+  {
+    "name": "Ac. Anti-Triglobulina (IgG)",
+    "digest": "92449fa8f6d15f2ca9bdacac9a7e4f4b",
+    "units": {
+      "UI/mL": {
+        "min": 0.0,
+        "max": 115.0
+      },
+      "mg/dL": {
+        "min": 0.4,
+        "max": 4.0
+      },
+      "mg/L": {
+        "min": 0.0,
+        "max": 115.0
+      }
+    }
+  },
+  {
+    "name": "Ácido Ascórbico",
+    "digest": "763998927707375dd33685ddcd36d344",
+    "units": {
+      "mg/dL": {
+        "min": 0.4,
+        "max": 2.0
+      },
+      "µmol/L": {
+        "min": 23.0,
+        "max": 85.0
+      },
+      "mg/L": {
+        "min": 23.0,
+        "max": 85.0
+      }
+    }
+  },
+  {
+    "name": "Ácido Fólico",
+    "digest": "a9a89a3e7f774e35aba6ff288ccd8496",
+    "units": {
+      "ng/mL": {
+        "min": 4.6,
+        "max": 18.7
+      },
+      "µg/L": {
+        "min": 3.1,
+        "max": 17.5
+      },
+      "nmol/L": {
+        "min": 7.0,
+        "max": 45.0
+      }
+    }
+  },
+  {
+    "name": "Ácido Úrico",
+    "digest": "13ecb747ddb3ba6a1a1d2869d03f5574",
+    "units": {
+      "mg/dL": {
+        "min": 2.4,
+        "max": 6.0
+      },
+      "µmol/L": {
+        "min": 140.0,
+        "max": 340.0
+      },
+      "mmol/L": {
+        "min": 140.0,
+        "max": 340.0
+      }
+    }
+  },
+  {
+    "name": "Alanina aminotransferase / ALT / GPT",
+    "digest": "5cdf651a01d124970663de5324d8b463",
+    "units": {
+      "U/L": {
+        "min": 7.0,
+        "max": 35.0
+      },
+      "IU/L": {
+        "min": 7.0,
+        "max": 56.0
+      },
+      "µkat/L": {
+        "min": 0.17,
+        "max": 0.68
+      }
+    }
+  },
+  {
+    "name": "Albumina",
+    "digest": "8fbecf2cf38ef461bc62b07e07e3d62a",
+    "units": {
+      "g/dL": {
+        "min": 3.5,
+        "max": 5.5
+      },
+      "g/L": {
+        "min": 35.0,
+        "max": 50.0
+      },
+      "mg/dL": {
+        "min": 3.5,
+        "max": 5.5
+      }
+    }
+  },
+  {
+    "name": "Alfa-1",
+    "digest": "d8af5619c302d40bd445f4c03371050b",
+    "units": {
+      "g/dL": {
+        "min": 0.1,
+        "max": 0.3
+      },
+      "mg/dL": {
+        "min": 100.0,
+        "max": 190.0
+      },
+      "µg/dL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Alfa-1-Globulina",
+    "digest": "181cb55aa3a001950e89d75b8867c02f",
+    "units": {
+      "g/dL": {
+        "min": 0.1,
+        "max": 0.3
+      },
+      "mg/dL": {
+        "min": 17.0,
+        "max": 30.0
+      },
+      "µg/mL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Alfa-2",
+    "digest": "59ba558761048433dfa2a2949e84a611",
+    "units": {
+      "g/dL": {
+        "min": 0.6,
+        "max": 1.0
+      },
+      "mg/dL": {
+        "min": 0.6,
+        "max": 1.0
+      },
+      "IU/mL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Alfa-2-Globulina",
+    "digest": "5045098a618e44b39b9bdfa68eaeb33e",
+    "units": {
+      "g/dL": {
+        "min": 0.6,
+        "max": 1.0
+      },
+      "mg/dL": {
+        "min": null,
+        "max": null
+      },
+      "g/L": {
+        "min": 0.6,
+        "max": 1.0
+      }
+    }
+  },
+  {
+    "name": "Amilase",
+    "digest": "42c75d35405c1b61df2d36017ee30215",
+    "units": {
+      "U/L": {
+        "min": 28.0,
+        "max": 100.0
+      },
+      "IU/L": {
+        "min": 28.0,
+        "max": 100.0
+      },
+      "kat/L": {
+        "min": 0.42,
+        "max": 1.67
+      }
+    }
+  },
+  {
+    "name": "Amónia",
+    "digest": "aaa8416a6feb47b8c636ba78eb3c9ac3",
+    "units": {
+      "µmol/L": {
+        "min": 11.0,
+        "max": 35.0
+      },
+      "mg/dL": {
+        "min": 11.6,
+        "max": 35.0
+      },
+      "µg/dL": {
+        "min": 11.0,
+        "max": 35.0
+      }
+    }
+  },
+  {
+    "name": "anisocitose",
+    "digest": "f084a391507e7108b9b7882304b04d88",
+    "units": {
+      "fL": {
+        "min": null,
+        "max": null
+      },
+      "pg": {
+        "min": null,
+        "max": null
+      },
+      "µm³": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Aspartato aminotransferase / AST / GOT",
+    "digest": "11b0b77dd3fc52dff1e5668cc92075cc",
+    "units": {
+      "U/L": {
+        "min": 8.0,
+        "max": 40.0
+      },
+      "IU/L": {
+        "min": 8.0,
+        "max": 40.0
+      },
+      "µkat/L": {
+        "min": 0.17,
+        "max": 0.52
+      }
+    }
+  },
+  {
+    "name": "Baixo conteúdo de RNA",
+    "digest": "4b4f47da162df4f37816b271415685e8",
+    "units": {
+      "g/dL": {
+        "min": null,
+        "max": 2.0
+      },
+      "mg/dL": {
+        "min": null,
+        "max": 2.0
+      },
+      "µg/dL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Leucograma - Basófilos",
+    "digest": "f1add2733da5105e5d960984f42acbc1",
+    "units": {
+      "%": {
+        "min": 0.0,
+        "max": 2.0
+      },
+      "células/µL": {
+        "min": 0.0,
+        "max": 200.0
+      },
+      "células/mm³": {
+        "min": 0.0,
+        "max": 200.0
+      }
+    }
+  },
+  {
+    "name": "Beta-1-Globulina",
+    "digest": "dfe2fa023d5b5b854544846dba04f770",
+    "units": {
+      "g/dL": {
+        "min": 0.7,
+        "max": 1.1
+      },
+      "mg/dL": {
+        "min": 0.7,
+        "max": 1.2
+      },
+      "g/L": {
+        "min": 0.7,
+        "max": 1.1
+      }
+    }
+  },
+  {
+    "name": "Beta-2-Globulina",
+    "digest": "59473ef07cde8e80b10d670a3c355935",
+    "units": {
+      "g/dL": {
+        "min": 0.7,
+        "max": 1.2
+      },
+      "mg/dL": {
+        "min": 1.2,
+        "max": 3.1
+      },
+      "g/L": {
+        "min": 1.3,
+        "max": 3.3
+      }
+    }
+  },
+  {
+    "name": "Electroforese de Proteinas - Beta (pt)",
+    "units": {
+      "s": {
+        "min": 9.9,
+        "max": 12.1
+      },
+      "ng/mL": {
+        "min": 0.1,
+        "max": 2.0
+      },
+      "UI/L": {
+        "min": 5.0,
+        "max": 35.0
+      }
+    },
+    "digest": "6c2cade26964e5aa6c6975c31b7cb5ad"
+  },
+  {
+    "name": "Bilirrubina Conjugada",
+    "digest": "2fd82b17332c58c8b77256b6acb89f42",
+    "units": {
+      "mg/dL": {
+        "min": 0.0,
+        "max": 0.3
+      },
+      "µmol/L": {
+        "min": 0.0,
+        "max": 6.8
+      },
+      "µmol/dL": {
+        "min": 0.0,
+        "max": 6.8
+      }
+    }
+  },
+  {
+    "name": "Bilirrubina Direta",
+    "digest": "7a0b7477909f70fd29a1ef7bfcf36a75",
+    "units": {
+      "mg/dL": {
+        "min": 0.0,
+        "max": 0.3
+      },
+      "µmol/L": {
+        "min": 0.0,
+        "max": 5.0
+      },
+      "µg/dL": {
+        "min": 0.0,
+        "max": 3.4
+      }
+    }
+  },
+  {
+    "name": "Bilirrubina Total",
+    "digest": "32a2bdde811326aa3e8ae908d99c6ddb",
+    "units": {
+      "mg/dL": {
+        "min": 0.2,
+        "max": 1.2
+      },
+      "µmol/L": {
+        "min": 3.4,
+        "max": 20.5
+      },
+      "mg/L": {
+        "min": 0.2,
+        "max": 1.2
+      }
+    }
+  },
+  {
+    "name": "Cálcio",
+    "digest": "657cd0659a8d7ccfd0793cbb6f1459f0",
+    "units": {
+      "mg/dL": {
+        "min": 8.6,
+        "max": 10.2
+      },
+      "mmol/L": {
+        "min": 2.2,
+        "max": 2.6
+      },
+      "g/dL": {
+        "min": 8.6,
+        "max": 10.2
+      }
+    }
+  },
+  {
+    "name": "Calprotectina",
+    "digest": "1f27906caaff72244cf747ae5e626000",
+    "units": {
+      "µg/g": {
+        "min": 50.0,
+        "max": 120.0
+      },
+      "mg/kg": {
+        "min": null,
+        "max": 50.0
+      },
+      "µg/mL": {
+        "min": 50.0,
+        "max": 120.0
+      }
+    }
+  },
+  {
+    "name": "Capacidade Total de Fixação de Ferro",
+    "digest": "212461fe323bbb541b659c63706e6796",
+    "alternatives": [
+      "Cap. Tot. Fix. Ferro"
+    ],
+    "units": {
+      "µg/dL": {
+        "min": 250.0,
+        "max": 450.0
+      },
+      "µmol/L": {
+        "min": 45.0,
+        "max": 72.0
+      },
+      "mg/dL": {
+        "min": 250.0,
+        "max": 450.0
+      }
+    }
+  },
+  {
+    "name": "Células escamosas epiteliais",
+    "digest": "14346cdaf009d011dda5f3dab90e1df3",
+    "units": {
+      "células/µL": {
+        "min": null,
+        "max": null
+      },
+      "células/mm³": {
+        "min": null,
+        "max": null
+      },
+      "%": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Ceruloplasmina",
+    "digest": "70a9df04818f894a018d43fc4835048f",
+    "units": {
+      "mg/dL": {
+        "min": 20.0,
+        "max": 60.0
+      },
+      "g/L": {
+        "min": 20.0,
+        "max": 60.0
+      },
+      "µmol/L": {
+        "min": 15.0,
+        "max": 60.0
+      }
+    }
+  },
+  {
+    "name": "CK Total (Atividade Enzimática)",
+    "digest": "37992437e18c57861c7cd0f5ab97683e",
+    "units": {
+      "U/L": {
+        "min": 38.0,
+        "max": 174.0
+      },
+      "IU/L": {
+        "min": 38.0,
+        "max": 174.0
+      },
+      "ng/mL": {
+        "min": null,
+        "max": 195.0
+      }
+    }
+  },
+  {
+    "name": "Cloreto",
+    "digest": "4d0e729834b14d6cad1bc45529c34a7a",
+    "units": {
+      "mEq/L": {
+        "min": 98.0,
+        "max": 107.0
+      },
+      "mmol/L": {
+        "min": 98.0,
+        "max": 107.0
+      },
+      "mg/dL": {
+        "min": 98.0,
+        "max": 107.0
+      }
+    }
+  },
+  {
+    "name": "Cloro",
+    "digest": "19c07169cea93ce2ed256139d955ace0",
+    "units": {
+      "mEq/L": {
+        "min": 98.0,
+        "max": 106.0
+      },
+      "mmol/L": {
+        "min": 97.0,
+        "max": 108.0
+      },
+      "mg/dL": {
+        "min": 98.0,
+        "max": 106.0
+      }
+    }
+  },
+  {
+    "name": "Cobre",
+    "digest": "00ba07369691a570d13bf6fe4e1a5595",
+    "units": {
+      "µg/dL": {
+        "min": 70.0,
+        "max": 155.0
+      },
+      "µmol/L": {
+        "min": 11.7,
+        "max": 24.4
+      },
+      "mg/dL": {
+        "min": 0.75,
+        "max": 1.5
+      }
+    }
+  },
+  {
+    "name": "Cobre eritrocitário",
+    "digest": "b0acdaf15313359a4ec1cbaabd3cd6fb",
+    "units": {
+      "µg/g": {
+        "min": null,
+        "max": 70.0
+      },
+      "mg/dL": {
+        "min": null,
+        "max": 1.6
+      },
+      "µmol/L": {
+        "min": 11.7,
+        "max": 24.4
+      }
+    }
+  },
+  {
+    "name": "Colesterol HDL",
+    "digest": "93001f5665118530844a164444c20735",
+    "units": {
+      "mg/dL": {
+        "min": 50.0,
+        "max": 60.0
+      },
+      "mmol/L": {
+        "min": 1.2,
+        "max": 1.7
+      },
+      "g/L": {
+        "min": 1.2,
+        "max": 1.6
+      }
+    }
+  },
+  {
+    "name": "Colesterol LDL",
+    "digest": "a6a4f0f77fb770f4dd6adcfb9ec92cce",
+    "units": {
+      "mg/dL": {
+        "min": 50.0,
+        "max": 190.0
+      },
+      "mmol/L": {
+        "min": 1.5,
+        "max": 4.9
+      },
+      "mg/L": {
+        "min": null,
+        "max": 130.0
+      }
+    }
+  },
+  {
+    "name": "Colesterol Total",
+    "digest": "c61f20b27f2212bd42f29ae68a248992",
+    "units": {
+      "mg/dL": {
+        "min": 125.0,
+        "max": 200.0
+      },
+      "mmol/L": {
+        "min": 3.6,
+        "max": 5.2
+      },
+      "mg/L": {
+        "min": 150.0,
+        "max": 200.0
+      }
+    }
+  },
+  {
+    "name": "Eritrograma - Concentração de Hemoglobina Globular Média / CHGM",
+    "digest": "c7249a53118c4c68a067378bcd18ddb9",
+    "alternatives": [
+      "Concentração de Hemoglobina"
+    ],
+    "units": {
+      "g/dL": {
+        "min": 31.5,
+        "max": 35.5
+      },
+      "pg": {
+        "min": 27.0,
+        "max": 34.0
+      },
+      "g/L": {
+        "min": 27.0,
+        "max": 34.0
+      }
+    }
+  },
+  {
+    "name": "Eritrograma - Macrócitos",
+    "digest": "656b51cefdfcb7a64ddbcc5d3b0ad19d",
+    "units": {
+      "fL": {
+        "min": 80.0,
+        "max": 100.0
+      },
+      "pg": {
+        "min": null,
+        "max": null
+      },
+      "µm³": {
+        "min": 80.0,
+        "max": 100.0
+      }
+    }
+  },
+  {
+    "name": "Contagem de leucócitos",
+    "digest": "c913ad9fb1de47c7f95e4001909bd077",
+    "units": {
+      "células/µL": {
+        "min": 4500.0,
+        "max": 11000.0
+      },
+      "células/mm³": {
+        "min": 4000.0,
+        "max": 10000.0
+      },
+      "%": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Contagem de plaquetas",
+    "digest": "15fadb3855de17e96570dd080d3444c0",
+    "units": {
+      "células/µL": {
+        "min": 150000.0,
+        "max": 450000.0
+      },
+      "células/mm³": {
+        "min": 150000.0,
+        "max": 450000.0
+      },
+      "fL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Corpos Cetónicos",
+    "units": {
+      "mmol/L": {
+        "min": null,
+        "max": 3.0
+      },
+      "mg/dL": {
+        "min": null,
+        "max": 3.0
+      },
+      "µmol/L": {
+        "min": null,
+        "max": 130.0
+      }
+    },
+    "digest": "49bd68067850e067c45c69da072d4242"
+  },
+  {
+    "name": "Cortisol",
+    "digest": "f375dc40398d5b28a79b4950c2391c49",
+    "units": {
+      "µg/dL": {
+        "min": 6.2,
+        "max": 19.4
+      },
+      "nmol/L": {
+        "min": 166.0,
+        "max": 507.0
+      },
+      "µg/L": {
+        "min": 6.2,
+        "max": 19.4
+      }
+    }
+  },
+  {
+    "name": "Cortisol Livre",
+    "units": {
+      "µg/dL": {
+        "min": 3.1,
+        "max": 16.7
+      },
+      "nmol/L": {
+        "min": null,
+        "max": 166.0
+      },
+      "µg/L": {
+        "min": 6.2,
+        "max": 19.4
+      }
+    },
+    "digest": "575bcf0229ea06fce686382df4fb9110"
+  },
+  {
+    "name": "Creatinina",
+    "digest": "b704a0b5b2ac818f88f8f7a35e72cb00",
+    "units": {
+      "mg/dL": {
+        "min": 0.6,
+        "max": 1.1
+      },
+      "µmol/L": {
+        "min": 45.0,
+        "max": 97.0
+      },
+      "mg/L": {
+        "min": 0.6,
+        "max": 1.1
+      }
+    }
+  },
+  {
+    "name": "Crómio",
+    "digest": "333eb4d07037d80978c2fd2aaad38015",
+    "units": {
+      "µg/L": {
+        "min": null,
+        "max": null
+      },
+      "µg/dL": {
+        "min": null,
+        "max": null
+      },
+      "µg/mL": {
+        "min": null,
+        "max": 0.002
+      }
+    }
+  },
+  {
+    "name": "Dehidroepiandrosterona / DHEA",
+    "digest": "a2590b37368d399c5bac9b56e32d2708",
+    "units": {
+      "ng/dL": {
+        "min": 80.0,
+        "max": 560.0
+      },
+      "µg/dL": {
+        "min": 110.0,
+        "max": 370.0
+      },
+      "nmol/L": {
+        "min": 80.0,
+        "max": 560.0
+      }
+    }
+  },
+  {
+    "name": "DELTA-4-ANDROSTENEDIONA",
+    "digest": "81759f3d8d50f64d5d8567e80e96b191",
+    "units": {
+      "ng/dL": {
+        "min": 0.3,
+        "max": 3.3
+      },
+      "ng/mL": {
+        "min": 0.3,
+        "max": 3.3
+      },
+      "µg/dL": {
+        "min": 0.3,
+        "max": 3.3
+      }
+    }
+  },
+  {
+    "name": "Dehidroepiandrosterona Sulfato / DHEA-s",
+    "digest": "d3a440dffb3fdb1a267998e3dabe8ebf",
+    "units": {
+      "µg/dL": {
+        "min": 80.0,
+        "max": 560.0
+      },
+      "ng/mL": {
+        "min": 80.0,
+        "max": 560.0
+      },
+      "µmol/L": {
+        "min": 5.7,
+        "max": 11.7
+      }
+    }
+  },
+  {
+    "name": "Dihidrotestosterona",
+    "digest": "a71cb679136c4aedf9be6d2b965622be",
+    "units": {
+      "pg/mL": {
+        "min": 24.0,
+        "max": 246.0
+      },
+      "ng/dL": {
+        "min": 24.6,
+        "max": 148.7
+      },
+      "ng/mL": {
+        "min": null,
+        "max": 0.8
+      }
+    }
+  },
+  {
+    "name": "Elastase pancreática",
+    "digest": "46804c63e598e9581387fda10fcc1212",
+    "units": {
+      "µg/g": {
+        "min": 200.0,
+        "max": 500.0
+      },
+      "µg/mL": {
+        "min": 0.1,
+        "max": 4.0
+      },
+      "ng/mL": {
+        "min": 0.1,
+        "max": 3.5
+      }
+    }
+  },
+  {
+    "name": "Elevado teor de RNA",
+    "digest": "4889aaf27e71e7847b7a0a4859f77d50",
+    "units": {
+      "g/dL": {
+        "min": null,
+        "max": null
+      },
+      "mg/dL": {
+        "min": null,
+        "max": null
+      },
+      "µg/dL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Leucograma - Eosinófilos",
+    "digest": "760b751d06c6c26998c212beae6c4389",
+    "units": {
+      "%": {
+        "min": 1.0,
+        "max": 6.0
+      },
+      "células/µL": {
+        "min": 50.0,
+        "max": 500.0
+      },
+      "células/mm³": {
+        "min": 50.0,
+        "max": 500.0
+      }
+    }
+  },
+  {
+    "name": "Eritrograma - Eritrócitos",
+    "digest": "977d9df59473fa282f6ed57bd2517e1d",
+    "alternatives": [
+      "Eritrócitos",
+      "Hematócitos",
+      "Glóbulos Vermelhos"
+    ],
+    "units": {
+      "x10^6/µL": {
+        "min": 4.2,
+        "max": 5.4
+      },
+      "x10^12/L": {
+        "min": 4.2,
+        "max": 5.4
+      },
+      "x10^6/mm³": {
+        "min": 4.2,
+        "max": 5.4
+      }
+    }
+  },
+  {
+    "name": "Eritrograma - Eritrócitos hipercrómicos",
+    "digest": "4a6ea11d9ddd8b2271c0c3de238d51ac",
+    "units": {
+      "fL": {
+        "min": null,
+        "max": null
+      },
+      "pg": {
+        "min": null,
+        "max": null
+      },
+      "g/dL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Eritrograma - Eritrócitos hipocrómicos",
+    "digest": "b5d2193dd2d1b796d54cdd7241214a02",
+    "units": {
+      "x10^6/µL": {
+        "min": null,
+        "max": null
+      },
+      "g/dL": {
+        "min": null,
+        "max": 2.0
+      },
+      "pg": {
+        "min": null,
+        "max": 28.0
+      }
+    }
+  },
+  {
+    "name": "Eritropoietina",
+    "digest": "6d15fbf2c79a6e7efaedec8ee8f87103",
+    "units": {
+      "mUI/mL": {
+        "min": 4.3,
+        "max": 29.0
+      },
+      "pg/mL": {
+        "min": 4.1,
+        "max": 19.5
+      },
+      "UI/L": {
+        "min": 4.3,
+        "max": 29.0
+      }
+    }
+  },
+  {
+    "name": "Estradiol",
+    "digest": "0a5c943f0421dd65679582a932e0c687",
+    "units": {
+      "pg/mL": {
+        "min": 30.0,
+        "max": 400.0
+      },
+      "pmol/L": {
+        "min": 110.0,
+        "max": 1460.0
+      },
+      "ng/dL": {
+        "min": 14.0,
+        "max": 350.0
+      }
+    }
+  },
+  {
+    "name": "Estradiol Total - E3",
+    "digest": "450a392e718d98c41f8398d57deb433c",
+    "units": {
+      "pg/mL": {
+        "min": 30.0,
+        "max": 400.0
+      },
+      "pmol/L": {
+        "min": null,
+        "max": 734.0
+      },
+      "ng/dL": {
+        "min": 30.0,
+        "max": 400.0
+      }
+    }
+  },
+  {
+    "name": "Fator Reumatoide",
+    "digest": "ae425f2064fc502feffc7766943a285c",
+    "units": {
+      "UI/mL": {
+        "min": null,
+        "max": 14.0
+      },
+      "IU/mL": {
+        "min": null,
+        "max": 14.0
+      },
+      "mg/dL": {
+        "min": null,
+        "max": 14.0
+      }
+    }
+  },
+  {
+    "name": "Ferritina",
+    "digest": "19b33c9b351513b76fde2deb25140d30",
+    "units": {
+      "ng/mL": {
+        "min": 10.0,
+        "max": 150.0
+      },
+      "µg/L": {
+        "min": 20.0,
+        "max": 200.0
+      },
+      "ng/dL": {
+        "min": 10.0,
+        "max": 150.0
+      }
+    }
+  },
+  {
+    "name": "Ferro",
+    "digest": "d8a1238ea725543b45d0154c5be0cd11",
+    "units": {
+      "µg/dL": {
+        "min": 50.0,
+        "max": 170.0
+      },
+      "ng/mL": {
+        "min": 22.0,
+        "max": 184.0
+      },
+      "µmol/L": {
+        "min": 7.2,
+        "max": 25.9
+      }
+    }
+  },
+  {
+    "name": "Fosfatase Alcalina",
+    "digest": "5c62b8ab1bdd78f71d4a5a1e6c356d82",
+    "units": {
+      "U/L": {
+        "min": 35.0,
+        "max": 104.0
+      },
+      "IU/L": {
+        "min": 35.0,
+        "max": 104.0
+      },
+      "µkat/L": {
+        "min": 0.5,
+        "max": 1.3
+      }
+    }
+  },
+  {
+    "name": "Fósforo",
+    "digest": "3368f0eb1f24cc0228b4938f965e7e17",
+    "units": {
+      "mg/dL": {
+        "min": 2.5,
+        "max": 4.5
+      },
+      "mmol/L": {
+        "min": 0.87,
+        "max": 1.45
+      },
+      "µmol/L": {
+        "min": 0.87,
+        "max": 1.45
+      }
+    }
+  },
+  {
+    "name": "Hormona Folículo Estimulante / FSH",
+    "digest": "69fd94e4f697f68cf6aa3d5ad9a4efcd",
+    "units": {
+      "mUI/mL": {
+        "min": 4.7,
+        "max": 21.5
+      },
+      "ng/mL": {
+        "min": 1.5,
+        "max": 12.4
+      },
+      "IU/L": {
+        "min": 2.5,
+        "max": 10.2
+      }
+    }
+  },
+  {
+    "name": "Electroforese de Proteinas - Gama",
+    "digest": "2a80f76c7099b4853ae7f5d18de8d3fc",
+    "units": {
+      "g/dL": {
+        "min": 0.6,
+        "max": 1.6
+      },
+      "g/L": {
+        "min": 6.6,
+        "max": 11.1
+      },
+      "mg/dL": {
+        "min": 11.1,
+        "max": 22.3
+      }
+    }
+  },
+  {
+    "name": "Gama Glutamil-Transferase - GGT",
+    "digest": "10d56474f56e8931d9cfaf60bc3a1110",
+    "units": {
+      "U/L": {
+        "min": 9.0,
+        "max": 36.0
+      }
+    }
+  },
+  {
+    "name": "Glicemia",
+    "digest": "e24b885dd7651b8d83bcd6113b429b8f",
+    "units": {
+      "mg/dL": {
+        "min": 70.0,
+        "max": 99.0
+      },
+      "mmol/L": {
+        "min": 4.0,
+        "max": 5.4
+      },
+      "g/L": {
+        "min": 0.74,
+        "max": 1.06
+      }
+    }
+  },
+  {
+    "name": "Glicemia média estimada (GME - ADA)",
+    "digest": "372f542e91990ef5978e398ca925b147",
+    "units": {
+      "mg/dL": {
+        "min": 97.0,
+        "max": 123.0
+      },
+      "mmol/L": {
+        "min": 42.0,
+        "max": 53.0
+      },
+      "g/L": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Glicose",
+    "digest": "39d96affdd90be39b52d937c44fd19a2",
+    "units": {
+      "mg/dL": {
+        "min": 70.0,
+        "max": 99.0
+      },
+      "mmol/L": {
+        "min": 3.9,
+        "max": 5.5
+      },
+      "mg/100mL": {
+        "min": 70.0,
+        "max": 99.0
+      }
+    }
+  },
+  {
+    "name": "Globulina Ligada às Hormonas Sexuais Basal / SHBG",
+    "digest": "088f4241150778b308e46687b2937c24",
+    "units": {
+      "nmol/L": {
+        "min": 18.0,
+        "max": 144.0
+      },
+      "µg/mL": {
+        "min": 18.0,
+        "max": 144.0
+      },
+      "nmol/dL": {
+        "min": 18.0,
+        "max": 144.0
+      }
+    }
+  },
+  {
+    "name": "Granulócitos Imaturos",
+    "digest": "4d7baad86347e3a213d487682411972a",
+    "units": {
+      "%": {
+        "min": 0.0,
+        "max": 2.0
+      },
+      "": {
+        "min": null,
+        "max": 0.05
+      },
+      "células/µL": {
+        "min": null,
+        "max": 200.0
+      },
+      "células/mm³": {
+        "min": null,
+        "max": 200.0
+      }
+    }
+  },
+  {
+    "name": "Eritrograma - Hematócrito / Hct",
+    "digest": "798ffd0cec61c2dd197800ea6e9b6b81",
+    "alternatives": [
+      "Volume Globular / Hematócrito (Hct)"
+    ],
+    "units": {
+      "%": {
+        "min": 37.0,
+        "max": 47.0
+      },
+      "g/dL": {
+        "min": null,
+        "max": null
+      },
+      "células/mm³": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Eritrograma - Hemoglobina / Hb",
+    "digest": "10bb85ae4d365038bdbcfa4d678ed442",
+    "alternatives": [
+      "Hemoglobina"
+    ],
+    "units": {
+      "g/dL": {
+        "min": 12.1,
+        "max": 15.1
+      },
+      "g/L": {
+        "min": 120.0,
+        "max": 160.0
+      },
+      "mg/dL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Hemoglobina Glicada / HbA1C",
+    "digest": "db9d6611c139cd61c883894479836e6b",
+    "units": {
+      "%": {
+        "min": 4.0,
+        "max": 5.6
+      }
+    }
+  },
+  {
+    "name": "Hemoglobina Glicada - IFCC / HbA1C - IFCC",
+    "digest": "8aa324a943d639e9fbf6eb13d41f75ca",
+    "units": {
+      "%\nmmol/mol\nmmol/L": {}
+    }
+  },
+  {
+    "name": "Eritrograma - Hemoglobina Globular Média / HGM",
+    "digest": "06e1442e1761c1e699788e486738ead0",
+    "units": {
+      "g/dL": {
+        "min": 27.0,
+        "max": 34.0
+      },
+      "pg": {
+        "min": 27.0,
+        "max": 31.0
+      },
+      "g/L": {
+        "min": 27.0,
+        "max": 34.0
+      }
+    }
+  },
+  {
+    "name": "Homocisteína",
+    "digest": "c19dfcebfe8ed63eaeb7ebaa96cffaba",
+    "units": {
+      "µmol/L": {
+        "min": 4.4,
+        "max": 13.56
+      },
+      "nmol/mL": {
+        "min": null,
+        "max": 15.0
+      },
+      "µmol/g": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Hormona Folículo Estimulante / FSH",
+    "digest": "69fd94e4f697f68cf6aa3d5ad9a4efcd",
+    "units": {
+      "mUI/mL": {
+        "min": 4.7,
+        "max": 21.5
+      },
+      "ng/mL": {
+        "min": 1.5,
+        "max": 12.4
+      },
+      "IU/L": {
+        "min": 6.7,
+        "max": 112.0
+      }
+    }
+  },
+  {
+    "name": "Hormona Luteotrófica / LH",
+    "digest": "538d12c4c9f1ac5f9d7631a988401d0e",
+    "units": {
+      "mUI/mL": {
+        "min": 2.4,
+        "max": 12.6
+      },
+      "mIU/mL": {
+        "min": 2.4,
+        "max": 12.6
+      },
+      "ng/mL": {
+        "min": 2.4,
+        "max": 12.6
+      }
+    }
+  },
+  {
+    "name": "Hormona Paratiroideia Intacta / PTH-I",
+    "digest": "776691c39ebf2d15f81bd8f14fb86c9f",
+    "units": {
+      "pg/mL": {
+        "min": 15.0,
+        "max": 65.0
+      },
+      "ng/L": {
+        "min": 15.0,
+        "max": 65.0
+      },
+      "pmol/L": {
+        "min": 1.6,
+        "max": 6.9
+      }
+    }
+  },
+  {
+    "name": "Imunoglobulina A - IgA",
+    "digest": "93026613b0fbc43063213cf34227f467",
+    "units": {
+      "mg/dL": {
+        "min": 70.0,
+        "max": 400.0
+      },
+      "g/L": {
+        "min": 0.7,
+        "max": 4.0
+      },
+      "mg/L": {
+        "min": 70.0,
+        "max": 400.0
+      }
+    }
+  },
+  {
+    "name": "Imunoglobulina A secretora - IgA secretora",
+    "digest": "dcb7e22abc92dbe10774712dc4b4a0ee",
+    "units": {
+      "µg/mL": {
+        "min": null,
+        "max": 370.0
+      },
+      "mg/dL": {
+        "min": null,
+        "max": null
+      },
+      "g/L": {
+        "min": 0.7,
+        "max": 4.0
+      }
+    }
+  },
+  {
+    "name": "Imunoglobulina G - IgG",
+    "digest": "e387ae6c02ada8d681f68a6276f1695a",
+    "units": {
+      "mg/dL": {
+        "min": 700.0,
+        "max": 1600.0
+      },
+      "g/L": {
+        "min": 7.0,
+        "max": 16.0
+      },
+      "mg/L": {
+        "min": 7000.0,
+        "max": 16000.0
+      }
+    }
+  },
+  {
+    "name": "Imunoglobulina M - IgM",
+    "digest": "2b68e2dcb83a70e5e23f69cb925c8b5a",
+    "units": {
+      "mg/dL": {
+        "min": 40.0,
+        "max": 230.0
+      },
+      "g/L": {
+        "min": 0.4,
+        "max": 2.3
+      },
+      "µg/mL": {
+        "min": 40.0,
+        "max": 230.0
+      }
+    }
+  },
+  {
+    "name": "Índice de Anisocitose RBC - RDW - CV",
+    "digest": "6d2e018361b097d329fa1d9f42cef1ab",
+    "units": {
+      "fL": {
+        "min": 11.6,
+        "max": 14.6
+      },
+      "%": {
+        "min": 11.6,
+        "max": 14.6
+      },
+      "pg": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Índice de Anisocitose RBC - RDW - SD",
+    "digest": "964546f13bda211dab2cb551f9a6442a",
+    "units": {
+      "fL": {
+        "min": 39.0,
+        "max": 46.0
+      },
+      "%": {
+        "min": 39.0,
+        "max": 46.0
+      },
+      "pg": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Eritrograma - Índice de Distribuição da Hemoglobina - HDW",
+    "digest": "c02048b15c9042357260ed056a463eb9",
+    "units": {
+      "g/dL": {
+        "min": null,
+        "max": null
+      },
+      "pg": {
+        "min": null,
+        "max": null
+      },
+      "fL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Eritrograma - Índice de Distribuição dos Eritrócitos - RDW",
+    "digest": "a662f24376d8c3ba48532c821f135b95",
+    "units": {
+      "%": {
+        "min": 11.5,
+        "max": 14.5
+      },
+      "fl": {
+        "min": 11.5,
+        "max": 14.5
+      },
+      "pg": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Eritrograma - Índice de Distribuição Plaquetária - PDW",
+    "digest": "9cd98b10ed67137823913aee444b8fa5",
+    "units": {
+      "fL": {
+        "min": 9.0,
+        "max": 17.0
+      },
+      "%": {
+        "min": 9.0,
+        "max": 17.0
+      },
+      "células/µL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Índice de Protrombina",
+    "digest": "bc6e5d0a85da3afbac089ea1ee74891a",
+    "units": {
+      "%": {
+        "min": 70.0,
+        "max": 100.0
+      },
+      "segundos": {
+        "min": 11.0,
+        "max": 14.5
+      },
+      "INR": {
+        "min": 0.8,
+        "max": 1.2
+      }
+    }
+  },
+  {
+    "name": "Insulina",
+    "digest": "872ef88982f2617a460a268b0918a4b6",
+    "units": {
+      "µU/mL": {
+        "min": 2.6,
+        "max": 24.9
+      },
+      "pmol/L": {
+        "min": 3.0,
+        "max": 25.0
+      },
+      "µIU/mL": {
+        "min": 2.6,
+        "max": 24.9
+      }
+    }
+  },
+  {
+    "name": "L.E.D.W. (Líquido Extracelular e Desequilíbrio de Água)",
+    "digest": "29712650feffa6ea211f7022217e8c1e",
+    "units": {
+      "mEq/L": {
+        "min": null,
+        "max": null
+      },
+      "mmol/L": {
+        "min": null,
+        "max": null
+      },
+      "mg/dL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Lactato desidrogenase - LDH",
+    "digest": "01fc934a711b777eaa441b01a66fea01",
+    "units": {
+      "U/L": {
+        "min": 135.0,
+        "max": 214.0
+      },
+      "IU/L": {
+        "min": 135.0,
+        "max": 214.0
+      },
+      "µkat/L": {
+        "min": 2.25,
+        "max": 3.75
+      }
+    }
+  },
+  {
+    "name": "Leucograma - Leucócitos",
+    "digest": "e691c48f36f28a72bd8334a9cbe24c88",
+    "units": {
+      "células/µL": {
+        "min": 4500.0,
+        "max": 11000.0
+      },
+      "células/mm³": {
+        "min": 4000.0,
+        "max": 10000.0
+      },
+      "%": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Leucócitos (sedimento urinário)",
+    "digest": "d7f06a31036cd8f353f88ac5daf95e3c",
+    "units": {
+      "células/µL": {
+        "min": 0.0,
+        "max": 20.0
+      },
+      "células/mm³": {
+        "min": 0.0,
+        "max": 10.0
+      },
+      "mg/dL": {
+        "min": null,
+        "max": 20.0
+      }
+    }
+  },
+  {
+    "name": "Leucograma - Linfócitos",
+    "digest": "71e0c21f3184aa601f0c06f142599df1",
+    "units": {
+      "%": {
+        "min": 20.0,
+        "max": 40.0
+      },
+      "células/µL": {
+        "min": 1000.0,
+        "max": 4800.0
+      },
+      "células/mm³": {
+        "min": 1000.0,
+        "max": 4800.0
+      }
+    }
+  },
+  {
+    "name": "Lítio",
+    "digest": "637e7afb8efa7121d5136cdad5a304a1",
+    "units": {
+      "mEq/L": {
+        "min": 0.6,
+        "max": 1.2
+      },
+      "µg/L": {
+        "min": 0.5,
+        "max": 1.2
+      },
+      "mmol/L": {
+        "min": 0.6,
+        "max": 1.2
+      }
+    }
+  },
+  {
+    "name": "Luteína estimulante plasmática - LH",
+    "digest": "3f856221df0cf3f35100e335d013a1e6",
+    "units": {
+      "mUI/mL": {
+        "min": 2.4,
+        "max": 12.6
+      },
+      "ng/mL": {
+        "min": 2.4,
+        "max": 12.6
+      },
+      "U/L": {
+        "min": 2.4,
+        "max": 12.6
+      }
+    }
+  },
+  {
+    "name": "Macrocitose",
+    "digest": "35662f116e7112594af88ac906095852",
+    "units": {
+      "fL": {
+        "min": 80.0,
+        "max": 100.0
+      },
+      "pg": {
+        "min": null,
+        "max": null
+      },
+      "µm³": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Magnésio",
+    "digest": "4385dbcae4444d7d1b494bfc6c1bb611",
+    "units": {
+      "mg/dL": {
+        "min": 1.7,
+        "max": 2.2
+      },
+      "mmol/L": {
+        "min": 0.7,
+        "max": 1.0
+      },
+      "µmol/L": {
+        "min": 0.7,
+        "max": 1.05
+      }
+    }
+  },
+  {
+    "name": "Magnésio Eritrocitário",
+    "digest": "01b8c16db6772d325e413a167f2abcfb",
+    "units": {
+      "mmol/L": {
+        "min": 1.7,
+        "max": 2.6
+      },
+      "mg/dL": {
+        "min": 1.5,
+        "max": 2.5
+      },
+      "mmol/g Hb": {
+        "min": 1.65,
+        "max": 2.65
+      }
+    }
+  },
+  {
+    "name": "Leucograma - Monócitos",
+    "digest": "d34e9d666a1b317ee6eb393338eb2c55",
+    "units": {
+      "%": {
+        "min": 2.0,
+        "max": 10.0
+      },
+      "células/µL": {
+        "min": 200.0,
+        "max": 950.0
+      },
+      "células/mm³": {
+        "min": 200.0,
+        "max": 800.0
+      }
+    }
+  },
+  {
+    "name": "Leucograma - Neutrófilos",
+    "digest": "988312d026f22b51cadb9db32c5e93d6",
+    "units": {
+      "%": {
+        "min": 40.0,
+        "max": 75.0
+      },
+      "células/µL": {
+        "min": 1500.0,
+        "max": 7700.0
+      },
+      "células/mm³": {
+        "min": 1500.0,
+        "max": 7700.0
+      }
+    }
+  },
+  {
+    "name": "pH",
+    "digest": "da984e42a5899bbdac496ef0cbadcee2",
+    "units": {
+      "-": {
+        "min": 7.35,
+        "max": 7.45
+      }
+    }
+  },
+  {
+    "name": "Plaquetas",
+    "digest": "10681151bb5874b251a5e2cb4fb280a2",
+    "units": {
+      "células/µL": {
+        "min": 150000.0,
+        "max": 450000.0
+      },
+      "células/mm³": {
+        "min": 150000.0,
+        "max": 450000.0
+      },
+      "10^3/µL": {
+        "min": 150.0,
+        "max": 450.0
+      }
+    }
+  },
+  {
+    "name": "Plaquetocrito - PCT",
+    "digest": "0c62cf3f83617aee6bcf223254c3d6d7",
+    "units": {
+      "fL": {
+        "min": 0.108,
+        "max": 0.282
+      },
+      "%": {
+        "min": 0.22,
+        "max": 0.24
+      },
+      "células/µL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Potássio",
+    "digest": "fe1e7c66fac51ea473eeee35176db261",
+    "units": {
+      "mEq/L": {
+        "min": 3.5,
+        "max": 5.0
+      },
+      "mmol/L": {
+        "min": 3.5,
+        "max": 5.1
+      },
+      "mg/dL": {
+        "min": 3.5,
+        "max": 5.1
+      }
+    }
+  },
+  {
+    "name": "Progesterona (P4)",
+    "digest": "37ae5d0824a53cd10492b8bd6c6aa473",
+    "units": {
+      "ng/mL": {
+        "min": 0.2,
+        "max": 1.4
+      },
+      "ng/dL": {
+        "min": 0.2,
+        "max": 1.4
+      },
+      "µg/L": {
+        "min": 0.2,
+        "max": 1.4
+      }
+    }
+  },
+  {
+    "name": "Prolactina",
+    "digest": "4fe8ff88ea81cbd01e67f0e472d27204",
+    "units": {
+      "ng/mL": {
+        "min": 4.79,
+        "max": 23.3
+      },
+      "µg/L": {
+        "min": 4.79,
+        "max": 23.3
+      },
+      "mIU/L": {
+        "min": 102.0,
+        "max": 496.0
+      }
+    }
+  },
+  {
+    "name": "Proteína Albumina",
+    "digest": "6e42e73481b977bb14165cd51fd54cad",
+    "units": {
+      "g/dL": {
+        "min": 3.4,
+        "max": 5.4
+      },
+      "g/L": {
+        "min": 35.0,
+        "max": 50.0
+      },
+      "mg/dL": {
+        "min": 3.4,
+        "max": 5.4
+      }
+    }
+  },
+  {
+    "name": "Proteína C Reativa - PCR",
+    "digest": "01f4671a2e060765a3bd11aebd6a6a15",
+    "units": {
+      "mg/L": {
+        "min": 0.0,
+        "max": 5.0
+      },
+      "mg/dL": {
+        "min": 0.0,
+        "max": 0.5
+      },
+      "µg/mL": {
+        "min": 0.0,
+        "max": 5.0
+      }
+    }
+  },
+  {
+    "name": "Proteínas Totais",
+    "digest": "85ef66a70292cc7123e5dfcaabec5457",
+    "units": {
+      "g/dL": {
+        "min": 6.4,
+        "max": 8.3
+      },
+      "g/L": {
+        "min": 64.0,
+        "max": 83.0
+      },
+      "mg/dL": {
+        "min": 6.4,
+        "max": 8.3
+      }
+    }
+  },
+  {
+    "name": "Quimotripsina",
+    "digest": "93613adeee99cb1484991e1c3767b501",
+    "units": {
+      "µg/mL": {
+        "min": 3.8,
+        "max": 22.0
+      },
+      "ng/mL": {
+        "min": 3.8,
+        "max": 20.0
+      },
+      "mg/dL": {
+        "min": 3.8,
+        "max": 22.0
+      }
+    }
+  },
+  {
+    "name": "Reticulócitos",
+    "digest": "24388825766915c6c1d93398953b96c2",
+    "units": {
+      "%": {
+        "min": 0.5,
+        "max": 2.5
+      },
+      "": {
+        "min": 0.5,
+        "max": 2.5
+      },
+      "células/µL": {
+        "min": 25.0,
+        "max": 100.0
+      },
+      "células/mm³": {
+        "min": 25.0,
+        "max": 100.0
+      }
+    }
+  },
+  {
+    "name": "Reticulócitos - Baixo teor em RNA",
+    "digest": "009afe4bd0ef56667b461e6bd4b9189d",
+    "units": {
+      "fl": {
+        "min": null,
+        "max": 32.0
+      },
+      "g/dL": {
+        "min": null,
+        "max": 2.0
+      },
+      "%": {
+        "min": 0.5,
+        "max": 2.5
+      }
+    }
+  },
+  {
+    "name": "Reticulócitos - Médio teor em RNA",
+    "digest": "ab2102b6fc225ecc990100f1d374cba1",
+    "units": {
+      "fl": {
+        "min": 27.0,
+        "max": 32.0
+      },
+      "fl%": {
+        "min": null,
+        "max": null
+      },
+      "%": {
+        "min": 27.0,
+        "max": 47.0
+      }
+    }
+  },
+  {
+    "name": "Reticulócitos - Alto teor em RNA",
+    "digest": "d10432f3aa4657f1fbacb4132060d421",
+    "units": {
+      "fL": {
+        "min": null,
+        "max": null
+      },
+      "%": {
+        "min": 0.5,
+        "max": 2.5
+      },
+      "x10^9/L": {
+        "min": 24.0,
+        "max": 85.0
+      }
+    }
+  },
+  {
+    "name": "Saturação da Transferrina",
+    "digest": "7a9073f1def7cd423e20791ae845943e",
+    "units": {
+      "%": {
+        "min": 20.0,
+        "max": 50.0
+      },
+      "g/dL": {
+        "min": 20.0,
+        "max": 50.0
+      },
+      "mg/dL": {
+        "min": 20.0,
+        "max": 50.0
+      }
+    }
+  },
+  {
+    "name": "Selénio",
+    "digest": "f2a9884e8f353befb5d9d3535cc8b307",
+    "units": {
+      "µg/L": {
+        "min": 79.0,
+        "max": 152.0
+      },
+      "µg/dL": {
+        "min": 7.0,
+        "max": 17.0
+      },
+      "µg/mL": {
+        "min": 70.0,
+        "max": 150.0
+      }
+    }
+  },
+  {
+    "name": "Sódio",
+    "digest": "2fc267a9fc867a115c50f0a2e75577fb",
+    "units": {
+      "mEq/L": {
+        "min": 136.0,
+        "max": 145.0
+      },
+      "mmol/L": {
+        "min": 135.0,
+        "max": 145.0
+      },
+      "mg/dL": {
+        "min": 136.0,
+        "max": 145.0
+      }
+    }
+  },
+  {
+    "name": "Urobilinogénio",
+    "digest": "d52c0713f2ea167750068da56a6a3cbf",
+    "units": {
+      "µmol/L": {
+        "min": 3.2,
+        "max": 16.0
+      },
+      "mg/dL": {
+        "min": 0.2,
+        "max": 1.0
+      },
+      "µg/dL": {
+        "min": 0.2,
+        "max": 1.0
+      }
+    }
+  },
+  {
+    "name": "Somatomedina Basal - IGF-1",
+    "digest": "439f0d048800f77d3f26b5fe85020fba",
+    "units": {
+      "ng/mL": {
+        "min": 84.0,
+        "max": 246.0
+      },
+      "µg/L": {
+        "min": 84.0,
+        "max": 255.0
+      },
+      "ng/dL": {
+        "min": 63.0,
+        "max": 267.0
+      }
+    }
+  },
+  {
+    "name": "Triiodotironina - T3",
+    "digest": "8c8fd4f0ae5e8a52b56589bf05ee5d52",
+    "units": {
+      "ng/dL": {
+        "min": 80.0,
+        "max": 200.0
+      },
+      "pg/mL": {
+        "min": 2.3,
+        "max": 4.2
+      },
+      "pmol/L": {
+        "min": 1.3,
+        "max": 3.1
+      }
+    }
+  },
+  {
+    "name": "Triiodotironina Livre - T3 Livre",
+    "digest": "28bf2c24383c85f7dc9ab6fb2e914734",
+    "units": {
+      "pg/mL": {
+        "min": 2.0,
+        "max": 4.4
+      },
+      "ng/dL": {
+        "min": 2.0,
+        "max": 4.4
+      },
+      "pmol/L": {
+        "min": 3.1,
+        "max": 6.8
+      }
+    }
+  },
+  {
+    "name": "Triiodotironina Total - T3 Total",
+    "digest": "8e052908f1499a11362e3f8be4bfe009",
+    "units": {
+      "ng/dL": {
+        "min": 80.0,
+        "max": 200.0
+      },
+      "ng/mL": {
+        "min": 0.8,
+        "max": 2.0
+      },
+      "µg/dL": {
+        "min": 0.8,
+        "max": 2.0
+      }
+    }
+  },
+  {
+    "name": "Tiroxina - T4",
+    "digest": "9d29dfb231a7a5a173ebcd49b4abac8e",
+    "units": {
+      "ng/dL": {
+        "min": 5.0,
+        "max": 12.0
+      },
+      "µg/dL": {
+        "min": 4.5,
+        "max": 12.0
+      },
+      "nmol/L": {
+        "min": 66.0,
+        "max": 181.0
+      }
+    }
+  },
+  {
+    "name": "Tiroxina Livre - T4 Livre",
+    "digest": "797aa35aaf1d4b92c4071c2adf0ff68d",
+    "units": {
+      "pg/mL": {
+        "min": 0.9,
+        "max": 1.7
+      },
+      "ng/dL": {
+        "min": 0.9,
+        "max": 1.7
+      },
+      "pmol/L": {
+        "min": 12.0,
+        "max": 22.0
+      }
+    }
+  },
+  {
+    "name": "Tiroxina Total - T4 Total",
+    "digest": "ee0ed0f68f0dcb75f8fd669dd2a9f109",
+    "units": {
+      "ng/dL": {
+        "min": 4.5,
+        "max": 12.0
+      },
+      "µg/dL": {
+        "min": 4.5,
+        "max": 12.0
+      },
+      "nmol/L": {
+        "min": 66.0,
+        "max": 181.0
+      }
+    }
+  },
+  {
+    "name": "Tempo de Protrombina",
+    "digest": "00578c09dc061aaa6db0e1d887ffe8c8",
+    "units": {
+      "segundos": {
+        "min": 11.0,
+        "max": 14.5
+      },
+      "INR": {
+        "min": 0.8,
+        "max": 1.2
+      },
+      "%": {
+        "min": 70.0,
+        "max": 130.0
+      }
+    }
+  },
+  {
+    "name": "Tempo de Protrombina - RNI",
+    "digest": "e5208202b152b04322c3bd12b7ff761d",
+    "units": {
+      "segundos": {
+        "min": null,
+        "max": null
+      },
+      "RNI": {
+        "min": 0.8,
+        "max": 1.2
+      },
+      "INR": {
+        "min": 0.8,
+        "max": 1.2
+      }
+    }
+  },
+  {
+    "name": "Teor médio de RNA",
+    "digest": "3a83c3cd29879978560dce4c80900adf",
+    "units": {
+      "ng/mL": {
+        "min": null,
+        "max": null
+      },
+      "pg/mL": {
+        "min": null,
+        "max": null
+      },
+      "µg/mL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Teste de Magnésio",
+    "digest": "43e515af7dd76fa71b1d43caa891f876",
+    "units": {
+      "mg/dL": {
+        "min": 1.7,
+        "max": 2.2
+      },
+      "mmol/L": {
+        "min": 0.7,
+        "max": 1.0
+      },
+      "µmol/L": {
+        "min": 0.7,
+        "max": 1.05
+      }
+    }
+  },
+  {
+    "name": "Teste de Proteínas",
+    "digest": "38b22551d493a48759db3b5a23dea42a",
+    "units": {
+      "g/dL": {
+        "min": 6.0,
+        "max": 8.3
+      },
+      "mg/dL": {
+        "min": 6.4,
+        "max": 8.3
+      },
+      "g/L": {
+        "min": 64.0,
+        "max": 83.0
+      }
+    }
+  },
+  {
+    "name": "Calcitonina",
+    "digest": "bedbb59af633357f725eaeb88666c93f",
+    "units": {
+      "pg/mL": {
+        "min": null,
+        "max": 10.0
+      },
+      "ng/L": {
+        "min": 1.5,
+        "max": 11.5
+      },
+      "pmol/L": {
+        "min": 1.5,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Osteocalcina",
+    "digest": "ec968a9eb968d80e8d6e029a13800f7f",
+    "units": {
+      "ng/mL": {
+        "min": 11.0,
+        "max": 43.0
+      },
+      "µg/L": {
+        "min": 11.0,
+        "max": 43.0
+      },
+      "ng/dL": {
+        "min": 11.2,
+        "max": 43.2
+      }
+    }
+  },
+  {
+    "name": "Testosterona Livre",
+    "digest": "f54d717ffd919a4ec8489406c8924bf2",
+    "units": {
+      "pg/mL": {
+        "min": 0.7,
+        "max": 3.6
+      },
+      "ng/dL": {
+        "min": 0.6,
+        "max": 6.8
+      },
+      "nmol/L": {
+        "min": 0.7,
+        "max": 3.6
+      }
+    }
+  },
+  {
+    "name": "Testosterona Total",
+    "digest": "00427e1a4e6265f0912d5ae10f20f5ad",
+    "units": {
+      "ng/dL": {
+        "min": 8.0,
+        "max": 60.0
+      },
+      "nmol/L": {
+        "min": 0.3,
+        "max": 2.4
+      },
+      "µg/L": {
+        "min": 0.15,
+        "max": 0.76
+      }
+    }
+  },
+  {
+    "name": "Testosterona Total Plasmática (TTP)",
+    "digest": "cc902f1ea5f778c0f29936c6748069f0",
+    "units": {
+      "ng/dL": {
+        "min": 14.0,
+        "max": 76.0
+      },
+      "nmol/L": {
+        "min": 0.5,
+        "max": 2.4
+      },
+      "µg/L": {
+        "min": 0.15,
+        "max": 0.76
+      }
+    }
+  },
+  {
+    "name": "Transaminase Glutâmico-Oxalacética (TGO)",
+    "digest": "08f81e09134ef02693e855137aa2cb75",
+    "units": {
+      "U/L": {
+        "min": 8.0,
+        "max": 40.0
+      },
+      "IU/L": {
+        "min": 5.0,
+        "max": 34.0
+      },
+      "µkat/L": {
+        "min": 0.25,
+        "max": 0.75
+      }
+    }
+  },
+  {
+    "name": "Transaminase Glutâmico-Pirúvica (TGP)",
+    "digest": "1215c9705a05c881b91935cc9720760f",
+    "units": {
+      "UI/L": {
+        "min": 7.0,
+        "max": 35.0
+      },
+      "U/L": {
+        "min": 7.0,
+        "max": 35.0
+      },
+      "µkat/L": {
+        "min": 0.17,
+        "max": 0.63
+      }
+    }
+  },
+  {
+    "name": "Transferrina",
+    "digest": "56fa00b24c41a7ee726b34b97de9bc2b",
+    "units": {
+      "mg/dL": {
+        "min": 200.0,
+        "max": 360.0
+      },
+      "g/L": {
+        "min": 2.0,
+        "max": 3.6
+      },
+      "µmol/L": {
+        "min": 20.7,
+        "max": 51.8
+      }
+    }
+  },
+  {
+    "name": "Triglicéridos",
+    "digest": "b27bc80a7d221394795199b088f030a4",
+    "units": {
+      "mg/dL": {
+        "min": null,
+        "max": 150.0
+      },
+      "mmol/L": {
+        "min": 0.0,
+        "max": 1.7
+      },
+      "µmol/L": {
+        "min": 0.56,
+        "max": 2.26
+      }
+    }
+  },
+  {
+    "name": "Hormona Tiro-Estimulante - TSH",
+    "digest": "95354b11ce729f5ba52734e00f2e3f94",
+    "units": {
+      "µIU/mL": {
+        "min": 0.4,
+        "max": 4.0
+      },
+      "mU/L": {
+        "min": 0.4,
+        "max": 4.0
+      },
+      "ng/mL": {
+        "min": 0.4,
+        "max": 4.0
+      }
+    }
+  },
+  {
+    "name": "Ureia",
+    "digest": "5e4ebfae4f189b00faaf5662a14bdc27",
+    "units": {
+      "mg/dL": {
+        "min": 10.0,
+        "max": 50.0
+      },
+      "mmol/L": {
+        "min": 2.5,
+        "max": 7.1
+      },
+      "mg/24h": {
+        "min": null,
+        "max": 550.0
+      }
+    }
+  },
+  {
+    "name": "Eritrograma - Velocidade de Sedimentação",
+    "digest": "e664348ea3465925fdc5773ddc621788",
+    "units": {
+      "mm/h": {
+        "min": 0.0,
+        "max": 20.0
+      }
+    }
+  },
+  {
+    "name": "Eritrograma - Volume Corpuscular Médio / VCM",
+    "digest": "8fcc88c1a764d3c8c5b8eacbb70fc536",
+    "units": {
+      "fL": {
+        "min": 80.0,
+        "max": 100.0
+      },
+      "µm³": {
+        "min": 80.0,
+        "max": 100.0
+      },
+      "mm³": {
+        "min": 80.0,
+        "max": 100.0
+      }
+    }
+  },
+  {
+    "name": "Eritrograma - Hemoglobina Corpuscular Média / HCM",
+    "digest": "1b80ef650edc27cb6998ab5544fe43df",
+    "units": {
+      "g/dL": {
+        "min": 27.0,
+        "max": 34.0
+      },
+      "pg": {
+        "min": 27.0,
+        "max": 33.0
+      },
+      "g/L": {
+        "min": 27.0,
+        "max": 34.0
+      }
+    }
+  },
+  {
+    "name": "Vitamina A",
+    "digest": "3d16b8611fc29b7de307073f89ac66f2",
+    "units": {
+      "µg/dL": {
+        "min": 20.0,
+        "max": 50.0
+      },
+      "µg/L": {
+        "min": 30.0,
+        "max": 70.0
+      },
+      "µg/mL": {
+        "min": 30.0,
+        "max": 65.0
+      }
+    }
+  },
+  {
+    "name": "Vitamina B12 - Cianocobalamina",
+    "digest": "06579c371fa7e26b63985532853a84c9",
+    "units": {
+      "pg/mL": {
+        "min": 200.0,
+        "max": 900.0
+      },
+      "ng/L": {
+        "min": 200.0,
+        "max": 900.0
+      },
+      "pmol/L": {
+        "min": 156.0,
+        "max": 672.0
+      }
+    }
+  },
+  {
+    "name": "Vitamina B6",
+    "digest": "7257705b565ccec1e3168651ff73efed",
+    "units": {
+      "ng/mL": {
+        "min": 5.0,
+        "max": 50.0
+      },
+      "µg/L": {
+        "min": 5.0,
+        "max": 50.0
+      },
+      "nmol/L": {
+        "min": 20.0,
+        "max": 125.0
+      }
+    }
+  },
+  {
+    "name": "Vitamina C",
+    "digest": "b027619a73e34118c8a6a60b3daf2d23",
+    "units": {
+      "mg/dL": {
+        "min": 0.4,
+        "max": 2.0
+      },
+      "µmol/L": {
+        "min": 23.4,
+        "max": 114.0
+      },
+      "mg/L": {
+        "min": 23.0,
+        "max": 85.0
+      }
+    }
+  },
+  {
+    "name": "Vitamina D3 / 25-Hidroxicolecalciferol / Calcidiol",
+    "digest": "8d8eb4ef107a25c2f5bd7bdb036cf30c",
+    "units": {
+      "ng/mL": {
+        "min": 30.0,
+        "max": 100.0
+      },
+      "nmol/L": {
+        "min": 50.0,
+        "max": 125.0
+      },
+      "µg/L": {
+        "min": 50.0,
+        "max": 125.0
+      }
+    }
+  },
+  {
+    "name": "Vitamina E",
+    "digest": "ae4a70f5092dcdb068cdf4f4fc95b5bf",
+    "units": {
+      "mg/L": {
+        "min": 5.5,
+        "max": 18.5
+      },
+      "µg/mL": {
+        "min": 2.8,
+        "max": 18.4
+      },
+      "µmol/L": {
+        "min": 12.0,
+        "max": 42.0
+      }
+    }
+  },
+  {
+    "name": "Volume de urina em 24 horas",
+    "digest": "c964263630e564a98966fc0a5d5adb79",
+    "units": {
+      "mL": {
+        "min": 800.0,
+        "max": 2000.0
+      },
+      "L": {
+        "min": 0.8,
+        "max": 2.5
+      },
+      "µL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Eritrograma - Volume Globular Médio - VGM",
+    "digest": "afc3292c1fe6ec802a210dd887422aac",
+    "units": {
+      "fL": {
+        "min": 80.0,
+        "max": 100.0
+      },
+      "%": {
+        "min": null,
+        "max": null
+      },
+      "µm³": {
+        "min": 80.0,
+        "max": 100.0
+      }
+    }
+  },
+  {
+    "name": "Eritrograma - Volume Plaquetário Médio - VPM",
+    "digest": "983efe0b527da692b1941ad84fd1e645",
+    "units": {
+      "fL": {
+        "min": 7.4,
+        "max": 10.4
+      },
+      "femtoliters": {
+        "min": 7.4,
+        "max": 10.4
+      }
+    }
+  },
+  {
+    "name": "VSG - Método de Westergreen - Primeira hora",
+    "digest": "9c87caa23b8960f755b5a2e1cf84bfb9",
+    "units": {
+      "mm/h": {
+        "min": 2.0,
+        "max": 30.0
+      },
+      "mm/hora": {
+        "min": 2.0,
+        "max": 30.0
+      }
+    }
+  },
+  {
+    "name": "Zinco",
+    "digest": "4ae8cde26bdd8620847a388e968d0f43",
+    "units": {
+      "µg/dL": {
+        "min": 70.0,
+        "max": 120.0
+      },
+      "µmol/L": {
+        "min": 10.7,
+        "max": 18.2
+      },
+      "mg/L": {
+        "min": null,
+        "max": 18.2
+      }
+    }
+  },
+  {
+    "name": "Triiodotironina Reversa / RT3",
+    "digest": "f79b378fedba04078d7444eadc9e65c8",
+    "units": {
+      "ng/dL": {
+        "min": 8.0,
+        "max": 25.0
+      },
+      "pmol/L": {
+        "min": 10.0,
+        "max": 24.0
+      },
+      "ng/mL": {
+        "min": 10.0,
+        "max": 24.0
+      }
+    }
+  }
 ]

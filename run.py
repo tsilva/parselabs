@@ -4,10 +4,11 @@ import json
 import base64
 import logging
 import requests 
-import pandas as pd
+#import pandas as pd
 from openai import OpenAI
 from dotenv import load_dotenv
-from pdf2image import convert_from_path
+#from pdf2image import convert_from_path
+from utils import load_json, find_most_similar_lab_spec
 
 # Load environment variables
 load_dotenv()
@@ -21,8 +22,8 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_CLIENT = OpenAI()
 
 def load_labs_specs():
-    with open("mappings.json", "r", encoding='utf-8') as function_file: mappings = json.load(function_file)
-    return mappings
+    labs_specs = load_json("labs_specs.json")
+    return labs_specs
 
 def convert_pdfs_to_images(directory):
     for file in os.listdir(directory):
@@ -189,31 +190,8 @@ def validate_jsons(directory):
             logging.error(f"Invalid JSON: {json_path} - {_errors}")
         raise Exception("Invalid JSONs")
 
-def merge_jsons(directory):
-    mappings = load_labs_specs()
 
-    results = []
-    for file in os.listdir(directory):
-        if not file.endswith('.json'): continue
-        json_path = os.path.join(directory, file)
-        date_pattern = r'\d{4}-\d{2}-\d{2}'
-        dates = re.findall(date_pattern, json_path)
-        date = dates[0] if dates else None
-        if not date: raise Exception(f"Could not find date in path: {json_path}")
-        with open(json_path, "r", encoding='utf-8') as json_file: _results = json.load(json_file)
-        for _result in _results: 
-            _result["date"] = date
-            print(_result)
-            results.append(_result)
-    results = sorted(results, key=lambda x: x["date"])
 
-    for result in results:
-        name = result["name"]
-        fixed_name = mappings.get(name)
-        if fixed_name: result["name"] = fixed_name
-
-    with open("outputs/blood_labs.json", "w", encoding='utf-8') as json_file:
-        json.dump(results, json_file, indent=4, ensure_ascii=False)
 
 def json_to_csv():
     with open("outputs/blood_labs.json", "r", encoding='utf-8') as file: labs = json.load(file)
@@ -224,7 +202,7 @@ def json_to_csv():
 #convert_images_to_text("output")
 #convert_texts_to_json("output")
 #validate_jsons("output")
-merge_jsons("output")
-json_to_csv()
+merge_jsons()
+#json_to_csv()
 
 # @tsilva TODO: validate the results
