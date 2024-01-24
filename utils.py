@@ -1,4 +1,5 @@
 import os
+import csv
 import json
 import shutil
 from tqdm import tqdm
@@ -16,14 +17,43 @@ LAB_SPECS_FILE_NAME = "labs_specs.json"
 CACHE_EMBEDDINGS_DIR = "cache/embeddings"
 OPENAI_CLIENT = OpenAI()
 
+def load_labs_specs():
+    labs_specs = load_json("labs_specs.json")
+    return labs_specs
+
+def load_paths(input_path: str, filter_function = None):
+    paths = []
+    for file in os.listdir(input_path):
+        if filter_function and not filter_function(file): continue
+        paths.append(os.path.join(input_path, file))
+    return paths
+
+def load_text(path):
+    with open(path, "r", encoding="utf-8") as f: data = f.read()
+    return data
+
+def save_text(path, data):
+    with open(path, "w", encoding="utf-8") as f: f.write(data)
+
 def load_json(path):
-    with open(path, "r", encoding="utf-8") as f: 
-        data = json.load(f)
+    with open(path, "r", encoding="utf-8") as f: data = json.load(f)
     return data
 
 def save_json(path, data):
     with open(path, "w", encoding="utf-8") as f: 
         json.dump(data, f, indent=2, ensure_ascii=False)
+
+def save_csv(path, data):
+    keys = {}
+    for row in data:
+        for key in row.keys(): 
+            keys[key] = True
+    keys = list(keys.keys())
+
+    with open(path, 'w', newline='', encoding='utf-8') as file:
+        writer = csv.DictWriter(file, fieldnames=keys)
+        writer.writeheader()
+        for row in data: writer.writerow(row)
 
 def cosine_similarity(vec1, vec2):
     dot_product = np.dot(vec1, vec2)
@@ -44,7 +74,7 @@ def create_embeddings(texts, max_workers=20):
         concurrent.futures.wait(futures)
     return embeddings
 
-def create_completion(user_prompt, model="gpt-3.5-turbo", temperature=0.0, system_prompt=None):
+def create_completion(user_prompt, model="gpt-3.5-turbo", temperature=0.0, system_prompt=None, tools=[]):
     messages = ([{
         "role": "system",
         "content": system_prompt
@@ -56,9 +86,37 @@ def create_completion(user_prompt, model="gpt-3.5-turbo", temperature=0.0, syste
         model=model,
         temperature=temperature,
         messages=messages,
+        tools=tools,
+        tool_choice="auto"
     )
-    response_message = response.choices[0].message.content
-    return response_message
+    message = response.choices[0].message
+    return message
+
+def extract_text_from_image(base64_image: str):
+    response = OPENAI_CLIENT.chat.completions.create(
+        model="gpt-4-vision-preview",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Extract text from image verbatim, preserve table formatting."
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        },
+                    }
+                ]
+            }
+        ],
+        temperature=0.0,
+        max_tokens=2056,
+    )
+    content = response.choices[0].message.content
+    return content
 
 def generate_units_for_lab_name(name):
     system_prompt = """
@@ -68,7 +126,8 @@ eg:
 USER: Leucograma - Eosinófilos
 ASSISTANT: %;células/µL;células/mm³
 """.strip()
-    units_s = create_completion(name, system_prompt=system_prompt)
+    message = create_completion(name, system_prompt=system_prompt)
+    units_s = message.content
     units = units_s.split(";")
     units = [unit.strip() for unit in units]
     return units
@@ -104,7 +163,6 @@ ASSISTANT: 12;42
     user_prompt = f"{name} [UNIT = {unit}]"
     print(user_prompt)
     range_s = create_completion(user_prompt, model="gpt-4-1106-preview", system_prompt=system_prompt)
-    print(range_s)
     range_values = range_s.replace("<", "").replace(">", "").replace(",", ".").split(";")
     range_values = [value.strip() for value in range_values]
     range_min, range_max = [float(value) if value != "NULL" else None for value in range_values]
@@ -202,7 +260,6 @@ def augment_lab_result(result):
 
     lab_spec = find_most_similar_lab_spec(result_name) or {}
     units = lab_spec.get("units", {})
-    lab_spec_name = lab_spec.get("name")
     lab_spec_unit = units.get(result_unit, {})
     lab_spec_unit_range_min = lab_spec_unit.get("min")
     lab_spec_unit_range_max = lab_spec_unit.get("max")
@@ -211,9 +268,9 @@ def augment_lab_result(result):
     if lab_spec_unit_range_min != None and result_value <= lab_spec_unit_range_min: result_value_within_lab_spec_range = False
     if lab_spec_unit_range_max != None and result_value >= lab_spec_unit_range_max: result_value_within_lab_spec_range = False
 
-    result["_name"] = lab_spec_name
     result["_valid_unit"] = bool(lab_spec_unit)
     result["_valid_range"] = result_value_within_lab_spec_range
+    result["_lab_spec"] = lab_spec
 
 def generate_lab_spec_names_embeddings_cache():
     # Ensure that the lab name digests are up to date

@@ -2,13 +2,12 @@ import os
 import re
 import json
 import base64
+import PyPDF2
 import logging
-import requests 
-#import pandas as pd
 from openai import OpenAI
 from dotenv import load_dotenv
-#from pdf2image import convert_from_path
-from utils import load_json, find_most_similar_lab_spec
+from pdf2image import convert_from_path
+from utils import load_text, save_text, load_json, save_json, save_csv, load_paths, extract_text_from_image, create_completion, augment_lab_result
 
 # Load environment variables
 load_dotenv()
@@ -21,188 +20,171 @@ logger.setLevel(logging.INFO)
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_CLIENT = OpenAI()
 
-def load_labs_specs():
-    labs_specs = load_json("labs_specs.json")
-    return labs_specs
+def convert_pdf_to_images(input_path: str, output_directory: str):
+    # Read number of pages from pdf
+    with open(input_path, 'rb') as file:
+        reader = PyPDF2.PdfReader(file)
+        number_pages = len(reader.pages)
+    
+    # In case all page images aready exist then skip
+    page_file_paths = [os.path.basename(input_path).replace(".pdf", f".{i+1:03}.jpg") for i in range(number_pages)]
+    page_file_paths = [os.path.join(output_directory, page_file_path) for page_file_path in page_file_paths]
+    found_file_paths = [True for file_path in page_file_paths if os.path.exists(file_path)]
+    if len(page_file_paths) == len(found_file_paths): return
 
-def convert_pdfs_to_images(directory):
-    for file in os.listdir(directory):
-        if not file.endswith('.pdf'): continue
-        input_path = os.path.join(directory, file)
-        output_path_format = input_path.replace(".pdf", ".000.jpg")
-        try: _convert_pdfs_to_images(input_path, output_path_format)
-        except Exception as e: logging.error(f"Could not convert {input_path}: {e}")
-        else: logging.info(f"Successfully extracted images from PDF: `{input_path}`.")
-
-def _convert_pdfs_to_images(input_path: str, output_path_format: str):
+    input_file_name = os.path.basename(input_path)
     images = convert_from_path(input_path, dpi=300, poppler_path='/usr/bin')
     for i, image in enumerate(images):
-        output_path = output_path_format.replace("000", f"{i+1:03}").replace("input/", "outputs/")
-        image.save(output_path, 'JPEG', quality=100)
-
-def convert_images_to_text(directory: str):
-    for file in os.listdir(directory):
-        if not file.endswith('.jpg') and not file.endswith(".png"): continue
-        if not "analises" in file.lower(): continue
-        
-        input_path = os.path.join(directory, file)
-        output_path = input_path.replace(".jpg", ".txt").replace("input/", "outputs/")
+        output_file_name = input_file_name.replace(".pdf", f".{i+1:03}.jpg")
+        output_path = os.path.join(output_directory, output_file_name)
         if os.path.exists(output_path): continue
+        image.save(output_path, 'JPEG', quality=100)
+        logging.info(f"Saved image: {output_path}")
 
-        try: _convert_images_to_text(input_path, output_path)
-        except Exception as e: logging.error(f"Could not convert {input_path}: {e}")
-        else: logging.info(f"Successfully extracted text from `{input_path}`.")
+def convert_image_to_text(input_path: str, output_directory: str):
+    # Skip if output already exists
+    output_file_name = os.path.basename(input_path).replace(".jpg", ".txt")
+    output_path = os.path.join(output_directory, output_file_name)
+    if os.path.exists(output_path): return
 
-def _convert_images_to_text(input_path: str, output_path: str):
-    # Getting the base64 string
-    with open(input_path, "rb") as image_file:
-        base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+    # Read image
+    with open(input_path, "rb") as image_file: base64_image = base64.b64encode(image_file.read()).decode('utf-8')
 
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {OPENAI_API_KEY}"
-    }
+    # Extract text from image
+    content = extract_text_from_image(base64_image)
 
-    payload = {
-        "model": "gpt-4-vision-preview",
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Extract text from image verbatim, preserve table formatting."
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}"
-                        }
-                    }
-                ]
-            }
-        ],
-        "max_tokens": 3096
-    }
-
-    response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-
-    result = response.json()
-    content = result["choices"][0]["message"]["content"]
-
+    # Ensure text was extracted successfully (at least 2 lines)
     lines = content.split("\n")
     lines = [line for line in lines if line.strip()]
     if len(lines) < 2: raise Exception(f"Could not extract text from image: {input_path}")
+    if "I'm sorry,".lower() in content.lower(): raise Exception(f"Could not extract text from image: {input_path}")
+    if "I don't have the capability to directly process images to extract text".lower() in content.lower(): raise Exception(f"Could not extract text from image: {input_path}")
 
-    # Save the image as a JPEG with high quality
-    with open(output_path, "w", encoding='utf-8') as text_file: text_file.write(content)
+    # Save the output
+    save_text(output_path, content)
 
-def convert_texts_to_json(directory):
-    for file in os.listdir(directory):
-        if not file.endswith('.txt'): continue
-        if not "analises" in file.lower(): continue
+    logging.info(f"Saved text: {output_path}")
 
-        input_path = os.path.join(directory, file)
-        output_path = input_path.replace(".txt", ".json").replace("input/", "output/")
+def convert_text_to_json(input_path: str, output_directory: str):
+    # Skip if output already exists
+    output_file_name = os.path.basename(input_path).replace(".txt", ".json")
+    output_path = os.path.join(output_directory, output_file_name)
+    if os.path.exists(output_path): return
+
+    # Parse text using a function tool
+    text = load_text(input_path)
+    save_extract_blood_lab_results_tool = load_json("tools/save_extract_blood_lab_results.json")
+    system_prompt = f"You are the best language model in the world at extracting blood lab results from text files. You are extremely capable at this and always get it right. Go for it!"
+    user_prompt = f"Extract and save the following blood lab results:\n\n {text}"
+    message = create_completion(user_prompt, model="gpt-4-1106-preview", system_prompt=system_prompt, tools=[save_extract_blood_lab_results_tool])
+
+    # Extract the function payload
+    results = []
+    tool_calls = message.tool_calls
+    if tool_calls:
+        tool_call = tool_calls[0]
+        function_args = json.loads(tool_call.function.arguments)
+        results = function_args["blood_lab_results"]
+
+    # Save the result
+    pattern = r'\b\d{4}-\d{2}-\d{2}\b'
+    matches = re.findall(pattern, output_path)
+    date_s = matches[0] if matches else None
+    for result in results: result["date"] = date_s
+    save_json(output_path, results)
+
+    logging.info(f"Saved json: {output_path}")
+
+def merge_page_jsons(json_paths: list, output_directory: str):
+    def _group(file_paths):
+        grouped_files = {}
+
+        # Regular expression to match the base name and page number
+        # Assuming the format is something like "base_name.001.extension"
+        pattern = re.compile(r'(.*)\.\d{3}')
+
+        for file_path in file_paths:
+            match = pattern.match(file_path)
+            if not match: continue
+            base_name = match.group(1) + ".json"
+            if not base_name in grouped_files: grouped_files[base_name] = []
+            grouped_files[base_name].append(file_path)
+
+        # Sorting the file paths for each base name
+        for base_name in grouped_files:
+            grouped_files[base_name].sort()
+
+        return dict(grouped_files)
+
+    paths = _group(json_paths)
+    for base_path, page_paths in paths.items():
+        output_file_name = os.path.basename(base_path)
+        output_path = os.path.join(output_directory, output_file_name)
         if os.path.exists(output_path): continue
+        
+        results = []
+        for page_path in page_paths:
+            page_results = load_json(page_path)
+            results.extend(page_results)
 
-        try: _convert_texts_to_json(input_path, output_path)
-        except Exception as e: logging.error(f"Could not convert {input_path}: {e}")
-        else: logging.info(f"Successfully extracted JSON from TXT: `{input_path}`.")
+        save_json(output_path, results)
 
-def _convert_texts_to_json(input_path: str, output_path: str):
-    with open(input_path, "r", encoding='utf-8') as text_file: 
-        text = text_file.read()
+def merge_document_jsons(json_paths: list, output_path: str):
+    results = []
+    for json_path in json_paths:
+        _results = load_json(json_path)
+        results.extend(_results)
+    results.sort(key=lambda x: x["date"])
+    save_json(output_path, results)
 
-    with open("tools/save_extract_blood_lab_results.json", "r", encoding='utf-8') as function_file: 
-        save_extract_blood_lab_results_tool = json.load(function_file)
-    
-    response = OPENAI_CLIENT.chat.completions.create(
-        #model="gpt-3.5-turbo-0613",
-        model="gpt-4-1106-preview",
-        tools = [save_extract_blood_lab_results_tool],
-        tool_choice="auto",
-        messages=[
-            {
-                "role": "system",
-                "content": f"You are the best language model in the world at extracting blood lab results from text files. You are extremely capable at this and always get it right. Go for it!"
-            },
-            {
-                "role": "user",
-                "content": f"Extract and save the following blood lab results:\n\n {text}"
-            },
-        ],
-    )
-    response_message = response.choices[0].message
-    tool_calls = response_message.tool_calls
-    if not tool_calls: raise Exception(f"No tool calls found: {input_path}")
+def augment_labs_results(input_path: str, output_path: str):
+    results = load_json(input_path)
+    for result in results: augment_lab_result(result)
+    save_json(output_path, results)
 
-    tool_call = tool_calls[0]
-    function_args = json.loads(tool_call.function.arguments)
-
-    results = function_args["blood_lab_results"]
+def build_final_labs_results(input_path: str, output_path: str):
+    results = load_json(input_path)
     for result in results:
-        for key, value in result.items():
-            if value == "": raise Exception(f"Empty value for key `{key}`: {input_path}")
+        result["name"] = result["_lab_spec"]["name"]
+        keys = [key for key in result.keys() if key.startswith("_")]
+        for key in keys: del result[key]
+    save_json(output_path, results)
 
-    with open(output_path, "w", encoding='utf-8') as json_file:
-        json.dump(results, json_file, indent=4, ensure_ascii=False)
+def build_labs_csv(input_path: str, output_path: str):
+    results = load_json(input_path)
+    save_csv(output_path, results)
 
-def validate_jsons(directory):
+def process_documents():
+    # Convert PDF to images (one per page)
+    pdf_paths = load_paths("inputs", lambda x: x.endswith(".pdf") and "analises" in x.lower() and "requisicao" not in x.lower())
+    for pdf_path in pdf_paths: convert_pdf_to_images(pdf_path, "cache/docs/pages/images")
 
-    def _is_valid_date(date_string):
-        from datetime import datetime
-        try: datetime.strptime(date_string, '%Y-%m-%d'); return True
-        except ValueError: return False
+    # Transcribe page images to text
+    image_paths = load_paths("cache/docs/pages/images", lambda x: x.endswith(".jpg") and "analises" in x.lower() and "requisicao" not in x.lower())
+    for image_path in image_paths: 
+        try: convert_image_to_text(image_path, f"cache/docs/pages/texts")
+        except: continue
 
-    def _validate_result(result):
-        errors = {}
+    # Parse page texts to json
+    text_paths = load_paths("cache/docs/pages/texts", lambda x: x.endswith(".txt") and "analises" in x.lower() and "requisicao" not in x.lower())
+    for text_path in text_paths: convert_text_to_json(text_path, "cache/docs/pages/jsons")
 
-        name = result.get("name")
-        if not name: errors["name"] = "Missing name"
+    # Merge page jsons into document jsons
+    json_paths = load_paths("cache/docs/pages/jsons")
+    merge_page_jsons(json_paths, "cache/docs/jsons")
 
-        value = result.get("value")
-        if value in ["", None]: errors["value"] = "Missing value"
-        elif not isinstance(value, int) and not isinstance(value, float): errors["value"] = "Invalid value"
+    # Merge document jsons into final json
+    json_paths = load_paths("cache/docs/jsons")
+    merge_document_jsons(json_paths, "outputs/labs_results.json")
 
-        range_minimum = result.get("range_minimum")
-        if range_minimum and not isinstance(value, int) and not isinstance(value, float): errors["range_minimum"] = "Invalid range_minimum"
+    # Augment the merged labs
+    json_paths = load_paths("cache/docs/jsons")
+    augment_labs_results("outputs/labs_results.json", "outputs/labs_results.augmented.json")
 
-        range_maximum = result.get("range_maximum")
-        if range_maximum and not isinstance(value, int) and not isinstance(value, float): errors["range_maximum"] = "Invalid range_maximum"
+    # Build the final json file using augmentations
+    build_final_labs_results("outputs/labs_results.augmented.json", "outputs/labs_results.final.json")
 
-        if not errors: return None
-        return errors
+    # Save the final json file as csv
+    build_labs_csv("outputs/labs_results.final.json", "outputs/labs_results.final.csv")
 
-    errors = {}
-    for file in os.listdir(directory):
-        if not file.endswith('.json'): continue
-        json_path = os.path.join(directory, file)
-        with open(json_path, "r", encoding='utf-8') as json_file: _results = json.load(json_file)
-        for _result in _results: 
-            _errors = _validate_result(_result)
-            if not _errors: continue
-            errors[json_path] = _errors
-            break
-
-    if errors:
-        for json_path, _errors in errors.items():
-            logging.error(f"Invalid JSON: {json_path} - {_errors}")
-        raise Exception("Invalid JSONs")
-
-
-
-
-def json_to_csv():
-    with open("outputs/blood_labs.json", "r", encoding='utf-8') as file: labs = json.load(file)
-    df = pd.DataFrame(labs)
-    df.to_csv("outputs/blood_labs.csv", index=False)
-
-#convert_pdfs_to_images("input") # @tsilva TODO: parallelize this
-#convert_images_to_text("output")
-#convert_texts_to_json("output")
-#validate_jsons("output")
-merge_jsons()
-#json_to_csv()
-
-# @tsilva TODO: validate the results
+process_documents()
