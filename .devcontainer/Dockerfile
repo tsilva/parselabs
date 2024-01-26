@@ -11,6 +11,8 @@ RUN apk add --no-cache \
     iputils \
     wget \
     curl \
+    git \
+    open-ssh \
     poppler-utils \
     tesseract-ocr \
     tesseract-ocr-data-eng \

@@ -1,0 +1,3 @@
+from utils import generate_lab_spec_names_embeddings_cache
+
+generate_lab_spec_names_embeddings_cache()

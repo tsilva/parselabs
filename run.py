@@ -1,13 +1,12 @@
 import os
 import re
 import json
-import base64
 import PyPDF2
 import logging
 from openai import OpenAI
 from dotenv import load_dotenv
 from pdf2image import convert_from_path
-from utils import load_text, save_text, load_json, save_json, save_csv, load_paths, extract_text_from_image, create_completion, augment_lab_result
+from utils import load_text, save_text, load_json, save_json, save_csv, load_paths, extract_text_from_image, create_completion, augment_lab_result, prompt_visual
 
 # Load environment variables
 load_dotenv()
@@ -41,29 +40,31 @@ def convert_pdf_to_images(input_path: str, output_directory: str):
         image.save(output_path, 'JPEG', quality=100)
         logging.info(f"Saved image: {output_path}")
 
-def convert_image_to_text(input_path: str, output_directory: str):
+def convert_image_to_text(image_path: str, output_directory: str, validator=None):
     # Skip if output already exists
-    output_file_name = os.path.basename(input_path).replace(".jpg", ".txt")
+    output_file_name = os.path.basename(image_path).replace(".jpg", ".txt")
     output_path = os.path.join(output_directory, output_file_name)
     if os.path.exists(output_path): return
 
-    # Read image
-    with open(input_path, "rb") as image_file: base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+    # Try different temperatures until the content is valid
+    valid = True
+    for temperature in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+        # Extract text from image
+        logging.info(f"Extracting text from image: {image_path} (temperature={temperature})")
+        content = extract_text_from_image(image_path, temperature=temperature)
 
-    # Extract text from image
-    content = extract_text_from_image(base64_image)
+        # Assert that content was extracted correctly before proceeding
+        valid = validator(image_path, content) if validator else True
+        if valid: break
 
-    # Ensure text was extracted successfully (at least 2 lines)
-    lines = content.split("\n")
-    lines = [line for line in lines if line.strip()]
-    if len(lines) < 2: raise Exception(f"Could not extract text from image: {input_path}")
-    if "I'm sorry,".lower() in content.lower(): raise Exception(f"Could not extract text from image: {input_path}")
-    if "I don't have the capability to directly process images to extract text".lower() in content.lower(): raise Exception(f"Could not extract text from image: {input_path}")
-
+    # Raise exception if content was not extracted correctly
+    if not valid: raise Exception(f"Extracted text did not match image: {image_path}")
+    
     # Save the output
     save_text(output_path, content)
 
-    logging.info(f"Saved text: {output_path}")
+    # Log success
+    logging.info(f"Extract text from image: {output_path}")
 
 def convert_text_to_json(input_path: str, output_directory: str):
     # Skip if output already exists
@@ -137,7 +138,7 @@ def merge_document_jsons(json_paths: list, output_path: str):
     results.sort(key=lambda x: x["date"])
     save_json(output_path, results)
 
-def augment_labs_results(input_path: str, output_path: str):
+def build_augmented_labs_results(input_path: str, output_path: str):
     results = load_json(input_path)
     for result in results: augment_lab_result(result)
     save_json(output_path, results)
@@ -145,7 +146,8 @@ def augment_labs_results(input_path: str, output_path: str):
 def build_final_labs_results(input_path: str, output_path: str):
     results = load_json(input_path)
     for result in results:
-        result["name"] = result["_lab_spec"]["name"]
+        alt_name = result["_lab_spec"].get("name")
+        if alt_name: result["name"] = alt_name
         keys = [key for key in result.keys() if key.startswith("_")]
         for key in keys: del result[key]
     save_json(output_path, results)
@@ -154,6 +156,68 @@ def build_labs_csv(input_path: str, output_path: str):
     results = load_json(input_path)
     save_csv(output_path, results)
 
+def validate_lab_results_text_in_image(image_path: str, content: str):
+    result = prompt_visual(f"""
+{content}
+---------------------------------------------
+If the lab results above match the image then answer "1", otherwise answer "0".
+""".strip(), image_path, max_tokens=1)
+    valid = result == "1"
+    return valid
+
+def validate_processed_documents(pdf_paths):
+    errors = {}
+
+    # Validate each document
+    for pdf_path in pdf_paths:
+        _errors = errors.get(pdf_path, [])
+
+        # Validate each page
+        with open(pdf_path, 'rb') as file: number_pages = len(PyPDF2.PdfReader(file).pages)
+        pdf_file_name = os.path.basename(pdf_path)
+        image_file_names = [pdf_file_name.replace(".pdf", f".{i+1:03}.jpg") for i in range(number_pages)]
+        for image_file_name in image_file_names:
+            # Check if image for page exists
+            image_file_path = os.path.join("cache/docs/pages/images", image_file_name)
+            if not os.path.exists(image_file_path): 
+                _errors.append(f"Missing page image: {image_file_path}")
+                continue
+
+            # Check if text for page exists
+            text_file_path = os.path.join("cache/docs/pages/texts", image_file_name.replace(".jpg", ".txt"))
+            if not os.path.exists(text_file_path): 
+                _errors.append(f"Missing page text: {text_file_path}")
+                continue
+                
+            # Check that text matches image
+            text = load_text(text_file_path)
+            valid = validate_lab_results_text_in_image(image_file_path, text)
+            if not valid: 
+                _errors.append(f"Invalid page text: {text_file_path}")
+                continue
+
+            # Check if json for page exists
+            json_file_path = os.path.join("cache/docs/pages/jsons", image_file_name.replace(".jpg", ".json"))
+            if not os.path.exists(json_file_path):
+                _errors.append(f"Missing page json: {json_file_path}")
+                continue
+            
+            # @tsilva TODO: check that json is valid
+        
+        # If no errors were found in the pages 
+        # then check if the final document json exists
+        if not _errors:
+            json_file_name = pdf_file_name.replace(".pdf", ".json")
+            json_file_path = os.path.join("cache/docs/jsons", json_file_name)
+            if not os.path.exists(json_file_path): _errors.append(f"Missing document json: {json_file_path}")
+
+        # If errors were found associate them with the pdf
+        if _errors: errors[pdf_path] = _errors
+
+    # If any errors were found then raise exception
+    if errors:
+        raise Exception(f"Missing files: {json.dumps(errors, indent=2)}")
+
 def process_documents():
     # Convert PDF to images (one per page)
     pdf_paths = load_paths("inputs", lambda x: x.endswith(".pdf") and "analises" in x.lower() and "requisicao" not in x.lower())
@@ -161,9 +225,7 @@ def process_documents():
 
     # Transcribe page images to text
     image_paths = load_paths("cache/docs/pages/images", lambda x: x.endswith(".jpg") and "analises" in x.lower() and "requisicao" not in x.lower())
-    for image_path in image_paths: 
-        try: convert_image_to_text(image_path, f"cache/docs/pages/texts")
-        except: continue
+    for image_path in image_paths: convert_image_to_text(image_path, f"cache/docs/pages/texts", validator=validate_lab_results_text_in_image)
 
     # Parse page texts to json
     text_paths = load_paths("cache/docs/pages/texts", lambda x: x.endswith(".txt") and "analises" in x.lower() and "requisicao" not in x.lower())
@@ -179,12 +241,15 @@ def process_documents():
 
     # Augment the merged labs
     json_paths = load_paths("cache/docs/jsons")
-    augment_labs_results("outputs/labs_results.json", "outputs/labs_results.augmented.json")
+    build_augmented_labs_results("outputs/labs_results.json", "outputs/labs_results.augmented.json")
 
     # Build the final json file using augmentations
     build_final_labs_results("outputs/labs_results.augmented.json", "outputs/labs_results.final.json")
 
     # Save the final json file as csv
     build_labs_csv("outputs/labs_results.final.json", "outputs/labs_results.final.csv")
+
+    # Validate that all documents were correctly processed
+    validate_processed_documents(pdf_paths)
 
 process_documents()

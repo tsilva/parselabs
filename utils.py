@@ -1,6 +1,7 @@
 import os
 import csv
 import json
+import base64
 import shutil
 from tqdm import tqdm
 import functools
@@ -62,7 +63,7 @@ def cosine_similarity(vec1, vec2):
     return dot_product / magnitude
 
 def create_embedding(text):
-    response = OPENAI_CLIENT.embeddings.create(input=[text], model="text-embedding-ada-002")
+    response = OPENAI_CLIENT.embeddings.create(input=[text], model="text-embedding-3-small")
     embedding = response.data[0].embedding
     return embedding
 
@@ -74,7 +75,7 @@ def create_embeddings(texts, max_workers=20):
         concurrent.futures.wait(futures)
     return embeddings
 
-def create_completion(user_prompt, model="gpt-3.5-turbo", temperature=0.0, system_prompt=None, tools=[]):
+def create_completion(user_prompt, model="gpt-3.5-turbo-1106", temperature=0.0, system_prompt=None, tools=[]):
     messages = ([{
         "role": "system",
         "content": system_prompt
@@ -92,16 +93,24 @@ def create_completion(user_prompt, model="gpt-3.5-turbo", temperature=0.0, syste
     message = response.choices[0].message
     return message
 
-def extract_text_from_image(base64_image: str):
+def extract_text_from_image(image_path: str, max_tokens=None, temperature=0.0):
+    content = prompt_visual("Extract text from image verbatim, preserve table formatting.", image_path, max_tokens=max_tokens, temperature=temperature)
+    return content
+
+def prompt_visual(text_prompt: str, image_path: str, max_tokens=None, temperature=0.0):
+    if not max_tokens: max_tokens = 2056
+
+    with open(image_path, "rb") as image_file: base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+
     response = OPENAI_CLIENT.chat.completions.create(
-        model="gpt-4-vision-preview",
+        model="gpt-4-vision-preview", # gpt-4-0125-preview
         messages=[
             {
                 "role": "user",
                 "content": [
                     {
                         "type": "text",
-                        "text": "Extract text from image verbatim, preserve table formatting."
+                        "text": text_prompt
                     },
                     {
                         "type": "image_url",
@@ -112,10 +121,11 @@ def extract_text_from_image(base64_image: str):
                 ]
             }
         ],
-        temperature=0.0,
-        max_tokens=2056,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
     content = response.choices[0].message.content
+    content = content.strip()
     return content
 
 def generate_units_for_lab_name(name):
@@ -210,17 +220,18 @@ def find_similar_lab_names(name):
     return sorted_matches
 
 @functools.lru_cache(maxsize=None)
-def find_most_similar_lab_name(name, threshold=0.80):
+def find_most_similar_lab_name(name, threshold=0.40):
     matches = find_similar_lab_names(name)
     #print(matches[:3])
     filtered_matches = [(match[0], match[1]) for match in matches if match[1] >= threshold]
-    if not filtered_matches: return None
+    if not filtered_matches: 
+        print(name + " " + json.dumps(matches[0]))
+        return None
     return filtered_matches[0][0]
 
 @functools.lru_cache(maxsize=None)
-def find_most_similar_lab_spec(name, threshold=0.80):
+def find_most_similar_lab_spec(name, threshold=0.40):
     similar_name = find_most_similar_lab_name(name, threshold=threshold)
-    print(similar_name)
     lab_spec = lab_spec_by_name(similar_name)
     return lab_spec
 
@@ -258,7 +269,11 @@ def augment_lab_result(result):
     result_unit = result["unit"]
     result_value = result["value"]
 
-    lab_spec = find_most_similar_lab_spec(result_name) or {}
+    lab_spec = find_most_similar_lab_spec(result_name)
+    if not lab_spec:
+        result["_lab_spec"] = None
+        return
+
     units = lab_spec.get("units", {})
     lab_spec_unit = units.get(result_unit, {})
     lab_spec_unit_range_min = lab_spec_unit.get("min")
@@ -268,8 +283,8 @@ def augment_lab_result(result):
     if lab_spec_unit_range_min != None and result_value <= lab_spec_unit_range_min: result_value_within_lab_spec_range = False
     if lab_spec_unit_range_max != None and result_value >= lab_spec_unit_range_max: result_value_within_lab_spec_range = False
 
-    result["_valid_unit"] = bool(lab_spec_unit)
-    result["_valid_range"] = result_value_within_lab_spec_range
+    result["_supported_lab_spec_unit"] = bool(lab_spec_unit)
+    result["_within_lab_spec_range"] = result_value_within_lab_spec_range
     result["_lab_spec"] = lab_spec
 
 def generate_lab_spec_names_embeddings_cache():
