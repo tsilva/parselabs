@@ -142,7 +142,7 @@ def merge_document_jsons(json_paths: list, output_path: str):
     results.sort(key=lambda x: x["date"])
     save_json(output_path, results)
 
-def build_augmented_labs_results(input_path: str, output_path: str, max_workers=10):
+def build_augmented_labs_results(input_path: str, output_path: str, max_workers=5):
     results = load_json(input_path)
 
     def _augment(result): augment_lab_result(result)
@@ -157,14 +157,16 @@ def build_lab_name_mappings(input_path: str, output_path: str):
     labs = load_json(input_path)
     for lab in labs:
         name = lab["name"]
-        spec_name = lab.get("_lab_spec", {}).get("name")
+        lab_spec = lab.get("_lab_spec")
+        spec_name = lab_spec["name"] if lab_spec else None
         mappings[name] = spec_name
     save_json(output_path, mappings)
 
 def build_final_labs_results(input_path: str, output_path: str):
     results = load_json(input_path)
     for result in results:
-        alt_name = result.get("_lab_spec", {}).get("name")
+        lab_spec = result.get("_lab_spec")
+        alt_name = lab_spec["name"] if lab_spec else None
         if alt_name: result["name"] = alt_name
         keys = [key for key in result.keys() if key.startswith("_")]
         for key in keys: del result[key]

@@ -93,6 +93,7 @@ def create_completion(user_prompt, model="gpt-3.5-turbo-1106", temperature=0.0, 
         model=model,
         temperature=temperature,
         messages=messages,
+        timeout=30,
         **extra
     )
     message = response.choices[0].message
