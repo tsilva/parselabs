@@ -172,7 +172,8 @@
         "min": 0.0,
         "max": 10.0
       }
-    }
+    },
+    "digest": "8f5dc744c4ef70a85864f3a0309e80e2"
   },
   {
     "name": "Anticorpo Anti-Nuclear",
@@ -249,7 +250,8 @@
         "min": 7.0,
         "max": 13.0
       }
-    }
+    },
+    "digest": "389fbaa570ba5f609a255ff08cac6a1c"
   },
   {
     "name": "Anticorpo Anti-Tiroglobulina / Tg",
@@ -267,7 +269,7 @@
         "max": 115.0
       }
     },
-    "digest": "50285a230c6053a72f05e923f6027d3d"
+    "digest": "d0b7af0ca3893bce7aba5d65073ac302"
   },
   {
     "name": "Ácido Ascórbico",
@@ -506,7 +508,8 @@
         "min": 0.17,
         "max": 0.52
       }
-    }
+    },
+    "digest": "11b0b77dd3fc52dff1e5668cc92075cc"
   },
   {
     "name": "Leucograma - Basófilos",
@@ -1032,7 +1035,8 @@
         "min": 0.0,
         "max": 5.0
       }
-    }
+    },
+    "digest": "577dd4b850e101aeec7b7ac3ff459144"
   },
   {
     "name": "Relação Albuminas-Globulinas",
@@ -1052,7 +1056,8 @@
         "min": null,
         "max": null
       }
-    }
+    },
+    "digest": "cb83407d501e6077c5b8fd548b526a2d"
   },
   {
     "name": "Eritrograma - Concentração de Hemoglobina Globular Média / CHGM",
@@ -1079,7 +1084,8 @@
         "min": 27.0,
         "max": 34.0
       }
-    }
+    },
+    "digest": "c7249a53118c4c68a067378bcd18ddb9"
   },
   {
     "name": "Eritrograma - Macrócitos",
@@ -1114,7 +1120,8 @@
         "min": 9.2,
         "max": 18.1
       }
-    }
+    },
+    "digest": "705660c06ce7a31209c6ec9992c2bcfd"
   },
   {
     "name": "Globulina Beta",
@@ -1131,7 +1138,8 @@
         "min": 6.0,
         "max": 12.1
       }
-    }
+    },
+    "digest": "6b81c98c4bff1936a7c2b4c8574747e9"
   },
   {
     "name": "Reticulócitos - Hemoglobina",
@@ -1148,7 +1156,8 @@
         "min": 27.5,
         "max": 32.5
       }
-    }
+    },
+    "digest": "e27cd25388acdca472e7160cd915ed82"
   },
   {
     "name": "Urina - Contagem de colónias",
@@ -1165,7 +1174,8 @@
         "min": null,
         "max": null
       }
-    }
+    },
+    "digest": "9960c58cc4689a17b53849cce51fc47a"
   },
   {
     "name": "Antígeno Carboidrato 19-9",
@@ -1307,7 +1317,8 @@
         "min": null,
         "max": null
       }
-    }
+    },
+    "digest": "844c92a16119bfbbdd1dd9857f9a885d"
   },
   {
     "name": "Pesquisa de Imunocomplexos",
@@ -1324,7 +1335,8 @@
         "min": 3.3,
         "max": 150.0
       }
-    }
+    },
+    "digest": "b4c47ed554948ae496c62b50ed586e71"
   },
   {
     "name": "Delta-4-Androstenediona",
@@ -1341,7 +1353,8 @@
         "min": 0.3,
         "max": 3.3
       }
-    }
+    },
+    "digest": "81759f3d8d50f64d5d8567e80e96b191"
   },
   {
     "name": "Dehidroepiandrosterona Sulfato / DHEA-s",
@@ -1838,7 +1851,8 @@
         "min": 70.0,
         "max": 99.0
       }
-    }
+    },
+    "digest": "39d96affdd90be39b52d937c44fd19a2"
   },
   {
     "name": "Globulina Ligada às Hormonas Sexuais Basal / SHBG",
@@ -1895,7 +1909,8 @@
         "min": 70.0,
         "max": 130.0
       }
-    }
+    },
+    "digest": "1a6531774b9dc6063f8d96a7459e27e0"
   },
   {
     "name": "Eritrograma - Hematócrito / Hct",
@@ -1965,7 +1980,8 @@
         "min": null,
         "max": null
       }
-    }
+    },
+    "digest": "a8c3b0f429aed00c372fe0225da1edce"
   },
   {
     "name": "Urina - Cristais",
@@ -1974,7 +1990,8 @@
         "min": null,
         "max": null
       }
-    }
+    },
+    "digest": "be1a3842c1fcd78b7e6923027cd49e37"
   },
   {
     "name": "Urina - Small Round Cells",
@@ -1991,7 +2008,8 @@
         "min": null,
         "max": null
       }
-    }
+    },
+    "digest": "cd2659fbf8ce4bb02459c6353dba2023"
   },
   {
     "name": "Hemoglobina Glicada - IFCC / HbA1C - IFCC",
@@ -2018,7 +2036,8 @@
         "min": 27.0,
         "max": 34.0
       }
-    }
+    },
+    "digest": "06e1442e1761c1e699788e486738ead0"
   },
   {
     "name": "Homocisteína",
@@ -2255,7 +2274,8 @@
         "min": null,
         "max": null
       }
-    }
+    },
+    "digest": "a662f24376d8c3ba48532c821f135b95"
   },
   {
     "name": "Eritrograma - Índice de Distribuição Plaquetária - PDW",
@@ -2293,7 +2313,8 @@
         "min": 0.8,
         "max": 1.2
       }
-    }
+    },
+    "digest": "d3d85159cdbf4d4d074e027dd2f0fc67"
   },
   {
     "name": "Insulina",
@@ -2688,7 +2709,8 @@
         "min": null,
         "max": null
       }
-    }
+    },
+    "digest": "ccf8af6be0f8495660e335ca93c893cb"
   },
   {
     "name": "Reticulócitos",
@@ -2961,7 +2983,8 @@
         "min": 70.0,
         "max": 130.0
       }
-    }
+    },
+    "digest": "00578c09dc061aaa6db0e1d887ffe8c8"
   },
   {
     "name": "Calcitonina",
@@ -3137,7 +3160,8 @@
         "min": 2.0,
         "max": 20.0
       }
-    }
+    },
+    "digest": "4b69823116764e394b90982284ec7f85"
   },
   {
     "name": "Eritrograma - Velocidade de Sedimentação - 2a Hora",
@@ -3151,7 +3175,8 @@
         "min": null,
         "max": 30.0
       }
-    }
+    },
+    "digest": "c3b00b44faf16e4868e542779e2d7ea5"
   },
   {
     "name": "Eritrograma - Volume Corpuscular Médio / VCM",
@@ -3171,7 +3196,8 @@
         "min": 80.0,
         "max": 100.0
       }
-    }
+    },
+    "digest": "8fcc88c1a764d3c8c5b8eacbb70fc536"
   },
   {
     "name": "Eritrograma - Hemoglobina Corpuscular Média / HCM",
@@ -3191,7 +3217,8 @@
         "min": 27.0,
         "max": 34.0
       }
-    }
+    },
+    "digest": "1b80ef650edc27cb6998ab5544fe43df"
   },
   {
     "name": "Vitamina A",
@@ -3286,7 +3313,8 @@
         "min": 50.0,
         "max": 125.0
       }
-    }
+    },
+    "digest": "8d8eb4ef107a25c2f5bd7bdb036cf30c"
   },
   {
     "name": "Vitamina E",

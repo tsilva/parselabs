@@ -7,7 +7,7 @@ import concurrent
 from openai import OpenAI
 from dotenv import load_dotenv
 from pdf2image import convert_from_path
-from utils import load_text, save_text, load_json, save_json, save_csv, load_paths, extract_text_from_image, create_completion, augment_lab_result, prompt_visual
+from utils import load_text, save_text, load_json, save_json, save_csv, load_paths, extract_text_from_image, create_completion, augment_lab_result, prompt_visual, validate_lab_test_name_mappings
 
 # Load environment variables
 load_dotenv()
@@ -162,6 +162,11 @@ def build_lab_name_mappings(input_path: str, output_path: str):
         mappings[name] = spec_name
     save_json(output_path, mappings)
 
+def build_lab_name_invalid_mappings(input_path: str, output_path: str):
+    mappings = load_json(input_path)
+    invalid_mappings = validate_lab_test_name_mappings(mappings)
+    save_json(output_path, invalid_mappings)
+
 def build_final_labs_results(input_path: str, output_path: str):
     results = load_json(input_path)
     for result in results:
@@ -295,6 +300,11 @@ def process_documents():
     build_lab_name_mappings("outputs/labs_results.augmented.json", "outputs/labs_results.mappings.json")
     logging.info("Building lab name mappings... DONE")
 
+    # Build the lab name invalid mappings
+    logging.info("Building lab name invalid mappings")
+    build_lab_name_invalid_mappings("outputs/labs_results.mappings.json", "outputs/labs_results.invalid_mappings.json")
+    logging.info("Building lab name invalid mappings... DONE")
+
     # Build the final json file using augmentations
     logging.info("Building final json file")
     build_final_labs_results("outputs/labs_results.augmented.json", "outputs/labs_results.final.json")
@@ -307,7 +317,7 @@ def process_documents():
 
     # Validate that all documents were correctly processed
     logging.info("Validating processed documents")
-    #validate_processed_documents(pdf_paths)
+    validate_processed_documents(pdf_paths)
     logging.info("Validating processed documents... DONE")
 
 process_documents()
