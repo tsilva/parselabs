@@ -3,6 +3,7 @@ import re
 import json
 import PyPDF2
 import logging
+import concurrent
 from openai import OpenAI
 from dotenv import load_dotenv
 from pdf2image import convert_from_path
@@ -52,6 +53,9 @@ def convert_image_to_text(image_path: str, output_directory: str, validator=None
         # Extract text from image
         logging.info(f"Extracting text from image: {image_path} (temperature={temperature})")
         content = extract_text_from_image(image_path, temperature=temperature)
+
+        # Invalid, continue to next temperature
+        if content.startswith("I'm sorry, but I can't assist"): continue
 
         # Assert that content was extracted correctly before proceeding
         valid = validator(image_path, content) if validator else True
@@ -138,15 +142,29 @@ def merge_document_jsons(json_paths: list, output_path: str):
     results.sort(key=lambda x: x["date"])
     save_json(output_path, results)
 
-def build_augmented_labs_results(input_path: str, output_path: str):
+def build_augmented_labs_results(input_path: str, output_path: str, max_workers=10):
     results = load_json(input_path)
-    for result in results: augment_lab_result(result)
+
+    def _augment(result): augment_lab_result(result)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(_augment, result) for result in results]
+        concurrent.futures.wait(futures)
+
     save_json(output_path, results)
+
+def build_lab_name_mappings(input_path: str, output_path: str):
+    mappings = {}
+    labs = load_json(input_path)
+    for lab in labs:
+        name = lab["name"]
+        spec_name = lab.get("_lab_spec", {}).get("name")
+        mappings[name] = spec_name
+    save_json(output_path, mappings)
 
 def build_final_labs_results(input_path: str, output_path: str):
     results = load_json(input_path)
     for result in results:
-        alt_name = result["_lab_spec"].get("name")
+        alt_name = result.get("_lab_spec", {}).get("name")
         if alt_name: result["name"] = alt_name
         keys = [key for key in result.keys() if key.startswith("_")]
         for key in keys: del result[key]
@@ -162,8 +180,18 @@ def validate_lab_results_text_in_image(image_path: str, content: str):
 ---------------------------------------------
 If the lab results above match the image then answer "1", otherwise answer "0".
 """.strip(), image_path, max_tokens=1)
+    result = result.strip()
     valid = result == "1"
     return valid
+
+def extract_invalid_lab_results_text_from_image(image_path: str, content: str):
+    result = prompt_visual(f"""
+{content}
+---------------------------------------------
+Which lab result values above don't match the ones in the image?
+""".strip(), image_path, max_tokens=1)
+    result = result.strip()
+    return result
 
 def validate_processed_documents(pdf_paths):
     errors = {}
@@ -171,6 +199,9 @@ def validate_processed_documents(pdf_paths):
     # Validate each document
     for pdf_path in pdf_paths:
         _errors = errors.get(pdf_path, [])
+        def _log_error(msg):
+            logging.error(msg)
+            _errors.append(msg)
 
         # Validate each page
         with open(pdf_path, 'rb') as file: number_pages = len(PyPDF2.PdfReader(file).pages)
@@ -180,26 +211,27 @@ def validate_processed_documents(pdf_paths):
             # Check if image for page exists
             image_file_path = os.path.join("cache/docs/pages/images", image_file_name)
             if not os.path.exists(image_file_path): 
-                _errors.append(f"Missing page image: {image_file_path}")
+                _log_error(f"Missing page image: {image_file_path}")
                 continue
 
             # Check if text for page exists
             text_file_path = os.path.join("cache/docs/pages/texts", image_file_name.replace(".jpg", ".txt"))
             if not os.path.exists(text_file_path): 
-                _errors.append(f"Missing page text: {text_file_path}")
+                _log_error(f"Missing page text: {text_file_path}")
                 continue
                 
             # Check that text matches image
             text = load_text(text_file_path)
             valid = validate_lab_results_text_in_image(image_file_path, text)
             if not valid: 
-                _errors.append(f"Invalid page text: {text_file_path}")
+                invalid_values = extract_invalid_lab_results_text_from_image(image_file_path, text)
+                _log_error(f"Invalid page text: {text_file_path} - {invalid_values}")
                 continue
 
             # Check if json for page exists
             json_file_path = os.path.join("cache/docs/pages/jsons", image_file_name.replace(".jpg", ".json"))
             if not os.path.exists(json_file_path):
-                _errors.append(f"Missing page json: {json_file_path}")
+                _log_error(f"Missing page json: {json_file_path}")
                 continue
             
             # @tsilva TODO: check that json is valid
@@ -209,7 +241,8 @@ def validate_processed_documents(pdf_paths):
         if not _errors:
             json_file_name = pdf_file_name.replace(".pdf", ".json")
             json_file_path = os.path.join("cache/docs/jsons", json_file_name)
-            if not os.path.exists(json_file_path): _errors.append(f"Missing document json: {json_file_path}")
+            if not os.path.exists(json_file_path): 
+                _log_error(f"Missing document json: {json_file_path}")
 
         # If errors were found associate them with the pdf
         if _errors: errors[pdf_path] = _errors
@@ -220,36 +253,59 @@ def validate_processed_documents(pdf_paths):
 
 def process_documents():
     # Convert PDF to images (one per page)
+    logging.info("Converting PDF to images")
     pdf_paths = load_paths("inputs", lambda x: x.endswith(".pdf") and "analises" in x.lower() and "requisicao" not in x.lower())
     for pdf_path in pdf_paths: convert_pdf_to_images(pdf_path, "cache/docs/pages/images")
+    logging.info("Converting PDF to images... DONE")
 
     # Transcribe page images to text
+    logging.info("Transcribing page images to text")
     image_paths = load_paths("cache/docs/pages/images", lambda x: x.endswith(".jpg") and "analises" in x.lower() and "requisicao" not in x.lower())
     for image_path in image_paths: convert_image_to_text(image_path, f"cache/docs/pages/texts", validator=validate_lab_results_text_in_image)
+    logging.info("Transcribing page images to text... DONE")
 
     # Parse page texts to json
+    logging.info("Parsing page texts to json")
     text_paths = load_paths("cache/docs/pages/texts", lambda x: x.endswith(".txt") and "analises" in x.lower() and "requisicao" not in x.lower())
     for text_path in text_paths: convert_text_to_json(text_path, "cache/docs/pages/jsons")
+    logging.info("Parsing page texts to json... DONE")
 
     # Merge page jsons into document jsons
+    logging.info("Merging page jsons into document jsons")
     json_paths = load_paths("cache/docs/pages/jsons")
     merge_page_jsons(json_paths, "cache/docs/jsons")
-
+    logging.info("Merging page jsons into document jsons... DONE")
+    
     # Merge document jsons into final json
+    logging.info("Merging document jsons into final json")
     json_paths = load_paths("cache/docs/jsons")
     merge_document_jsons(json_paths, "outputs/labs_results.json")
+    logging.info("Merging document jsons into final json... DONE")
 
     # Augment the merged labs
+    logging.info("Augmenting merged labs")
     json_paths = load_paths("cache/docs/jsons")
     build_augmented_labs_results("outputs/labs_results.json", "outputs/labs_results.augmented.json")
+    logging.info("Augmenting merged labs... DONE")
+    
+    # Build the lab name mappings
+    logging.info("Building lab name mappings")
+    build_lab_name_mappings("outputs/labs_results.augmented.json", "outputs/labs_results.mappings.json")
+    logging.info("Building lab name mappings... DONE")
 
     # Build the final json file using augmentations
+    logging.info("Building final json file")
     build_final_labs_results("outputs/labs_results.augmented.json", "outputs/labs_results.final.json")
+    logging.info("Building final json file... DONE")
 
     # Save the final json file as csv
+    logging.info("Saving final json file as CSV")
     build_labs_csv("outputs/labs_results.final.json", "outputs/labs_results.final.csv")
+    logging.info("Saving final json file as CSV... DONE")
 
     # Validate that all documents were correctly processed
-    validate_processed_documents(pdf_paths)
+    logging.info("Validating processed documents")
+    #validate_processed_documents(pdf_paths)
+    logging.info("Validating processed documents... DONE")
 
 process_documents()

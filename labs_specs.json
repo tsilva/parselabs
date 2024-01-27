@@ -36,8 +36,8 @@
     }
   },
   {
-    "name": "Ac. Anti-Fator Intrínseco",
-    "digest": "9d5d4ea17d8715a4c99ddd17bc976f49",
+    "name": "Anticorpo Anti-Fator Intrínseco",
+    "digest": "40194fde5fa4ef139d74e677e20394d6",
     "units": {
       "UI/mL": {
         "min": 0.0,
@@ -54,8 +54,8 @@
     }
   },
   {
-    "name": "Ac. Anti-Gliadina (IgA)",
-    "digest": "d216991348138f0c3e7bfba573df532e",
+    "name": "Anticorpo Anti-Gliadina (IgA)",
+    "digest": "bedd6633b1f56a871a820c165da43e98",
     "units": {
       "U/mL": {
         "min": null,
@@ -72,8 +72,8 @@
     }
   },
   {
-    "name": "Ac. Anti-Gliadina (IgG)",
-    "digest": "dfebc4d800c316b1f4b674ea93805c8e",
+    "name": "Anticorpo Anti-Gliadina (IgG)",
+    "digest": "8c8a61a2fea81ab9ffdfd0a005ca9cb4",
     "units": {
       "U/mL": {
         "min": null,
@@ -90,8 +90,8 @@
     }
   },
   {
-    "name": "Ac. Anti-Microssomas",
-    "digest": "c2d445fe209c59e17ba1e757e6a637d4",
+    "name": "Anticorpo Anti-Microssomas",
+    "digest": "3590855bba90c0d69c713c2cc0ef60b8",
     "units": {
       "UI/mL": {
         "min": 0.0,
@@ -108,8 +108,8 @@
     }
   },
   {
-    "name": "Ac. Anti-T TG (IgG)",
-    "digest": "d8e7e8cb56181153fee10fddc08602c6",
+    "name": "Anticorpo Anti-T TG (IgG)",
+    "digest": "bc9b89ce9e159bda8f2756d8655b3f4a",
     "units": {
       "U/mL": {
         "min": 0.4,
@@ -118,8 +118,8 @@
     }
   },
   {
-    "name": "Ac. Anti-tireoglobulina",
-    "digest": "3bb8383779823efb14081b79a9fd232c",
+    "name": "Anticorpo Anti-tireoglobulina",
+    "digest": "0318525a9ea16e9badc5d47984ded69c",
     "units": {
       "UI/mL": {
         "min": 10.0,
@@ -136,8 +136,8 @@
     }
   },
   {
-    "name": "Ac. Anti-TPO (Peroxidase Tireoidiana) (IgG)",
-    "digest": "51d13d8cbe31c452a0f2ddf1cbecc660",
+    "name": "Anticorpo Anti-TPO (Peroxidase Tireoidiana) (IgG)",
+    "digest": "f8cee53bb81d19f81feac3a916733920",
     "units": {
       "UI/mL": {
         "min": 0.0,
@@ -154,8 +154,8 @@
     }
   },
   {
-    "name": "Ac. Anti-Transglutaminase (IgA)",
-    "digest": "eaf3021382b21b67ab89bff26da456ed",
+    "name": "Anticorpo Anti-Transglutaminase (IgA)",
+    "digest": "c343d56e068936ba81ad0cf0864d1221",
     "units": {
       "U/mL": {
         "min": 0.0,
@@ -172,8 +172,67 @@
     }
   },
   {
-    "name": "Ac. Anti-Triglobulina (IgG)",
-    "digest": "92449fa8f6d15f2ca9bdacac9a7e4f4b",
+    "name": "Anticorpo Anti-Nuclear",
+    "units": {
+      "U/mL": {
+        "min": 1.0,
+        "max": null
+      },
+      "AI": {
+        "min": null,
+        "max": 1.0
+      },
+      "RU/mL": {
+        "min": 1.0,
+        "max": null
+      }
+    },
+    "digest": "6648e16caaaccc993c71184caac5dc38"
+  },
+  {
+    "name": "Anticorpo Anti-Scl 70",
+    "alternatives": [
+      "Anticorpo Anti-Topoisomerase I"
+    ],
+    "units": {
+      "U/mL": {
+        "min": null,
+        "max": 200.0
+      },
+      "RU/mL": {
+        "min": 10.0,
+        "max": null
+      },
+      "AU/mL": {
+        "min": 0.0,
+        "max": 100.0
+      }
+    },
+    "digest": "c0c2b5fb44b774ffa58d497f673ad8a0"
+  },
+  {
+    "name": "Título Antiestreptolisina O (ASO)",
+    "alternatives": [
+      "Teste de ASO"
+    ],
+    "units": {
+      "IU/mL": {
+        "min": 85.0,
+        "max": 200.0
+      },
+      "U/mL": {
+        "min": 85.0,
+        "max": 200.0
+      },
+      "IU/L": {
+        "min": 200.0,
+        "max": 400.0
+      }
+    },
+    "digest": "52cd2154fd3f563f41ed30393b96b57a"
+  },
+  {
+    "name": "Anticorpo Anti-Tireoglobulina (IgG)",
     "units": {
       "UI/mL": {
         "min": 0.0,
@@ -187,7 +246,8 @@
         "min": 0.0,
         "max": 115.0
       }
-    }
+    },
+    "digest": "50285a230c6053a72f05e923f6027d3d"
   },
   {
     "name": "Ácido Ascórbico",
@@ -514,8 +574,10 @@
     "digest": "6c2cade26964e5aa6c6975c31b7cb5ad"
   },
   {
-    "name": "Bilirrubina Conjugada",
-    "digest": "2fd82b17332c58c8b77256b6acb89f42",
+    "name": "Bilirrubina Direta",
+    "alternatives": [
+      "Bilirrubina Conjugada"
+    ],
     "units": {
       "mg/dL": {
         "min": 0.0,
@@ -529,11 +591,95 @@
         "min": 0.0,
         "max": 6.8
       }
-    }
+    },
+    "digest": "7a0b7477909f70fd29a1ef7bfcf36a75"
   },
   {
-    "name": "Bilirrubina Direta",
-    "digest": "7a0b7477909f70fd29a1ef7bfcf36a75",
+    "name": "Anticorpo SS-A",
+    "alternatives": [
+      "Anticorpo Anti-Ro"
+    ],
+    "units": {
+      "U/mL": {
+        "min": 0.8,
+        "max": null
+      },
+      "AU/mL": {
+        "min": 0.9,
+        "max": null
+      },
+      "Index": {
+        "min": null,
+        "max": 1.0
+      }
+    },
+    "digest": "f308e88d30aed76465c18e9aa4275cd7"
+  },
+  {
+    "name": "Anticorpo SS-B",
+    "alternatives": [
+      "Anticorpo Anti-La"
+    ],
+    "units": {
+      "mg/dL": {
+        "min": null,
+        "max": null
+      },
+      "U/mL": {
+        "min": 0.9,
+        "max": null
+      },
+      "IU/mL": {
+        "min": null,
+        "max": 1.0
+      }
+    },
+    "digest": "98e2a1dd27acbc1fd1455ff18d969565"
+  },
+  {
+    "name": "Anticorpo Anti-CPP",
+    "alternatives": [
+      "Anticorpo contra Peptídeos Cíclicos Citrulinados"
+    ],
+    "units": {
+      "U/mL": {
+        "min": 5.0,
+        "max": null
+      },
+      "AU/mL": {
+        "min": 5.0,
+        "max": 60.0
+      },
+      "RU/mL": {
+        "min": 5.0,
+        "max": null
+      }
+    },
+    "digest": "41f3a957951e3e6321c973b448021745"
+  },
+  {
+    "name": "Anticorpo Anti-ADN",
+    "units": {
+      "U/mL": {
+        "min": 0.0,
+        "max": 10.0
+      },
+      "UI/mL": {
+        "min": 0.0,
+        "max": 200.0
+      },
+      "mg/dL": {
+        "min": null,
+        "max": null
+      }
+    },
+    "digest": "5883d3c2218b96ae140ea18891b9bbd9"
+  },
+  {
+    "name": "Bilirrubina Indireta",
+    "alternatives": [
+      "Bilirrubina Não Conjugada"
+    ],
     "units": {
       "mg/dL": {
         "min": 0.0,
@@ -547,7 +693,8 @@
         "min": 0.0,
         "max": 3.4
       }
-    }
+    },
+    "digest": "f12e5810287749e54a20596148141f0c"
   },
   {
     "name": "Bilirrubina Total",
@@ -751,6 +898,80 @@
     }
   },
   {
+    "name": "Anticorpo Anti-HBs",
+    "alternatives": [
+      "Anticorpo contra o Antígeno de Superfície do Vírus da Hepatite B (HBsAg)"
+    ],
+    "units": {
+      "mUI/mL": {
+        "min": null,
+        "max": null
+      },
+      "IU/L": {
+        "min": 10.0,
+        "max": 1000.0
+      }
+    },
+    "digest": "f775c8ed95dee806ad263feeecd80262"
+  },
+  {
+    "name": "Anticorpo Anti-Vírus da Hepatite C",
+    "alternatives": [
+      "Anticorpo Anti-HCV"
+    ],
+    "units": {
+      "UI/mL": {
+        "min": null,
+        "max": null
+      },
+      "COI": {
+        "min": null,
+        "max": 1.0
+      },
+      "S/CO": {
+        "min": 0.0,
+        "max": 1.0
+      }
+    },
+    "digest": "f6b750baba326178c2a3f779c7e087f3"
+  },
+  {
+    "name": "Haptoglobina",
+    "units": {
+      "g/dL": {
+        "min": 0.3,
+        "max": 2.0
+      },
+      "mg/dL": {
+        "min": 30.0,
+        "max": 200.0
+      },
+      "µg/mL": {
+        "min": 30.0,
+        "max": 200.0
+      }
+    },
+    "digest": "d23be362c75de6ecf1c668f76edfc0ce"
+  },
+  {
+    "name": "Colesterol VLDL",
+    "units": {
+      "mg/dL": {
+        "min": 5.0,
+        "max": 40.0
+      },
+      "mmol/L": {
+        "min": 0.13,
+        "max": 1.04
+      },
+      "g/L": {
+        "min": 0.05,
+        "max": 0.77
+      }
+    },
+    "digest": "31e1e1e5426cada0295e61cf927b4463"
+  },
+  {
     "name": "Colesterol HDL",
     "digest": "93001f5665118530844a164444c20735",
     "units": {
@@ -898,7 +1119,50 @@
     "digest": "49bd68067850e067c45c69da072d4242"
   },
   {
+    "name": "Antígeno Carboidrato 19-9",
+    "alternatives": [
+      "CA-19.9"
+    ],
+    "units": {
+      "U/mL": {
+        "min": null,
+        "max": 37.0
+      },
+      "kU/L": {
+        "min": null,
+        "max": 37.0
+      },
+      "ng/mL": {
+        "min": null,
+        "max": 37.0
+      }
+    },
+    "digest": "bf957647c3fcb8d19c8136ee18abf1bf"
+  },
+  {
+    "name": "5-Nucleotidase",
+    "units": {
+      "U/L": {
+        "min": 4.3,
+        "max": 10.3
+      },
+      "µkat/L": {
+        "min": 0.63,
+        "max": 2.3
+      },
+      "IU/L": {
+        "min": 4.3,
+        "max": 10.3
+      }
+    },
+    "digest": "06a796a17ea42ece0e47c61b9f5645c0"
+  },
+  {
     "name": "Cortisol",
+    "alternatives": [
+      "Cortisol Sérico",
+      "Cortisol Livre"
+    ],
     "digest": "f375dc40398d5b28a79b4950c2391c49",
     "units": {
       "µg/dL": {
@@ -1209,8 +1473,162 @@
     }
   },
   {
+    "name": "Anticorpo Anti-Cardiolipina (IgM)",
+    "units": {
+      "U/mL": {
+        "min": null,
+        "max": 10.0
+      },
+      "GPL units": {
+        "min": null,
+        "max": 12.4
+      },
+      "MPL units": {
+        "min": null,
+        "max": 12.4
+      }
+    },
+    "digest": "406e3507db49a65fbabf47b4cf86c67b"
+  },
+  {
+    "name": "Anticorpo Anti-Cardiolipina (IgG)",
+    "units": {
+      "U/mL": {
+        "min": null,
+        "max": 40.0
+      },
+      "GPL units": {
+        "min": null,
+        "max": 15.0
+      },
+      "MPL units": {
+        "min": null,
+        "max": 40.0
+      }
+    },
+    "digest": "b6f66e6ecfb1489f75cb782dcc1a0c65"
+  },
+  {
+    "name": "ANCA-MPO",
+    "alternatives": [
+      "Anticorpo Anticitoplasma de Neutrófilos contra a Mieloperoxidase"
+    ],
+    "units": {
+      "U/mL": {
+        "min": 0.0,
+        "max": 19.9
+      },
+      "RU/mL": {
+        "min": 0.0,
+        "max": 19.9
+      },
+      "AU/mL": {
+        "min": 0.0,
+        "max": 19.9
+      }
+    },
+    "digest": "99be1a6df4d2e59b2abc6eea9d2ec7f7"
+  },
+  {
+    "name": "ANCA Citoplasmático",
+    "alternatives": [
+      "c-ANCA"
+    ],
+    "units": {
+      "U/mL": {
+        "min": null,
+        "max": 5.0
+      },
+      "RU/mL": {
+        "min": null,
+        "max": 20.0
+      },
+      "AIU/mL": {
+        "min": null,
+        "max": 20.0
+      }
+    },
+    "digest": "d040e0e703b46a696fb9aed7c433956a"
+  },
+  {
+    "name": "ANCA Perinuclear",
+    "alternatives": [
+      "p-ANCA"
+    ],
+    "units": {
+      "%": {
+        "min": null,
+        "max": 3.0
+      },
+      "": {},
+      "U/mL": {
+        "min": null,
+        "max": 20.0
+      },
+      "IU/mL": {
+        "min": null,
+        "max": 20.0
+      }
+    },
+    "digest": "897f767859cccd3cb769368edb1e7a05"
+  },
+  {
+    "name": "Teste de Waaler-Rose",
+    "units": {
+      "mm/h": {
+        "min": null,
+        "max": 20.0
+      }
+    },
+    "digest": "bbb8720213da1f577586f67f4da15ea0"
+  },
+  {
+    "name": "Complemento C3",
+    "alternatives": [
+      "C3"
+    ],
+    "units": {
+      "g/L": {
+        "min": 0.9,
+        "max": 1.8
+      },
+      "mg/L": {
+        "min": 90.0,
+        "max": 180.0
+      },
+      "µg/mL": {
+        "min": 90.0,
+        "max": 180.0
+      }
+    },
+    "digest": "45c6a2bb75c93d81efe0934ec7860c77"
+  },
+  {
+    "name": "Complemento C4",
+    "alternatives": [
+      "C4"
+    ],
+    "units": {
+      "g/L": {
+        "min": 10.0,
+        "max": 40.0
+      },
+      "mg/L": {
+        "min": 10.0,
+        "max": 40.0
+      },
+      "µg/mL": {
+        "min": 14.0,
+        "max": 40.0
+      }
+    },
+    "digest": "dfe9618822b297f0d801011edf8dee0a"
+  },
+  {
     "name": "Fator Reumatoide",
-    "digest": "ae425f2064fc502feffc7766943a285c",
+    "alternatives": [
+      "R.A. Teste"
+    ],
     "units": {
       "UI/mL": {
         "min": null,
@@ -1224,7 +1642,8 @@
         "min": null,
         "max": 14.0
       }
-    }
+    },
+    "digest": "ae425f2064fc502feffc7766943a285c"
   },
   {
     "name": "Ferritina",
@@ -1295,24 +1714,6 @@
       "µmol/L": {
         "min": 0.87,
         "max": 1.45
-      }
-    }
-  },
-  {
-    "name": "Hormona Folículo Estimulante / FSH",
-    "digest": "69fd94e4f697f68cf6aa3d5ad9a4efcd",
-    "units": {
-      "mUI/mL": {
-        "min": 4.7,
-        "max": 21.5
-      },
-      "ng/mL": {
-        "min": 1.5,
-        "max": 12.4
-      },
-      "IU/L": {
-        "min": 2.5,
-        "max": 10.2
       }
     }
   },
@@ -1442,6 +1843,7 @@
     "name": "Eritrograma - Hematócrito / Hct",
     "digest": "798ffd0cec61c2dd197800ea6e9b6b81",
     "alternatives": [
+      "Hematócrito",
       "Volume Globular / Hematócrito (Hct)"
     ],
     "units": {
@@ -1568,6 +1970,24 @@
         "max": 12.6
       }
     }
+  },
+  {
+    "name": "Hormona Adrenocorticotrópica / ACTH",
+    "units": {
+      "pg/mL": {
+        "min": 7.2,
+        "max": 63.3
+      },
+      "pmol/L": {
+        "min": 2.0,
+        "max": 11.0
+      },
+      "ng/L": {
+        "min": 7.2,
+        "max": 63.3
+      }
+    },
+    "digest": "2a75c7c5228094b788c3f65a5778db94"
   },
   {
     "name": "Hormona Paratiroideia Intacta / PTH-I",
@@ -2926,8 +3346,82 @@
     }
   },
   {
+    "name": "Alfa-1 Antitripsina / AAT",
+    "alternatives": [
+      "Alfa-1 Proteína Inibidora da Tripsina (SERPINA1)",
+      "AAT"
+    ],
+    "units": {
+      "g/L": {
+        "min": 1.1,
+        "max": 2.1
+      },
+      "mg/dL": {
+        "min": 100.0,
+        "max": 220.0
+      },
+      "µg/mL": {
+        "min": 100.0,
+        "max": 220.0
+      }
+    },
+    "digest": "a14cd6d355c327e82530dd1c3779fd43"
+  },
+  {
+    "name": "Alfa-Fetoproteína (AFP)",
+    "alternatives": [
+      "AFP"
+    ],
+    "units": {
+      "ng/mL": {
+        "min": 1.5,
+        "max": 5.5
+      },
+      "µg/L": {
+        "min": 1.5,
+        "max": 5.5
+      },
+      "ng/dL": {
+        "min": 1.5,
+        "max": 5.5
+      }
+    },
+    "digest": "15c4d277ef4e27812d7ec01a1a5b04f9"
+  },
+  {
+    "name": "Azoto Ureico / BUN",
+    "alternatives": [
+      "BUN"
+    ],
+    "units": {
+      "mg/dL": {
+        "min": 7.0,
+        "max": 20.0
+      },
+      "mmol/L": {
+        "min": 2.5,
+        "max": 7.1
+      },
+      "mg/100mL": {
+        "min": 7.0,
+        "max": 20.0
+      }
+    },
+    "digest": "c724cb22659d4e09efbd0b9282dae4d0"
+  },
+  {
+    "name": "Anticorpo Anti-HBc",
+    "units": {
+      "%\nU/mL\nCOI": {}
+    },
+    "digest": "83d45d03b3ee5b0db3722123b2f2d092"
+  },
+  {
     "name": "Eritrograma - Volume Plaquetário Médio - VPM",
-    "digest": "983efe0b527da692b1941ad84fd1e645",
+    "alternatives": [
+      "Volume Plaquetário Médio",
+      "VPM"
+    ],
     "units": {
       "fL": {
         "min": 7.4,
@@ -2937,7 +3431,8 @@
         "min": 7.4,
         "max": 10.4
       }
-    }
+    },
+    "digest": "983efe0b527da692b1941ad84fd1e645"
   },
   {
     "name": "VSG - Método de Westergreen - Primeira hora",
@@ -2988,5 +3483,252 @@
         "max": 24.0
       }
     }
+  },
+  {
+    "name": "Urina - pH",
+    "units": {
+      "": {
+        "min": 4.5,
+        "max": 8.0
+      },
+      "Unidades de pH": {
+        "min": 4.5,
+        "max": 8.0
+      },
+      "Unidades de concentración": {
+        "min": 4.5,
+        "max": 8.0
+      },
+      "Unidades de acidez o basicidad": {
+        "min": 4.5,
+        "max": 8.0
+      }
+    },
+    "digest": "64b120fd5a5830cc9deb56d686398d1e"
+  },
+  {
+    "name": "Urina - Densidade",
+    "units": {
+      "g/mL": {
+        "min": 1.005,
+        "max": 1.03
+      },
+      "kg/m³": {
+        "min": 1015.0,
+        "max": 1035.0
+      },
+      "g/cm³": {
+        "min": 1.005,
+        "max": 1.03
+      }
+    },
+    "digest": "c269417cf69b23f782a7243660a19933"
+  },
+  {
+    "name": "Urina - Leucócitos",
+    "units": {
+      "células/µL": {
+        "min": 0.0,
+        "max": 20.0
+      },
+      "células/mm³": {
+        "min": null,
+        "max": 20.0
+      },
+      "mg/dL": {
+        "min": null,
+        "max": 0.2
+      }
+    },
+    "digest": "3d841b103906fef272cf3ccc942891b2"
+  },
+  {
+    "name": "Urina - Nitritos",
+    "units": {
+      "%": {
+        "min": null,
+        "max": null
+      },
+      "mg/dL": {
+        "min": null,
+        "max": 0.3
+      },
+      "µg/mL": {
+        "min": null,
+        "max": null
+      }
+    },
+    "digest": "0940ec6401a1fb59f66825955317009e"
+  },
+  {
+    "name": "Urina - Proteínas",
+    "units": {
+      "g/L": {
+        "min": 0.03,
+        "max": 0.14
+      },
+      "mg/dL": {
+        "min": null,
+        "max": 0.2
+      },
+      "g/24h": {
+        "min": null,
+        "max": 0.15
+      }
+    },
+    "digest": "acf067fa4100ac4a498f82f0678d6e51"
+  },
+  {
+    "name": "Urina - Glicose",
+    "units": {
+      "mg/dL": {
+        "min": null,
+        "max": 15.0
+      },
+      "mmol/L": {
+        "min": null,
+        "max": null
+      },
+      "mg/24h": {
+        "min": null,
+        "max": 15.0
+      }
+    },
+    "digest": "6eb1909002dcfc4e7c2f19e1b6cb2686"
+  },
+  {
+    "name": "Urina - Corpos cetónicos",
+    "units": {
+      "mg/dL": {},
+      "mmol/L": {},
+      "µmol/L": {}
+    },
+    "digest": "303d448888abf58b7c852a2554bfda69"
+  },
+  {
+    "name": "Urina - Urobilinogénio",
+    "units": {
+      "mg/dL": {
+        "min": 0.2,
+        "max": 1.0
+      },
+      "µmol/L": {
+        "min": 0.6,
+        "max": 6.8
+      },
+      "µg/dL": {
+        "min": 0.2,
+        "max": 1.0
+      }
+    },
+    "digest": "f7484f8f5705672a77fa39f03d2a525f"
+  },
+  {
+    "name": "Urina - Bilirrubina",
+    "units": {
+      "mg/dL": {
+        "min": 0.0,
+        "max": 1.2
+      },
+      "µmol/L": {
+        "min": null,
+        "max": 3.4
+      },
+      "µg/dL": {
+        "min": null,
+        "max": 1.0
+      }
+    },
+    "digest": "94d6147b5e8c3e7fa9c12970a2f8397d"
+  },
+  {
+    "name": "Urina - Sangue",
+    "units": {
+      "mg/dL": {
+        "min": null,
+        "max": 0.03
+      },
+      "células/µL": {
+        "min": null,
+        "max": 20.0
+      },
+      "células/mm³": {
+        "min": null,
+        "max": 3.0
+      }
+    },
+    "digest": "79f483457989383600404e1ffa7e966d"
+  },
+  {
+    "name": "Urina - Células epiteliais escamosas",
+    "units": {
+      "células/campo": {
+        "min": 0.0,
+        "max": null
+      },
+      "células/mL": {
+        "min": null,
+        "max": null
+      },
+      "células/µL": {
+        "min": null,
+        "max": null
+      }
+    },
+    "digest": "6b6bfec0f840ccabef4e5532f647da95"
+  },
+  {
+    "name": "Urina - Células epiteliais transição",
+    "units": {
+      "células/campo": {
+        "min": 0.0,
+        "max": 10.0
+      },
+      "células/mL": {
+        "min": null,
+        "max": null
+      },
+      "células/µL": {
+        "min": null,
+        "max": null
+      }
+    },
+    "digest": "8b09fab25c896098561470f3e6965c29"
+  },
+  {
+    "name": "Urina - Células epiteliais tubulares",
+    "units": {
+      "células/campo": {
+        "min": 0.0,
+        "max": 5.0
+      },
+      "células/mL": {
+        "min": null,
+        "max": null
+      },
+      "células/µL": {
+        "min": null,
+        "max": null
+      }
+    },
+    "digest": "6c71a6b1c673e7f3b77b9004ab79dafd"
+  },
+  {
+    "name": "Urina - Eritrócitos",
+    "units": {
+      "células/µL": {
+        "min": 0.0,
+        "max": 20.0
+      },
+      "células/mm³": {
+        "min": 0.0,
+        "max": 20.0
+      },
+      "mg/dL": {
+        "min": null,
+        "max": 20.0
+      }
+    },
+    "digest": "063ac39168ffba5071d4681c03d05ef5"
   }
 ]

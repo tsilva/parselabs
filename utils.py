@@ -3,7 +3,6 @@ import csv
 import json
 import base64
 import shutil
-from tqdm import tqdm
 import functools
 import numpy as np
 import concurrent.futures
@@ -62,8 +61,9 @@ def cosine_similarity(vec1, vec2):
     if magnitude == 0: return 0
     return dot_product / magnitude
 
+@functools.lru_cache(maxsize=None)
 def create_embedding(text):
-    response = OPENAI_CLIENT.embeddings.create(input=[text], model="text-embedding-3-small")
+    response = OPENAI_CLIENT.embeddings.create(input=[text], model="text-embedding-ada-002")
     embedding = response.data[0].embedding
     return embedding
 
@@ -75,7 +75,7 @@ def create_embeddings(texts, max_workers=20):
         concurrent.futures.wait(futures)
     return embeddings
 
-def create_completion(user_prompt, model="gpt-3.5-turbo-1106", temperature=0.0, system_prompt=None, tools=[]):
+def create_completion(user_prompt, model="gpt-3.5-turbo-1106", temperature=0.0, max_tokens=None, system_prompt=None, tools=[]):
     messages = ([{
         "role": "system",
         "content": system_prompt
@@ -83,12 +83,17 @@ def create_completion(user_prompt, model="gpt-3.5-turbo-1106", temperature=0.0, 
         "role": "user",
         "content": user_prompt
     }]
+
+    extra = {}
+    if tools: extra["tools"] = tools
+    if tools: extra["tool_choice"] = "auto"
+    if max_tokens: extra["max_tokens"] = max_tokens
+
     response = OPENAI_CLIENT.chat.completions.create(
         model=model,
         temperature=temperature,
         messages=messages,
-        tools=tools,
-        tool_choice="auto"
+        **extra
     )
     message = response.choices[0].message
     return message
@@ -127,56 +132,6 @@ def prompt_visual(text_prompt: str, image_path: str, max_tokens=None, temperatur
     content = response.choices[0].message.content
     content = content.strip()
     return content
-
-def generate_units_for_lab_name(name):
-    system_prompt = """
-Given a lab test, what are the most 3 most common units used to measure that lab test (by default consider that it's a blood lab, unless specified otherwise). Output as CSV string, ordered from most to least common, with no other content.
-
-eg: 
-USER: Leucograma - Eosinófilos
-ASSISTANT: %;células/µL;células/mm³
-""".strip()
-    message = create_completion(name, system_prompt=system_prompt)
-    units_s = message.content
-    units = units_s.split(";")
-    units = [unit.strip() for unit in units]
-    return units
-
-def generate_range_for_lab_unit(name: str, unit: str):
-    USER_GENDER = os.environ["USER_GENDER"]
-    USER_RACE = os.environ["USER_RACE"]
-    USER_AGE = os.environ["USER_AGE"]
-    USER_LOCATION = os.environ["USER_LOCATION"]
-    USER_HEIGHT = os.environ["USER_HEIGHT"]
-    USER_WEIGHT = os.environ["USER_WEIGHT"]
-
-    system_prompt = f"""
-Given a lab test corresponding measurement unit, what is the min and max healthy range for a person with the following characteristics:
-
-Gender: {USER_GENDER}
-Age: {USER_AGE}
-Race: {USER_RACE}
-Location: {USER_LOCATION}
-Height: {USER_HEIGHT}
-Weight: {USER_WEIGHT}
-
-Output just the range as CSV string with range min value followed by range max value. If there is no min output NULL in its place, if there is no max output NULL in its place. Don't output anything else.
-
-Eg:
-USER: Vitamina E [UNIT = mg/L]
-ASSISTANT: 5.5;18.5
-USER: Vitamina E  [UNIT = µg/mL]
-ASSISTANT: 2.8;18.4
-USER: Vitamina E  [UNIT = µmol/L]
-ASSISTANT: 12;42
-""".strip()
-    user_prompt = f"{name} [UNIT = {unit}]"
-    print(user_prompt)
-    range_s = create_completion(user_prompt, model="gpt-4-1106-preview", system_prompt=system_prompt)
-    range_values = range_s.replace("<", "").replace(">", "").replace(",", ".").split(";")
-    range_values = [value.strip() for value in range_values]
-    range_min, range_max = [float(value) if value != "NULL" else None for value in range_values]
-    return range_min, range_max
 
 @functools.lru_cache(maxsize=None)
 def load_labs_specs():
@@ -220,49 +175,19 @@ def find_similar_lab_names(name):
     return sorted_matches
 
 @functools.lru_cache(maxsize=None)
-def find_most_similar_lab_name(name, threshold=0.40):
+def find_most_similar_lab_name(name):
     matches = find_similar_lab_names(name)
-    #print(matches[:3])
-    filtered_matches = [(match[0], match[1]) for match in matches if match[1] >= threshold]
-    if not filtered_matches: 
-        print(name + " " + json.dumps(matches[0]))
-        return None
-    return filtered_matches[0][0]
+    lab_names = [match[0] for match in matches[:3]]
+    for lab_name in lab_names:
+        valid = validate_lab_test_name_mapping(name, lab_name)
+        if valid: return lab_name
+    return None
 
 @functools.lru_cache(maxsize=None)
-def find_most_similar_lab_spec(name, threshold=0.40):
-    similar_name = find_most_similar_lab_name(name, threshold=threshold)
+def find_most_similar_lab_spec(name):
+    similar_name = find_most_similar_lab_name(name)
     lab_spec = lab_spec_by_name(similar_name)
     return lab_spec
-
-def generate_units_for_lab_specs(lab_specs):
-    for spec in tqdm(lab_specs, total=len(lab_specs)):
-        name = spec["name"]
-        units = spec.get("units")
-        if units: continue
-        units = generate_units_for_lab_name(name)
-        spec["units"] = dict([(unit, {}) for unit in units])
-    return lab_specs
-
-def generate_units_ranges_for_lab_specs(lab_specs):
-    for spec in tqdm(lab_specs, total=len(lab_specs) * 3):
-        lab_name = spec["name"]
-        units = spec.get("units", {})
-        for unit_name, values in units.items():
-            if values: 
-                continue
-            try: 
-                range_min, range_max = generate_range_for_lab_unit(lab_name, unit_name)
-            except Exception as e: 
-                print(e)
-                continue
-            spec["units"][unit_name] = {
-                "min": range_min,
-                "max": range_max
-            }
-            print(unit_name)
-            print(spec["units"][unit_name])
-    return lab_specs
 
 def augment_lab_result(result):
     result_name = result["name"]
@@ -273,6 +198,8 @@ def augment_lab_result(result):
     if not lab_spec:
         result["_lab_spec"] = None
         return
+    
+    print(result_name + " -> " + lab_spec["name"] if lab_spec else "null")
 
     units = lab_spec.get("units", {})
     lab_spec_unit = units.get(result_unit, {})
@@ -321,3 +248,38 @@ def generate_lab_name_mappings(labs):
         mappings[name] = mapped_name
         print(f"{name} -> {mapped_name}")
     return mappings
+
+@functools.lru_cache(maxsize=None)
+def validate_lab_test_name_mapping(key, value):
+    system_prompt = """
+Your task is to determine whether two given lab test names, separated by an equals sign, refer to the same test. 
+Respond with '1' for equivalent tests and '0' for non-equivalent tests.
+
+Examples:
+
+USER: Eosinófilos = Leucograma - Eosinófilos
+ASSISTANT: 1
+USER: Ferro = Ferritina
+ASSISTANT: 0
+USER: frro = Ferro
+ASSISTANT: 1
+USER: Uricémia = Homocisteína
+ASSISTANT: 0
+""".strip()
+    user_prompt = f"{key} = {value}"
+    message = create_completion(user_prompt, system_prompt=system_prompt, max_tokens=1)
+    content = message.content
+    content = content.strip()
+    valid = content == "1"
+    if not valid: print(f"{key} != {value}")
+    return valid
+
+def validate_lab_test_name_mappings(mappings, max_workers=10):
+    invalid_mappings = {}
+    def _validate(key, value): 
+        valid = validate_lab_test_name_mapping(key, value)
+        if not valid: invalid_mappings[key] = value
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(_validate, key, value) for key, value in mappings.items()]
+        concurrent.futures.wait(futures)
+    return invalid_mappings
