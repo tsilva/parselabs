@@ -4,8 +4,8 @@ Scripts to extract data from health lab reports (portuguese)
 
 # TODO
 
-- Add missing labs
-- If an error is being logged for why image doesnt match text, explain why
+- Regen cache and run again
+- Validate inconsistencies (check explanations)
+- Discard duplicate values in final file
+- Export bad mappings on generation
 - TSH plot
-- Make mappings file be exported in run
-- Use GPT to verify that all mappings are accurate

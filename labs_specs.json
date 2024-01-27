@@ -109,7 +109,10 @@
   },
   {
     "name": "Anticorpo Anti-T TG (IgG)",
-    "alternatives": ["Anti-Tissue Transglutaminase (IgG)", "Anti-tTG (IgG)"],
+    "alternatives": [
+      "Anti-Tissue Transglutaminase (IgG)",
+      "Anti-tTG (IgG)"
+    ],
     "digest": "bc9b89ce9e159bda8f2756d8655b3f4a",
     "units": {
       "U/mL": {
@@ -155,7 +158,21 @@
     }
   },
   {
-    "name": "Anticorpo Anti-Transglutaminase (IgG)"
+    "name": "Anticorpo Anti-Transglutaminase (IgG)",
+    "units": {
+      "U/mL": {
+        "min": 0.0,
+        "max": 10.0
+      },
+      "AU/mL": {
+        "min": 5.0,
+        "max": 30.0
+      },
+      "U/L": {
+        "min": 0.0,
+        "max": 10.0
+      }
+    }
   },
   {
     "name": "Anticorpo Anti-Nuclear",
@@ -177,7 +194,9 @@
   },
   {
     "name": "Anticorpo Anti-Scl 70",
-    "alternatives": ["Anticorpo Anti-Topoisomerase I"],
+    "alternatives": [
+      "Anticorpo Anti-Topoisomerase I"
+    ],
     "units": {
       "U/mL": {
         "min": null,
@@ -196,7 +215,9 @@
   },
   {
     "name": "Título Antiestreptolisina O (ASO)",
-    "alternatives": ["Teste de ASO"],
+    "alternatives": [
+      "Teste de ASO"
+    ],
     "units": {
       "IU/mL": {
         "min": 85.0,
@@ -213,7 +234,23 @@
     },
     "digest": "52cd2154fd3f563f41ed30393b96b57a"
   },
-  { "name": "Gama-Globulina" },
+  {
+    "name": "Gama-Globulina",
+    "units": {
+      "g/dL": {
+        "min": 0.7,
+        "max": 1.7
+      },
+      "mg/dL": {
+        "min": 9.2,
+        "max": 18.1
+      },
+      "g/L": {
+        "min": 7.0,
+        "max": 13.0
+      }
+    }
+  },
   {
     "name": "Anticorpo Anti-Tiroglobulina / Tg",
     "units": {
@@ -289,7 +326,9 @@
   {
     "name": "Alanina aminotransferase / ALT / GPT",
     "digest": "5cdf651a01d124970663de5324d8b463",
-    "alternatives": ["Transaminase Glutâmico-Pirúvica (TGP)"],
+    "alternatives": [
+      "Transaminase Glutâmico-Pirúvica (TGP)"
+    ],
     "units": {
       "U/L": {
         "min": 7.0,
@@ -451,7 +490,9 @@
   },
   {
     "name": "Aspartato aminotransferase / AST / GOT",
-    "alternatives": ["Transaminase Glutâmico-Oxalacética (TGO)"],
+    "alternatives": [
+      "Transaminase Glutâmico-Oxalacética (TGO)"
+    ],
     "units": {
       "U/L": {
         "min": 8.0,
@@ -541,7 +582,9 @@
   },
   {
     "name": "Bilirrubina Direta",
-    "alternatives": ["Bilirrubina Conjugada"],
+    "alternatives": [
+      "Bilirrubina Conjugada"
+    ],
     "units": {
       "mg/dL": {
         "min": 0.0,
@@ -560,7 +603,9 @@
   },
   {
     "name": "Anticorpo SS-A",
-    "alternatives": ["Anticorpo Anti-Ro"],
+    "alternatives": [
+      "Anticorpo Anti-Ro"
+    ],
     "units": {
       "U/mL": {
         "min": 0.8,
@@ -579,7 +624,9 @@
   },
   {
     "name": "Anticorpo SS-B",
-    "alternatives": ["Anticorpo Anti-La"],
+    "alternatives": [
+      "Anticorpo Anti-La"
+    ],
     "units": {
       "mg/dL": {
         "min": null,
@@ -598,7 +645,9 @@
   },
   {
     "name": "Anticorpo Anti-CPP",
-    "alternatives": ["Anticorpo contra Peptídeos Cíclicos Citrulinados"],
+    "alternatives": [
+      "Anticorpo contra Peptídeos Cíclicos Citrulinados"
+    ],
     "units": {
       "U/mL": {
         "min": 5.0,
@@ -635,7 +684,9 @@
   },
   {
     "name": "Bilirrubina Indireta",
-    "alternatives": ["Bilirrubina Não Conjugada"],
+    "alternatives": [
+      "Bilirrubina Não Conjugada"
+    ],
     "units": {
       "mg/dL": {
         "min": 0.0,
@@ -709,7 +760,9 @@
   {
     "name": "Capacidade Total de Fixação de Ferro",
     "digest": "212461fe323bbb541b659c63706e6796",
-    "alternatives": ["Cap. Tot. Fix. Ferro"],
+    "alternatives": [
+      "Cap. Tot. Fix. Ferro"
+    ],
     "units": {
       "µg/dL": {
         "min": 250.0,
@@ -852,7 +905,9 @@
   },
   {
     "name": "Anticorpo Anti-Vírus da Hepatite C",
-    "alternatives": ["Anticorpo Anti-HCV"],
+    "alternatives": [
+      "Anticorpo Anti-HCV"
+    ],
     "units": {
       "UI/mL": {
         "min": null,
@@ -959,8 +1014,46 @@
       }
     }
   },
-  { "name": "Antígeno Carcinoembrionário / CEA", "alternatives": ["CEA"] },
-  { "name": "Relação Albuminas-Globulinas", "alternatives": ["Relacao A/G"] },
+  {
+    "name": "Antígeno Carcinoembrionário / CEA",
+    "alternatives": [
+      "CEA"
+    ],
+    "units": {
+      "ng/mL": {
+        "min": 0.0,
+        "max": 5.0
+      },
+      "µg/L": {
+        "min": 2.5,
+        "max": 5.0
+      },
+      "ng/dL": {
+        "min": 0.0,
+        "max": 5.0
+      }
+    }
+  },
+  {
+    "name": "Relação Albuminas-Globulinas",
+    "alternatives": [
+      "Relacao A/G"
+    ],
+    "units": {
+      "g/dL": {
+        "min": 1.1,
+        "max": 2.5
+      },
+      "ratio": {
+        "min": 1.1,
+        "max": 2.5
+      },
+      "g/L": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
   {
     "name": "Eritrograma - Concentração de Hemoglobina Globular Média / CHGM",
     "alternatives": [
@@ -1006,13 +1099,79 @@
       }
     }
   },
-  { "name": "Globulina Gama" },
-  { "name": "Globulina Beta" },
-  { "name": "Reticulócitos - Hemoglobina" },
-  { "name": "Urina - Contagem de colónias" },
+  {
+    "name": "Globulina Gama",
+    "units": {
+      "g/dL": {
+        "min": 0.7,
+        "max": 1.6
+      },
+      "g/L": {
+        "min": 7.0,
+        "max": 16.0
+      },
+      "mg/dL": {
+        "min": 9.2,
+        "max": 18.1
+      }
+    }
+  },
+  {
+    "name": "Globulina Beta",
+    "units": {
+      "g/dL": {
+        "min": 0.7,
+        "max": 1.2
+      },
+      "g/L": {
+        "min": 7.0,
+        "max": 13.0
+      },
+      "mg/dL": {
+        "min": 6.0,
+        "max": 12.1
+      }
+    }
+  },
+  {
+    "name": "Reticulócitos - Hemoglobina",
+    "units": {
+      "g/dL": {
+        "min": 27.5,
+        "max": 37.5
+      },
+      "%": {
+        "min": 0.5,
+        "max": 2.5
+      },
+      "pg": {
+        "min": 27.5,
+        "max": 32.5
+      }
+    }
+  },
+  {
+    "name": "Urina - Contagem de colónias",
+    "units": {
+      "UFC/mL": {
+        "min": 1000.0,
+        "max": 100000.0
+      },
+      "UFC/100mL": {
+        "min": 1000.0,
+        "max": 100000.0
+      },
+      "UFC/µL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
   {
     "name": "Antígeno Carboidrato 19-9",
-    "alternatives": ["CA-19.9"],
+    "alternatives": [
+      "CA-19.9"
+    ],
     "units": {
       "U/mL": {
         "min": null,
@@ -1049,7 +1208,10 @@
   },
   {
     "name": "Cortisol",
-    "alternatives": ["Cortisol Sérico", "Cortisol Livre"],
+    "alternatives": [
+      "Cortisol Sérico",
+      "Cortisol Livre"
+    ],
     "digest": "f375dc40398d5b28a79b4950c2391c49",
     "units": {
       "µg/dL": {
@@ -1138,8 +1300,32 @@
       }
     }
   },
-  { "name": "Titulo do Complemento" },
-  { "name": "Pesquisa de Imunocomplexos" },
+  {
+    "name": "Titulo do Complemento",
+    "units": {
+      "I'm sorry, I didn't understand the lab test you are referring to. Can you please provide the specific lab test for which you would like to know the most common units of measurement?": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Pesquisa de Imunocomplexos",
+    "units": {
+      "mg/dL": {
+        "min": 3.0,
+        "max": 4.0
+      },
+      "µg/mL": {
+        "min": 3.0,
+        "max": 4.0
+      },
+      "ng/mL": {
+        "min": 3.3,
+        "max": 150.0
+      }
+    }
+  },
   {
     "name": "Delta-4-Androstenediona",
     "units": {
@@ -1232,7 +1418,11 @@
   {
     "name": "Eritrograma - Eritrócitos",
     "digest": "977d9df59473fa282f6ed57bd2517e1d",
-    "alternatives": ["Eritrócitos", "Hematócitos", "Glóbulos Vermelhos"],
+    "alternatives": [
+      "Eritrócitos",
+      "Hematócitos",
+      "Glóbulos Vermelhos"
+    ],
     "units": {
       "x10^6/µL": {
         "min": 4.2,
@@ -1397,7 +1587,9 @@
   },
   {
     "name": "ANCA Citoplasmático",
-    "alternatives": ["c-ANCA"],
+    "alternatives": [
+      "c-ANCA"
+    ],
     "units": {
       "U/mL": {
         "min": null,
@@ -1416,7 +1608,9 @@
   },
   {
     "name": "ANCA Perinuclear",
-    "alternatives": ["p-ANCA"],
+    "alternatives": [
+      "p-ANCA"
+    ],
     "units": {
       "%": {
         "min": null,
@@ -1446,7 +1640,9 @@
   },
   {
     "name": "Complemento C3",
-    "alternatives": ["C3"],
+    "alternatives": [
+      "C3"
+    ],
     "units": {
       "g/L": {
         "min": 0.9,
@@ -1465,7 +1661,9 @@
   },
   {
     "name": "Complemento C4",
-    "alternatives": ["C4"],
+    "alternatives": [
+      "C4"
+    ],
     "units": {
       "g/L": {
         "min": 10.0,
@@ -1484,7 +1682,9 @@
   },
   {
     "name": "Fator Reumatoide",
-    "alternatives": ["R.A. Teste"],
+    "alternatives": [
+      "R.A. Teste"
+    ],
     "units": {
       "UI/mL": {
         "min": null,
@@ -1621,7 +1821,10 @@
   },
   {
     "name": "Glicose",
-    "alternatives": ["Glicemia", "Glicose em Jejum"],
+    "alternatives": [
+      "Glicemia",
+      "Glicose em Jejum"
+    ],
     "units": {
       "mg/dL": {
         "min": 70.0,
@@ -1677,11 +1880,30 @@
       }
     }
   },
-  { "name": "Tempo de Quick" },
+  {
+    "name": "Tempo de Quick",
+    "units": {
+      "segundos": {
+        "min": 11.0,
+        "max": 15.0
+      },
+      "%": {
+        "min": 70.0,
+        "max": 130.0
+      },
+      "% atividade relativa": {
+        "min": 70.0,
+        "max": 130.0
+      }
+    }
+  },
   {
     "name": "Eritrograma - Hematócrito / Hct",
     "digest": "798ffd0cec61c2dd197800ea6e9b6b81",
-    "alternatives": ["Hematócrito", "Volume Globular / Hematócrito (Hct)"],
+    "alternatives": [
+      "Hematócrito",
+      "Volume Globular / Hematócrito (Hct)"
+    ],
     "units": {
       "%": {
         "min": 37.0,
@@ -1700,7 +1922,9 @@
   {
     "name": "Eritrograma - Hemoglobina / Hb",
     "digest": "10bb85ae4d365038bdbcfa4d678ed442",
-    "alternatives": ["Hemoglobina"],
+    "alternatives": [
+      "Hemoglobina"
+    ],
     "units": {
       "g/dL": {
         "min": 12.1,
@@ -1726,9 +1950,49 @@
       }
     }
   },
-  { "name": "Fezes - Sangue Oculto" },
-  { "name": "Urina - Cristais" },
-  { "name": "Urina - Small Round Cells" },
+  {
+    "name": "Fezes - Sangue Oculto",
+    "units": {
+      "ug/g": {
+        "min": null,
+        "max": 200.0
+      },
+      "ng/mL": {
+        "min": null,
+        "max": 200.0
+      },
+      "µg/dL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Urina - Cristais",
+    "units": {
+      "N/A": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
+  {
+    "name": "Urina - Small Round Cells",
+    "units": {
+      "células/µL": {
+        "min": null,
+        "max": null
+      },
+      "células/mm³": {
+        "min": null,
+        "max": null
+      },
+      "mg/dL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
   {
     "name": "Hemoglobina Glicada - IFCC / HbA1C - IFCC",
     "digest": "8aa324a943d639e9fbf6eb13d41f75ca",
@@ -1738,7 +2002,9 @@
   },
   {
     "name": "Eritrograma - Hemoglobina Globular Média / HGM",
-    "alternatives": ["Hemoglobina Globular Média"],
+    "alternatives": [
+      "Hemoglobina Globular Média"
+    ],
     "units": {
       "g/dL": {
         "min": 27.0,
@@ -1972,7 +2238,10 @@
   },
   {
     "name": "Eritrograma - Índice de Distribuição dos Eritrócitos - RDW",
-    "alternatives": ["Indice dispersao rubros", "RDW"],
+    "alternatives": [
+      "Indice dispersao rubros",
+      "RDW"
+    ],
     "units": {
       "%": {
         "min": 11.5,
@@ -2008,7 +2277,9 @@
   },
   {
     "name": "Índice de Protrombina / IP",
-    "alternatives": ["Taxa de Protrombina"],
+    "alternatives": [
+      "Taxa de Protrombina"
+    ],
     "units": {
       "%": {
         "min": 70.0,
@@ -2402,7 +2673,23 @@
       }
     }
   },
-  { "name": "Reticulócitos - Indice de produção" },
+  {
+    "name": "Reticulócitos - Indice de produção",
+    "units": {
+      "%": {
+        "min": 0.5,
+        "max": 2.5
+      },
+      "": {
+        "min": null,
+        "max": 2.5
+      },
+      "células/µL": {
+        "min": null,
+        "max": null
+      }
+    }
+  },
   {
     "name": "Reticulócitos",
     "digest": "24388825766915c6c1d93398953b96c2",
@@ -2844,7 +3131,13 @@
       "Método de Westergreen - 1a Hora",
       "VSG - 1a Hora",
       "Velocidade de Sedimentacao Globular - 1a Hora"
-    ]
+    ],
+    "units": {
+      "mm/h": {
+        "min": 2.0,
+        "max": 20.0
+      }
+    }
   },
   {
     "name": "Eritrograma - Velocidade de Sedimentação - 2a Hora",
@@ -2852,11 +3145,19 @@
       "Método de Westergreen - 2a Hora",
       "VSG - 2a Hora",
       "Velocidade de Sedimentacao Globular - 2a Hora"
-    ]
+    ],
+    "units": {
+      "mm/h": {
+        "min": null,
+        "max": 30.0
+      }
+    }
   },
   {
     "name": "Eritrograma - Volume Corpuscular Médio / VCM",
-    "alternatives": ["VCM"],
+    "alternatives": [
+      "VCM"
+    ],
     "units": {
       "fL": {
         "min": 80.0,
@@ -2874,7 +3175,9 @@
   },
   {
     "name": "Eritrograma - Hemoglobina Corpuscular Média / HCM",
-    "alternatives": ["HCM"],
+    "alternatives": [
+      "HCM"
+    ],
     "units": {
       "g/dL": {
         "min": 27.0,
@@ -2962,7 +3265,6 @@
       }
     }
   },
-  { "name": "Cálcio" },
   {
     "name": "Vitamina D3 / 25-Hidroxicolecalciferol / Calcidiol",
     "alternatives": [
@@ -3042,7 +3344,10 @@
   },
   {
     "name": "Alfa-1 Antitripsina / AAT",
-    "alternatives": ["Alfa-1 Proteína Inibidora da Tripsina (SERPINA1)", "AAT"],
+    "alternatives": [
+      "Alfa-1 Proteína Inibidora da Tripsina (SERPINA1)",
+      "AAT"
+    ],
     "units": {
       "g/L": {
         "min": 1.1,
@@ -3061,7 +3366,9 @@
   },
   {
     "name": "Alfa-Fetoproteína (AFP)",
-    "alternatives": ["AFP"],
+    "alternatives": [
+      "AFP"
+    ],
     "units": {
       "ng/mL": {
         "min": 1.5,
@@ -3080,7 +3387,9 @@
   },
   {
     "name": "Azoto Ureico / BUN",
-    "alternatives": ["BUN"],
+    "alternatives": [
+      "BUN"
+    ],
     "units": {
       "mg/dL": {
         "min": 7.0,
@@ -3106,7 +3415,10 @@
   },
   {
     "name": "Eritrograma - Volume Plaquetário Médio - VPM",
-    "alternatives": ["Volume Plaquetário Médio", "VPM"],
+    "alternatives": [
+      "Volume Plaquetário Médio",
+      "VPM"
+    ],
     "units": {
       "fL": {
         "min": 7.4,
@@ -3272,7 +3584,10 @@
     "units": {
       "mg/dL": {},
       "mmol/L": {},
-      "µmol/L": {}
+      "µmol/L": {
+        "min": null,
+        "max": null
+      }
     },
     "digest": "303d448888abf58b7c852a2554bfda69"
   },
