@@ -36,9 +36,10 @@ ASSISTANT: 12;42
 """.strip()
     user_prompt = f"{name} [UNIT = {unit}]"
     message = create_completion(user_prompt, model="gpt-4-1106-preview", system_prompt=system_prompt)
-    range_s = message.content
+    range_s = message.content.strip()
     range_values = range_s.replace("<", "").replace(">", "").replace(",", ".").split(";")
-    range_values = [value.strip() for value in range_values]
+    range_values = [value.strip().lower() for value in range_values]
+    if "negative" in range_values or "positive" in range_values: return 0, 1
     range_min, range_max = [float(value) if value != "NULL" else None for value in range_values]
     return range_min, range_max
 
@@ -51,9 +52,9 @@ USER: Leucograma - Eosinófilos
 ASSISTANT: %;células/µL;células/mm³
 """.strip()
     message = create_completion(name, system_prompt=system_prompt)
-    units_s = message.content
+    units_s = message.content.strip()
     units = units_s.split(";")
-    units = [unit.strip() for unit in units]
+    units = [unit.strip() for unit in units if unit.strip()]
     return units
 
 def generate_units_for_lab_specs(lab_specs):
@@ -104,9 +105,36 @@ def assert_unique_lab_specs(lab_specs):
     if duplicates:
         raise Exception("Duplicate lab specs found: " + ", ".join(duplicates))
 
+def extract_unique_units(lab_specs):
+    VALID_UNITS = [
+        "ng/dL", "ng/mL", "µg/L", "pg/mL", "pmol/L", "UI/mL", "U/mL", "AU/mL", "mg/dL",
+        "UI/L", "UI/dL", "U/L", "AI", "RU/mL", "IU/mL", "IU/L", "g/dL", "g/L", "mg/L",
+        "µmol/L", "nmol/L", "mmol/L", "µg/dL", "µg/mL", "fL", "pg", "µm³", "%",
+        "células/µL", "células/mm³", "s", "µmol/dL", "Index", "µg/g", "mg/kg", "mEq/L",
+        "mUI/mL", "COI", "S/CO", "ratio", "UFC/mL", "UFC/100mL", "UFC/µL", "kU/L",
+        "AIU/mL", "mm/h", "mg/100mL", "nmol/dL", "segundos", "ug/g", "N/A", "nmol/mL",
+        "µmol/g", "mIU/mL", "ng/L", "fl", "INR", "µU/mL", "µIU/mL", "mmol/g Hb",
+        "10^3/µL", "mIU/L", "fl%", "10^9/L", "mU/L", "mg/24h", "mm³", "mL", "L", "µL",
+        "g/mL", "kg/m³", "g/cm³", "g/24h", "células/campo", "células/mL", 
+        "µkat/L", "kat/L", "10^6/µL", "10^12/L", "10^6/mm³", "GPLU/ML", "MPLU/ml"
+    ]
+
+    unique_units = {}
+    invalid_units = {}
+    for lab_spec in lab_specs:
+        _units = lab_spec.get("units", {})
+        for unit_name in _units.keys(): 
+            unique_units[unit_name] = True
+            if not unit_name in VALID_UNITS: invalid_units[unit_name] = True
+    unique_units = list(unique_units.keys())
+    invalid_units = list(invalid_units.keys())
+    return {"unique" : unique_units, "invalid": invalid_units}
+
 labs_specs = load_json("labs_specs.json")
 assert_unique_lab_specs(labs_specs)
 sort_labs_specs(labs_specs)
 generate_units_for_lab_specs(labs_specs)
 generate_units_ranges_for_lab_specs(labs_specs)
+units = extract_unique_units(labs_specs)
+save_json("labs_specs_2.units.json", units)
 save_json("labs_specs_2.json", labs_specs)

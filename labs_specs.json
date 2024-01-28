@@ -647,8 +647,10 @@
     "digest": "98e2a1dd27acbc1fd1455ff18d969565"
   },
   {
-    "name": "Anticorpo Anti-CPP",
+    "name": "Anticorpo Anti-Peptídeo Citrulinado / CPP",
     "alternatives": [
+      "Anticorpo Anti-CPP",
+      "Anticorpo Anti-Peptídeo Citrulinado (CCP)",
       "Anticorpo contra Peptídeos Cíclicos Citrulinados"
     ],
     "units": {
@@ -665,7 +667,7 @@
         "max": null
       }
     },
-    "digest": "41f3a957951e3e6321c973b448021745"
+    "digest": "7b62fc7da49044d3f91a0af8d2acf724"
   },
   {
     "name": "Anticorpo Anti-ADN",
@@ -726,6 +728,9 @@
   },
   {
     "name": "Cálcio",
+    "alternatives": [
+      "Cálcio Total"
+    ],
     "digest": "657cd0659a8d7ccfd0793cbb6f1459f0",
     "units": {
       "mg/dL": {
@@ -888,6 +893,21 @@
         "max": 24.4
       }
     }
+  },
+  {
+    "name": "Antigenio HBs",
+    "units": {
+      "ng/mL": {},
+      "mUI/mL": {
+        "min": 0.0,
+        "max": 10.0
+      },
+      "UI/L": {
+        "min": 0.0,
+        "max": 10.0
+      }
+    },
+    "digest": "a0bede6905a95d1bdde0b080342c911d"
   },
   {
     "name": "Anticorpo Anti-HBs",
@@ -1311,16 +1331,6 @@
     }
   },
   {
-    "name": "Titulo do Complemento",
-    "units": {
-      "I'm sorry, I didn't understand the lab test you are referring to. Can you please provide the specific lab test for which you would like to know the most common units of measurement?": {
-        "min": null,
-        "max": null
-      }
-    },
-    "digest": "844c92a16119bfbbdd1dd9857f9a885d"
-  },
-  {
     "name": "Pesquisa de Imunocomplexos",
     "units": {
       "mg/dL": {
@@ -1437,15 +1447,15 @@
       "Glóbulos Vermelhos"
     ],
     "units": {
-      "x10^6/µL": {
+      "10^6/µL": {
         "min": 4.2,
         "max": 5.4
       },
-      "x10^12/L": {
+      "10^12/L": {
         "min": 4.2,
         "max": 5.4
       },
-      "x10^6/mm³": {
+      "10^6/mm³": {
         "min": 4.2,
         "max": 5.4
       }
@@ -1473,7 +1483,7 @@
     "name": "Eritrograma - Eritrócitos hipocrómicos",
     "digest": "b5d2193dd2d1b796d54cdd7241214a02",
     "units": {
-      "x10^6/µL": {
+      "10^6/µL": {
         "min": null,
         "max": null
       },
@@ -1548,11 +1558,11 @@
         "min": null,
         "max": 10.0
       },
-      "GPL units": {
+      "GPLU/ML": {
         "min": null,
         "max": 12.4
       },
-      "MPL units": {
+      "MPLU/ml": {
         "min": null,
         "max": 12.4
       }
@@ -1629,7 +1639,6 @@
         "min": null,
         "max": 3.0
       },
-      "": {},
       "U/mL": {
         "min": null,
         "max": 20.0
@@ -1694,8 +1703,9 @@
     "digest": "dfe9618822b297f0d801011edf8dee0a"
   },
   {
-    "name": "Fator Reumatoide",
+    "name": "Fator Reumatoide / Teste RA",
     "alternatives": [
+      "Fator Reumatoide",
       "R.A. Teste"
     ],
     "units": {
@@ -1712,7 +1722,7 @@
         "max": 14.0
       }
     },
-    "digest": "ae425f2064fc502feffc7766943a285c"
+    "digest": "3fbb42f8cfad385021823aa6d85e14c6"
   },
   {
     "name": "Ferritina",
@@ -1734,6 +1744,9 @@
   },
   {
     "name": "Ferro",
+    "alternatives": [
+      "Ferro Sérico"
+    ],
     "digest": "d8a1238ea725543b45d0154c5be0cd11",
     "units": {
       "µg/dL": {
@@ -1836,6 +1849,7 @@
     "name": "Glicose",
     "alternatives": [
       "Glicemia",
+      "Glicemia em Jejum",
       "Glicose em Jejum"
     ],
     "units": {
@@ -1879,10 +1893,6 @@
       "%": {
         "min": 0.0,
         "max": 2.0
-      },
-      "": {
-        "min": null,
-        "max": 0.05
       },
       "células/µL": {
         "min": null,
@@ -2015,12 +2025,24 @@
     "name": "Hemoglobina Glicada - IFCC / HbA1C - IFCC",
     "digest": "8aa324a943d639e9fbf6eb13d41f75ca",
     "units": {
-      "%\nmmol/mol\nmmol/L": {}
+      "%": {
+        "min": 4.0,
+        "max": 6.0
+      },
+      "mmol/mol": {
+        "min": 20.0,
+        "max": 42.0
+      },
+      "g/dL": {
+        "min": 4.0,
+        "max": 6.0
+      }
     }
   },
   {
     "name": "Eritrograma - Hemoglobina Globular Média / HGM",
     "alternatives": [
+      "HGM",
       "Hemoglobina Globular Média"
     ],
     "units": {
@@ -2552,6 +2574,10 @@
   },
   {
     "name": "Plaquetas",
+    "alternatives": [
+      "Contagem de Plaquetas",
+      "Numero de Plaquetas"
+    ],
     "digest": "10681151bb5874b251a5e2cb4fb280a2",
     "units": {
       "células/µL": {
@@ -2701,10 +2727,6 @@
         "min": 0.5,
         "max": 2.5
       },
-      "": {
-        "min": null,
-        "max": 2.5
-      },
       "células/µL": {
         "min": null,
         "max": null
@@ -2717,10 +2739,6 @@
     "digest": "24388825766915c6c1d93398953b96c2",
     "units": {
       "%": {
-        "min": 0.5,
-        "max": 2.5
-      },
-      "": {
         "min": 0.5,
         "max": 2.5
       },
@@ -2782,7 +2800,7 @@
         "min": 0.5,
         "max": 2.5
       },
-      "x10^9/L": {
+      "10^9/L": {
         "min": 24.0,
         "max": 85.0
       }
@@ -2970,6 +2988,9 @@
   },
   {
     "name": "Tempo de Protrombina",
+    "alternatives": [
+      "INR"
+    ],
     "units": {
       "segundos": {
         "min": 11.0,
@@ -3113,7 +3134,10 @@
     }
   },
   {
-    "name": "Hormona Tiro-Estimulante - TSH",
+    "name": "Hormona Tiro-Estimulante / TSH",
+    "alternatives": [
+      "TSH"
+    ],
     "digest": "95354b11ce729f5ba52734e00f2e3f94",
     "units": {
       "µIU/mL": {
@@ -3436,10 +3460,15 @@
   },
   {
     "name": "Anticorpo Anti-HBc",
+    "digest": "83d45d03b3ee5b0db3722123b2f2d092",
     "units": {
-      "%\nU/mL\nCOI": {}
-    },
-    "digest": "83d45d03b3ee5b0db3722123b2f2d092"
+      "UI/mL": {
+        "min": 0.0,
+        "max": 1.0
+      },
+      "mIU/mL": {},
+      "COI": {}
+    }
   },
   {
     "name": "Eritrograma - Volume Plaquetário Médio - VPM",
@@ -3497,25 +3526,21 @@
   },
   {
     "name": "Urina - pH",
+    "digest": "64b120fd5a5830cc9deb56d686398d1e",
     "units": {
-      "": {
+      "unidad de pH": {
         "min": 4.5,
         "max": 8.0
       },
-      "Unidades de pH": {
+      "unidad de concentración de iones de hidrógeno (H+) en la orina": {
         "min": 4.5,
         "max": 8.0
       },
-      "Unidades de concentración": {
-        "min": 4.5,
-        "max": 8.0
-      },
-      "Unidades de acidez o basicidad": {
+      "unidad de acidez o alcalinidad de la orina": {
         "min": 4.5,
         "max": 8.0
       }
-    },
-    "digest": "64b120fd5a5830cc9deb56d686398d1e"
+    }
   },
   {
     "name": "Urina - Densidade",
@@ -3610,8 +3635,14 @@
   {
     "name": "Urina - Corpos cetónicos",
     "units": {
-      "mg/dL": {},
-      "mmol/L": {},
+      "mg/dL": {
+        "min": 0,
+        "max": 1
+      },
+      "mmol/L": {
+        "min": null,
+        "max": 0.6
+      },
       "µmol/L": {
         "min": null,
         "max": null

@@ -139,7 +139,6 @@ def merge_document_jsons(json_paths: list, output_path: str):
     for json_path in json_paths:
         _results = load_json(json_path)
         results.extend(_results)
-    results.sort(key=lambda x: x["date"])
     save_json(output_path, results)
 
 def build_augmented_labs_results(input_path: str, output_path: str, max_workers=5):
@@ -149,6 +148,19 @@ def build_augmented_labs_results(input_path: str, output_path: str, max_workers=
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(_augment, result) for result in results]
         concurrent.futures.wait(futures)
+
+    # Discard duplicate results, (we're assuming that the second duplicate is 
+    # always an alternative unit reading, so we're also assuming that the 
+    # results haven't been sorted yet, otherwise t) 
+    _used_keys = {}
+    _results = []
+    for result in results:
+        date = result["date"]
+        name = result["name"]
+        key = f"{date}-{name}"
+        if key in _used_keys: continue
+        _used_keys[key] = True
+        _results.append(result)
 
     save_json(output_path, results)
 
@@ -169,12 +181,24 @@ def build_lab_name_invalid_mappings(input_path: str, output_path: str):
 
 def build_final_labs_results(input_path: str, output_path: str):
     results = load_json(input_path)
+
+    # Inject name from lab spec then remove hidden fields
     for result in results:
         lab_spec = result.get("_lab_spec")
         alt_name = lab_spec["name"] if lab_spec else None
         if alt_name: result["name"] = alt_name
         keys = [key for key in result.keys() if key.startswith("_")]
         for key in keys: del result[key]
+
+    # Sort dictionary so that keys have this order: 
+    # date, name, value, unit, range_minimum, range_maximum
+    def _sort_key(x):
+        if x in ["date", "name", "value", "unit", "range_minimum", "range_maximum"]: return x
+        return f"z{x}"
+    results.sort(key=lambda x: _sort_key(x))
+
+    results = sorted(results, key=lambda x: x["date"])
+
     save_json(output_path, results)
 
 def build_labs_csv(input_path: str, output_path: str):
@@ -196,11 +220,22 @@ def extract_invalid_lab_results_text_from_image(image_path: str, content: str):
 {content}
 ---------------------------------------------
 Which lab result values above don't match the ones in the image?
-""".strip(), image_path, max_tokens=1)
+""".strip(), image_path)
     result = result.strip()
     return result
 
 def validate_processed_documents(pdf_paths):
+    def _validate_unique_labs_results(results, _log_error):
+        keys = {}
+        for result in results:
+            date = result["date"]
+            name = result["name"]
+            key = f"{date}-{name}"
+            if key in keys: 
+                _log_error(f"Duplicate result '{key}' in {json_file_path}")
+                continue
+            keys[key] = True
+
     errors = {}
 
     # Validate each document
@@ -240,7 +275,7 @@ def validate_processed_documents(pdf_paths):
             if not os.path.exists(json_file_path):
                 _log_error(f"Missing page json: {json_file_path}")
                 continue
-            
+                
             # @tsilva TODO: check that json is valid
         
         # If no errors were found in the pages 
@@ -250,6 +285,10 @@ def validate_processed_documents(pdf_paths):
             json_file_path = os.path.join("cache/docs/jsons", json_file_name)
             if not os.path.exists(json_file_path): 
                 _log_error(f"Missing document json: {json_file_path}")
+            
+            # Validate that the json has unique results
+            results = load_json(json_file_path)
+            _validate_unique_labs_results(results, _log_error)
 
         # If errors were found associate them with the pdf
         if _errors: errors[pdf_path] = _errors
@@ -259,6 +298,12 @@ def validate_processed_documents(pdf_paths):
         raise Exception(f"Missing files: {json.dumps(errors, indent=2)}")
 
 def process_documents():
+    # Validate that all documents were correctly processed
+    pdf_paths = load_paths("inputs", lambda x: x.endswith(".pdf") and "analises" in x.lower() and "requisicao" not in x.lower())
+    logging.info("Validating processed documents")
+    validate_processed_documents(pdf_paths)
+    logging.info("Validating processed documents... DONE")
+    return
     # Convert PDF to images (one per page)
     logging.info("Converting PDF to images")
     pdf_paths = load_paths("inputs", lambda x: x.endswith(".pdf") and "analises" in x.lower() and "requisicao" not in x.lower())
@@ -317,7 +362,7 @@ def process_documents():
 
     # Validate that all documents were correctly processed
     logging.info("Validating processed documents")
-    validate_processed_documents(pdf_paths)
+    #validate_processed_documents(pdf_paths)
     logging.info("Validating processed documents... DONE")
 
 process_documents()
