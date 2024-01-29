@@ -5,3 +5,6 @@ pandas
 pdf2image
 python-dotenv
 python-slugify
+matplotlib
+numpy
+pyarrow

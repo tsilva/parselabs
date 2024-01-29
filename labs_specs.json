@@ -493,6 +493,10 @@
   {
     "name": "Aspartato aminotransferase / AST / GOT",
     "alternatives": [
+      "AST",
+      "TGO",
+      "GOT",
+      "AST/TGO",
       "Transaminase Glutâmico-Oxalacética (TGO)"
     ],
     "units": {
@@ -2879,31 +2883,9 @@
     }
   },
   {
-    "name": "Triiodotironina - T3",
-    "digest": "8c8fd4f0ae5e8a52b56589bf05ee5d52",
-    "units": {
-      "ng/dL": {
-        "min": 80.0,
-        "max": 200.0
-      },
-      "pg/mL": {
-        "min": 2.3,
-        "max": 4.2
-      },
-      "pmol/L": {
-        "min": 1.3,
-        "max": 3.1
-      }
-    }
-  },
-  {
     "name": "Triiodotironina Livre - T3 Livre",
     "digest": "28bf2c24383c85f7dc9ab6fb2e914734",
     "units": {
-      "pg/mL": {
-        "min": 2.0,
-        "max": 4.4
-      },
       "ng/dL": {
         "min": 2.0,
         "max": 4.4
@@ -2911,6 +2893,10 @@
       "pmol/L": {
         "min": 3.1,
         "max": 6.8
+      },
+      "pg/mL": {
+        "min": 2.0,
+        "max": 4.4
       }
     }
   },
@@ -2933,31 +2919,9 @@
     }
   },
   {
-    "name": "Tiroxina - T4",
-    "digest": "9d29dfb231a7a5a173ebcd49b4abac8e",
-    "units": {
-      "ng/dL": {
-        "min": 5.0,
-        "max": 12.0
-      },
-      "µg/dL": {
-        "min": 4.5,
-        "max": 12.0
-      },
-      "nmol/L": {
-        "min": 66.0,
-        "max": 181.0
-      }
-    }
-  },
-  {
     "name": "Tiroxina Livre - T4 Livre",
     "digest": "797aa35aaf1d4b92c4071c2adf0ff68d",
     "units": {
-      "pg/mL": {
-        "min": 0.9,
-        "max": 1.7
-      },
       "ng/dL": {
         "min": 0.9,
         "max": 1.7
@@ -2965,6 +2929,10 @@
       "pmol/L": {
         "min": 12.0,
         "max": 22.0
+      },
+      "pg/mL": {
+        "min": 0.9,
+        "max": 1.7
       }
     }
   },
@@ -3377,7 +3345,11 @@
     }
   },
   {
-    "name": "Eritrograma - Volume Globular Médio - VGM",
+    "name": "Eritrograma / Volume Globular Médio / VGM",
+    "alternatives": [
+      "Volume Globular Médio",
+      "VGM"
+    ],
     "digest": "afc3292c1fe6ec802a210dd887422aac",
     "units": {
       "fL": {
@@ -3775,5 +3747,13 @@
       }
     },
     "digest": "063ac39168ffba5071d4681c03d05ef5"
+  },
+  {
+    "name": "Urina - Cilindros totais",
+    "digest": "c32294a1cfdb0dce19e9708494472c6d"
+  },
+  {
+    "name": "Urina - Células do tracto urinário superior",
+    "digest": "c646a36ab066aa64e0da2748c02fed6c"
   }
 ]

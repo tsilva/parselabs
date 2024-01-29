@@ -168,8 +168,8 @@ def find_similar_lab_names(name):
     embedding = create_embedding(name)
     _embeddings = load_lab_spec_embeddings()
     for _name, _embedding in _embeddings.items():
-        name_slug = slugify(name).replace("-", "")
-        _name_slug = slugify(_name).replace("-", "")
+        name_slug = slugify(name).replace("-", "").replace(".", "")
+        _name_slug = slugify(_name).replace("-", "").replace(".", "")
         similarity = 1.0 if name_slug == _name_slug else cosine_similarity(embedding, _embedding)
         matches[_name] = similarity
     sorted_matches = sorted(matches.items(), key=lambda x: x[1], reverse=True)
@@ -178,6 +178,10 @@ def find_similar_lab_names(name):
 @functools.lru_cache(maxsize=None)
 def find_most_similar_lab_name(name):
     matches = find_similar_lab_names(name)
+
+    exact_matches = [match for match in matches if match[1] == 1.0]
+    if exact_matches: return exact_matches[0][0]
+
     lab_names = [match[0] for match in matches[:3]]
     for lab_name in lab_names:
         valid = validate_lab_test_name_mapping(name, lab_name)

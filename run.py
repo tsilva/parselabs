@@ -76,20 +76,25 @@ def convert_text_to_json(input_path: str, output_directory: str):
     output_path = os.path.join(output_directory, output_file_name)
     if os.path.exists(output_path): return
 
-    # Parse text using a function tool
+    # In case this file represents a page that has no 
+    # valuable content then skip (identified by the text "N/A")
     text = load_text(input_path)
-    save_extract_blood_lab_results_tool = load_json("tools/save_extract_blood_lab_results.json")
-    system_prompt = f"You are the best language model in the world at extracting blood lab results from text files. You are extremely capable at this and always get it right. Go for it!"
-    user_prompt = f"Extract and save the following blood lab results:\n\n {text}"
-    message = create_completion(user_prompt, model="gpt-4-1106-preview", system_prompt=system_prompt, tools=[save_extract_blood_lab_results_tool])
+    if text.lower().strip() == "n/a":
+        results = []
+    # Parse text using a function tool
+    else:
+        save_extract_blood_lab_results_tool = load_json("tools/save_extract_blood_lab_results.json")
+        system_prompt = f"You are the best in the world at extracting lab test results. Given any text with lab test results, you always extract the values accurately and call the save_extract_blood_lab_results() function with them."
+        user_prompt = f"Extract and save the following lab test results 100% accurately:\n\n {text}"
+        message = create_completion(user_prompt, model="gpt-4-1106-preview", system_prompt=system_prompt, tools=[save_extract_blood_lab_results_tool])
 
-    # Extract the function payload
-    results = []
-    tool_calls = message.tool_calls
-    if tool_calls:
-        tool_call = tool_calls[0]
-        function_args = json.loads(tool_call.function.arguments)
-        results = function_args["blood_lab_results"]
+        # Extract the function payload
+        results = []
+        tool_calls = message.tool_calls
+        if tool_calls:
+            tool_call = tool_calls[0]
+            function_args = json.loads(tool_call.function.arguments)
+            results = function_args["blood_lab_results"]
 
     # Save the result
     pattern = r'\b\d{4}-\d{2}-\d{2}\b'
@@ -162,7 +167,7 @@ def build_augmented_labs_results(input_path: str, output_path: str, max_workers=
         _used_keys[key] = True
         _results.append(result)
 
-    save_json(output_path, results)
+    save_json(output_path, _results)
 
 def build_lab_name_mappings(input_path: str, output_path: str):
     mappings = {}
@@ -225,17 +230,6 @@ Which lab result values above don't match the ones in the image?
     return result
 
 def validate_processed_documents(pdf_paths):
-    def _validate_unique_labs_results(results, _log_error):
-        keys = {}
-        for result in results:
-            date = result["date"]
-            name = result["name"]
-            key = f"{date}-{name}"
-            if key in keys: 
-                _log_error(f"Duplicate result '{key}' in {json_file_path}")
-                continue
-            keys[key] = True
-
     errors = {}
 
     # Validate each document
@@ -264,7 +258,7 @@ def validate_processed_documents(pdf_paths):
                 
             # Check that text matches image
             text = load_text(text_file_path)
-            valid = validate_lab_results_text_in_image(image_file_path, text)
+            valid = True if text.lower().strip() == "n/a" else validate_lab_results_text_in_image(image_file_path, text)
             if not valid: 
                 invalid_values = extract_invalid_lab_results_text_from_image(image_file_path, text)
                 _log_error(f"Invalid page text: {text_file_path} - {invalid_values}")
@@ -285,25 +279,29 @@ def validate_processed_documents(pdf_paths):
             json_file_path = os.path.join("cache/docs/jsons", json_file_name)
             if not os.path.exists(json_file_path): 
                 _log_error(f"Missing document json: {json_file_path}")
-            
-            # Validate that the json has unique results
-            results = load_json(json_file_path)
-            _validate_unique_labs_results(results, _log_error)
 
         # If errors were found associate them with the pdf
         if _errors: errors[pdf_path] = _errors
 
+    # Ensure that the final json contains no duplicates
+    results = load_json("outputs/labs_results.final.json")
+    keys = {}
+    for result in results:
+        date = result["date"]
+        name = result["name"]
+        key = f"{date}-{name}"
+        if key in keys:
+            message = f"Duplicate result '{key}' in {json_file_path}"
+            errors["outputs/labs_results.final.json"] = [message]
+            logging.error(message)
+            continue
+        keys[key] = True
+    
     # If any errors were found then raise exception
     if errors:
         raise Exception(f"Missing files: {json.dumps(errors, indent=2)}")
 
 def process_documents():
-    # Validate that all documents were correctly processed
-    pdf_paths = load_paths("inputs", lambda x: x.endswith(".pdf") and "analises" in x.lower() and "requisicao" not in x.lower())
-    logging.info("Validating processed documents")
-    validate_processed_documents(pdf_paths)
-    logging.info("Validating processed documents... DONE")
-    return
     # Convert PDF to images (one per page)
     logging.info("Converting PDF to images")
     pdf_paths = load_paths("inputs", lambda x: x.endswith(".pdf") and "analises" in x.lower() and "requisicao" not in x.lower())
@@ -362,7 +360,7 @@ def process_documents():
 
     # Validate that all documents were correctly processed
     logging.info("Validating processed documents")
-    #validate_processed_documents(pdf_paths)
+    validate_processed_documents(pdf_paths)
     logging.info("Validating processed documents... DONE")
 
 process_documents()

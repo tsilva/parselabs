@@ -12,6 +12,8 @@ RUN apk add --no-cache \
     wget \
     curl \
     git \
+    make \
+    cmake \
     open-ssh \
     poppler-utils \
     tesseract-ocr \
