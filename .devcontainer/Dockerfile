@@ -14,10 +14,8 @@ RUN apk add --no-cache \
     git \
     make \
     cmake \
-    open-ssh \
+    openssh \
     poppler-utils \
-    tesseract-ocr \
-    tesseract-ocr-data-eng \
     msttcorefonts-installer \
     fontconfig && \
     update-ms-fonts && \

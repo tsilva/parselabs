@@ -1,7 +1,7 @@
 import csv
 from datetime import datetime
 import matplotlib.pyplot as plt
-
+import json
 import numpy as np
 from slugify import slugify
 
@@ -11,14 +11,18 @@ def plot(csv_file, lab_name):
     unit = None
 
     # Open and read the CSV file
+    units = []
     with open(csv_file, 'r') as file:
         reader = csv.DictReader(file)
         for row in reader:
             if row['name'] == lab_name:
                 dates.append(datetime.strptime(row['date'], '%Y-%m-%d'))  # Adjust format if needed
                 values.append(float(row['value']))
-                if unit is None:
-                    unit = row['unit']
+                unit = row['unit']
+                units.append(unit)
+
+    if len(list(set(units))) != 1:
+        raise Exception(f"{lab_name} - units are not the same for all values: " + json.dumps(units))
 
     # Sort the data by date
     sorted_data = sorted(zip(dates, values))
@@ -41,6 +45,7 @@ def plot(csv_file, lab_name):
 
     plt.plot(dates, regression_line, label='Linear Regression', color='red')
 
+    unit = units[0]
     plt.title(lab_name)
     plt.xlabel('Date')
     plt.ylabel(f"Value ({unit})")
@@ -54,6 +59,14 @@ def plot(csv_file, lab_name):
     # Optionally, close the plot if not displayed
     plt.close()
 
-lab_names = ["Ferritina", "Tiroxina Livre - T4 Livre", "Hormona Tiro-Estimulante / TSH"]
+lab_names = [
+    "Hormona Tiro-Estimulante / TSH",
+    "Triiodotironina Livre / T3 Livre",
+    "Tiroxina Livre / T4 Livre"
+    #"Tiroxina Total / T4 Total",
+    #"Triiodotironina Total / T3 Total",
+    #"Vitamina D3 / 25-Hidroxicolecalciferol / Calcidiol", 
+    #"Ferritina"
+]
 for lab_name in lab_names:
     plot("outputs/labs_results.final.csv", lab_name)

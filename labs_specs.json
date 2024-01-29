@@ -2883,7 +2883,12 @@
     }
   },
   {
-    "name": "Triiodotironina Livre - T3 Livre",
+    "name": "Triiodotironina Livre / T3 Livre",
+    "alternatives": [
+      "Triiodotironina Livre",
+      "T3 Livre",
+      "FT3"
+    ],
     "digest": "28bf2c24383c85f7dc9ab6fb2e914734",
     "units": {
       "ng/dL": {
@@ -2901,16 +2906,21 @@
     }
   },
   {
-    "name": "Triiodotironina Total - T3 Total",
+    "name": "Triiodotironina Total / T3 Total",
+    "alternatives": [
+      "Triiodotironina Total",
+      "T3 Total",
+      "T3"
+    ],
     "digest": "8e052908f1499a11362e3f8be4bfe009",
     "units": {
-      "ng/dL": {
-        "min": 80.0,
-        "max": 200.0
-      },
       "ng/mL": {
         "min": 0.8,
         "max": 2.0
+      },
+      "ng/dL": {
+        "min": 80.0,
+        "max": 200.0
       },
       "µg/dL": {
         "min": 0.8,
@@ -2919,7 +2929,12 @@
     }
   },
   {
-    "name": "Tiroxina Livre - T4 Livre",
+    "name": "Tiroxina Livre / T4 Livre",
+    "alternatives": [
+      "Tiroxina Livre",
+      "T4 Livre",
+      "FT4"
+    ],
     "digest": "797aa35aaf1d4b92c4071c2adf0ff68d",
     "units": {
       "ng/dL": {
@@ -2937,14 +2952,19 @@
     }
   },
   {
-    "name": "Tiroxina Total - T4 Total",
+    "name": "Tiroxina Total / T4 Total",
+    "alternatives": [
+      "Tiroxina Total",
+      "T4 Total",
+      "T4"
+    ],
     "digest": "ee0ed0f68f0dcb75f8fd669dd2a9f109",
     "units": {
-      "ng/dL": {
+      "µg/dL": {
         "min": 4.5,
         "max": 12.0
       },
-      "µg/dL": {
+      "ng/dL": {
         "min": 4.5,
         "max": 12.0
       },
