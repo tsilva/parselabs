@@ -1716,14 +1716,6 @@
       "UI/mL": {
         "min": null,
         "max": 14.0
-      },
-      "IU/mL": {
-        "min": null,
-        "max": 14.0
-      },
-      "mg/dL": {
-        "min": null,
-        "max": 14.0
       }
     },
     "digest": "3fbb42f8cfad385021823aa6d85e14c6"
@@ -2379,7 +2371,7 @@
     }
   },
   {
-    "name": "Lactato desidrogenase - LDH",
+    "name": "Lactato desidrogenase / LDH",
     "digest": "01fc934a711b777eaa441b01a66fea01",
     "units": {
       "U/L": {
@@ -2400,17 +2392,9 @@
     "name": "Leucograma - Leucócitos",
     "digest": "e691c48f36f28a72bd8334a9cbe24c88",
     "units": {
-      "células/µL": {
-        "min": 4500.0,
-        "max": 11000.0
-      },
-      "células/mm³": {
-        "min": 4000.0,
-        "max": 10000.0
-      },
-      "%": {
-        "min": null,
-        "max": null
+      "10^9/L": {
+        "min": 4,
+        "max": 10
       }
     }
   },

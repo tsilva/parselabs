@@ -302,6 +302,45 @@ def validate_processed_documents(pdf_paths):
         raise Exception(f"Missing files: {json.dumps(errors, indent=2)}")
 
 def process_documents():
+    
+    # Merge page jsons into document jsons
+    logging.info("Merging page jsons into document jsons")
+    json_paths = load_paths("cache/docs/pages/jsons")
+    merge_page_jsons(json_paths, "cache/docs/jsons")
+    logging.info("Merging page jsons into document jsons... DONE")
+    
+    # Merge document jsons into final json
+    logging.info("Merging document jsons into final json")
+    json_paths = load_paths("cache/docs/jsons")
+    merge_document_jsons(json_paths, "outputs/labs_results.json")
+    logging.info("Merging document jsons into final json... DONE")
+
+    # Augment the merged labs
+    logging.info("Augmenting merged labs")
+    json_paths = load_paths("cache/docs/jsons")
+    build_augmented_labs_results("outputs/labs_results.json", "outputs/labs_results.augmented.json")
+    logging.info("Augmenting merged labs... DONE")
+    
+    # Build the lab name mappings
+    logging.info("Building lab name mappings")
+    build_lab_name_mappings("outputs/labs_results.augmented.json", "outputs/labs_results.mappings.json")
+    logging.info("Building lab name mappings... DONE")
+
+    # Build the lab name invalid mappings
+    logging.info("Building lab name invalid mappings")
+    build_lab_name_invalid_mappings("outputs/labs_results.mappings.json", "outputs/labs_results.invalid_mappings.json")
+    logging.info("Building lab name invalid mappings... DONE")
+
+    # Build the final json file using augmentations
+    logging.info("Building final json file")
+    build_final_labs_results("outputs/labs_results.augmented.json", "outputs/labs_results.final.json")
+    logging.info("Building final json file... DONE")
+
+    # Save the final json file as csv
+    logging.info("Saving final json file as CSV")
+    build_labs_csv("outputs/labs_results.final.json", "outputs/labs_results.final.csv")
+    logging.info("Saving final json file as CSV... DONE")
+    return
     # Convert PDF to images (one per page)
     logging.info("Converting PDF to images")
     pdf_paths = load_paths("inputs", lambda x: x.endswith(".pdf") and "analises" in x.lower() and "requisicao" not in x.lower())

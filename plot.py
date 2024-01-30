@@ -24,6 +24,19 @@ def plot(csv_file, lab_name):
     if len(list(set(units))) != 1:
         raise Exception(f"{lab_name} - units are not the same for all values: " + json.dumps(units))
 
+    unit = units[0]
+    unit_range = {"min" : None, "max" : None}
+    if lab_name == "Fator Reumatoide / Teste RA":
+        unit_range = {
+            "min": None,
+            "max": 14.0
+        }
+    elif lab_name == "Eritrograma - Velocidade de Sedimentação - 1a Hora":
+        unit_range = {
+            "min": 2.0,
+            "max": 20.0
+        }
+
     # Sort the data by date
     sorted_data = sorted(zip(dates, values))
     dates, values = zip(*sorted_data)
@@ -45,7 +58,12 @@ def plot(csv_file, lab_name):
 
     plt.plot(dates, regression_line, label='Linear Regression', color='red')
 
-    unit = units[0]
+    # Check if unit range is defined and plot min and max lines
+    if unit_range['min'] is not None:
+        plt.axhline(y=unit_range['min'], color='green', linestyle='--', label='Min Value')
+    if unit_range['max'] is not None:
+        plt.axhline(y=unit_range['max'], color='green', linestyle='--', label='Max Value')
+
     plt.title(lab_name)
     plt.xlabel('Date')
     plt.ylabel(f"Value ({unit})")
@@ -60,6 +78,9 @@ def plot(csv_file, lab_name):
     plt.close()
 
 lab_names = [
+    "Leucograma - Leucócitos",
+    "Eritrograma - Velocidade de Sedimentação - 1a Hora",
+    "Fator Reumatoide / Teste RA",
     "Hormona Tiro-Estimulante / TSH",
     "Triiodotironina Livre / T3 Livre",
     "Tiroxina Livre / T4 Livre"
