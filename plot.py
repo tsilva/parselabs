@@ -63,16 +63,28 @@ def plot(csv_file, lab_names=None):
         slope, intercept = np.polyfit(dates_numeric, values, 1)
         regression_line = [slope * x + intercept for x in dates_numeric]
 
-        # Plotting
+        # Adjusted shading for min/max value range
         plt.figure(figsize=(10, 6))
         plt.plot(dates, values, marker='o', label='Data')
         for i in range(len(dates)):
             plt.text(dates[i], values[i], f'{values[i]:.2f}', fontsize=8, ha='right', va='bottom')
         plt.plot(dates, regression_line, label='Linear Regression', color='red')
-        if unit_range['min'] is not None:
-            plt.axhline(y=unit_range['min'], color='green', linestyle='--', label='Min Value')
-        if unit_range['max'] is not None:
-            plt.axhline(y=unit_range['max'], color='green', linestyle='--', label='Max Value')
+
+        # Define a default lower and upper bound for shading if min or max is None
+        default_lower_bound = min(values)  # Default to the minimum value in your dataset
+        default_upper_bound = max(values)  # Default to the maximum value in your dataset
+
+        # Conditionally set the lower and upper bounds for shading
+        lower_bound = unit_range.get('min', default_lower_bound)
+        upper_bound = unit_range.get('max', default_upper_bound)
+
+        # Shading acceptable value range with checks to prevent TypeError
+        if lower_bound is not None and upper_bound is not None:
+            plt.fill_between(dates, lower_bound, upper_bound, color='green', alpha=0.1, label='Acceptable Range')
+        elif lower_bound is not None:
+            plt.fill_between(dates, lower_bound, default_upper_bound, color='green', alpha=0.1, label='Above Min Value')
+        elif upper_bound is not None:
+            plt.fill_between(dates, default_lower_bound, upper_bound, color='green', alpha=0.1, label='Below Max Value')
 
         plt.title(lab_name)
         plt.xlabel('Date')

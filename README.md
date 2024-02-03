@@ -9,6 +9,9 @@ Scripts to extract data from health lab reports (portuguese)
 - Fix invalid mappings
 # @tsilva TODO: support mixed plots
 # @tsilva TODO: add colored range to plot
+- Better plot than linear regression?
+- Change lab names to match selfdecode's
+- Ask GPT about last values
 
 - Dont use LLM for pairing lab specs when there is an exact match (remove dots)
 - Validate JSON against TXT (eg: 1998-03-03 - analises.001.txt broken)
