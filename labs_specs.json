@@ -39,7 +39,7 @@
     "name": "Anticorpo Anti-Fator Intrínseco",
     "digest": "40194fde5fa4ef139d74e677e20394d6",
     "units": {
-      "RU/mL" : {
+      "RU/mL": {
         "min": 0,
         "max": 20.0
       },
@@ -800,7 +800,21 @@
   {
     "name": "Acido Metilmalonico",
     "price": 155,
-    "digest": "c79708d1b221822815b111856824f47a"
+    "digest": "c79708d1b221822815b111856824f47a",
+    "units": {
+      "ng/mL": {
+        "min": 0.08,
+        "max": 0.56
+      },
+      "µg/dL": {
+        "min": 0.08,
+        "max": 0.56
+      },
+      "nmol/L": {
+        "min": 0.08,
+        "max": 0.56
+      }
+    }
   },
   {
     "name": "Ceruloplasmina",
@@ -1732,7 +1746,23 @@
     },
     "digest": "3fbb42f8cfad385021823aa6d85e14c6"
   },
-  {"name" : "Cortisol Urinário Livre"},
+  {
+    "name": "Cortisol Urinário Livre",
+    "units": {
+      "µg/24h": {
+        "min": 28.0,
+        "max": 213.0
+      },
+      "nmol/24h": {
+        "min": 28.0,
+        "max": 276.0
+      },
+      "mg/g creatinine": {
+        "min": 10.0,
+        "max": 100.0
+      }
+    }
+  },
   {
     "name": "Ferritina",
     "digest": "19b33c9b351513b76fde2deb25140d30",
@@ -2426,7 +2456,7 @@
   },
   {
     "name": "Lactato desidrogenase / LD / LDH",
-    "alternatives" : [
+    "alternatives": [
       "LD",
       "LDH",
       "Desidrogenase láctica",
@@ -3300,7 +3330,20 @@
       }
     }
   },
-  {"name" : "Fração de plaquetas imaturas"},
+  {
+    "name": "Fração de plaquetas imaturas",
+    "units": {
+      "%": {
+        "min": 0.03,
+        "max": 1.1
+      },
+      "fL": {},
+      "10^9/L": {
+        "min": 0.03,
+        "max": 0.1
+      }
+    }
+  },
   {
     "name": "Vitamina B12",
     "alternatives": [
@@ -3827,10 +3870,20 @@
   },
   {
     "name": "Urina - Cilindros totais",
-    "digest": "c32294a1cfdb0dce19e9708494472c6d"
+    "digest": "c32294a1cfdb0dce19e9708494472c6d",
+    "units": {
+      "cylinders/mL": {},
+      "cylinders/L": {},
+      "cylinders/µL": {}
+    }
   },
   {
     "name": "Urina - Células do tracto urinário superior",
-    "digest": "c646a36ab066aa64e0da2748c02fed6c"
+    "digest": "c646a36ab066aa64e0da2748c02fed6c",
+    "units": {
+      "células/mL": {},
+      "células/µL": {},
+      "células/mm³": {}
+    }
   }
 ]

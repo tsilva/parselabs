@@ -7,6 +7,8 @@ Scripts to extract data from health lab reports (portuguese)
 - Mark out of range
 - Plot all labs that have unique units
 - Fix invalid mappings
+# @tsilva TODO: support mixed plots
+# @tsilva TODO: add colored range to plot
 
 - Dont use LLM for pairing lab specs when there is an exact match (remove dots)
 - Validate JSON against TXT (eg: 1998-03-03 - analises.001.txt broken)
