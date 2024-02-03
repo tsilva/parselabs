@@ -11,6 +11,21 @@ from utils import find_most_similar_lab_spec
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+def moving_average(values, window_size):
+    """Calculate the moving average using a simple sliding window approach."""
+    averages = []
+
+    # Calculate the moving average using a sliding window
+    for i in range(len(values)):
+        if i < window_size:
+            # Not enough data points yet for the window; use what's available
+            averages.append(sum(values[:i+1]) / (i+1))
+        else:
+            window = values[i-window_size+1:i+1]
+            averages.append(sum(window) / window_size)
+
+    return averages
+
 def plot(csv_file, lab_names=None):
     if not lab_names:
         lab_names = set()  # Use a set to collect unique lab names
@@ -63,12 +78,16 @@ def plot(csv_file, lab_names=None):
         slope, intercept = np.polyfit(dates_numeric, values, 1)
         regression_line = [slope * x + intercept for x in dates_numeric]
 
+        # Calculate moving average
+        window_size = 5
+        moving_avg = moving_average(values, window_size)
+
         # Adjusted shading for min/max value range
         plt.figure(figsize=(10, 6))
         plt.plot(dates, values, marker='o', label='Data')
-        for i in range(len(dates)):
-            plt.text(dates[i], values[i], f'{values[i]:.2f}', fontsize=8, ha='right', va='bottom')
-        plt.plot(dates, regression_line, label='Linear Regression', color='red')
+        plt.plot(dates, moving_avg, label='Moving Average', color='orange', linestyle='--')
+        for i in range(len(dates)): plt.text(dates[i], values[i], f'{values[i]:.2f}', fontsize=8, ha='right', va='bottom')
+        plt.plot(dates, regression_line, label='Linear Regression', color='red', linestyle='--')
 
         # Define a default lower and upper bound for shading if min or max is None
         default_lower_bound = min(values)  # Default to the minimum value in your dataset

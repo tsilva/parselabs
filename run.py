@@ -172,36 +172,28 @@ def build_augmented_labs_results(input_path: str, output_path: str, max_workers=
     save_json(output_path, _results)
 
 def build_latest_lab_results(input_path: str, output_path: str):
-    latest_values = {}
-    
     # Read and process the CSV file
+    latest_values = {}
     with open(input_path, 'r') as file:
         reader = csv.DictReader(file)
         for row in reader:
             lab_name = row['name']
-            date = datetime.strptime(row['date'], '%Y-%m-%d')
-            if lab_name not in latest_values or date > latest_values[lab_name]["date"]:
-                latest_values[lab_name] = {
-                    "date": date, 
-                    "value": row['value'],
-                    "unit": row['unit'],
-                    "range_minimum": row['range_minimum'],
-                    "range_maximum": row['range_maximum']
-                }
-    
+            row_date = datetime.strptime(row['date'], '%Y-%m-%d')
+            latest_date_s = latest_values.get(lab_name, {}).get("date")
+            latest_date = datetime.strptime(latest_date_s, '%Y-%m-%d') if latest_date_s else None
+            if not latest_date or row_date > latest_date: latest_values[lab_name] = row
+
+    rows = list(latest_values.values())
+    rows.sort(key=lambda x: x["date"])
+
     # Write to a new CSV file
     with open(output_path, 'w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(['date', 'name', 'value', 'unit', 'range_minimum', 'range_maximum'])
-        for lab_name, data in latest_values.items():
-            writer.writerow([
-                data['date'].strftime('%Y-%m-%d'), 
-                lab_name, 
-                data['value'], 
-                data['unit'],
-                data['range_minimum'],
-                data['range_maximum']
-            ])
+        keys = list(rows[0].keys())
+        writer.writerow(keys)
+        for row in rows: 
+            _row = [row[key] for key in keys]
+            writer.writerow(_row)
 
 def build_lab_name_mappings(input_path: str, output_path: str):
     mappings = {}
@@ -224,21 +216,31 @@ def build_final_labs_results(input_path: str, output_path: str):
     # Inject name from lab spec then remove hidden fields
     for result in results:
         lab_spec = result.get("_lab_spec")
-        alt_name = lab_spec["name"] if lab_spec else None
-        if alt_name: result["name"] = alt_name
         keys = [key for key in result.keys() if key.startswith("_")]
         for key in keys: del result[key]
+        result["within_range"] = False
+        if lab_spec:
+            alt_name = lab_spec["name"]
+            if alt_name: result["name"] = alt_name
+            units = lab_spec.get("units", {})
+            unit = result.get("unit")
+            unit_range = units.get(unit)
+            if unit_range:
+                range_minimum = unit_range.get("min") or 0
+                range_maximum = unit_range.get("max") or 9999
+                result["within_range"] = range_minimum <= result["value"] <= range_maximum
 
-    # Sort dictionary so that keys have this order: 
-    # date, name, value, unit, range_minimum, range_maximum
-    def _sort_key(x):
-        if x in ["date", "name", "value", "unit", "range_minimum", "range_maximum"]: return x
-        return f"z{x}"
-    results.sort(key=lambda x: _sort_key(x))
+    # Sort dictionary keys
+    order = ["date", "name", "value", "unit", "range_minimum", "range_maximum", "within_range"]
+    _results = []
+    for result in results:
+        _result = {k: result[k] for k in order if k in result}
+        _results.append(_result)
 
-    results = sorted(results, key=lambda x: x["date"])
+    # Sort by dates
+    _results = sorted(_results, key=lambda x: x["date"])
 
-    save_json(output_path, results)
+    save_json(output_path, _results)
 
 def build_labs_csv(input_path: str, output_path: str):
     results = load_json(input_path)
@@ -336,6 +338,23 @@ def validate_processed_documents(pdf_paths):
         raise Exception(f"Missing files: {json.dumps(errors, indent=2)}")
 
 def process_documents():
+    # Build the final json file using augmentations
+    logging.info("Building final json file")
+    build_final_labs_results("outputs/labs_results.augmented.json", "outputs/labs_results.final.json")
+    logging.info("Building final json file... DONE")
+
+    # Save the final json file as csv
+    logging.info("Saving final json file as CSV")
+    build_labs_csv("outputs/labs_results.final.json", "outputs/labs_results.final.csv")
+    logging.info("Saving final json file as CSV... DONE")
+
+    # Build csv with latest lab results
+    logging.info("Building latest results json file")
+    json_paths = load_paths("cache/docs/jsons")
+    build_latest_lab_results("outputs/labs_results.final.csv", "outputs/labs_results.latest.csv")
+    logging.info("Building latest results json file... DONE")
+
+    return
     # Merge page jsons into document jsons
     logging.info("Merging page jsons into document jsons")
     json_paths = load_paths("cache/docs/pages/jsons")
