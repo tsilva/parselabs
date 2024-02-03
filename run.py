@@ -1,9 +1,11 @@
 import os
 import re
+import csv
 import json
 import PyPDF2
 import logging
 import concurrent
+from datetime import datetime
 from openai import OpenAI
 from dotenv import load_dotenv
 from pdf2image import convert_from_path
@@ -169,6 +171,38 @@ def build_augmented_labs_results(input_path: str, output_path: str, max_workers=
 
     save_json(output_path, _results)
 
+def build_latest_lab_results(input_path: str, output_path: str):
+    latest_values = {}
+    
+    # Read and process the CSV file
+    with open(input_path, 'r') as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            lab_name = row['name']
+            date = datetime.strptime(row['date'], '%Y-%m-%d')
+            if lab_name not in latest_values or date > latest_values[lab_name]["date"]:
+                latest_values[lab_name] = {
+                    "date": date, 
+                    "value": row['value'],
+                    "unit": row['unit'],
+                    "range_minimum": row['range_minimum'],
+                    "range_maximum": row['range_maximum']
+                }
+    
+    # Write to a new CSV file
+    with open(output_path, 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['date', 'name', 'value', 'unit', 'range_minimum', 'range_maximum'])
+        for lab_name, data in latest_values.items():
+            writer.writerow([
+                data['date'].strftime('%Y-%m-%d'), 
+                lab_name, 
+                data['value'], 
+                data['unit'],
+                data['range_minimum'],
+                data['range_maximum']
+            ])
+
 def build_lab_name_mappings(input_path: str, output_path: str):
     mappings = {}
     labs = load_json(input_path)
@@ -302,7 +336,6 @@ def validate_processed_documents(pdf_paths):
         raise Exception(f"Missing files: {json.dumps(errors, indent=2)}")
 
 def process_documents():
-    
     # Merge page jsons into document jsons
     logging.info("Merging page jsons into document jsons")
     json_paths = load_paths("cache/docs/pages/jsons")
@@ -340,7 +373,15 @@ def process_documents():
     logging.info("Saving final json file as CSV")
     build_labs_csv("outputs/labs_results.final.json", "outputs/labs_results.final.csv")
     logging.info("Saving final json file as CSV... DONE")
+
+    # Build csv with latest lab results
+    logging.info("Building latest results json file")
+    json_paths = load_paths("cache/docs/jsons")
+    build_latest_lab_results("outputs/labs_results.final.csv", "outputs/labs_results.latest.csv")
+    logging.info("Building latest results json file... DONE")
+
     return
+
     # Convert PDF to images (one per page)
     logging.info("Converting PDF to images")
     pdf_paths = load_paths("inputs", lambda x: x.endswith(".pdf") and "analises" in x.lower() and "requisicao" not in x.lower())
@@ -396,6 +437,12 @@ def process_documents():
     logging.info("Saving final json file as CSV")
     build_labs_csv("outputs/labs_results.final.json", "outputs/labs_results.final.csv")
     logging.info("Saving final json file as CSV... DONE")
+
+    # Build csv with latest lab results
+    logging.info("Building latest results json file")
+    json_paths = load_paths("cache/docs/jsons")
+    build_latest_lab_results("outputs/labs_results.final.csv", "outputs/labs_results.latest.csv")
+    logging.info("Building latest results json file... DONE")
 
     # Validate that all documents were correctly processed
     logging.info("Validating processed documents")

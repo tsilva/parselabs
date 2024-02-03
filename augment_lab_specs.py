@@ -109,7 +109,7 @@ def extract_unique_units(lab_specs):
     VALID_UNITS = [
         "ng/dL", "ng/mL", "µg/L", "pg/mL", "pmol/L", "UI/mL", "U/mL", "AU/mL", "mg/dL",
         "UI/L", "UI/dL", "U/L", "AI", "RU/mL", "IU/mL", "IU/L", "g/dL", "g/L", "mg/L",
-        "µmol/L", "nmol/L", "mmol/L", "µg/dL", "µg/mL", "fL", "pg", "µm³", "%",
+        "µmol/L", "nmol/L", "mmol/L", "μg/dL", "µg/mL", "fL", "pg", "µm³", "%",
         "células/µL", "células/mm³", "s", "µmol/dL", "Index", "µg/g", "mg/kg", "mEq/L",
         "mUI/mL", "COI", "S/CO", "ratio", "UFC/mL", "UFC/100mL", "UFC/µL", "kU/L",
         "AIU/mL", "mm/h", "mg/100mL", "nmol/dL", "segundos", "ug/g", "N/A", "nmol/mL",

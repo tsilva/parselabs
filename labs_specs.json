@@ -1,6 +1,6 @@
 [
   {
-    "name": "17-alfa-hidroxiprogesterona",
+    "name": "17-Alfa-Hidroxiprogesterona",
     "digest": "4f653b8fb5caf4ba1f6f4580c0fcda1b",
     "units": {
       "ng/dL": {
@@ -39,16 +39,16 @@
     "name": "Anticorpo Anti-Fator Intrínseco",
     "digest": "40194fde5fa4ef139d74e677e20394d6",
     "units": {
-      "UI/mL": {
-        "min": 0.0,
+      "RU/mL" : {
+        "min": 0,
         "max": 20.0
       },
       "ng/mL": {
-        "min": null,
+        "min": 0,
         "max": 20.0
       },
       "U/mL": {
-        "min": null,
+        "min": 0,
         "max": 20.0
       }
     }
@@ -292,6 +292,10 @@
   {
     "name": "Ácido Fólico",
     "digest": "a9a89a3e7f774e35aba6ff288ccd8496",
+    "fasting_hours": 8,
+    "prices": {
+      "unilabs": 37
+    },
     "units": {
       "ng/mL": {
         "min": 4.6,
@@ -329,6 +333,9 @@
     "name": "Alanina aminotransferase / ALT / GPT",
     "digest": "5cdf651a01d124970663de5324d8b463",
     "alternatives": [
+      "ALT",
+      "GPT",
+      "TGP",
       "Transaminase Glutâmico-Pirúvica (TGP)"
     ],
     "units": {
@@ -376,7 +383,7 @@
         "min": 100.0,
         "max": 190.0
       },
-      "µg/dL": {
+      "μg/dL": {
         "min": null,
         "max": null
       }
@@ -466,14 +473,14 @@
         "min": 11.6,
         "max": 35.0
       },
-      "µg/dL": {
+      "μg/dL": {
         "min": 11.0,
         "max": 35.0
       }
     }
   },
   {
-    "name": "anisocitose",
+    "name": "Anisocitose",
     "digest": "f084a391507e7108b9b7882304b04d88",
     "units": {
       "fL": {
@@ -705,7 +712,7 @@
         "min": 0.0,
         "max": 5.0
       },
-      "µg/dL": {
+      "μg/dL": {
         "min": 0.0,
         "max": 3.4
       }
@@ -776,7 +783,7 @@
       "Cap. Tot. Fix. Ferro"
     ],
     "units": {
-      "µg/dL": {
+      "μg/dL": {
         "min": 250.0,
         "max": 450.0
       },
@@ -789,6 +796,11 @@
         "max": 450.0
       }
     }
+  },
+  {
+    "name": "Acido Metilmalonico",
+    "price": 155,
+    "digest": "c79708d1b221822815b111856824f47a"
   },
   {
     "name": "Ceruloplasmina",
@@ -866,7 +878,7 @@
     "name": "Cobre",
     "digest": "00ba07369691a570d13bf6fe4e1a5595",
     "units": {
-      "µg/dL": {
+      "μg/dL": {
         "min": 70.0,
         "max": 155.0
       },
@@ -1243,12 +1255,11 @@
   {
     "name": "Cortisol",
     "alternatives": [
-      "Cortisol Sérico",
-      "Cortisol Livre"
+      "Cortisol Sérico"
     ],
     "digest": "f375dc40398d5b28a79b4950c2391c49",
     "units": {
-      "µg/dL": {
+      "μg/dL": {
         "min": 6.2,
         "max": 19.4
       },
@@ -1265,7 +1276,7 @@
   {
     "name": "Cortisol Livre",
     "units": {
-      "µg/dL": {
+      "μg/dL": {
         "min": 3.1,
         "max": 16.7
       },
@@ -1306,7 +1317,7 @@
         "min": null,
         "max": null
       },
-      "µg/dL": {
+      "μg/dL": {
         "min": null,
         "max": null
       },
@@ -1324,7 +1335,7 @@
         "min": 80.0,
         "max": 560.0
       },
-      "µg/dL": {
+      "μg/dL": {
         "min": 110.0,
         "max": 370.0
       },
@@ -1363,7 +1374,7 @@
         "min": 0.3,
         "max": 3.3
       },
-      "µg/dL": {
+      "μg/dL": {
         "min": 0.3,
         "max": 3.3
       }
@@ -1374,7 +1385,7 @@
     "name": "Dehidroepiandrosterona Sulfato / DHEA-s",
     "digest": "d3a440dffb3fdb1a267998e3dabe8ebf",
     "units": {
-      "µg/dL": {
+      "μg/dL": {
         "min": 80.0,
         "max": 560.0
       },
@@ -1450,6 +1461,7 @@
       "Hematócitos",
       "Glóbulos Vermelhos"
     ],
+    "prices": 10,
     "units": {
       "10^6/µL": {
         "min": 4.2,
@@ -1720,9 +1732,11 @@
     },
     "digest": "3fbb42f8cfad385021823aa6d85e14c6"
   },
+  {"name" : "Cortisol Urinário Livre"},
   {
     "name": "Ferritina",
     "digest": "19b33c9b351513b76fde2deb25140d30",
+    "price": 31,
     "units": {
       "ng/mL": {
         "min": 10.0,
@@ -1745,7 +1759,7 @@
     ],
     "digest": "d8a1238ea725543b45d0154c5be0cd11",
     "units": {
-      "µg/dL": {
+      "μg/dL": {
         "min": 50.0,
         "max": 170.0
       },
@@ -1815,6 +1829,9 @@
   },
   {
     "name": "Gama Glutamil-Transferase - GGT",
+    "alternatives": [
+      "GGT"
+    ],
     "digest": "10d56474f56e8931d9cfaf60bc3a1110",
     "units": {
       "U/L": {
@@ -1866,6 +1883,9 @@
   },
   {
     "name": "Globulina Ligada às Hormonas Sexuais Basal / SHBG",
+    "alternatives": [
+      "SHBG"
+    ],
     "digest": "088f4241150778b308e46687b2937c24",
     "units": {
       "nmol/L": {
@@ -1963,6 +1983,9 @@
   },
   {
     "name": "Hemoglobina Glicada / HbA1C",
+    "alternatives": [
+      "HbA1C"
+    ],
     "digest": "db9d6611c139cd61c883894479836e6b",
     "units": {
       "%": {
@@ -1982,7 +2005,7 @@
         "min": null,
         "max": 200.0
       },
-      "µg/dL": {
+      "μg/dL": {
         "min": null,
         "max": null
       }
@@ -2019,6 +2042,10 @@
   },
   {
     "name": "Hemoglobina Glicada - IFCC / HbA1C - IFCC",
+    "alternatives": [
+      "Hemoglobina Glicada - IFCC",
+      "HbA1C - IFCC"
+    ],
     "digest": "8aa324a943d639e9fbf6eb13d41f75ca",
     "units": {
       "%": {
@@ -2038,8 +2065,8 @@
   {
     "name": "Eritrograma - Hemoglobina Globular Média / HGM",
     "alternatives": [
-      "HGM",
-      "Hemoglobina Globular Média"
+      "Hemoglobina Globular Média",
+      "HGM"
     ],
     "units": {
       "g/dL": {
@@ -2059,6 +2086,8 @@
   },
   {
     "name": "Homocisteína",
+    "price": 58,
+    "fasting_hours": 12,
     "digest": "c19dfcebfe8ed63eaeb7ebaa96cffaba",
     "units": {
       "µmol/L": {
@@ -2077,6 +2106,9 @@
   },
   {
     "name": "Hormona Folículo Estimulante / FSH",
+    "alternatives": [
+      "FSH"
+    ],
     "digest": "69fd94e4f697f68cf6aa3d5ad9a4efcd",
     "units": {
       "mUI/mL": {
@@ -2095,6 +2127,9 @@
   },
   {
     "name": "Hormona Luteotrófica / LH",
+    "alternatives": [
+      "LH"
+    ],
     "digest": "538d12c4c9f1ac5f9d7631a988401d0e",
     "units": {
       "mUI/mL": {
@@ -2113,6 +2148,9 @@
   },
   {
     "name": "Hormona Adrenocorticotrópica / ACTH",
+    "alternatives": [
+      "ACTH"
+    ],
     "units": {
       "pg/mL": {
         "min": 7.2,
@@ -2131,6 +2169,9 @@
   },
   {
     "name": "Hormona Paratiroideia Intacta / PTH-I",
+    "alternatives": [
+      "PTH-I"
+    ],
     "digest": "776691c39ebf2d15f81bd8f14fb86c9f",
     "units": {
       "pg/mL": {
@@ -2167,6 +2208,9 @@
   },
   {
     "name": "Imunoglobulina A secretora - IgA secretora",
+    "alternatives": [
+      "IgA secretora"
+    ],
     "digest": "dcb7e22abc92dbe10774712dc4b4a0ee",
     "units": {
       "µg/mL": {
@@ -2184,7 +2228,10 @@
     }
   },
   {
-    "name": "Imunoglobulina G - IgG",
+    "name": "Imunoglobulina G / IgG",
+    "alternatives": [
+      "IgG"
+    ],
     "digest": "e387ae6c02ada8d681f68a6276f1695a",
     "units": {
       "mg/dL": {
@@ -2202,7 +2249,10 @@
     }
   },
   {
-    "name": "Imunoglobulina M - IgM",
+    "name": "Imunoglobulina M / IgM",
+    "alternatives": [
+      "IgM"
+    ],
     "digest": "2b68e2dcb83a70e5e23f69cb925c8b5a",
     "units": {
       "mg/dL": {
@@ -2256,7 +2306,11 @@
     }
   },
   {
-    "name": "Eritrograma - Índice de Distribuição da Hemoglobina - HDW",
+    "name": "Eritrograma - Índice de Distribuição da Hemoglobina / HDW",
+    "alternatives": [
+      "Índice de Distribuição da Hemoglobina",
+      "HDW"
+    ],
     "digest": "c02048b15c9042357260ed056a463eb9",
     "units": {
       "g/dL": {
@@ -2371,7 +2425,13 @@
     }
   },
   {
-    "name": "Lactato desidrogenase / LDH",
+    "name": "Lactato desidrogenase / LD / LDH",
+    "alternatives" : [
+      "LD",
+      "LDH",
+      "Desidrogenase láctica",
+      "Desidrogenase do lactato"
+    ],
     "digest": "01fc934a711b777eaa441b01a66fea01",
     "units": {
       "U/L": {
@@ -2454,6 +2514,9 @@
   },
   {
     "name": "Luteína estimulante plasmática - LH",
+    "alternatives": [
+      "LH"
+    ],
     "digest": "3f856221df0cf3f35100e335d013a1e6",
     "units": {
       "mUI/mL": {
@@ -2820,7 +2883,7 @@
         "min": 79.0,
         "max": 152.0
       },
-      "µg/dL": {
+      "μg/dL": {
         "min": 7.0,
         "max": 17.0
       },
@@ -2849,7 +2912,10 @@
     }
   },
   {
-    "name": "Somatomedina Basal - IGF-1",
+    "name": "Somatomedina Basal / IGF-1",
+    "alternatives": [
+      "IGF-1"
+    ],
     "digest": "439f0d048800f77d3f26b5fe85020fba",
     "units": {
       "ng/mL": {
@@ -2906,7 +2972,7 @@
         "min": 80.0,
         "max": 200.0
       },
-      "µg/dL": {
+      "μg/dL": {
         "min": 0.8,
         "max": 2.0
       }
@@ -2944,7 +3010,7 @@
     ],
     "digest": "ee0ed0f68f0dcb75f8fd669dd2a9f109",
     "units": {
-      "µg/dL": {
+      "μg/dL": {
         "min": 4.5,
         "max": 12.0
       },
@@ -3112,11 +3178,11 @@
     ],
     "digest": "95354b11ce729f5ba52734e00f2e3f94",
     "units": {
-      "µIU/mL": {
+      "mUI/L": {
         "min": 0.4,
         "max": 4.0
       },
-      "mU/L": {
+      "µIU/mL": {
         "min": 0.4,
         "max": 4.0
       },
@@ -3220,7 +3286,7 @@
     "name": "Vitamina A",
     "digest": "3d16b8611fc29b7de307073f89ac66f2",
     "units": {
-      "µg/dL": {
+      "μg/dL": {
         "min": 20.0,
         "max": 50.0
       },
@@ -3234,9 +3300,16 @@
       }
     }
   },
+  {"name" : "Fração de plaquetas imaturas"},
   {
-    "name": "Vitamina B12 - Cianocobalamina",
-    "digest": "06579c371fa7e26b63985532853a84c9",
+    "name": "Vitamina B12",
+    "alternatives": [
+      "Vitamina B12 / Cianocobalamina",
+      "Vitamina B12",
+      "Cianocobalamina"
+    ],
+    "digest": "ea6ebf6592796e2e8122dd18cf64cf3e",
+    "fasting_hours": 8,
     "units": {
       "pg/mL": {
         "min": 200.0,
@@ -3468,7 +3541,7 @@
     "name": "Zinco",
     "digest": "4ae8cde26bdd8620847a388e968d0f43",
     "units": {
-      "µg/dL": {
+      "μg/dL": {
         "min": 70.0,
         "max": 120.0
       },
@@ -3637,7 +3710,7 @@
         "min": 0.6,
         "max": 6.8
       },
-      "µg/dL": {
+      "μg/dL": {
         "min": 0.2,
         "max": 1.0
       }
@@ -3655,7 +3728,7 @@
         "min": null,
         "max": 3.4
       },
-      "µg/dL": {
+      "μg/dL": {
         "min": null,
         "max": 1.0
       }

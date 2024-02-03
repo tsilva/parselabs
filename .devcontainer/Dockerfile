@@ -15,6 +15,11 @@ RUN apk add --no-cache \
     make \
     cmake \
     openssh \
+    build-base \ 
+    g++ \
+    freetype-dev \
+    libpng-dev \
+    openblas-dev \
     poppler-utils \
     msttcorefonts-installer \
     fontconfig && \

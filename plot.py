@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import json
 import numpy as np
 from slugify import slugify
+from utils import find_most_similar_lab_spec
 
 def plot(csv_file, lab_name):
     dates = []
@@ -22,20 +23,12 @@ def plot(csv_file, lab_name):
                 units.append(unit)
 
     if len(list(set(units))) != 1:
-        raise Exception(f"{lab_name} - units are not the same for all values: " + json.dumps(units))
-
-    unit = units[0]
-    unit_range = {"min" : None, "max" : None}
-    if lab_name == "Fator Reumatoide / Teste RA":
-        unit_range = {
-            "min": None,
-            "max": 14.0
-        }
-    elif lab_name == "Eritrograma - Velocidade de Sedimentação - 1a Hora":
-        unit_range = {
-            "min": 2.0,
-            "max": 20.0
-        }
+        raise Exception(f"{lab_name} - units are not the same for all values: " + json.dumps(list(set(units))))
+    
+    lab_spec = find_most_similar_lab_spec(lab_name)
+    units = lab_spec['units']
+    if not unit in units: raise Exception(f"{lab_name} - unit {unit} is not defined in lab_specs.json")
+    unit_range = lab_spec['units'][unit]
 
     # Sort the data by date
     sorted_data = sorted(zip(dates, values))
@@ -78,16 +71,23 @@ def plot(csv_file, lab_name):
     plt.close()
 
 lab_names = [
+    "Eritrograma - Eritrócitos",
     "Leucograma - Leucócitos",
     "Eritrograma - Velocidade de Sedimentação - 1a Hora",
     "Fator Reumatoide / Teste RA",
     "Hormona Tiro-Estimulante / TSH",
     "Triiodotironina Livre / T3 Livre",
-    "Tiroxina Livre / T4 Livre"
-    #"Tiroxina Total / T4 Total",
-    #"Triiodotironina Total / T3 Total",
-    #"Vitamina D3 / 25-Hidroxicolecalciferol / Calcidiol", 
-    #"Ferritina"
+    "Tiroxina Livre / T4 Livre",
+    "Triiodotironina Total / T3 Total",
+    "Vitamina D3 / 25-Hidroxicolecalciferol / Calcidiol", 
+    "Ferritina",
+    "Ferro",
+    "Tiroxina Total / T4 Total"
 ]
 for lab_name in lab_names:
     plot("outputs/labs_results.final.csv", lab_name)
+
+# @tsilva TODO: grab from labs_specs
+# @tsilva TODO: plot all available results
+# @tsilva TODO: support mixed plots
+# @tsilva TODO: add colored range to plot
