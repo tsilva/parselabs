@@ -338,23 +338,6 @@ def validate_processed_documents(pdf_paths):
         raise Exception(f"Missing files: {json.dumps(errors, indent=2)}")
 
 def process_documents():
-    # Build the final json file using augmentations
-    logging.info("Building final json file")
-    build_final_labs_results("outputs/labs_results.augmented.json", "outputs/labs_results.final.json")
-    logging.info("Building final json file... DONE")
-
-    # Save the final json file as csv
-    logging.info("Saving final json file as CSV")
-    build_labs_csv("outputs/labs_results.final.json", "outputs/labs_results.final.csv")
-    logging.info("Saving final json file as CSV... DONE")
-
-    # Build csv with latest lab results
-    logging.info("Building latest results json file")
-    json_paths = load_paths("cache/docs/jsons")
-    build_latest_lab_results("outputs/labs_results.final.csv", "outputs/labs_results.latest.csv")
-    logging.info("Building latest results json file... DONE")
-
-    return
     # Merge page jsons into document jsons
     logging.info("Merging page jsons into document jsons")
     json_paths = load_paths("cache/docs/pages/jsons")

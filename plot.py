@@ -84,7 +84,7 @@ def plot_labs(csv_file, lab_name):
     # Adjusted shading for min/max value range
     plt.figure(figsize=(10, 6))
     plt.plot(dates, values, marker='o', label='Data')
-    plt.plot(dates, moving_avg, label='Moving Average', color='orange', linestyle='--')
+    #plt.plot(dates, moving_avg, label='Moving Average', color='orange', linestyle='--')
     for i in range(len(dates)): plt.text(dates[i], values[i], f'{values[i]:.2f}', fontsize=8, ha='right', va='bottom')
     plt.plot(dates, regression_line, label='Linear Regression', color='red', linestyle='--')
 
@@ -98,7 +98,7 @@ def plot_labs(csv_file, lab_name):
 
     # Shading acceptable value range with checks to prevent TypeError
     if lower_bound is not None and upper_bound is not None:
-        plt.fill_between(dates, lower_bound, upper_bound, color='green', alpha=0.1, label='Acceptable Range')
+        plt.fill_between(dates, lower_bound, upper_bound, color='green', alpha=0.1, label=f"Range: {lower_bound}-{upper_bound} {unit}")
     elif lower_bound is not None:
         plt.fill_between(dates, lower_bound, default_upper_bound, color='green', alpha=0.1, label='Above Min Value')
     elif upper_bound is not None:
@@ -215,6 +215,8 @@ labs = [
     "Ferritina",
     "Ferro",
     "Tiroxina Total / T4 Total",
+    "Anticorpo Anti-Tiroglobulina / Tg",
+    "Anticorpo Anti-TPO (Peroxidase Tireoidiana) (IgG)",
     ["Hormona Tiro-Estimulante / TSH", "Tiroxina Livre / T4 Livre"]
 ]
 for lab in labs:

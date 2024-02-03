@@ -90,24 +90,6 @@
     }
   },
   {
-    "name": "Anticorpo Anti-Microssomas",
-    "digest": "3590855bba90c0d69c713c2cc0ef60b8",
-    "units": {
-      "UI/mL": {
-        "min": 0.0,
-        "max": 34.0
-      },
-      "U/mL": {
-        "min": 0.0,
-        "max": 34.0
-      },
-      "ng/mL": {
-        "min": null,
-        "max": 34.0
-      }
-    }
-  },
-  {
     "name": "Anticorpo Anti-T TG (IgG)",
     "alternatives": [
       "Anti-Tissue Transglutaminase (IgG)",
@@ -123,19 +105,19 @@
   },
   {
     "name": "Anticorpo Anti-TPO (Peroxidase Tireoidiana) (IgG)",
+    "alternatives": [
+      "Anti-Tireoperoxidase (TPO)",
+      "Anti-TPO",
+      "Anticorpo Anti-Microssomas",
+      "Anticorpos Anti-Peroxidase",
+      "Anticorpos Peroxidase Tirodeia (TPO) (IgG)",
+      "Anticorpos Anti-Peroxidase Microssomal (TPO)"
+    ],
     "digest": "f8cee53bb81d19f81feac3a916733920",
     "units": {
       "UI/mL": {
         "min": 0.0,
-        "max": 34.0
-      },
-      "UI/L": {
-        "min": 0.0,
-        "max": 34.0
-      },
-      "UI/dL": {
-        "min": 0.0,
-        "max": 34.0
+        "max": 60
       }
     }
   },
@@ -255,18 +237,13 @@
   },
   {
     "name": "Anticorpo Anti-Tiroglobulina / Tg",
+    "alternatives": [
+      "Anticorpo Triglobulina (IgG)"
+    ],
     "units": {
       "UI/mL": {
         "min": 0.0,
-        "max": 115.0
-      },
-      "mg/dL": {
-        "min": 0.4,
-        "max": 4.0
-      },
-      "mg/L": {
-        "min": 0.0,
-        "max": 115.0
+        "max": 40
       }
     },
     "digest": "d0b7af0ca3893bce7aba5d65073ac302"
@@ -1477,17 +1454,9 @@
     ],
     "prices": 10,
     "units": {
-      "10^6/µL": {
-        "min": 4.2,
-        "max": 5.4
-      },
       "10^12/L": {
-        "min": 4.2,
-        "max": 5.4
-      },
-      "10^6/mm³": {
-        "min": 4.2,
-        "max": 5.4
+        "min": 3.92,
+        "max": 5.13
       }
     }
   },
@@ -1761,7 +1730,8 @@
         "min": 10.0,
         "max": 100.0
       }
-    }
+    },
+    "digest": "0f573d2181760fc047ff37ada5fa2fc8"
   },
   {
     "name": "Ferritina",
@@ -1769,16 +1739,8 @@
     "price": 31,
     "units": {
       "ng/mL": {
-        "min": 10.0,
-        "max": 150.0
-      },
-      "µg/L": {
-        "min": 20.0,
-        "max": 200.0
-      },
-      "ng/dL": {
-        "min": 10.0,
-        "max": 150.0
+        "min": 10,
+        "max": 291
       }
     }
   },
@@ -2462,7 +2424,7 @@
       "Desidrogenase láctica",
       "Desidrogenase do lactato"
     ],
-    "digest": "01fc934a711b777eaa441b01a66fea01",
+    "digest": "c151a1f0cac77ea0e36aa8b631ff3637",
     "units": {
       "U/L": {
         "min": 135.0,
@@ -3018,16 +2980,8 @@
     "digest": "797aa35aaf1d4b92c4071c2adf0ff68d",
     "units": {
       "ng/dL": {
-        "min": 0.9,
-        "max": 1.7
-      },
-      "pmol/L": {
-        "min": 12.0,
-        "max": 22.0
-      },
-      "pg/mL": {
-        "min": 0.9,
-        "max": 1.7
+        "min": 0.7,
+        "max": 1.58
       }
     }
   },
@@ -3209,16 +3163,8 @@
     "digest": "95354b11ce729f5ba52734e00f2e3f94",
     "units": {
       "mUI/L": {
-        "min": 0.4,
-        "max": 4.0
-      },
-      "µIU/mL": {
-        "min": 0.4,
-        "max": 4.0
-      },
-      "ng/mL": {
-        "min": 0.4,
-        "max": 4.0
+        "min": 0.55,
+        "max": 4.78
       }
     }
   },
@@ -3342,7 +3288,8 @@
         "min": 0.03,
         "max": 0.1
       }
-    }
+    },
+    "digest": "dd5fc0e9ce756faebe4b21c84fba484d"
   },
   {
     "name": "Vitamina B12",
