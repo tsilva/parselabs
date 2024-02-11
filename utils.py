@@ -75,7 +75,7 @@ def create_embeddings(texts, max_workers=20):
         concurrent.futures.wait(futures)
     return embeddings
 
-def create_completion(user_prompt, model="gpt-3.5-turbo-1106", temperature=0.0, max_tokens=None, system_prompt=None, tools=[]):
+def create_completion(user_prompt, model="gpt-3.5-turbo-0125", temperature=0.0, max_tokens=None, system_prompt=None, tools=[]):
     messages = ([{
         "role": "system",
         "content": system_prompt

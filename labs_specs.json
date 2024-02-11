@@ -353,13 +353,35 @@
     "name": "Alfa-1-Globulina",
     "alternatives": [
       "Globulina Alfa-1"
-    ]
+    ],
+    "units": {
+      "g/dL": {
+        "min": 0.1,
+        "max": 0.3
+      },
+      "mg/dL": {},
+      "g/L": {
+        "min": 1.0,
+        "max": 3.0
+      }
+    }
   },
   {
     "name": "Alfa-2-Globulina",
     "alternatives": [
       "Globulina Alfa-2"
-    ]
+    ],
+    "units": {
+      "g/dL": {
+        "min": 0.6,
+        "max": 1.0
+      },
+      "mg/dL": {},
+      "g/L": {
+        "min": 0.6,
+        "max": 1.0
+      }
+    }
   },
   {
     "name": "Amilase",
@@ -466,22 +488,75 @@
     }
   },
   {
-    "name": "Globulina Beta"
+    "name": "Globulina Beta",
+    "units": {
+      "g/dL": {
+        "min": 0.7,
+        "max": 1.2
+      },
+      "g/L": {
+        "min": 2.1,
+        "max": 3.2
+      },
+      "mg/dL": {
+        "min": 7.0,
+        "max": 13.0
+      }
+    }
   },
   {
-    "name": "Globulina Gama"
+    "name": "Globulina Gama",
+    "units": {
+      "g/dL": {
+        "min": 0.7,
+        "max": 1.6
+      },
+      "mg/dL": {
+        "min": 9.2,
+        "max": 18.1
+      },
+      "g/L": {
+        "min": 7.0,
+        "max": 16.0
+      }
+    }
   },
   {
     "name": "Beta-1-Globulina",
     "alternatives": [
       "Globulina Beta-1"
-    ]
+    ],
+    "units": {
+      "g/dL": {
+        "min": 0.7,
+        "max": 1.1
+      },
+      "mg/dL": {
+        "min": 0.7,
+        "max": 1.1
+      },
+      "g/L": {
+        "min": 0.7,
+        "max": 1.1
+      }
+    }
   },
   {
     "name": "Beta-2-Globulina",
     "alternatives": [
       "Globulina Beta-2"
-    ]
+    ],
+    "units": {
+      "g/dL": {
+        "min": 0.7,
+        "max": 1.1
+      },
+      "mg/dL": {},
+      "g/L": {
+        "min": 1.8,
+        "max": 3.6
+      }
+    }
   },
   {
     "name": "Electroforese de Proteinas - Beta (pt)",
@@ -3700,24 +3775,72 @@
     }
   },
   {
-    "name": "S. Tiphy - Ant. H"
+    "name": "S. Tiphy - Ant. H",
+    "units": {
+      "mg/dL": {},
+      "ng/mL": {},
+      "µg/mL": {}
+    }
   },
   {
-    "name": "S. Tiphy - Ant. O"
+    "name": "S. Tiphy - Ant. O",
+    "units": {
+      "mg/dL": {},
+      "ng/mL": {},
+      "µg/mL": {}
+    }
   },
   {
-    "name": "S. Paratiphy A - Ant. H"
+    "name": "S. Paratiphy A - Ant. H",
+    "units": {
+      "ng/mL": {
+        "min": 0.0,
+        "max": 0.8
+      },
+      "IU/mL": {
+        "min": 0.0,
+        "max": 0.0
+      },
+      "ng/dL": {}
+    }
   },
   {
-    "name": "S. Paratiphy A - Ant. O"
+    "name": "S. Paratiphy A - Ant. O",
+    "units": {
+      "mg/dL": {},
+      "UI/mL": {
+        "min": 0.0,
+        "max": 20.0
+      },
+      "ng/mL": {
+        "min": 0.0,
+        "max": 0.8
+      }
+    }
   },
   {
-    "name": "S. Paratiphy B - Ant. H"
+    "name": "S. Paratiphy B - Ant. H",
+    "units": {
+      "mg/dL": {},
+      "UI/mL": {
+        "min": 5.0,
+        "max": 200.0
+      },
+      "ng/mL": {}
+    }
   },
   {
-    "name": "S. Paratiphy B - Ant. O"
+    "name": "S. Paratiphy B - Ant. O",
+    "units": {
+      "mg/dL": {},
+      "UI/mL": {},
+      "ng/mL": {}
+    }
   },
   {
-    "name": "Reaccao de Wright"
+    "name": "Reaccao de Wright",
+    "units": {
+      "%\nfL\npg": {}
+    }
   }
 ]
