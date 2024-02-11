@@ -11,6 +11,7 @@ Scripts to extract data from health lab reports (portuguese)
 - Validate JSON against TXT (eg: 1998-03-03 - analises.001.txt broken)
 - Validate inconsistencies (check explanations)
 - Check for json pages with [] that dont belong to pages with n/a
+- BOOKMARK: 2002-02-13
 
 # Validados manualmente
 
