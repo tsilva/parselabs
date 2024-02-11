@@ -164,7 +164,8 @@
         "min": 0,
         "max": 0
       }
-    }
+    },
+    "digest": "108e3b0669f4f1d6e2a6492d610a6381"
   },
   {
     "name": "Anticorpo Anti-Nuclear",
@@ -364,7 +365,8 @@
         "min": 1.0,
         "max": 3.0
       }
-    }
+    },
+    "digest": "181cb55aa3a001950e89d75b8867c02f"
   },
   {
     "name": "Alfa-2-Globulina",
@@ -381,7 +383,8 @@
         "min": 0.6,
         "max": 1.0
       }
-    }
+    },
+    "digest": "5045098a618e44b39b9bdfa68eaeb33e"
   },
   {
     "name": "Amilase",
@@ -424,7 +427,7 @@
     "alternatives": [
       "Anisocitose"
     ],
-    "digest": "f084a391507e7108b9b7882304b04d88",
+    "digest": "0da69cfe746765e448cacbf1787612be",
     "units": {
       "boolean": {
         "min": 0,
@@ -442,7 +445,8 @@
         "min": 0,
         "max": 0
       }
-    }
+    },
+    "digest": "5bc0cdbcaae7d143525c39608d839c14"
   },
   {
     "name": "Aspartato aminotransferase / AST / GOT",
@@ -502,7 +506,8 @@
         "min": 7.0,
         "max": 13.0
       }
-    }
+    },
+    "digest": "6b81c98c4bff1936a7c2b4c8574747e9"
   },
   {
     "name": "Globulina Gama",
@@ -519,7 +524,8 @@
         "min": 7.0,
         "max": 16.0
       }
-    }
+    },
+    "digest": "705660c06ce7a31209c6ec9992c2bcfd"
   },
   {
     "name": "Beta-1-Globulina",
@@ -539,7 +545,8 @@
         "min": 0.7,
         "max": 1.1
       }
-    }
+    },
+    "digest": "dfe2fa023d5b5b854544846dba04f770"
   },
   {
     "name": "Beta-2-Globulina",
@@ -556,7 +563,8 @@
         "min": 1.8,
         "max": 3.6
       }
-    }
+    },
+    "digest": "59473ef07cde8e80b10d670a3c355935"
   },
   {
     "name": "Electroforese de Proteinas - Beta (pt)",
@@ -844,7 +852,8 @@
         "min": 98.0,
         "max": 106.0
       }
-    }
+    },
+    "digest": "19c07169cea93ce2ed256139d955ace0"
   },
   {
     "name": "Cobre",
@@ -1130,7 +1139,7 @@
         "max": 18.1
       }
     },
-    "digest": "705660c06ce7a31209c6ec9992c2bcfd"
+    "digest": "389fbaa570ba5f609a255ff08cac6a1c"
   },
   {
     "name": "Reticulócitos - Hemoglobina",
@@ -1291,7 +1300,8 @@
         "min": 0,
         "max": 0
       }
-    }
+    },
+    "digest": "c73171f9a526e249aff6a86f715bf6d8"
   },
   {
     "name": "Anticorpo HIV-2",
@@ -1300,7 +1310,8 @@
         "min": 0,
         "max": 0
       }
-    }
+    },
+    "digest": "db4b5ef8ec5f82ee50017d8173494c49"
   },
   {
     "name": "VDRL",
@@ -1309,7 +1320,8 @@
         "min": 0,
         "max": 0
       }
-    }
+    },
+    "digest": "4ca9d162520826f557c6e273beac45c2"
   },
   {
     "name": "HLA-B27",
@@ -1318,7 +1330,8 @@
         "min": 0,
         "max": 0
       }
-    }
+    },
+    "digest": "454311d3ca13365bcec8cd73e20b2763"
   },
   {
     "name": "Pesquisa de Celulas LE",
@@ -1327,7 +1340,8 @@
         "min": 0,
         "max": 0
       }
-    }
+    },
+    "digest": "5b3c352cc950a52453f8c53d64eac1ea"
   },
   {
     "name": "Pesquisa de Imunocomplexos",
@@ -1647,7 +1661,7 @@
         "max": 126
       }
     },
-    "digest": "45c6a2bb75c93d81efe0934ec7860c77"
+    "digest": "844c92a16119bfbbdd1dd9857f9a885d"
   },
   {
     "name": "Complemento C3",
@@ -1978,7 +1992,7 @@
         "max": 0
       }
     },
-    "digest": "a8c3b0f429aed00c372fe0225da1edce"
+    "digest": "80aef3a5ece83fa894dfc074adbd1025"
   },
   {
     "name": "Urina - Cristais",
@@ -2978,7 +2992,8 @@
         "min": 0.8,
         "max": 1.2
       }
-    }
+    },
+    "digest": "f13346458faa155d597825b3fa83aa30"
   },
   {
     "name": "Calcitonina",
@@ -3780,7 +3795,8 @@
       "mg/dL": {},
       "ng/mL": {},
       "µg/mL": {}
-    }
+    },
+    "digest": "db7a411ea0123eb15f2486c3c8e1ce7a"
   },
   {
     "name": "S. Tiphy - Ant. O",
@@ -3788,7 +3804,8 @@
       "mg/dL": {},
       "ng/mL": {},
       "µg/mL": {}
-    }
+    },
+    "digest": "754b7866aed88db48617f2b1cdc9b73c"
   },
   {
     "name": "S. Paratiphy A - Ant. H",
@@ -3802,7 +3819,8 @@
         "max": 0.0
       },
       "ng/dL": {}
-    }
+    },
+    "digest": "e13dec5a98c8dc136ff73497a730fd6e"
   },
   {
     "name": "S. Paratiphy A - Ant. O",
@@ -3816,7 +3834,8 @@
         "min": 0.0,
         "max": 0.8
       }
-    }
+    },
+    "digest": "99057bf993121ac0c7aaa60787efa5e3"
   },
   {
     "name": "S. Paratiphy B - Ant. H",
@@ -3827,7 +3846,8 @@
         "max": 200.0
       },
       "ng/mL": {}
-    }
+    },
+    "digest": "3a1c1b5cebb98b48051cf76426ad8021"
   },
   {
     "name": "S. Paratiphy B - Ant. O",
@@ -3835,12 +3855,14 @@
       "mg/dL": {},
       "UI/mL": {},
       "ng/mL": {}
-    }
+    },
+    "digest": "592cf26a059b210489d894d84075c3f8"
   },
   {
     "name": "Reaccao de Wright",
     "units": {
       "%\nfL\npg": {}
-    }
+    },
+    "digest": "4d5024deacd5b8a0182c0e53e4acc7b0"
   }
 ]
