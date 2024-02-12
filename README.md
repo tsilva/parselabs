@@ -12,7 +12,7 @@ Scripts to extract data from health lab reports (portuguese)
 - Validate inconsistencies (check explanations)
 - Check for json pages with [] that dont belong to pages with n/a
 - Search for two entries with the same name in a row and delete the second one
-- BOOKMARK: 2002-02-13
+- Confirm that dates in files match file name
 
 # Validados manualmente
 

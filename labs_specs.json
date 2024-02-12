@@ -360,7 +360,10 @@
         "min": 0.1,
         "max": 0.3
       },
-      "mg/dL": {},
+      "mg/dL": {
+        "min": 17.0,
+        "max": 30.0
+      },
       "g/L": {
         "min": 1.0,
         "max": 3.0
@@ -1062,17 +1065,9 @@
       "Relacao Albumina / Globulina"
     ],
     "units": {
-      "g/dL": {
-        "min": 1.1,
-        "max": 2.5
-      },
       "ratio": {
         "min": 1.1,
         "max": 2.5
-      },
-      "g/L": {
-        "min": null,
-        "max": null
       }
     },
     "digest": "cb83407d501e6077c5b8fd548b526a2d"
@@ -2608,6 +2603,38 @@
       "10^3/µL": {
         "min": 150.0,
         "max": 450.0
+      }
+    }
+  },
+  {
+    "name": "Plaquetas - Volume Plaquetário Módio",
+    "digest": "6e92e357cd81c04c1fdfafefc8fb9b88",
+    "units": {
+      "fL": {
+        "min": 7.4,
+        "max": 10.4
+      },
+      "femtoliters": {
+        "min": 7.4,
+        "max": 10.4
+      },
+      "μm³": {
+        "min": 7.4,
+        "max": 10.4
+      }
+    }
+  },
+  {
+    "name": "Plaquetas - P.D.W.",
+    "digest": "e9699606b1d9895fa1f70a75392d34d4",
+    "units": {
+      "fL": {
+        "min": 9.0,
+        "max": 17.0
+      },
+      "%": {
+        "min": 9.0,
+        "max": 17.0
       }
     }
   },
