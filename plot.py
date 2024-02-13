@@ -2,6 +2,7 @@ import csv
 import json
 import logging
 import numpy as np
+import pandas as pd
 from datetime import datetime
 import matplotlib.pyplot as plt
 from slugify import slugify
@@ -49,6 +50,10 @@ def plot_labs(csv_file, lab_name):
                 values.append(float(row['value']))
                 unit = row['unit']
                 units.append(unit)
+
+    if len(values) < 2:
+        logging.error(f"{lab_name} - not enough data points to plot")
+        return
 
     if len(list(set(units))) != 1:
         logging.error(f"{lab_name} - units are not the same for all values: " + json.dumps(list(set(units))))
@@ -112,7 +117,7 @@ def plot_labs(csv_file, lab_name):
 
     # Save plot to a file
     image_name = slugify(lab_name)
-    plt.savefig(f"outputs/plot_{image_name}.png")
+    plt.savefig(f"outputs/plots/plot_{image_name}.png")
     plt.close()
 
 def normalize_values(values, value_range):
@@ -202,6 +207,15 @@ def plot_correlation(csv_file, lab_name1, lab_name2):
     plt.savefig(f"outputs/plot_{slugify(lab_name1)}_and_{slugify(lab_name2)}.png")
     plt.close()
 
+def get_labs_with_consistent_units():
+    df = pd.read_csv('outputs/labs_results.final.csv')
+    consistent_lab_names = {}
+    for lab_name, group in df.groupby('name'):
+        unique_units = group['unit'].unique()
+        if len(unique_units) == 1: consistent_lab_names[lab_name] = True
+    consistent_lab_names = list(consistent_lab_names.keys())
+    return consistent_lab_names
+
 labs = [
     "Eritrograma - Eritrócitos",
     "Leucograma - Leucócitos",
@@ -219,6 +233,7 @@ labs = [
     "Anticorpo Anti-TPO (Peroxidase Tireoidiana) (IgG)",
     ["Hormona Tiro-Estimulante / TSH", "Tiroxina Livre / T4 Livre"]
 ]
+labs = get_labs_with_consistent_units()
 for lab in labs:
     if isinstance(lab, list): plot_correlation(FINAL_CSV_PATH, lab[0], lab[1])
     else: plot_labs(FINAL_CSV_PATH, lab)

@@ -426,30 +426,64 @@
     }
   },
   {
-    "name": "Eritograma - Anisocitose",
-    "alternatives": [
-      "Anisocitose"
-    ],
-    "digest": "0da69cfe746765e448cacbf1787612be",
+    "name": "Eritrograma - Anisocitose",
     "units": {
-      "boolean": {
-        "min": 0,
-        "max": 0
-      }
-    }
+      "%": {
+        "min": 11.5,
+        "max": 14.5
+      },
+      "fL": {},
+      "pg": {}
+    },
+    "digest": "c7307506e21c6f34bdc1a0fea4d566fd"
   },
   {
-    "name": "Eritograma - Anisocromia",
-    "alternatives": [
-      "Anisocromia"
-    ],
+    "name": "Eritrograma - Anisocromia",
     "units": {
-      "boolean": {
-        "min": 0,
-        "max": 0
-      }
+      "%": {},
+      "g/dL": {},
+      "pg": {}
     },
-    "digest": "5bc0cdbcaae7d143525c39608d839c14"
+    "digest": "eacc68d5df595fa31a22563dda944b58"
+  },
+  {
+    "name": "Eritrograma - Microcitose",
+    "units": {
+      "%": {},
+      "pg": {},
+      "g/dL": {}
+    },
+    "digest": "b72e30da97a94ef06494a243ac6cfefe"
+  },
+  {
+    "name": "Eritrograma - Hipocromia",
+    "units": {
+      "%": {},
+      "g/dL": {},
+      "pg": {}
+    },
+    "digest": "73d79c9b7360e44b4925d1a73031a534"
+  },
+  {
+    "name": "Eritrograma - Esquizocitose",
+    "units": {
+      "%": {
+        "min": 0.0,
+        "max": 2.0
+      },
+      "fL": {},
+      "pg": {}
+    },
+    "digest": "409389bc015225ab72e57e903d605476"
+  },
+  {
+    "name": "Eritrograma - Eliptocitose",
+    "units": {
+      "%": {},
+      "fL": {},
+      "pg": {}
+    },
+    "digest": "3e7dabd8a9fee542ccc95e8b586cbafc"
   },
   {
     "name": "Aspartato aminotransferase / AST / GOT",
@@ -1990,6 +2024,9 @@
     "digest": "80aef3a5ece83fa894dfc074adbd1025"
   },
   {
+    "name" : "Fezes - Pesquisa H Pylori"
+  },
+  {
     "name": "Urina - Cristais",
     "units": {
       "N/A": {
@@ -3182,6 +3219,7 @@
   {
     "name": "Eritrograma - Velocidade de Sedimentação - 1a Hora",
     "alternatives": [
+      "Velocidade de Sedimentação - 1a Hora",
       "Método de Westergreen - 1a Hora",
       "VSG - 1a Hora",
       "Velocidade de Sedimentacao Globular - 1a Hora"
@@ -3546,6 +3584,7 @@
       }
     }
   },
+  {"name" : "Urina - Exame bacteriológico"},
   {
     "name": "Urina - pH",
     "digest": "64b120fd5a5830cc9deb56d686398d1e",
