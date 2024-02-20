@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from slugify import slugify
 from utils import find_most_similar_lab_spec, lab_spec_by_name
 
-FINAL_CSV_PATH = "outputs/labs_results.final.csv"
+FINAL_CSV_PATH = "/labs-parser-data/output/outputs/labs_results.final.csv"
 
 # Configure logger
 logger = logging.getLogger()
@@ -117,7 +117,7 @@ def plot_labs(csv_file, lab_name):
 
     # Save plot to a file
     image_name = slugify(lab_name)
-    plt.savefig(f"outputs/plots/plot_{image_name}.png")
+    plt.savefig(f"/labs-parser-data/output/outputs/plots/plot_{image_name}.png")
     plt.close()
 
 def normalize_values(values, value_range):
@@ -204,7 +204,7 @@ def plot_correlation(csv_file, lab_name1, lab_name2):
     plt.ylabel("Normalized Value")
     plt.grid(True)
     plt.legend()
-    plt.savefig(f"outputs/plot_{slugify(lab_name1)}_and_{slugify(lab_name2)}.png")
+    plt.savefig(f"/labs-parser-data/output/outputs/plot_{slugify(lab_name1)}_and_{slugify(lab_name2)}.png")
     plt.close()
 
 def get_labs_with_consistent_units():
@@ -216,23 +216,6 @@ def get_labs_with_consistent_units():
     consistent_lab_names = list(consistent_lab_names.keys())
     return consistent_lab_names
 
-labs = [
-    "Eritrograma - Eritrócitos",
-    "Leucograma - Leucócitos",
-    "Eritrograma - Velocidade de Sedimentação - 1a Hora",
-    "Fator Reumatoide / Teste RA",
-    "Hormona Tiro-Estimulante / TSH",
-    "Triiodotironina Livre / T3 Livre",
-    "Tiroxina Livre / T4 Livre",
-    "Triiodotironina Total / T3 Total",
-    "Vitamina D3 / 25-Hidroxicolecalciferol / Calcidiol", 
-    "Ferritina",
-    "Ferro",
-    "Tiroxina Total / T4 Total",
-    "Anticorpo Anti-Tiroglobulina / Tg",
-    "Anticorpo Anti-TPO (Peroxidase Tireoidiana) (IgG)",
-    ["Hormona Tiro-Estimulante / TSH", "Tiroxina Livre / T4 Livre"]
-]
 labs = get_labs_with_consistent_units()
 for lab in labs:
     if isinstance(lab, list): plot_correlation(FINAL_CSV_PATH, lab[0], lab[1])

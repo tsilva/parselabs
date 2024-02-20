@@ -281,13 +281,13 @@ def validate_processed_documents(pdf_paths):
         image_file_names = [pdf_file_name.replace(".pdf", f".{i+1:03}.jpg") for i in range(number_pages)]
         for image_file_name in image_file_names:
             # Check if image for page exists
-            image_file_path = os.path.join("cache/docs/pages/images", image_file_name)
+            image_file_path = os.path.join("/labs-parser-data/output/cache/docs/pages/images", image_file_name)
             if not os.path.exists(image_file_path): 
                 _log_error(f"Missing page image: {image_file_path}")
                 continue
 
             # Check if text for page exists
-            text_file_path = os.path.join("cache/docs/pages/texts", image_file_name.replace(".jpg", ".txt"))
+            text_file_path = os.path.join("/labs-parser-data/output/cache/docs/pages/texts", image_file_name.replace(".jpg", ".txt"))
             if not os.path.exists(text_file_path): 
                 _log_error(f"Missing page text: {text_file_path}")
                 continue
@@ -301,7 +301,7 @@ def validate_processed_documents(pdf_paths):
                 continue
 
             # Check if json for page exists
-            json_file_path = os.path.join("cache/docs/pages/jsons", image_file_name.replace(".jpg", ".json"))
+            json_file_path = os.path.join("/labs-parser-data/output/cache/docs/pages/jsons", image_file_name.replace(".jpg", ".json"))
             if not os.path.exists(json_file_path):
                 _log_error(f"Missing page json: {json_file_path}")
                 continue
@@ -312,7 +312,7 @@ def validate_processed_documents(pdf_paths):
         # then check if the final document json exists
         if not _errors:
             json_file_name = pdf_file_name.replace(".pdf", ".json")
-            json_file_path = os.path.join("cache/docs/jsons", json_file_name)
+            json_file_path = os.path.join("/labs-parser-data/output/cache/docs/jsons", json_file_name)
             if not os.path.exists(json_file_path): 
                 _log_error(f"Missing document json: {json_file_path}")
 
@@ -320,7 +320,7 @@ def validate_processed_documents(pdf_paths):
         if _errors: errors[pdf_path] = _errors
 
     # Ensure that the final json contains no duplicates
-    results = load_json("outputs/labs_results.final.json")
+    results = load_json("/labs-parser-data/output/outputs/labs_results.final.json")
     keys = {}
     for result in results:
         date = result["date"]
@@ -328,7 +328,7 @@ def validate_processed_documents(pdf_paths):
         key = f"{date}-{name}"
         if key in keys:
             message = f"Duplicate result '{key}' in {json_file_path}"
-            errors["outputs/labs_results.final.json"] = [message]
+            errors["/labs-parser-data/output/outputs/labs_results.final.json"] = [message]
             logging.error(message)
             continue
         keys[key] = True
@@ -340,110 +340,110 @@ def validate_processed_documents(pdf_paths):
 def process_documents():
     # Merge page jsons into document jsons
     logging.info("Merging page jsons into document jsons")
-    json_paths = load_paths("cache/docs/pages/jsons")
-    merge_page_jsons(json_paths, "cache/docs/jsons")
+    json_paths = load_paths("/labs-parser-data/output/cache/docs/pages/jsons")
+    merge_page_jsons(json_paths, "/labs-parser-data/output/cache/docs/jsons")
     logging.info("Merging page jsons into document jsons... DONE")
     
     # Merge document jsons into final json
     logging.info("Merging document jsons into final json")
-    json_paths = load_paths("cache/docs/jsons")
-    merge_document_jsons(json_paths, "outputs/labs_results.json")
+    json_paths = load_paths("/labs-parser-data/output/cache/docs/jsons")
+    merge_document_jsons(json_paths, "/labs-parser-data/output/outputs/labs_results.json")
     logging.info("Merging document jsons into final json... DONE")
 
     # Augment the merged labs
     logging.info("Augmenting merged labs")
-    json_paths = load_paths("cache/docs/jsons")
-    build_augmented_labs_results("outputs/labs_results.json", "outputs/labs_results.augmented.json")
+    json_paths = load_paths("/labs-parser-data/output/cache/docs/jsons")
+    build_augmented_labs_results("/labs-parser-data/output/outputs/labs_results.json", "/labs-parser-data/output/outputs/labs_results.augmented.json")
     logging.info("Augmenting merged labs... DONE")
     
     # Build the lab name mappings
     logging.info("Building lab name mappings")
-    build_lab_name_mappings("outputs/labs_results.augmented.json", "outputs/labs_results.mappings.json")
+    build_lab_name_mappings("/labs-parser-data/output/outputs/labs_results.augmented.json", "/labs-parser-data/output/outputs/labs_results.mappings.json")
     logging.info("Building lab name mappings... DONE")
 
     # Build the lab name invalid mappings
     logging.info("Building lab name invalid mappings")
-    build_lab_name_invalid_mappings("outputs/labs_results.mappings.json", "outputs/labs_results.invalid_mappings.json")
+    build_lab_name_invalid_mappings("/labs-parser-data/output/outputs/labs_results.mappings.json", "/labs-parser-data/output/outputs/labs_results.invalid_mappings.json")
     logging.info("Building lab name invalid mappings... DONE")
 
     # Build the final json file using augmentations
     logging.info("Building final json file")
-    build_final_labs_results("outputs/labs_results.augmented.json", "outputs/labs_results.final.json")
+    build_final_labs_results("/labs-parser-data/output/outputs/labs_results.augmented.json", "/labs-parser-data/output/outputs/labs_results.final.json")
     logging.info("Building final json file... DONE")
 
     # Save the final json file as csv
     logging.info("Saving final json file as CSV")
-    build_labs_csv("outputs/labs_results.final.json", "outputs/labs_results.final.csv")
+    build_labs_csv("/labs-parser-data/output/outputs/labs_results.final.json", "/labs-parser-data/output/outputs/labs_results.final.csv")
     logging.info("Saving final json file as CSV... DONE")
 
     # Build csv with latest lab results
     logging.info("Building latest results json file")
-    json_paths = load_paths("cache/docs/jsons")
-    build_latest_lab_results("outputs/labs_results.final.csv", "outputs/labs_results.latest.csv")
+    json_paths = load_paths("/labs-parser-data/output/cache/docs/jsons")
+    build_latest_lab_results("/labs-parser-data/output/outputs/labs_results.final.csv", "/labs-parser-data/output/outputs/labs_results.latest.csv")
     logging.info("Building latest results json file... DONE")
 
     return
 
     # Convert PDF to images (one per page)
     logging.info("Converting PDF to images")
-    pdf_paths = load_paths("inputs", lambda x: x.endswith(".pdf") and "analises" in x.lower() and "requisicao" not in x.lower())
-    for pdf_path in pdf_paths: convert_pdf_to_images(pdf_path, "cache/docs/pages/images")
+    pdf_paths = load_paths("/labs-parser-data/input/", lambda x: x.endswith(".pdf") and "analises" in x.lower() and "requisicao" not in x.lower())
+    for pdf_path in pdf_paths: convert_pdf_to_images(pdf_path, "/labs-parser-data/output/cache/docs/pages/images")
     logging.info("Converting PDF to images... DONE")
 
     # Transcribe page images to text
     logging.info("Transcribing page images to text")
-    image_paths = load_paths("cache/docs/pages/images", lambda x: x.endswith(".jpg") and "analises" in x.lower() and "requisicao" not in x.lower())
-    for image_path in image_paths: convert_image_to_text(image_path, f"cache/docs/pages/texts", validator=validate_lab_results_text_in_image)
+    image_paths = load_paths("/labs-parser-data/output/cache/docs/pages/images", lambda x: x.endswith(".jpg") and "analises" in x.lower() and "requisicao" not in x.lower())
+    for image_path in image_paths: convert_image_to_text(image_path, f"/labs-parser-data/output/cache/docs/pages/texts", validator=validate_lab_results_text_in_image)
     logging.info("Transcribing page images to text... DONE")
 
     # Parse page texts to json
     logging.info("Parsing page texts to json")
-    text_paths = load_paths("cache/docs/pages/texts", lambda x: x.endswith(".txt") and "analises" in x.lower() and "requisicao" not in x.lower())
-    for text_path in text_paths: convert_text_to_json(text_path, "cache/docs/pages/jsons")
+    text_paths = load_paths("/labs-parser-data/output/cache/docs/pages/texts", lambda x: x.endswith(".txt") and "analises" in x.lower() and "requisicao" not in x.lower())
+    for text_path in text_paths: convert_text_to_json(text_path, "/labs-parser-data/output/cache/docs/pages/jsons")
     logging.info("Parsing page texts to json... DONE")
 
     # Merge page jsons into document jsons
     logging.info("Merging page jsons into document jsons")
-    json_paths = load_paths("cache/docs/pages/jsons")
-    merge_page_jsons(json_paths, "cache/docs/jsons")
+    json_paths = load_paths("/labs-parser-data/output/cache/docs/pages/jsons")
+    merge_page_jsons(json_paths, "/labs-parser-data/output/cache/docs/jsons")
     logging.info("Merging page jsons into document jsons... DONE")
     
     # Merge document jsons into final json
     logging.info("Merging document jsons into final json")
-    json_paths = load_paths("cache/docs/jsons")
-    merge_document_jsons(json_paths, "outputs/labs_results.json")
+    json_paths = load_paths("/labs-parser-data/output/cache/docs/jsons")
+    merge_document_jsons(json_paths, "/labs-parser-data/output/outputs/labs_results.json")
     logging.info("Merging document jsons into final json... DONE")
 
     # Augment the merged labs
     logging.info("Augmenting merged labs")
-    json_paths = load_paths("cache/docs/jsons")
-    build_augmented_labs_results("outputs/labs_results.json", "outputs/labs_results.augmented.json")
+    json_paths = load_paths("/labs-parser-data/output/cache/docs/jsons")
+    build_augmented_labs_results("/labs-parser-data/output/outputs/labs_results.json", "/labs-parser-data/output/outputs/labs_results.augmented.json")
     logging.info("Augmenting merged labs... DONE")
     
     # Build the lab name mappings
     logging.info("Building lab name mappings")
-    build_lab_name_mappings("outputs/labs_results.augmented.json", "outputs/labs_results.mappings.json")
+    build_lab_name_mappings("/labs-parser-data/output/outputs/labs_results.augmented.json", "/labs-parser-data/output/outputs/labs_results.mappings.json")
     logging.info("Building lab name mappings... DONE")
 
     # Build the lab name invalid mappings
     logging.info("Building lab name invalid mappings")
-    build_lab_name_invalid_mappings("outputs/labs_results.mappings.json", "outputs/labs_results.invalid_mappings.json")
+    build_lab_name_invalid_mappings("/labs-parser-data/output/outputs/labs_results.mappings.json", "/labs-parser-data/output/outputs/labs_results.invalid_mappings.json")
     logging.info("Building lab name invalid mappings... DONE")
 
     # Build the final json file using augmentations
     logging.info("Building final json file")
-    build_final_labs_results("outputs/labs_results.augmented.json", "outputs/labs_results.final.json")
+    build_final_labs_results("/labs-parser-data/output/outputs/labs_results.augmented.json", "/labs-parser-data/output/outputs/labs_results.final.json")
     logging.info("Building final json file... DONE")
 
     # Save the final json file as csv
     logging.info("Saving final json file as CSV")
-    build_labs_csv("outputs/labs_results.final.json", "outputs/labs_results.final.csv")
+    build_labs_csv("/labs-parser-data/output/outputs/labs_results.final.json", "/labs-parser-data/output/outputs/labs_results.final.csv")
     logging.info("Saving final json file as CSV... DONE")
 
     # Build csv with latest lab results
     logging.info("Building latest results json file")
-    json_paths = load_paths("cache/docs/jsons")
-    build_latest_lab_results("outputs/labs_results.final.csv", "outputs/labs_results.latest.csv")
+    json_paths = load_paths("/labs-parser-data/output/cache/docs/jsons")
+    build_latest_lab_results("/labs-parser-data/output/outputs/labs_results.final.csv", "/labs-parser-data/output/outputs/labs_results.latest.csv")
     logging.info("Building latest results json file... DONE")
 
     # Validate that all documents were correctly processed

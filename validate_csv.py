@@ -1,4 +1,7 @@
+import os
 import pandas as pd
+
+FINAL_CSV_PATH = "/labs-parser-data/output/outputs/labs_results.final.csv"
 
 def identify_lab_names_with_different_units(file_path):
     # Load the CSV file into a DataFrame
@@ -20,6 +23,9 @@ def identify_lab_names_with_different_units(file_path):
     else:
         print("No labs with different units found.")
 
+if not os.path.exists(FINAL_CSV_PATH):
+    print(f"File not found: {FINAL_CSV_PATH}")
+    exit()
+
 # Replace 'your_file_path.csv' with the path to your actual CSV file
-file_path = 'outputs/labs_results.final.csv'
-identify_lab_names_with_different_units(file_path)
+identify_lab_names_with_different_units(FINAL_CSV_PATH)

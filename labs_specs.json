@@ -47,7 +47,7 @@
         "min": 0,
         "max": 20.0
       },
-      "U/mL": {
+      "UI/mL": {
         "min": 0,
         "max": 20.0
       }
@@ -57,7 +57,7 @@
     "name": "Anticorpo Anti-Gliadina (IgA)",
     "digest": "bedd6633b1f56a871a820c165da43e98",
     "units": {
-      "U/mL": {
+      "UI/mL": {
         "min": null,
         "max": 20.0
       },
@@ -75,7 +75,7 @@
     "name": "Anticorpo Anti-Gliadina (IgG)",
     "digest": "8c8a61a2fea81ab9ffdfd0a005ca9cb4",
     "units": {
-      "U/mL": {
+      "UI/mL": {
         "min": null,
         "max": 20.0
       },
@@ -97,17 +97,18 @@
     ],
     "digest": "bc9b89ce9e159bda8f2756d8655b3f4a",
     "units": {
-      "U/mL": {
+      "UI/mL": {
         "min": 0.4,
         "max": 1.5
       }
     }
   },
   {
-    "name": "Anticorpo Anti-TPO (Peroxidase Tireoidiana) (IgG)",
+    "name": "Anticorpo Anti-TPO (IgG)",
     "alternatives": [
       "Anti-Tireoperoxidase (TPO)",
       "Anti-TPO",
+      "Anticorpo Anti-TPO (Peroxidase Tireoidiana) (IgG)",
       "Anticorpo Anti-Microssomas",
       "Anticorpos Anti-Peroxidase",
       "Anticorpos Peroxidase Tirodeia (TPO) (IgG)",
@@ -125,7 +126,7 @@
     "name": "Anticorpo Anti-Transglutaminase (IgA)",
     "digest": "c343d56e068936ba81ad0cf0864d1221",
     "units": {
-      "U/mL": {
+      "UI/mL": {
         "min": 0.0,
         "max": 4.0
       },
@@ -142,7 +143,7 @@
   {
     "name": "Anticorpo Anti-Transglutaminase (IgG)",
     "units": {
-      "U/mL": {
+      "UI/mL": {
         "min": 0.0,
         "max": 10.0
       },
@@ -150,7 +151,7 @@
         "min": 5.0,
         "max": 30.0
       },
-      "U/L": {
+      "UI/L": {
         "min": 0.0,
         "max": 10.0
       }
@@ -183,7 +184,7 @@
       "Anticorpo Anti-Topoisomerase I"
     ],
     "units": {
-      "U/mL": {
+      "UI/mL": {
         "min": null,
         "max": 200.0
       },
@@ -208,11 +209,11 @@
         "min": 85.0,
         "max": 200.0
       },
-      "U/mL": {
+      "UI/mL": {
         "min": 85.0,
         "max": 200.0
       },
-      "IU/L": {
+      "UI/L": {
         "min": 200.0,
         "max": 400.0
       }
@@ -227,7 +228,7 @@
     "units": {
       "UI/mL": {
         "min": 0.0,
-        "max": 40
+        "max": 4.5
       }
     },
     "digest": "d0b7af0ca3893bce7aba5d65073ac302"
@@ -259,16 +260,8 @@
     },
     "units": {
       "ng/mL": {
-        "min": 4.6,
-        "max": 18.7
-      },
-      "µg/L": {
-        "min": 3.1,
-        "max": 17.5
-      },
-      "nmol/L": {
-        "min": 7.0,
-        "max": 45.0
+        "min": 5.38,
+        "max": 20
       }
     }
   },
@@ -291,26 +284,19 @@
     }
   },
   {
-    "name": "Alanina aminotransferase / ALT / GPT",
+    "name": "Alanina Aminotransferase (TGP)",
     "digest": "5cdf651a01d124970663de5324d8b463",
     "alternatives": [
       "ALT",
       "GPT",
       "TGP",
+      "Alanina aminotransferase / ALT / GPT",
       "Transaminase Glutâmico-Pirúvica (TGP)"
     ],
     "units": {
-      "U/L": {
-        "min": 7.0,
-        "max": 35.0
-      },
-      "IU/L": {
-        "min": 7.0,
-        "max": 56.0
-      },
-      "µkat/L": {
-        "min": 0.17,
-        "max": 0.68
+      "UI/L": {
+        "min": 10,
+        "max": 49
       }
     }
   },
@@ -393,11 +379,7 @@
     "name": "Amilase",
     "digest": "42c75d35405c1b61df2d36017ee30215",
     "units": {
-      "U/L": {
-        "min": 28.0,
-        "max": 100.0
-      },
-      "IU/L": {
+      "UI/L": {
         "min": 28.0,
         "max": 100.0
       },
@@ -486,33 +468,28 @@
     "digest": "3e7dabd8a9fee542ccc95e8b586cbafc"
   },
   {
-    "name": "Aspartato aminotransferase / AST / GOT",
+    "name": "Aspartato Aminotransferase (TGO)",
     "alternatives": [
       "AST",
       "TGO",
       "GOT",
       "AST/TGO",
+      "Aspartato aminotransferase / AST / GOT",
       "Transaminase Glutâmico-Oxalacética (TGO)"
     ],
     "units": {
-      "U/L": {
-        "min": 8.0,
-        "max": 40.0
-      },
-      "IU/L": {
-        "min": 8.0,
-        "max": 40.0
-      },
-      "µkat/L": {
-        "min": 0.17,
-        "max": 0.52
+      "UI/L": {
+        "min": null,
+        "max": 34
       }
     },
     "digest": "11b0b77dd3fc52dff1e5668cc92075cc"
   },
   {
-    "name": "Leucograma - Basófilos",
-    "digest": "f1add2733da5105e5d960984f42acbc1",
+    "name": "Basófilos",
+    "alternatives": [
+      "Leucograma - Basófilos"
+    ],
     "units": {
       "%": {
         "min": 0.0,
@@ -526,7 +503,8 @@
         "min": 0.0,
         "max": 200.0
       }
-    }
+    },
+    "digest": "c8d2856ef962e1a2e74f25a1f5b36c2b"
   },
   {
     "name": "Globulina Beta",
@@ -665,7 +643,7 @@
         "min": null,
         "max": null
       },
-      "U/mL": {
+      "UI/mL": {
         "min": 0.9,
         "max": null
       },
@@ -684,7 +662,7 @@
       "Anticorpo contra Peptídeos Cíclicos Citrulinados"
     ],
     "units": {
-      "U/mL": {
+      "UI/mL": {
         "min": 5.0,
         "max": null
       },
@@ -702,7 +680,7 @@
   {
     "name": "Anticorpo Anti-ADN",
     "units": {
-      "U/mL": {
+      "UI/mL": {
         "min": 0.0,
         "max": 10.0
       },
@@ -803,16 +781,8 @@
     ],
     "units": {
       "μg/dL": {
-        "min": 250.0,
-        "max": 450.0
-      },
-      "µmol/L": {
-        "min": 45.0,
-        "max": 72.0
-      },
-      "mg/dL": {
-        "min": 250.0,
-        "max": 450.0
+        "min": 313.0,
+        "max": 475.0
       }
     }
   },
@@ -857,11 +827,7 @@
     "name": "CK Total (Atividade Enzimática)",
     "digest": "37992437e18c57861c7cd0f5ab97683e",
     "units": {
-      "U/L": {
-        "min": 38.0,
-        "max": 174.0
-      },
-      "IU/L": {
+      "UI/L": {
         "min": 38.0,
         "max": 174.0
       },
@@ -897,16 +863,8 @@
     "digest": "00ba07369691a570d13bf6fe4e1a5595",
     "units": {
       "μg/dL": {
-        "min": 70.0,
+        "min": 80.0,
         "max": 155.0
-      },
-      "µmol/L": {
-        "min": 11.7,
-        "max": 24.4
-      },
-      "mg/dL": {
-        "min": 0.75,
-        "max": 1.5
       }
     }
   },
@@ -953,7 +911,7 @@
         "min": null,
         "max": null
       },
-      "IU/L": {
+      "UI/L": {
         "min": 10.0,
         "max": 1000.0
       }
@@ -1022,16 +980,8 @@
     "digest": "93001f5665118530844a164444c20735",
     "units": {
       "mg/dL": {
-        "min": 50.0,
-        "max": 60.0
-      },
-      "mmol/L": {
-        "min": 1.2,
-        "max": 1.7
-      },
-      "g/L": {
-        "min": 1.2,
-        "max": 1.6
+        "min": 60.0,
+        "max": null
       }
     }
   },
@@ -1059,14 +1009,6 @@
     "units": {
       "mg/dL": {
         "min": 125.0,
-        "max": 200.0
-      },
-      "mmol/L": {
-        "min": 3.6,
-        "max": 5.2
-      },
-      "mg/L": {
-        "min": 150.0,
         "max": 200.0
       }
     }
@@ -1212,7 +1154,7 @@
       "CA-19.9"
     ],
     "units": {
-      "U/mL": {
+      "UI/mL": {
         "min": null,
         "max": 37.0
       }
@@ -1222,17 +1164,13 @@
   {
     "name": "5-Nucleotidase",
     "units": {
-      "U/L": {
+      "UI/L": {
         "min": 4.3,
         "max": 10.3
       },
       "µkat/L": {
         "min": 0.63,
         "max": 2.3
-      },
-      "IU/L": {
-        "min": 4.3,
-        "max": 10.3
       }
     },
     "digest": "06a796a17ea42ece0e47c61b9f5645c0"
@@ -1273,15 +1211,7 @@
     "digest": "b704a0b5b2ac818f88f8f7a35e72cb00",
     "units": {
       "mg/dL": {
-        "min": 0.6,
-        "max": 1.1
-      },
-      "µmol/L": {
-        "min": 45.0,
-        "max": 97.0
-      },
-      "mg/L": {
-        "min": 0.6,
+        "min": 0.5,
         "max": 1.1
       }
     }
@@ -1455,8 +1385,10 @@
     }
   },
   {
-    "name": "Leucograma - Eosinófilos",
-    "digest": "760b751d06c6c26998c212beae6c4389",
+    "name": "Eosinófilos",
+    "alternatives": [
+      "Leucograma - Eosinófilos"
+    ],
     "units": {
       "%": {
         "min": 1.0,
@@ -1470,15 +1402,16 @@
         "min": 50.0,
         "max": 500.0
       }
-    }
+    },
+    "digest": "def98e2716d610fec640efc72874eab8"
   },
   {
-    "name": "Eritrograma - Eritrócitos",
-    "digest": "977d9df59473fa282f6ed57bd2517e1d",
+    "name": "Eritrócitos",
+    "digest": "8c4629903a62cd7595bc488ed1d8f40f",
     "alternatives": [
-      "Eritrócitos",
       "Hematócitos",
-      "Glóbulos Vermelhos"
+      "Glóbulos Vermelhos",
+      "Eritrograma - Eritrócitos"
     ],
     "prices": 10,
     "units": {
@@ -1573,7 +1506,7 @@
   {
     "name": "Anticorpo Anti-Cardiolipina (IgM)",
     "units": {
-      "U/mL": {
+      "UI/mL": {
         "min": null,
         "max": 10.0
       },
@@ -1591,7 +1524,7 @@
   {
     "name": "Anticorpo Anti-Cardiolipina (IgG)",
     "units": {
-      "U/mL": {
+      "UI/mL": {
         "min": null,
         "max": 40.0
       },
@@ -1612,7 +1545,7 @@
       "Anticorpo Anticitoplasma de Neutrófilos contra a Mieloperoxidase"
     ],
     "units": {
-      "U/mL": {
+      "UI/mL": {
         "min": 0.0,
         "max": 19.9
       },
@@ -1633,7 +1566,7 @@
       "c-ANCA"
     ],
     "units": {
-      "U/mL": {
+      "UI/mL": {
         "min": null,
         "max": 5.0
       },
@@ -1658,7 +1591,7 @@
         "min": null,
         "max": 3.0
       },
-      "U/mL": {
+      "UI/mL": {
         "min": null,
         "max": 20.0
       },
@@ -1771,14 +1704,6 @@
       "μg/dL": {
         "min": 50.0,
         "max": 170.0
-      },
-      "ng/mL": {
-        "min": 22.0,
-        "max": 184.0
-      },
-      "µmol/L": {
-        "min": 7.2,
-        "max": 25.9
       }
     }
   },
@@ -1786,11 +1711,7 @@
     "name": "Fosfatase Alcalina",
     "digest": "5c62b8ab1bdd78f71d4a5a1e6c356d82",
     "units": {
-      "U/L": {
-        "min": 35.0,
-        "max": 104.0
-      },
-      "IU/L": {
+      "UI/L": {
         "min": 35.0,
         "max": 104.0
       },
@@ -1837,13 +1758,14 @@
     }
   },
   {
-    "name": "Gama Glutamil-Transferase - GGT",
+    "name": "Gama Glutamil-Transferase",
     "alternatives": [
-      "GGT"
+      "GGT",
+      "Gama Glutamil-Transferase / GGT"
     ],
     "digest": "10d56474f56e8931d9cfaf60bc3a1110",
     "units": {
-      "U/L": {
+      "UI/L": {
         "min": 9.0,
         "max": 36.0
       }
@@ -1876,16 +1798,8 @@
     ],
     "units": {
       "mg/dL": {
-        "min": 70.0,
-        "max": 99.0
-      },
-      "mmol/L": {
-        "min": 3.9,
-        "max": 5.5
-      },
-      "mg/100mL": {
-        "min": 70.0,
-        "max": 99.0
+        "min": 60.0,
+        "max": 110.0
       }
     },
     "digest": "39d96affdd90be39b52d937c44fd19a2"
@@ -1991,9 +1905,10 @@
     }
   },
   {
-    "name": "Hemoglobina Glicada / HbA1C",
+    "name": "Hemoglobina Glicada (A1c)",
     "alternatives": [
-      "HbA1C"
+      "HbA1C",
+      "Hemoglobina Glicada / HbA1C"
     ],
     "digest": "db9d6611c139cd61c883894479836e6b",
     "units": {
@@ -2024,7 +1939,8 @@
     "digest": "80aef3a5ece83fa894dfc074adbd1025"
   },
   {
-    "name" : "Fezes - Pesquisa H Pylori"
+    "name": "Fezes - Pesquisa H Pylori",
+    "digest": "fafe42d9db1d7f5c23536b1206e31764"
   },
   {
     "name": "Urina - Cristais",
@@ -2390,17 +2306,9 @@
     "name": "Insulina",
     "digest": "872ef88982f2617a460a268b0918a4b6",
     "units": {
-      "µU/mL": {
-        "min": 2.6,
-        "max": 24.9
-      },
-      "pmol/L": {
-        "min": 3.0,
-        "max": 25.0
-      },
       "µIU/mL": {
-        "min": 2.6,
-        "max": 24.9
+        "min": 3,
+        "max": 25
       }
     }
   },
@@ -2432,11 +2340,7 @@
     ],
     "digest": "c151a1f0cac77ea0e36aa8b631ff3637",
     "units": {
-      "U/L": {
-        "min": 135.0,
-        "max": 214.0
-      },
-      "IU/L": {
+      "UI/L": {
         "min": 135.0,
         "max": 214.0
       },
@@ -2447,14 +2351,17 @@
     }
   },
   {
-    "name": "Leucograma - Leucócitos",
-    "digest": "e691c48f36f28a72bd8334a9cbe24c88",
+    "name": "Leucócitos",
+    "alternatives": [
+      "Leucograma - Leucócitos"
+    ],
     "units": {
       "10^9/L": {
         "min": 4,
         "max": 10
       }
-    }
+    },
+    "digest": "98578c0adb00bdb4539930eb87d9938c"
   },
   {
     "name": "Leucócitos (sedimento urinário)",
@@ -2475,8 +2382,10 @@
     }
   },
   {
-    "name": "Leucograma - Linfócitos",
-    "digest": "71e0c21f3184aa601f0c06f142599df1",
+    "name": "Linfócitos",
+    "alternatives": [
+      "Leucograma - Linfócitos"
+    ],
     "units": {
       "%": {
         "min": 20.0,
@@ -2490,7 +2399,8 @@
         "min": 1000.0,
         "max": 4800.0
       }
-    }
+    },
+    "digest": "27813225c3d2d31aca712d4dda0ddb3c"
   },
   {
     "name": "Lítio",
@@ -2525,7 +2435,7 @@
         "min": 2.4,
         "max": 12.6
       },
-      "U/L": {
+      "UI/L": {
         "min": 2.4,
         "max": 12.6
       }
@@ -2586,8 +2496,10 @@
     }
   },
   {
-    "name": "Leucograma - Monócitos",
-    "digest": "d34e9d666a1b317ee6eb393338eb2c55",
+    "name": "Monócitos",
+    "alternatives": [
+      "Leucograma - Monócitos"
+    ],
     "units": {
       "%": {
         "min": 2.0,
@@ -2601,11 +2513,14 @@
         "min": 200.0,
         "max": 800.0
       }
-    }
+    },
+    "digest": "1c06aa82df4ee8b90445704a129f5128"
   },
   {
-    "name": "Leucograma - Neutrófilos",
-    "digest": "988312d026f22b51cadb9db32c5e93d6",
+    "name": "Neutrófilos",
+    "alternatives": [
+      "Leucograma - Neutrófilos"
+    ],
     "units": {
       "%": {
         "min": 40.0,
@@ -2619,7 +2534,8 @@
         "min": 1500.0,
         "max": 7700.0
       }
-    }
+    },
+    "digest": "aa7734278f07605f0d264546c6af1bce"
   },
   {
     "name": "Plaquetas",
@@ -2894,14 +2810,6 @@
       "%": {
         "min": 20.0,
         "max": 50.0
-      },
-      "g/dL": {
-        "min": 20.0,
-        "max": 50.0
-      },
-      "mg/dL": {
-        "min": 20.0,
-        "max": 50.0
       }
     }
   },
@@ -2963,59 +2871,44 @@
     }
   },
   {
-    "name": "Triiodotironina Livre / T3 Livre",
+    "name": "T3 Livre",
     "alternatives": [
+      "Triiodotironina Livre / T3 Livre",
       "Triiodotironina Livre",
-      "T3 Livre",
       "FT3"
     ],
-    "digest": "28bf2c24383c85f7dc9ab6fb2e914734",
+    "digest": "6442291edb780fa5f5e9310af7291696",
     "units": {
-      "ng/dL": {
-        "min": 2.0,
-        "max": 4.4
-      },
-      "pmol/L": {
-        "min": 3.1,
-        "max": 6.8
-      },
       "pg/mL": {
         "min": 2.0,
-        "max": 4.4
+        "max": 4.2
       }
     }
   },
   {
-    "name": "Triiodotironina Total / T3 Total",
+    "name": "T3 Total",
     "alternatives": [
+      "Triiodotironina Total / T3 Total",
       "Triiodotironina Total",
-      "T3 Total",
       "T3"
     ],
-    "digest": "8e052908f1499a11362e3f8be4bfe009",
+    "digest": "4049b2c46193503b23604c7b5978de64",
     "units": {
       "ng/mL": {
-        "min": 0.8,
-        "max": 2.0
-      },
-      "ng/dL": {
-        "min": 80.0,
-        "max": 200.0
-      },
-      "μg/dL": {
-        "min": 0.8,
-        "max": 2.0
+        "min": 0.6,
+        "max": 1.81
       }
     }
   },
   {
-    "name": "Tiroxina Livre / T4 Livre",
+    "name": "T4 Livre",
     "alternatives": [
+      "Tiroxina Livre / T4 Livre",
       "Tiroxina Livre",
       "T4 Livre",
       "FT4"
     ],
-    "digest": "797aa35aaf1d4b92c4071c2adf0ff68d",
+    "digest": "453235f239e02e06ac13cc4a84892686",
     "units": {
       "ng/dL": {
         "min": 0.7,
@@ -3024,25 +2917,18 @@
     }
   },
   {
-    "name": "Tiroxina Total / T4 Total",
+    "name": "T4 Total",
     "alternatives": [
+      "Tiroxina Total / T4 Total",
       "Tiroxina Total",
       "T4 Total",
       "T4"
     ],
-    "digest": "ee0ed0f68f0dcb75f8fd669dd2a9f109",
+    "digest": "e8aae83358b40b6b0016c902518ea3a9",
     "units": {
       "μg/dL": {
         "min": 4.5,
-        "max": 12.0
-      },
-      "ng/dL": {
-        "min": 4.5,
-        "max": 12.0
-      },
-      "nmol/L": {
-        "min": 66.0,
-        "max": 181.0
+        "max": 10.9
       }
     }
   },
@@ -3174,23 +3060,15 @@
       "mg/dL": {
         "min": null,
         "max": 150.0
-      },
-      "mmol/L": {
-        "min": 0.0,
-        "max": 1.7
-      },
-      "µmol/L": {
-        "min": 0.56,
-        "max": 2.26
       }
     }
   },
   {
-    "name": "Hormona Tiro-Estimulante / TSH",
+    "name": "TSH",
     "alternatives": [
-      "TSH"
+      "Hormona Tiro-Estimulante / TSH"
     ],
-    "digest": "95354b11ce729f5ba52734e00f2e3f94",
+    "digest": "aa1aeb8da792a08776a9ce8af7fd5373",
     "units": {
       "mUI/L": {
         "min": 0.55,
@@ -3203,23 +3081,15 @@
     "digest": "5e4ebfae4f189b00faaf5662a14bdc27",
     "units": {
       "mg/dL": {
-        "min": 10.0,
-        "max": 50.0
-      },
-      "mmol/L": {
-        "min": 2.5,
-        "max": 7.1
-      },
-      "mg/24h": {
-        "min": null,
-        "max": 550.0
+        "min": 13.0,
+        "max": 45.0
       }
     }
   },
   {
-    "name": "Eritrograma - Velocidade de Sedimentação - 1a Hora",
+    "name": "Velocidade de Sedimentação - 1a Hora",
     "alternatives": [
-      "Velocidade de Sedimentação - 1a Hora",
+      "Eritrograma - Velocidade de Sedimentação - 1a Hora",
       "Método de Westergreen - 1a Hora",
       "VSG - 1a Hora",
       "Velocidade de Sedimentacao Globular - 1a Hora"
@@ -3230,11 +3100,12 @@
         "max": 20.0
       }
     },
-    "digest": "4b69823116764e394b90982284ec7f85"
+    "digest": "ef0ff0d7ae1e1789540dd1839ef10885"
   },
   {
-    "name": "Eritrograma - Velocidade de Sedimentação - 2a Hora",
+    "name": "Velocidade de Sedimentação - 2a Hora",
     "alternatives": [
+      "Eritrograma - Velocidade de Sedimentação - 2a Hora",
       "Método de Westergreen - 2a Hora",
       "VSG - 2a Hora",
       "Velocidade de Sedimentacao Globular - 2a Hora"
@@ -3245,12 +3116,13 @@
         "max": 30.0
       }
     },
-    "digest": "c3b00b44faf16e4868e542779e2d7ea5"
+    "digest": "fb436fa59d823fb76b91da260b80d862"
   },
   {
-    "name": "Eritrograma - Volume Corpuscular Médio / VCM",
+    "name": "Volume Corpuscular Médio",
     "alternatives": [
-      "VCM"
+      "VCM",
+      "Eritrograma - Volume Corpuscular Médio / VCM"
     ],
     "units": {
       "fL": {
@@ -3266,12 +3138,13 @@
         "max": 100.0
       }
     },
-    "digest": "8fcc88c1a764d3c8c5b8eacbb70fc536"
+    "digest": "1e8f0e4727f951c7668e1c2ce7ec536f"
   },
   {
-    "name": "Eritrograma - Hemoglobina Corpuscular Média / HCM",
+    "name": "Hemoglobina Corpuscular Média",
     "alternatives": [
-      "HCM"
+      "HCM",
+      "Eritrograma - Hemoglobina Corpuscular Média / HCM"
     ],
     "units": {
       "g/dL": {
@@ -3287,7 +3160,7 @@
         "max": 34.0
       }
     },
-    "digest": "1b80ef650edc27cb6998ab5544fe43df"
+    "digest": "989f76375678970602e695a2c660fb97"
   },
   {
     "name": "Vitamina A",
@@ -3326,23 +3199,14 @@
     "name": "Vitamina B12",
     "alternatives": [
       "Vitamina B12 / Cianocobalamina",
-      "Vitamina B12",
       "Cianocobalamina"
     ],
     "digest": "ea6ebf6592796e2e8122dd18cf64cf3e",
     "fasting_hours": 8,
     "units": {
       "pg/mL": {
-        "min": 200.0,
-        "max": 900.0
-      },
-      "ng/L": {
-        "min": 200.0,
-        "max": 900.0
-      },
-      "pmol/L": {
-        "min": 156.0,
-        "max": 672.0
+        "min": 246.0,
+        "max": 911.0
       }
     }
   },
@@ -3352,15 +3216,7 @@
     "units": {
       "ng/mL": {
         "min": 5.0,
-        "max": 50.0
-      },
-      "µg/L": {
-        "min": 5.0,
-        "max": 50.0
-      },
-      "nmol/L": {
-        "min": 20.0,
-        "max": 125.0
+        "max": 30.0
       }
     }
   },
@@ -3393,15 +3249,7 @@
     "units": {
       "ng/mL": {
         "min": 30.0,
-        "max": 100.0
-      },
-      "nmol/L": {
-        "min": 50.0,
-        "max": 125.0
-      },
-      "µg/L": {
-        "min": 50.0,
-        "max": 125.0
+        "max": 80.0
       }
     },
     "digest": "8d8eb4ef107a25c2f5bd7bdb036cf30c"
@@ -3555,14 +3403,6 @@
       "μg/dL": {
         "min": 70.0,
         "max": 120.0
-      },
-      "µmol/L": {
-        "min": 10.7,
-        "max": 18.2
-      },
-      "mg/L": {
-        "min": null,
-        "max": 18.2
       }
     }
   },
@@ -3584,7 +3424,10 @@
       }
     }
   },
-  {"name" : "Urina - Exame bacteriológico"},
+  {
+    "name": "Urina - Exame bacteriológico",
+    "digest": "a8f8311da79b9422fa4111a62c66f8ff"
+  },
   {
     "name": "Urina - pH",
     "digest": "64b120fd5a5830cc9deb56d686398d1e",

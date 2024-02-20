@@ -2,6 +2,10 @@
 
 Scripts to extract data from health lab reports (portuguese)
 
+`python build_embeddings_cache.py`
+
+`python augment_lab_specs.py`
+
 # TODO
 
 - Fix invalid lab spec mappings

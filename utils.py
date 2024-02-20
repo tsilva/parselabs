@@ -14,7 +14,7 @@ from slugify import slugify
 load_dotenv()
 
 LAB_SPECS_FILE_NAME = "labs_specs.json"
-CACHE_EMBEDDINGS_DIR = "cache/embeddings"
+CACHE_EMBEDDINGS_DIR = "/labs-parser-data/output/cache/embeddings"
 OPENAI_CLIENT = OpenAI()
 
 def load_labs_specs():
@@ -219,7 +219,7 @@ def augment_lab_result(result):
     result["_within_lab_spec_range"] = result_value_within_lab_spec_range
     result["_lab_spec"] = lab_spec
 
-def generate_lab_spec_names_embeddings_cache():
+def build_lab_spec_names_embeddings_cache():
     # Ensure that the lab name digests are up to date
     specs = load_json("labs_specs.json")
     for spec in specs:
