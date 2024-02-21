@@ -14,6 +14,18 @@ FINAL_CSV_PATH = "/labs-parser-data/output/outputs/labs_results.final.csv"
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+def find_global_date_range(csv_file):
+    min_date, max_date = None, None
+    with open(csv_file, 'r') as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            date = datetime.strptime(row['date'], '%Y-%m-%d')
+            if min_date is None or date < min_date:
+                min_date = date
+            if max_date is None or date > max_date:
+                max_date = date
+    return min_date, max_date
+
 def get_lab_names(csv_file):
     lab_names = set()
     with open(csv_file, 'r') as file:
@@ -36,7 +48,7 @@ def moving_average(values, window_size):
 
     return averages
 
-def plot_labs(csv_file, lab_name):
+def plot_labs(csv_file, lab_name, min_date, max_date):
     dates = []
     values = []
     unit = None
@@ -113,7 +125,9 @@ def plot_labs(csv_file, lab_name):
     plt.xlabel('Date')
     plt.ylabel(f"Value ({unit})")
     plt.grid(True)
+    plt.xlim(min_date, max_date)
     plt.legend()
+    plt.tight_layout()
 
     # Save plot to a file
     image_name = slugify(lab_name)
@@ -166,7 +180,7 @@ def interpolate_missing_dates(dates, values, all_dates):
 
     return interpolated_values
 
-def plot_correlation(csv_file, lab_name1, lab_name2):
+def plot_correlation(csv_file, lab_name1, lab_name2, min_date, max_date):
     # Load data
     data = {lab_name1: {'dates': [], 'values': [], "unit" : None}, lab_name2: {'dates': [], 'values': [], "unit" : None}}
     with open(csv_file, 'r') as file:
@@ -204,11 +218,14 @@ def plot_correlation(csv_file, lab_name1, lab_name2):
     plt.ylabel("Normalized Value")
     plt.grid(True)
     plt.legend()
+    plt.xlim(min_date, max_date)
+    plt.tight_layout()
+
     plt.savefig(f"/labs-parser-data/output/outputs/plot_{slugify(lab_name1)}_and_{slugify(lab_name2)}.png")
     plt.close()
 
 def get_labs_with_consistent_units():
-    df = pd.read_csv('outputs/labs_results.final.csv')
+    df = pd.read_csv('/labs-parser-data/output/outputs/labs_results.final.csv')
     consistent_lab_names = {}
     for lab_name, group in df.groupby('name'):
         unique_units = group['unit'].unique()
@@ -216,7 +233,8 @@ def get_labs_with_consistent_units():
     consistent_lab_names = list(consistent_lab_names.keys())
     return consistent_lab_names
 
+global_min_date, global_max_date = find_global_date_range(FINAL_CSV_PATH)
 labs = get_labs_with_consistent_units()
 for lab in labs:
-    if isinstance(lab, list): plot_correlation(FINAL_CSV_PATH, lab[0], lab[1])
-    else: plot_labs(FINAL_CSV_PATH, lab)
+    if isinstance(lab, list): plot_correlation(FINAL_CSV_PATH, lab[0], lab[1], global_min_date, global_max_date)
+    else: plot_labs(FINAL_CSV_PATH, lab, global_min_date, global_max_date)

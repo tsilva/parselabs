@@ -114,7 +114,7 @@
       "Anticorpos Peroxidase Tirodeia (TPO) (IgG)",
       "Anticorpos Anti-Peroxidase Microssomal (TPO)"
     ],
-    "digest": "f8cee53bb81d19f81feac3a916733920",
+    "digest": "1477cd6813dc6110203117f384aa5198",
     "units": {
       "UI/mL": {
         "min": 0.0,
@@ -221,17 +221,19 @@
     "digest": "52cd2154fd3f563f41ed30393b96b57a"
   },
   {
-    "name": "Anticorpo Anti-Tiroglobulina / Tg",
+    "name": "Anticorpo Anti-Tiroglobulina",
     "alternatives": [
-      "Anticorpo Triglobulina (IgG)"
+      "Anticorpo Anti-Tiroglobulina / Tg",
+      "Anticorpo Triglobulina (IgG)",
+      "Ac. Triglobulina IgG"
     ],
     "units": {
       "UI/mL": {
         "min": 0.0,
-        "max": 4.5
+        "max": 40
       }
     },
-    "digest": "d0b7af0ca3893bce7aba5d65073ac302"
+    "digest": "d6969c79b3b5268cc1557e8f285defe2"
   },
   {
     "name": "Ácido Ascórbico",
@@ -285,11 +287,14 @@
   },
   {
     "name": "Alanina Aminotransferase (TGP)",
-    "digest": "5cdf651a01d124970663de5324d8b463",
+    "digest": "e09292def82c000dc898acfb9843bb55",
     "alternatives": [
       "ALT",
       "GPT",
       "TGP",
+      "TRANS.GLUTAM.PIRUVICA",
+      "TRANS.GLUT.PIRUVICA",
+      "TRANS. GLUTAM. PIRUVICA",
       "Alanina aminotransferase / ALT / GPT",
       "Transaminase Glutâmico-Pirúvica (TGP)"
     ],
@@ -409,61 +414,81 @@
   },
   {
     "name": "Eritrograma - Anisocitose",
+    "alternatives": [
+      "Anisocitose"
+    ],
     "units": {
-      "%": {
-        "min": 11.5,
-        "max": 14.5
-      },
-      "fL": {},
-      "pg": {}
+      "boolean": {
+        "min": 0,
+        "max": 0
+      }
     },
     "digest": "c7307506e21c6f34bdc1a0fea4d566fd"
   },
   {
     "name": "Eritrograma - Anisocromia",
+    "alternatives": [
+      "Anisocromia"
+    ],
     "units": {
-      "%": {},
-      "g/dL": {},
-      "pg": {}
+      "boolean": {
+        "min": 0,
+        "max": 0
+      }
     },
     "digest": "eacc68d5df595fa31a22563dda944b58"
   },
   {
     "name": "Eritrograma - Microcitose",
+    "alternatives": [
+      "Microcitose"
+    ],
     "units": {
-      "%": {},
-      "pg": {},
-      "g/dL": {}
+      "boolean": {
+        "min": 0,
+        "max": 0
+      }
     },
     "digest": "b72e30da97a94ef06494a243ac6cfefe"
   },
   {
     "name": "Eritrograma - Hipocromia",
+    "alternatives": [
+      "Hipocromia",
+      "Eritrograma - Eritrócitos hipocrómicos"
+    ],
     "units": {
-      "%": {},
-      "g/dL": {},
-      "pg": {}
+      "boolean": {
+        "min": 0,
+        "max": 0
+      }
     },
     "digest": "73d79c9b7360e44b4925d1a73031a534"
   },
   {
     "name": "Eritrograma - Esquizocitose",
+    "alternatives": [
+      "Esquizocitose",
+      "Eritograma - Eritrocitos Esquizociticos"
+    ],
     "units": {
-      "%": {
-        "min": 0.0,
-        "max": 2.0
-      },
-      "fL": {},
-      "pg": {}
+      "boolean": {
+        "min": 0,
+        "max": 0
+      }
     },
     "digest": "409389bc015225ab72e57e903d605476"
   },
   {
     "name": "Eritrograma - Eliptocitose",
+    "alternatives": [
+      "Eliptocitose"
+    ],
     "units": {
-      "%": {},
-      "fL": {},
-      "pg": {}
+      "boolean": {
+        "min": 0,
+        "max": 0
+      }
     },
     "digest": "3e7dabd8a9fee542ccc95e8b586cbafc"
   },
@@ -483,25 +508,18 @@
         "max": 34
       }
     },
-    "digest": "11b0b77dd3fc52dff1e5668cc92075cc"
+    "digest": "20ac344c543b001d5af39f8018727ad2"
   },
   {
     "name": "Basófilos",
     "alternatives": [
+      "Gran.Basofinilos",
       "Leucograma - Basófilos"
     ],
     "units": {
       "%": {
         "min": 0.0,
         "max": 2.0
-      },
-      "células/µL": {
-        "min": 0.0,
-        "max": 200.0
-      },
-      "células/mm³": {
-        "min": 0.0,
-        "max": 200.0
       }
     },
     "digest": "c8d2856ef962e1a2e74f25a1f5b36c2b"
@@ -607,15 +625,7 @@
     "units": {
       "mg/dL": {
         "min": 0.0,
-        "max": 0.3
-      },
-      "µmol/L": {
-        "min": 0.0,
-        "max": 6.8
-      },
-      "µmol/dL": {
-        "min": 0.0,
-        "max": 6.8
+        "max": 1.0
       }
     },
     "digest": "7a0b7477909f70fd29a1ef7bfcf36a75"
@@ -680,10 +690,6 @@
   {
     "name": "Anticorpo Anti-ADN",
     "units": {
-      "UI/mL": {
-        "min": 0.0,
-        "max": 10.0
-      },
       "UI/mL": {
         "min": 0.0,
         "max": 200.0
@@ -1077,8 +1083,10 @@
     "digest": "c7249a53118c4c68a067378bcd18ddb9"
   },
   {
-    "name": "Eritrograma - Macrócitos",
-    "digest": "656b51cefdfcb7a64ddbcc5d3b0ad19d",
+    "name": "Macrócitos",
+    "alternatives": [
+      "Eritrograma - Macrócitos"
+    ],
     "units": {
       "fL": {
         "min": 80.0,
@@ -1092,7 +1100,8 @@
         "min": 80.0,
         "max": 100.0
       }
-    }
+    },
+    "digest": "6a1e5b38bb212b36a3aeb04bbab904aa"
   },
   {
     "name": "Gama Globulina",
@@ -1391,16 +1400,8 @@
     ],
     "units": {
       "%": {
-        "min": 1.0,
+        "min": 1,
         "max": 6.0
-      },
-      "células/µL": {
-        "min": 50.0,
-        "max": 500.0
-      },
-      "células/mm³": {
-        "min": 50.0,
-        "max": 500.0
       }
     },
     "digest": "def98e2716d610fec640efc72874eab8"
@@ -1422,38 +1423,15 @@
     }
   },
   {
-    "name": "Eritrograma - Eritrócitos hipercrómicos",
-    "digest": "4a6ea11d9ddd8b2271c0c3de238d51ac",
+    "name": "Eritrograma - Hipercromia",
+    "alternatives": [
+      "Eritrograma - Eritrócitos hipercrómicos"
+    ],
+    "digest": "f8bc9cb5107367ac9f248d7811834f66",
     "units": {
-      "fL": {
-        "min": null,
-        "max": null
-      },
-      "pg": {
-        "min": null,
-        "max": null
-      },
-      "g/dL": {
-        "min": null,
-        "max": null
-      }
-    }
-  },
-  {
-    "name": "Eritrograma - Eritrócitos hipocrómicos",
-    "digest": "b5d2193dd2d1b796d54cdd7241214a02",
-    "units": {
-      "10^6/µL": {
-        "min": null,
-        "max": null
-      },
-      "g/dL": {
-        "min": null,
-        "max": 2.0
-      },
-      "pg": {
-        "min": null,
-        "max": 28.0
+      "boolean": {
+        "min": 0,
+        "max": 0
       }
     }
   },
@@ -1608,9 +1586,9 @@
       "Reaccao de Waaler-Rose"
     ],
     "units": {
-      "mm/h": {
-        "min": null,
-        "max": 20.0
+      "boolean": {
+        "min": 0,
+        "max": 0
       }
     },
     "digest": "bbb8720213da1f577586f67f4da15ea0"
@@ -1652,10 +1630,12 @@
     "digest": "dfe9618822b297f0d801011edf8dee0a"
   },
   {
-    "name": "Fator Reumatoide / Teste RA",
+    "name": "Fator Reumatoide",
     "alternatives": [
       "Fator Reumatoide",
-      "R.A. Teste"
+      "Fator Reumatoide / Teste RA",
+      "R.A. Teste",
+      "R.A. TESTE"
     ],
     "units": {
       "UI/mL": {
@@ -1663,7 +1643,7 @@
         "max": 14.0
       }
     },
-    "digest": "3fbb42f8cfad385021823aa6d85e14c6"
+    "digest": "ae425f2064fc502feffc7766943a285c"
   },
   {
     "name": "Cortisol Urinário Livre",
@@ -1689,7 +1669,7 @@
     "price": 31,
     "units": {
       "ng/mL": {
-        "min": 10,
+        "min": 30,
         "max": 291
       }
     }
@@ -1763,7 +1743,7 @@
       "GGT",
       "Gama Glutamil-Transferase / GGT"
     ],
-    "digest": "10d56474f56e8931d9cfaf60bc3a1110",
+    "digest": "303ce8e37a360d0cf51764d8717c6240",
     "units": {
       "UI/L": {
         "min": 9.0,
@@ -1884,10 +1864,11 @@
     }
   },
   {
-    "name": "Eritrograma - Hemoglobina / Hb",
-    "digest": "10bb85ae4d365038bdbcfa4d678ed442",
+    "name": "Hemoglobina",
+    "digest": "77cd344f52ad8bf18e57bec6a8dff0bf",
     "alternatives": [
-      "Hemoglobina"
+      "Hemoglobina",
+      "Eritrograma - Hemoglobina / Hb"
     ],
     "units": {
       "g/dL": {
@@ -1910,7 +1891,7 @@
       "HbA1C",
       "Hemoglobina Glicada / HbA1C"
     ],
-    "digest": "db9d6611c139cd61c883894479836e6b",
+    "digest": "74fb604e3b9324593401072c0557bc2d",
     "units": {
       "%": {
         "min": 4.0,
@@ -2242,26 +2223,19 @@
     }
   },
   {
-    "name": "Eritrograma - Índice de Distribuição dos Eritrócitos - RDW",
+    "name": "RDW",
     "alternatives": [
+      "RDW",
       "Indice dispersao rubros",
-      "RDW"
+      "Eritrograma - Índice de Distribuição dos Eritrócitos - RDW"
     ],
     "units": {
       "%": {
         "min": 11.5,
         "max": 14.5
-      },
-      "fl": {
-        "min": 11.5,
-        "max": 14.5
-      },
-      "pg": {
-        "min": null,
-        "max": null
       }
     },
-    "digest": "a662f24376d8c3ba48532c821f135b95"
+    "digest": "4559adfc323e82f49c24a5496859abc4"
   },
   {
     "name": "Eritrograma - Índice de Distribuição Plaquetária - PDW",
@@ -2390,14 +2364,6 @@
       "%": {
         "min": 20.0,
         "max": 40.0
-      },
-      "células/µL": {
-        "min": 1000.0,
-        "max": 4800.0
-      },
-      "células/mm³": {
-        "min": 1000.0,
-        "max": 4800.0
       }
     },
     "digest": "27813225c3d2d31aca712d4dda0ddb3c"
@@ -2504,14 +2470,6 @@
       "%": {
         "min": 2.0,
         "max": 10.0
-      },
-      "células/µL": {
-        "min": 200.0,
-        "max": 950.0
-      },
-      "células/mm³": {
-        "min": 200.0,
-        "max": 800.0
       }
     },
     "digest": "1c06aa82df4ee8b90445704a129f5128"
@@ -2524,15 +2482,7 @@
     "units": {
       "%": {
         "min": 40.0,
-        "max": 75.0
-      },
-      "células/µL": {
-        "min": 1500.0,
-        "max": 7700.0
-      },
-      "células/mm³": {
-        "min": 1500.0,
-        "max": 7700.0
+        "max": 80.0
       }
     },
     "digest": "aa7734278f07605f0d264546c6af1bce"
