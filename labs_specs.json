@@ -441,7 +441,8 @@
   {
     "name": "Eritrograma - Microcitose",
     "alternatives": [
-      "Microcitose"
+      "Microcitose",
+      "Eritograma - Eritrocitos Microcitos"
     ],
     "units": {
       "boolean": {
