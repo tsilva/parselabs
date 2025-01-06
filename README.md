@@ -1,4 +1,6 @@
-# uprise-hackathon-2024
+# labs-parser
+
+[Logo](logo.jpg)
 
 ## Installation
 

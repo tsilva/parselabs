@@ -1,4 +1,4 @@
-name: uprise-hackathon-2024
+name: labs-parser
 channels:
   - conda-forge
   - defaults
