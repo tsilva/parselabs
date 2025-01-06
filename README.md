@@ -1,25 +1,21 @@
-# labs-parser
+# uprise-hackathon-2024
 
-Scripts to extract data from health lab reports (portuguese)
+## Installation
 
-`python build_embeddings_cache.py`
+To set up the conda environment using the `environment.yml` file, run the following command:
 
-`python augment_lab_specs.py`
+```sh
+conda env create -f environment.yml
+```
 
-# TODO
+This will create a new conda environment with all the dependencies specified in the `environment.yml` file.
 
-- Fix invalid lab spec mappings
-- Fix invalid lab spec ranges
-- Change lab names to match selfdecode's
-- Dont use LLM for pairing lab specs when there is an exact match (remove dots)
-- Validate inconsistencies (check explanations)
-- Check for json pages with [] that dont belong to pages with n/a
-- Search for two entries with the same name in a row and delete the second one
-- Confirm that dates in files match file name
+## Updating the Environment
 
-# Validados manualmente
+If you need to update the conda environment with any changes made to the `environment.yml` file, run:
 
-- TSH
-- T4 Livre
-- Anti-Tireoglobulina
-- Anti-TPO
+```sh
+conda env update --file environment.yml --prune
+```
+
+The `--prune` flag will remove any dependencies that are no longer required.

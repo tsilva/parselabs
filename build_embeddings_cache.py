@@ -1,3 +1,0 @@
-from utils import build_lab_spec_names_embeddings_cache
-
-build_lab_spec_names_embeddings_cache()

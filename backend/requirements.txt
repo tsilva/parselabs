@@ -1,9 +1,0 @@
-numpy
-PyPDF2
-openai
-Pillow
-pandas
-pdf2image
-matplotlib
-python-dotenv
-python-slugify

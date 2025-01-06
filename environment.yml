@@ -1,0 +1,17 @@
+name: uprise-hackathon-2024
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - pip
+  - anthropic
+  - pandas
+  - langchain
+  - langchain-core
+  - langchain-openai
+  - python-dotenv
+  - poppler
+  - pdf2image
+  - matplotlib
+  - seaborn
