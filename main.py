@@ -115,7 +115,7 @@ Para testes sem um limite máximo especificado, use 9999.""",
     }
 ]
 
-def hash_file(file_path, length = 4):
+def hash_file(file_path, length=4):
     """Calculate MD5 hash of a file"""
     hash_md5 = hashlib.md5()
     with open(file_path, "rb") as f:
@@ -125,7 +125,7 @@ def hash_file(file_path, length = 4):
     short_hash = full_hash[:length]
     return short_hash
 
-def optimize_image(image):
+def preprocess_page_image(image):
     """Optimize image by converting to grayscale, resizing if needed, and quantizing"""
     # Convert to grayscale
     gray_image = image.convert('L')
@@ -153,14 +153,14 @@ def extract_pdf_pages(pdf_path):
     
     for i, image in enumerate(images, start=1):
         # Optimize image before saving
-        optimized = optimize_image(image)
+        processed_image = preprocess_page_image(image)
         image_path = output_dir / f"{base_name}.{i:03d}.jpg"  # Changed extension to jpg
-        optimized.save(image_path, "JPEG", quality=80)  # Save as JPEG with 80% quality
+        processed_image.save(image_path, "JPEG", quality=80)  # Save as JPEG with 80% quality
         image_paths.append(image_path)
     
     return image_paths
 
-def process_image(image_path, client):
+def parse_labs_from_page_image(image_path, client):
     """Process a single image with Claude"""
     with open(image_path, "rb") as img_file:
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
@@ -194,34 +194,6 @@ def process_image(image_path, client):
         for result in results: labs.append(result)
     return labs
 
-def process_pdf(pdf_path, client):
-    """Process a PDF file and extract lab results"""
-    # Extract pages as images
-    image_paths = extract_pdf_pages(pdf_path)
-    logger.info(f"Split PDF into {len(image_paths)} pages")
-
-    # Process each page
-    all_labs = []
-    for img_path in image_paths:
-        logger.info(f"Processing {img_path}")
-        labs = process_image(img_path, client)
-        df = pd.DataFrame(labs)
-        
-        # Save CSV in same directory as the source PDF
-        csv_path = img_path.with_suffix('.csv')
-        df.to_csv(csv_path, index=False, sep=';')
-        logger.info(f"Saved page results to {csv_path}")
-        all_labs.extend(labs)
-
-    # Create aggregated results file in the same subfolder
-    if all_labs:
-        df = pd.DataFrame(all_labs)
-        csv_path = pdf_path.with_suffix('.csv')
-        df.to_csv(csv_path, index=False, sep=';')
-        logger.info(f"Saved aggregated results to {csv_path}")
-    
-    return all_labs
-
 def create_lab_test_plot(df_test, lab_name, output_dir):
     """Create a time series plot for a specific lab test"""
     plt.figure(figsize=(10, 6))
@@ -247,41 +219,6 @@ def plot_labs_from_csv(input_path):
         logger.info(f"Processing {lab_name}")
         df_test = df[df['lab_name'] == lab_name]
         create_lab_test_plot(df_test, lab_name, PLOTS_DIR)
-
-def stage_copy_pdfs():
-    """Stage 1: Copy PDFs to hash-based directories"""
-    pdf_files = [f for f in SOURCE_PATH.glob("*.pdf") if "analises" in f.name.lower()]
-    copied_paths = []
-    
-    logger.info("Stage 1: Copying PDFs to destination directories")
-    for pdf_file in pdf_files:
-        short_hash = hash_file(pdf_file)
-        
-        # Create hash-based directory name with original filename
-        dir_name = f"[{short_hash}]-{pdf_file.stem}"  # Changed format to use square brackets
-        hash_dir = DESTINATION_PATH / dir_name
-        hash_dir.mkdir(exist_ok=True)
-        
-        # New PDF path
-        new_pdf_path = hash_dir / f"{dir_name}.pdf"
-        
-        # Copy file if it doesn't exist
-        if not new_pdf_path.exists():
-            from shutil import copy2
-            copy2(pdf_file, new_pdf_path)
-            logger.info(f"Copied {pdf_file.name} to {new_pdf_path}")
-        
-        copied_paths.append(new_pdf_path)
-        logger.info(f"Prepared {new_pdf_path}")
-    
-    return copied_paths
-
-def stage_process_pdfs(pdf_paths, client):
-    """Stage 2: Process copied PDFs"""
-    logger.info("Stage 2: Processing PDFs")
-    for pdf_path in pdf_paths:
-        logger.info(f"Processing {pdf_path}")
-        results = process_pdf(pdf_path, client)
 
 @dataclass
 class PipelineConfig:
@@ -309,10 +246,34 @@ class StepCopyPDFs(PipelineStep):
     """Step 1: Copy PDFs to destination"""
     def execute(self, data: dict) -> dict:
         self.logger.info("Stage 1: Copying PDFs to destination directories")
-        copied_paths = stage_copy_pdfs()
+
+        pdf_files = [f for f in SOURCE_PATH.glob("*.pdf") if "analises" in f.name.lower()]
+        copied_paths = []
+        
+        logger.info("Stage 1: Copying PDFs to destination directories")
+        for pdf_file in pdf_files:
+            short_hash = hash_file(pdf_file)
+            
+            # Create hash-based directory name with original filename
+            dir_name = f"[{short_hash}]-{pdf_file.stem}"  # Changed format to use square brackets
+            hash_dir = DESTINATION_PATH / dir_name
+            hash_dir.mkdir(exist_ok=True)
+            
+            # New PDF path
+            new_pdf_path = hash_dir / f"{dir_name}.pdf"
+            
+            # Copy file if it doesn't exist
+            if not new_pdf_path.exists():
+                from shutil import copy2
+                copy2(pdf_file, new_pdf_path)
+                logger.info(f"Copied {pdf_file.name} to {new_pdf_path}")
+            
+            copied_paths.append(new_pdf_path)
+            logger.info(f"Prepared {new_pdf_path}")
+        
         return {"pdf_paths": copied_paths}
 
-def extract_single_pdf(args):
+def _StepExtractPages_worker_fn(args):
     """Extract pages from a single PDF with error handling"""
     logger = logging.getLogger(f"{__name__}.extract_single_pdf")
     pdf_path, = args
@@ -323,7 +284,7 @@ def extract_single_pdf(args):
         image_paths = []
         
         for i, image in enumerate(images, start=1):
-            optimized = optimize_image(image)
+            optimized = preprocess_page_image(image)
             image_path = output_dir / f"{base_name}.{i:03d}.jpg"
             optimized.save(image_path, "JPEG", quality=80)
             image_paths.append(image_path)
@@ -338,6 +299,7 @@ class StepExtractPages(PipelineStep):
     """Step 2: Extract pages from PDFs as images"""
 
     def execute(self, data: dict) -> dict:
+
         self.logger.info("Stage 2: Extracting PDF pages")
         pdf_paths = data["pdf_paths"]
         
@@ -349,17 +311,10 @@ class StepExtractPages(PipelineStep):
         n_workers = min(n_workers, len(pdf_paths))
         
         all_image_paths = []
-        if n_workers > 1:
-            self.logger.info(f"Extracting pages from {len(pdf_paths)} PDFs using {n_workers} workers")
-            with Pool(n_workers) as pool:
-                results = pool.map(extract_single_pdf, args)
-                for paths in results:
-                    all_image_paths.extend(paths)
-        else:
-            self.logger.info("Extracting pages sequentially")
-            for args in args:
-                paths = extract_single_pdf(args)
-                all_image_paths.extend(paths)
+        self.logger.info(f"Extracting pages from {len(pdf_paths)} PDFs using {n_workers} workers")
+        with Pool(n_workers) as pool:
+            results = pool.map(_StepExtractPages_worker_fn, args)
+            for paths in results: all_image_paths.extend(paths)
         
         self.logger.info(f"Total pages extracted: {len(all_image_paths)}")
         return {
@@ -367,10 +322,27 @@ class StepExtractPages(PipelineStep):
             "image_paths": all_image_paths
         }
 
+def _StepProcessImages_worker_fn(args):
+    """Process a single page with error handling"""
+    image_path, client_key = args
+    try:
+        logger.info(f"Processing {image_path}")
+        client = anthropic.Anthropic(api_key=client_key)
+        labs = parse_labs_from_page_image(image_path, client)
+        df = pd.DataFrame(labs)
+        csv_path = image_path.with_suffix('.csv')
+        df.to_csv(csv_path, index=False, sep=';')
+        logger.info(f"Saved page results to {csv_path}")
+        return labs
+    except Exception as e:
+        logger.error(f"Error processing {image_path}: {e}", exc_info=True)
+        return []
+            
 class StepProcessImages(PipelineStep):
     """Step 3: Process extracted images"""
 
     def execute(self, data: dict) -> dict:
+
         self.logger.info("Stage 3: Processing images")
         image_paths = data["image_paths"]
         client = anthropic.Anthropic()
@@ -382,13 +354,8 @@ class StepProcessImages(PipelineStep):
         n_workers = self.config.get_workers("process_images", cpu_count())
         n_workers = min(n_workers, len(image_paths))
         
-        if n_workers > 1:
-            self.logger.info(f"Processing {len(image_paths)} images with {n_workers} workers")
-            with Pool(n_workers) as pool:
-                results = pool.map(process_single_page, args)
-        else:
-            self.logger.info("Processing images sequentially")
-            results = [process_single_page(arg) for arg in args]
+        self.logger.info(f"Processing {len(image_paths)} images with {n_workers} workers")
+        with Pool(n_workers) as pool: results = pool.map(_StepProcessImages_worker_fn, args)
         
         # Group results by PDF
         pdf_results = {}
@@ -425,8 +392,7 @@ class StepMergeResults(PipelineStep):
         # Read and combine all CSVs
         dfs = []
         for csv_file in csv_files:
-            if csv_file.name == "merged_results.csv":
-                continue
+            if csv_file.name == "merged_results.csv": continue
             df = pd.read_csv(csv_file, sep=';')
             df['source_file'] = csv_file.name
             dfs.append(df)
@@ -474,22 +440,6 @@ class StepGeneratePlots(PipelineStep):
         plot_labs_from_csv(DESTINATION_PATH / "merged_results.csv")
         return data
 
-def process_single_page(args):
-    """Process a single page with error handling"""
-    logger = logging.getLogger(f"{__name__}.process_single_page")
-    image_path, client_key = args
-    try:
-        logger.info(f"Processing {image_path}")
-        client = anthropic.Anthropic(api_key=client_key)
-        labs = process_image(image_path, client)
-        df = pd.DataFrame(labs)
-        csv_path = image_path.with_suffix('.csv')
-        df.to_csv(csv_path, index=False, sep=';')
-        logger.info(f"Saved page results to {csv_path}")
-        return labs
-    except Exception as e:
-        logger.error(f"Error processing {image_path}: {e}", exc_info=True)
-        return []
 
 class Pipeline:
     """Main pipeline executor"""
@@ -503,45 +453,17 @@ class Pipeline:
             StepMergeResults(config),
             StepGeneratePlots(config)
         ]
-    
-    def get_pool_for_step(self, step: PipelineStep, items_count: int) -> Pool:
-        step_name = step.__class__.__name__.lower()
-        n_workers = self.config.parallel_workers.get(step_name, 1)
-        if n_workers > 1:
-            n_workers = min(n_workers, items_count)
-            self.logger.info(f"Creating pool with {n_workers} workers")
-            return Pool(n_workers)
-        return None
 
     def execute(self):
-        """Execute all pipeline steps"""
         data = {}
-        try:
-            for step in self.steps:
-                self.logger.info(f"Executing step: {step.__class__.__name__}")
-                items_count = len(data.get("pdf_paths", [])) if "pdf_paths" in data else \
-                            len(data.get("image_paths", [])) if "image_paths" in data else 1
-                
-                pool = self.get_pool_for_step(step, items_count)
-                if pool:
-                    with pool:
-                        data = step.execute(data, pool)
-                else:
-                    data = step.execute(data)
-                
-                if not data:
-                    self.logger.warning("Pipeline stopped: no data to process")
-                    break
-            self.logger.info("Processing complete!")
-        except Exception as e:
-            self.logger.error(f"Error during processing: {e}", exc_info=True)
-            sys.exit(1)
+        for step in self.steps: data = step.execute(data)
+        return data
 
 if __name__ == "__main__":
     logger.info("Starting pipeline execution")
     # Configure pipeline
     config = PipelineConfig(
-        parallel_workers={
+        parallel_workers={ # TODO: consider passing configs directly to each step
             "extract_pages": cpu_count(),
             "process_images": 2
         }

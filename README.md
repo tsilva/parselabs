@@ -24,4 +24,5 @@ The `--prune` flag will remove any dependencies that are no longer required.
 
 ## TODO
 
+- [ ] Instead of adding hash as file prefix, create an hashes.json file at the root mapping the hash to the file name
 - [ ] Add unit test for single document parsing
