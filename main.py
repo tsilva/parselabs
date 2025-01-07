@@ -115,38 +115,15 @@ Para testes sem um limite máximo especificado, use 9999.""",
     }
 ]
 
-def calculate_md5(file_path):
+def hash_file(file_path, length = 4):
     """Calculate MD5 hash of a file"""
     hash_md5 = hashlib.md5()
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
             hash_md5.update(chunk)
-    return hash_md5.hexdigest()
-
-def get_short_hash(full_hash, length=4):  # Changed from length=8 to length=4
-    """Get shortened version of hash"""
-    return full_hash[:length]
-
-def setup_hash_directory(pdf_path):
-    """Setup hash-based directory structure and return new file path"""
-    full_hash = calculate_md5(pdf_path)
-    short_hash = get_short_hash(full_hash)
-    
-    # Create hash-based directory name with original filename
-    dir_name = f"[{short_hash}]-{pdf_path.stem}"  # Changed format to use square brackets
-    hash_dir = DESTINATION_PATH / dir_name
-    hash_dir.mkdir(exist_ok=True)
-    
-    # New PDF path
-    new_pdf_path = hash_dir / f"{dir_name}.pdf"
-    
-    # Copy file if it doesn't exist
-    if not new_pdf_path.exists():
-        from shutil import copy2
-        copy2(pdf_path, new_pdf_path)
-        logger.info(f"Copied {pdf_path.name} to {new_pdf_path}")
-    
-    return new_pdf_path
+    full_hash = hash_md5.hexdigest()
+    short_hash = full_hash[:length]
+    return short_hash
 
 def optimize_image(image):
     """Optimize image by converting to grayscale, resizing if needed, and quantizing"""
@@ -245,56 +222,6 @@ def process_pdf(pdf_path, client):
     
     return all_labs
 
-def merge_csv_files():
-    """Merge all CSV files in directory into a single sorted file"""
-    # Find all CSV files, excluding page-specific CSVs using regex
-    csv_files = [f for f in DESTINATION_PATH.glob("**/*.csv") 
-                 if not re.search(r'\.\d{3}\.csv$', str(f))]
-    logger.info(f"Merging {len(csv_files)} CSV files")
-    
-    # Read and combine all CSVs
-    dfs = []
-    for csv_file in csv_files:
-        if csv_file.name == "merged_results.csv":
-            continue
-        df = pd.read_csv(csv_file, sep=';')
-        df['source_file'] = csv_file.name
-        dfs.append(df)
-    
-    if not dfs:
-        logger.warning("No CSV files found to merge")
-        return
-    
-    # Combine all dataframes and sort
-    merged_df = pd.concat(dfs, ignore_index=True)
-    merged_df['date'] = pd.to_datetime(merged_df['date'])
-    merged_df = merged_df.sort_values(
-        by=['date', 'lab_name'], 
-        ascending=[False, False]
-    )
-    
-    # Export merged results
-    output_path = DESTINATION_PATH / "merged_results.csv"
-    merged_df.to_csv(output_path, index=False, sep=';')
-    logger.info(f"Saved merged results to {output_path}")
-    
-    # Print statistics and export unique values
-    logger.info(f"Total records: {len(merged_df)}")
-    logger.info(f"Date range: {merged_df['date'].min()} to {merged_df['date'].max()}")
-    logger.info(f"Unique lab tests: {len(merged_df['lab_name'].unique())}")
-    
-    unique_values = {
-        "lab_names": sorted([str(x) for x in merged_df['lab_name'].unique().tolist()]),
-        "lab_units": sorted([str(x) for x in merged_df['lab_unit'].unique().tolist()]),
-        "lab_methods": sorted([str(x) for x in merged_df['lab_method'].unique().tolist()])
-    }
-    
-    for key, values in unique_values.items():
-        json_path = DESTINATION_PATH / f"unique_{key}.json"
-        with open(json_path, 'w', encoding='utf-8') as f:
-            json.dump(values, f, ensure_ascii=False, indent=2)
-        logger.info(f"Saved unique {key} to {json_path}")
-
 def create_lab_test_plot(df_test, lab_name, output_dir):
     """Create a time series plot for a specific lab test"""
     plt.figure(figsize=(10, 6))
@@ -309,10 +236,7 @@ def create_lab_test_plot(df_test, lab_name, output_dir):
     plt.close()
     logger.info(f"Saved plot for {lab_name} to {output_file}")
 
-def plot_all_lab_tests():
-    """Generate plots for all lab tests from merged results"""
-    # Read merged results
-    input_path = DESTINATION_PATH / "merged_results.csv"
+def plot_labs_from_csv(input_path):
     df = pd.read_csv(input_path, sep=';')
     
     # Convert date column
@@ -331,9 +255,24 @@ def stage_copy_pdfs():
     
     logger.info("Stage 1: Copying PDFs to destination directories")
     for pdf_file in pdf_files:
-        hash_pdf_path = setup_hash_directory(pdf_file)
-        copied_paths.append(hash_pdf_path)
-        logger.info(f"Prepared {hash_pdf_path}")
+        short_hash = hash_file(pdf_file)
+        
+        # Create hash-based directory name with original filename
+        dir_name = f"[{short_hash}]-{pdf_file.stem}"  # Changed format to use square brackets
+        hash_dir = DESTINATION_PATH / dir_name
+        hash_dir.mkdir(exist_ok=True)
+        
+        # New PDF path
+        new_pdf_path = hash_dir / f"{dir_name}.pdf"
+        
+        # Copy file if it doesn't exist
+        if not new_pdf_path.exists():
+            from shutil import copy2
+            copy2(pdf_file, new_pdf_path)
+            logger.info(f"Copied {pdf_file.name} to {new_pdf_path}")
+        
+        copied_paths.append(new_pdf_path)
+        logger.info(f"Prepared {new_pdf_path}")
     
     return copied_paths
 
@@ -343,16 +282,6 @@ def stage_process_pdfs(pdf_paths, client):
     for pdf_path in pdf_paths:
         logger.info(f"Processing {pdf_path}")
         results = process_pdf(pdf_path, client)
-
-def stage_merge_results():
-    """Stage 3: Merge results"""
-    logger.info("Stage 3: Merging results")
-    merge_csv_files()
-
-def stage_generate_plots():
-    """Stage 4: Generate plots"""
-    logger.info("Stage 4: Generating plots")
-    plot_all_lab_tests()
 
 @dataclass
 class PipelineConfig:
@@ -407,6 +336,7 @@ def extract_single_pdf(args):
 
 class StepExtractPages(PipelineStep):
     """Step 2: Extract pages from PDFs as images"""
+
     def execute(self, data: dict) -> dict:
         self.logger.info("Stage 2: Extracting PDF pages")
         pdf_paths = data["pdf_paths"]
@@ -439,6 +369,7 @@ class StepExtractPages(PipelineStep):
 
 class StepProcessImages(PipelineStep):
     """Step 3: Process extracted images"""
+
     def execute(self, data: dict) -> dict:
         self.logger.info("Stage 3: Processing images")
         image_paths = data["image_paths"]
@@ -481,16 +412,66 @@ class StepProcessImages(PipelineStep):
 
 class StepMergeResults(PipelineStep):
     """Step 3: Merge all results"""
+
     def execute(self, data: dict) -> dict:
         self.logger.info("Stage 3: Merging results")
-        merge_csv_files()
+
+        """Merge all CSV files in directory into a single sorted file"""
+        # Find all CSV files, excluding page-specific CSVs using regex
+        csv_files = [f for f in DESTINATION_PATH.glob("**/*.csv") 
+                    if not re.search(r'\.\d{3}\.csv$', str(f))]
+        logger.info(f"Merging {len(csv_files)} CSV files")
+        
+        # Read and combine all CSVs
+        dfs = []
+        for csv_file in csv_files:
+            if csv_file.name == "merged_results.csv":
+                continue
+            df = pd.read_csv(csv_file, sep=';')
+            df['source_file'] = csv_file.name
+            dfs.append(df)
+        
+        if not dfs:
+            logger.warning("No CSV files found to merge")
+            return
+        
+        # Combine all dataframes and sort
+        merged_df = pd.concat(dfs, ignore_index=True)
+        merged_df['date'] = pd.to_datetime(merged_df['date'])
+        merged_df = merged_df.sort_values(
+            by=['date', 'lab_name'], 
+            ascending=[False, False]
+        )
+        
+        # Export merged results
+        output_path = DESTINATION_PATH / "merged_results.csv"
+        merged_df.to_csv(output_path, index=False, sep=';')
+        logger.info(f"Saved merged results to {output_path}")
+        
+        # Print statistics and export unique values
+        logger.info(f"Total records: {len(merged_df)}")
+        logger.info(f"Date range: {merged_df['date'].min()} to {merged_df['date'].max()}")
+        logger.info(f"Unique lab tests: {len(merged_df['lab_name'].unique())}")
+        
+        unique_values = {
+            "lab_names": sorted([str(x) for x in merged_df['lab_name'].unique().tolist()]),
+            "lab_units": sorted([str(x) for x in merged_df['lab_unit'].unique().tolist()]),
+            "lab_methods": sorted([str(x) for x in merged_df['lab_method'].unique().tolist()])
+        }
+        
+        for key, values in unique_values.items():
+            json_path = DESTINATION_PATH / f"unique_{key}.json"
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(values, f, ensure_ascii=False, indent=2)
+            logger.info(f"Saved unique {key} to {json_path}")
+
         return data
 
 class StepGeneratePlots(PipelineStep):
-    """Step 4: Generate plots"""
+
     def execute(self, data: dict) -> dict:
         self.logger.info("Stage 4: Generating plots")
-        plot_all_lab_tests()
+        plot_labs_from_csv(DESTINATION_PATH / "merged_results.csv")
         return data
 
 def process_single_page(args):
