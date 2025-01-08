@@ -61,7 +61,7 @@ Para testes sem um limite máximo especificado, use 9999.""",
                             "lab_method" : {
                                 "type": "string",
                                 "enum": LAB_METHODS,
-                                "description": "Método de medição do resultado do exame laboratorial; #N/A para resultados sem método especificado ou inferivel."
+                                "description": "Método de medição do resultado do exame laboratorial; N/A para resultados sem método especificado ou inferivel."
                             },
                             "lab_value": {
                                 "type": "number",
@@ -70,7 +70,7 @@ Para testes sem um limite máximo especificado, use 9999.""",
                             "lab_unit": {
                                 "type": "string",
                                 "enum": LAB_UNITS,
-                                "description": "Unidade de medida para o resultado do exame; #N/A para resultados sem unidade"
+                                "description": "Unidade de medida para o resultado do exame; N/A para resultados sem unidade"
                             },
                             "lab_range_min": {
                                 "type": "number",
