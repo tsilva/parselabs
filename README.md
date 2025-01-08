@@ -30,8 +30,8 @@ python -m tests.test_pipeline
 
 ## TODO
 
+- [ ] Fix expected.csv / unit test
 - [ ] Prescan for missing enum values using function call
-- [ ] Fix expected.csv
 - [ ] Run multiple parsers in parallel and merge their results
-- [ ] Add unit test for single document parsing
+- [ ] Remove PII
 - [ ] Upgrade to use langchain (abstract underlying model)
