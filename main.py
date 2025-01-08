@@ -25,8 +25,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('pipeline.log')
+        logging.StreamHandler()
     ]
 )
 logger = logging.getLogger('labs-parser')
@@ -57,12 +56,12 @@ Para testes sem um limite máximo especificado, use 9999.""",
                             "lab_name": {
                                 "type": "string",
                                 "enum": LAB_NAMES,
-                                "description": "Nome do exame laboratorial (por exemplo, 'Hemoglobina', 'Contagem de Glóbulos Brancos')"
+                                "description": "Nome do exame laboratorial"
                             },
                             "lab_method" : {
                                 "type": "string",
                                 "enum": LAB_METHODS,
-                                "description": "Método de medição do resultado do exame laboratorial (exemplo: 'Imunoensaio', 'Citometria de Fluxo'); N/A para resultados sem método"
+                                "description": "Método de medição do resultado do exame laboratorial; #N/A para resultados sem método especificado ou inferivel."
                             },
                             "lab_value": {
                                 "type": "number",
@@ -71,7 +70,7 @@ Para testes sem um limite máximo especificado, use 9999.""",
                             "lab_unit": {
                                 "type": "string",
                                 "enum": LAB_UNITS,
-                                "description": "Unidade de medida para o resultado do exame (por exemplo, 'g/dL', 'células/µL'); N/A para resultados sem unidade"
+                                "description": "Unidade de medida para o resultado do exame; #N/A para resultados sem unidade"
                             },
                             "lab_range_min": {
                                 "type": "number",
@@ -99,6 +98,7 @@ Para testes sem um limite máximo especificado, use 9999.""",
 ]
 
 def load_env_config():
+    # Read environment variables
     input_path = os.getenv("INPUT_PATH")
     input_file_regex = os.getenv("INPUT_FILE_REGEX") or r".*analises.*\.pdf$" # TODO: add .env support
     output_path = os.getenv("OUTPUT_PATH")
@@ -125,6 +125,7 @@ def extract_labs_from_page_image(image_path, client):
     message = client.messages.create(
         model="claude-3-5-sonnet-20241022", # TODO: softcode
         max_tokens=8192,
+        temperature=0.0,
         system=[
             {
                 "type": "text",
@@ -204,9 +205,11 @@ class PipelineStep(ABC):
     """Abstract base class for pipeline steps"""
     def __init__(self, config):
         self.config = config
+
+        # Initialize logger for this step
         step_name = self.__class__.__name__
         self.logger = logging.getLogger(f"{step_name}")
-        
+
         # Add prefix to all log messages for this step
         for handler in self.logger.handlers:
             handler.setFormatter(
@@ -223,7 +226,7 @@ def _StepCopyPDFs_worker_fn(args):
     """Copy PDF file to destination directory"""
     
     # Read worker args
-    pdf_path, output_path, logger = args  # Add logger to args
+    pdf_path, output_path = args
 
     # Create output directory for document assets
     output_dir = output_path / pdf_path.stem
@@ -258,7 +261,7 @@ class StepCopyPDFs(PipelineStep):
         pdf_hashes_map = {}
         output_pdf_paths = []
         with Pool(n_workers) as pool:
-            results = pool.map(_StepCopyPDFs_worker_fn, [(path, output_path, self.logger) for path in input_pdf_paths])
+            results = pool.map(_StepCopyPDFs_worker_fn, [(path, output_path) for path in input_pdf_paths])
             for (path, file_hash) in results: 
                 pdf_hashes_map[file_hash] = path.name
                 output_pdf_paths.append(path)
@@ -271,10 +274,9 @@ class StepCopyPDFs(PipelineStep):
         
         # Return pipeline step output
         return {
-            "input_pdf_paths": input_pdf_paths
+            "input_pdf_paths": output_pdf_paths
         }
 
-# Step 2: Extract Pages
 def _StepExtractPageImages_worker_fn(args):
     """Extract pages from a single PDF with error handling"""
     pdf_path, output_dir, logger = args  # Add logger to args
@@ -299,7 +301,6 @@ class StepExtractPageImages(PipelineStep):
     def execute(self, data: dict) -> dict:
         
         # Read configuration
-        output_path = self.config["output_path"]
         n_workers = self.config.get("n_workers", cpu_count())
         
         # Get input data
@@ -322,7 +323,6 @@ class StepExtractPageImages(PipelineStep):
             "pdf_page_image_paths": pdf_page_image_paths
         }
 
-# Step 3: Process Images
 def _StepExtractPageImageLabs_worker_fn(args):
     """Process single image with Claude"""
     image_path, api_key, output_dir, logger = args  # Add logger to args
@@ -377,8 +377,8 @@ class StepExtractPageImageLabs(PipelineStep):
                 df = pd.DataFrame(labs)
                 csv_path = pdf_path.with_suffix('.csv')
                 df.to_csv(csv_path, index=False, sep=';')
-                self.logger.info(f"Saved aggregated results to {csv_path}")
                 all_results.extend(labs)
+                self.logger.info(f"Saved page results to {csv_path}")
         
         # Return pipeline step output
         return {
@@ -396,12 +396,12 @@ def _StepMergeResults_worker_fn(args):
         logger.error(f"Error reading {csv_path}: {e}", exc_info=True)
         return None
 
-class StepMergePageImageLabs(PipelineStep):
+class StepMergePageLabs(PipelineStep):
     def execute(self, data: dict) -> dict:
         # Read configuration
         output_path = self.config["output_path"]
-        n_workers = min(self.config["n_workers"], cpu_count())
-        
+        n_workers = self.config.get("n_workers", cpu_count())
+
         # Find CSVs to merge
         csv_files = [f for f in output_path.glob("**/*.csv") 
                     if not re.search(r'\.\d{3}\.csv$', str(f))
@@ -418,8 +418,22 @@ class StepMergePageImageLabs(PipelineStep):
             
         # Process merged results
         merged_df = pd.concat(dfs, ignore_index=True)
-        merged_df['date'] = pd.to_datetime(merged_df['date'])
-        merged_df = merged_df.sort_values(['date', 'lab_name'], ascending=[False, False])
+        
+        # Convert dates to consistent format
+        merged_df['date'] = pd.to_datetime(merged_df['date']).dt.strftime('%Y-%m-%d')
+        
+        # Find most frequent date
+        most_frequent_date = merged_df['date'].mode().iloc[0]
+        self.logger.info(f"Using most frequent date: {most_frequent_date}")
+        
+        # Set all dates to the most frequent date
+        merged_df['date'] = pd.to_datetime(most_frequent_date)
+        
+        # Sort results
+        merged_df = merged_df.sort_values(['lab_name'], ascending=[False])
+        
+        # Convert date to string format before saving
+        merged_df['date'] = merged_df['date'].dt.strftime('%Y-%m-%d')
         
         # Save results
         output_file = output_path / "merged_results.csv"
@@ -465,15 +479,16 @@ class Pipeline:
             data = {**data, **_data}
         return data
 
-def create_default_pipeline():
+def create_default_pipeline(plot_labs=True):
     env_config = load_env_config()
-    pipeline = Pipeline([
-        StepCopyPDFs({**env_config, "n_workers": cpu_count()}),
-        StepExtractPageImages({**env_config, "n_workers": 2}),
-        StepExtractPageImageLabs({**env_config, "n_workers": 2}),
-        StepMergePageImageLabs({**env_config, "n_workers": 2}),
-        StepPlotLabs({**env_config, "n_workers": 2})
-    ])
+    steps = [x for x in [
+        StepCopyPDFs({**env_config}),
+        StepExtractPageImages({**env_config}),
+        StepExtractPageImageLabs({**env_config, "n_workers": 2}), # TODO: softcode n_workers
+        StepMergePageLabs({**env_config}),
+        StepPlotLabs({**env_config}) if plot_labs else None
+    ] if x is not None]
+    pipeline = Pipeline(steps)
     return pipeline
 
 def main():

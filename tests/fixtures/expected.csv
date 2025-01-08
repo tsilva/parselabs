@@ -1,2 +1,46 @@
-date;lab_name;lab_value;lab_method;lab_unit;lab_range_min;lab_range_max
-2024-01-15;Hemoglobina;14.2;N/A;g/dL;12;16
+lab_name;lab_method;lab_value;lab_unit;lab_range_min;lab_range_max;date
+Leucócitos;Citometria de Fluxo;5.5;10³/µL;4.0;11.0;2023-01-05
+Neutrófilos;Citometria de Fluxo;63.5;%;40.0;75.0;2023-01-05
+Linfócitos;Citometria de Fluxo;24.7;%;20.0;45.0;2023-01-05
+Monócitos;Citometria de Fluxo;9.5;%;2.0;10.0;2023-01-05
+Eosinófilos;Citometria de Fluxo;1.1;%;1.0;6.0;2023-01-05
+Basófilos;Citometria de Fluxo;0.7;%;0.0;1.0;2023-01-05
+Granulócitos Imaturos;Citometria de Fluxo;0.5;%;0.0;9999.0;2023-01-05
+Eritrócitos;Citometria de Fluxo;4.39;10⁶/µL;4.5;5.5;2023-01-05
+Hemoglobina;Hgb-Espectrofotometria;14.0;g/dL;13.0;17.0;2023-01-05
+Hematócrito;Citometria de Fluxo;40.9;%;40.0;50.0;2023-01-05
+Volume Globular Médio (VGM);Citometria de Fluxo;93.2;fL;83.0;101.0;2023-01-05
+Concentração Hemoglobina Globular Média (CHGM);Citometria de Fluxo;34.2;g/dL;31.5;34.5;2023-01-05
+Índice Distribuição Eritrocitária (RDW);Citometria de Fluxo;11.9;%;11.5;14.5;2023-01-05
+Plaquetas;Citometria de Fluxo;287.0;10³/µL;150.0;400.0;2023-01-05
+Volume Plaquetário Médio;Citometria de Fluxo;10.3;fL;7.2;11.1;2023-01-05
+Índice Distribuição Plaquetas (PDW);Citometria de Fluxo;11.7;%;9.0;14.0;2023-01-05
+Colesterol HDL;Colorimetria (CHOD-PAP);48.0;mg/dL;35.0;55.0;2023-05-01
+Colesterol Não-HDL;#N/A;117.0;mg/dL;0.0;160.0;2023-05-01
+Colesterol LDL;Cálculo Friedewald;93.0;mg/dL;0.0;130.0;2023-05-01
+Colesterol VLDL;#N/A;24.0;mg/dL;3.0;56.0;2023-05-01
+Ferro;#N/A;155.0;µg/dL;53.0;167.0;2023-05-01
+Transferrina;#N/A;209.0;mg/dL;200.0;370.0;2023-05-01
+Saturação da Transferrina;#N/A;53.0;%;15.0;45.0;2023-05-01
+Ferritina;#N/A;405.0;ng/mL;12.8;454.0;2023-05-01
+Proteínas Totais;#N/A;6.94;g/dL;6.0;7.3;2023-05-01
+Proteína C Reativa;#N/A;0.6;mg/L;0.0;5.0;2023-05-01
+Alfa-Fetoproteína;#N/A;5.2;µg/L;0.0;7.0;2023-05-01
+T4 Livre;#N/A;1.26;ng/dL;1.01;1.65;2023-05-01
+Vitamina B12;#N/A;368.0;pg/mL;191.0;663.0;2023-01-05
+25-Hidroxivitamina D;#N/A;65.1;nmol/L;50.0;150.0;2023-01-05
+Ácido Fólico;#N/A;6.1;ng/mL;3.9;26.8;2023-01-05
+Ácido Úrico;#N/A;5.6;mg/dL;3.4;7.0;2023-01-05
+Creatinina;#N/A;0.73;mg/dL;0.7;1.2;2023-01-05
+Ureia;#N/A;26.0;mg/dL;10.0;50.0;2023-01-05
+Bilirrubina Total;#N/A;1.53;mg/dL;0.2;1.0;2023-01-05
+Bilirrubina Direta;#N/A;0.59;mg/dL;0.0;0.3;2023-01-05
+Bilirrubina Indireta;#N/A;0.94;mg/dL;0.0;1.0;2023-01-05
+Aspartato Aminotransferase (AST);#N/A;20.0;U/L;10.0;34.0;2023-01-05
+Alanina Aminotransferase (ALT);#N/A;35.0;U/L;10.0;44.0;2023-01-05
+Fosfatase Alcalina;#N/A;57.0;U/L;40.0;129.0;2023-01-05
+Gama-Glutamil Transferase (GGT);#N/A;10.0;U/L;10.0;66.0;2023-01-05
+Hemoglobina A1C (DCCT);#N/A;4.1;%;4.0;6.0;2023-01-05
+Hemoglobina A1C (IFCC);#N/A;21.0;mmol/mol;20.0;42.0;2023-01-05
+Colesterol Total;#N/A;165.0;mg/dL;0.0;200.0;2023-01-05
+Triglicerídeos;#N/A;118.0;mg/dL;40.0;160.0;2023-01-05
