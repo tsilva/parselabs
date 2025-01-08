@@ -206,29 +206,16 @@ def plot_labs_from_csv(input_path):
         df_test = df[df['lab_name'] == lab_name]
         create_lab_test_plot(df_test, lab_name, PLOTS_DIR)
 
-@dataclass
-class PipelineConfig:
-    """Configuration for pipeline execution"""
-    parallel_workers: dict[str, int] = None
-    
-    def __post_init__(self):
-        self.parallel_workers = self.parallel_workers or {}
-    
-    def get_workers(self, step_name: str, default: int = 1) -> int:
-        """Get number of workers for a step"""
-        return self.parallel_workers.get(step_name, default)
-
 class PipelineStep(ABC):
     """Abstract base class for pipeline steps"""
-    def __init__(self, config: PipelineConfig):
-        self.config = config
+    def __init__(self, n_workers=1):
+        self.n_workers = n_workers
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
     
     @abstractmethod
-    def execute(self, data: dict, pool: Pool = None) -> dict:
+    def execute(self, data: dict) -> dict:
         pass
 
-# TODO: parallelize
 class StepCopyPDFs(PipelineStep):
     """Step 1: Copy PDFs to destination"""
     def execute(self, data: dict) -> dict:
@@ -295,11 +282,10 @@ class StepExtractPages(PipelineStep):
         self.logger.info("Stage 2: Extracting PDF pages")
 
         input_pdf_paths = data["input_pdf_paths"]
+        n_workers = min(self.n_workers, len(input_pdf_paths))
+        self.logger.info(f"Extracting pages from {len(input_pdf_paths)} PDFs using {n_workers} workers")
         
         pdf_page_image_paths = []
-        n_workers = self.config.get_workers("extract_pages", cpu_count())
-        self.logger.info(f"Extracting pages from {len(input_pdf_paths)} PDFs using {n_workers} workers")
-        n_workers = min(n_workers, len(input_pdf_paths))
         with Pool(n_workers) as pool:
             results = pool.map(_StepExtractPages_worker_fn, [(path,) for path in input_pdf_paths])
             for paths in results: pdf_page_image_paths.extend(paths)
@@ -335,8 +321,7 @@ class StepProcessImages(PipelineStep):
         client = anthropic.Anthropic()
 
         # Process images in parallel
-        n_workers = self.config.get_workers("process_images", cpu_count())
-        n_workers = min(n_workers, len(pdf_page_image_paths))
+        n_workers = min(self.n_workers, len(pdf_page_image_paths))
         self.logger.info(f"Processing {len(pdf_page_image_paths)} images with {n_workers} workers")
         with Pool(n_workers) as pool: results = pool.map(_StepProcessImages_worker_fn, [(path, client.api_key) for path in pdf_page_image_paths])
         
@@ -425,16 +410,9 @@ class StepGeneratePlots(PipelineStep):
 
 class Pipeline:
     """Main pipeline executor"""
-    def __init__(self, config: PipelineConfig):
-        self.config = config
+    def __init__(self, steps):
         self.logger = logging.getLogger(f"{__name__}.Pipeline")
-        self.steps = [
-            StepCopyPDFs(config),
-            StepExtractPages(config),
-            StepProcessImages(config),
-            StepMergeResults(config),
-            StepGeneratePlots(config)
-        ]
+        self.steps = steps
 
     def execute(self):
         data = {}
@@ -445,14 +423,13 @@ class Pipeline:
 
 if __name__ == "__main__":
     logger.info("Starting pipeline execution")
-    # Configure pipeline
-    config = PipelineConfig(
-        parallel_workers={ # TODO: consider passing configs directly to each step
-            "extract_pages": cpu_count(),
-            "process_images": 2
-        }
-    )
     
     # Execute pipeline
-    pipeline = Pipeline(config)
+    pipeline = Pipeline([
+        StepCopyPDFs(),
+        StepExtractPages(n_workers=2),
+        StepProcessImages(n_workers=2),
+        StepMergeResults(),
+        StepGeneratePlots()
+    ])
     pipeline.execute()
