@@ -13,12 +13,12 @@ import pdf2image
 import re
 import matplotlib.pyplot as plt
 import seaborn as sns
-import sys
 import hashlib
-from dataclasses import dataclass
 from multiprocessing import Pool, cpu_count
 from abc import ABC, abstractmethod
 from PIL import Image
+from pathlib import Path
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -98,6 +98,25 @@ Para testes sem um limite máximo especificado, use 9999.""",
     }
 ]
 
+def load_env_config():
+    input_path = os.getenv("INPUT_PATH")
+    input_file_regex = os.getenv("INPUT_FILE_REGEX") or r".*analises.*\.pdf$" # TODO: add .env support
+    output_path = os.getenv("OUTPUT_PATH")
+    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+    
+    # Validate required fields
+    if not input_path or not Path(input_path).exists(): raise ValueError(f"INPUT_PATH not set or does not exist: {input_path}")
+    if not input_file_regex: raise ValueError("INPUT_FILE_REGEX not set")
+    if not output_path or not Path(output_path).exists(): raise ValueError("OUTPUT_PATH not set")
+    if not anthropic_api_key: raise ValueError("ANTHROPIC_API_KEY not set")
+        
+    return {
+        "input_path" : Path(input_path),
+        "input_file_regex" : input_file_regex,
+        "output_path" : Path(output_path),
+        "anthropic_api_key" : anthropic_api_key
+    }
+    
 def extract_labs_from_page_image(image_path, client):
     """Process a single image with Claude"""
     with open(image_path, "rb") as img_file:
@@ -106,7 +125,13 @@ def extract_labs_from_page_image(image_path, client):
     message = client.messages.create(
         model="claude-3-5-sonnet-20241022",
         max_tokens=8192,
-        system="You are a meticulous medical lab report analyzer. Extract ALL laboratory test results from this image - missing even one result is considered a failure.",
+        system=[
+            {
+                "type": "text",
+                "text": "You are a meticulous medical lab report analyzer. Extract ALL laboratory test results from this image - missing even one result is considered a failure.",
+                "cache_control": {"type": "ephemeral"}
+            }
+        ],
         messages=[
             {
                 "role": "user",
@@ -175,12 +200,19 @@ def create_lab_test_plot(df_test, lab_name, output_dir):
     plt.close()
     logger.info(f"Saved plot for {lab_name} to {output_file}")
 
-
 class PipelineStep(ABC):
     """Abstract base class for pipeline steps"""
     def __init__(self, config):
         self.config = config
-        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        step_name = self.__class__.__name__
+        self.logger = logging.getLogger(f"{step_name}")
+        # Add prefix to all log messages for this step
+        for handler in self.logger.handlers:
+            handler.setFormatter(
+                logging.Formatter(
+                    f'%(asctime)s - {step_name} - %(levelname)s - %(message)s'
+                )
+            )
     
     @abstractmethod
     def execute(self, data: dict) -> dict:
@@ -190,7 +222,7 @@ def _StepCopyPDFs_worker_fn(args):
     """Copy PDF file to destination directory"""
     
     # Read worker args
-    pdf_path, output_path = args
+    pdf_path, output_path, logger = args  # Add logger to args
 
     # Create output directory for document assets
     output_dir = output_path / pdf_path.stem
@@ -208,9 +240,7 @@ def _StepCopyPDFs_worker_fn(args):
 
 class StepCopyPDFs(PipelineStep):
     """Step 1: Copy PDFs to destination"""
-    def execute(self, data: dict) -> dict:
-        self.logger.info("Stage 1: Copying PDFs to destination directories")
-        
+    def execute(self, data: dict) -> dict:        
         # Read configuration
         input_path = self.config["input_path"]
         input_file_regex = self.config["input_file_regex"]
@@ -227,7 +257,7 @@ class StepCopyPDFs(PipelineStep):
         pdf_hashes_map = {}
         output_pdf_paths = []
         with Pool(n_workers) as pool:
-            results = pool.map(_StepCopyPDFs_worker_fn, [(path, output_path) for path in input_pdf_paths])
+            results = pool.map(_StepCopyPDFs_worker_fn, [(path, output_path, self.logger) for path in input_pdf_paths])
             for (path, file_hash) in results: 
                 pdf_hashes_map[file_hash] = path.name
                 output_pdf_paths.append(path)
@@ -246,7 +276,7 @@ class StepCopyPDFs(PipelineStep):
 # Step 2: Extract Pages
 def _StepExtractPageImages_worker_fn(args):
     """Extract pages from a single PDF with error handling"""
-    pdf_path, output_dir = args
+    pdf_path, output_dir, logger = args  # Add logger to args
     try:
         images = pdf2image.convert_from_path(pdf_path)
         base_name = pdf_path.stem
@@ -280,7 +310,7 @@ class StepExtractPageImages(PipelineStep):
         # Extract pages in parallel
         all_image_paths = []
         with Pool(n_workers) as pool:
-            args = [(path, path.parent) for path in input_pdf_paths]
+            args = [(path, path.parent, self.logger) for path in input_pdf_paths]
             results = pool.map(_StepExtractPageImages_worker_fn, args)
             for paths in results:
                 all_image_paths.extend(paths)
@@ -291,7 +321,7 @@ class StepExtractPageImages(PipelineStep):
 # Step 3: Process Images
 def _StepExtractPageImageLabs_worker_fn(args):
     """Process single image with Claude"""
-    image_path, api_key, output_dir = args
+    image_path, api_key, output_dir, logger = args  # Add logger to args
     try:
         logger.info(f"Processing {image_path}")
 
@@ -314,8 +344,6 @@ def _StepExtractPageImageLabs_worker_fn(args):
 
 class StepExtractPageImageLabs(PipelineStep):
     def execute(self, data: dict) -> dict:
-        self.logger.info("Stage 3: Processing images")
-        
         # Read configuration
         api_key = self.config["anthropic_api_key"]
         n_workers = self.config.get("n_workers", cpu_count())
@@ -328,7 +356,7 @@ class StepExtractPageImageLabs(PipelineStep):
 
         # Process images in parallel
         with Pool(n_workers) as pool:
-            args = [(path, api_key, path.parent) for path in pdf_page_image_paths]
+            args = [(path, api_key, path.parent, self.logger) for path in pdf_page_image_paths]
             results = pool.map(_StepExtractPageImageLabs_worker_fn, args)
         
         # Group results by PDF
@@ -352,7 +380,7 @@ class StepExtractPageImageLabs(PipelineStep):
 
 def _StepMergeResults_worker_fn(args):
     """Process single CSV file"""
-    csv_path, = args
+    csv_path, logger = args  # Add logger to args
     try:
         df = pd.read_csv(csv_path, sep=';')
         df['source_file'] = csv_path.name
@@ -363,8 +391,6 @@ def _StepMergeResults_worker_fn(args):
 
 class StepMergePageImageLabs(PipelineStep):
     def execute(self, data: dict) -> dict:
-        self.logger.info("Stage 4: Merging results")
-        
         # Read configuration
         output_path = self.config["output_path"]
         n_workers = min(self.config["n_workers"], cpu_count())
@@ -376,7 +402,7 @@ class StepMergePageImageLabs(PipelineStep):
         
         # Merge CSVs in parallel
         with Pool(n_workers) as pool:
-            results = pool.map(_StepMergeResults_worker_fn, [(f,) for f in csv_files])
+            results = pool.map(_StepMergeResults_worker_fn, [(f, self.logger) for f in csv_files])
             dfs = [df for df in results if df is not None]
         
         if not dfs:
@@ -393,13 +419,7 @@ class StepMergePageImageLabs(PipelineStep):
         merged_df.to_csv(output_file, index=False, sep=';')
         self.logger.info(f"Saved merged results to {output_file}")
         
-        # Save statistics
-        self._save_statistics(merged_df, output_path)
         return {"merged_results": merged_df}
-        
-    def _save_statistics(self, df, output_path):
-        """Save statistics and unique values"""
-        # ...existing statistics code...
 
 class StepPlotLabs(PipelineStep):
 
@@ -410,7 +430,6 @@ class StepPlotLabs(PipelineStep):
         self.logger.info("Stage 4: Generating plots")
 
         # Ensure output directories exist
-        # DESTINATION_PATH.mkdir(exist_ok=True)
         plots_dir = output_path / "plots"
         plots_dir.mkdir(exist_ok=True)
 
@@ -441,46 +460,19 @@ class Pipeline:
             data = {**data, **_data}
         return data
 
-# TODO: should env vars be read here?
-# TODO: is there an easier way to perform env validation?
-def main():
-    logger.info("Starting pipeline execution")
-
-    # Directory constants
-    INPUT_PATH = os.getenv("INPUT_PATH")
-    OUTPUT_PATH = os.getenv("OUTPUT_PATH")
-    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-    INPUT_FILE_REGEX = r".*analises.*\.pdf$" # TODO: move to .env
-
-    # Assert input path exists
-    if not INPUT_PATH or not Path(INPUT_PATH).exists():
-        logger.error(f"Input path does not exist: {INPUT_PATH}")
-        sys.exit(1)
-
-    # Assert output path exists
-    if not OUTPUT_PATH or not Path(OUTPUT_PATH).exists():
-        logger.error(f"Output path does not exist: {OUTPUT_PATH}")
-        sys.exit(1)
-
-    # Assert API key is set
-    if not ANTHROPIC_API_KEY:
-        logger.error("Anthropic API key not found")
-        sys.exit(1)
-
-    # Execute pipeline
-    base_config = {
-        "input_path": Path(INPUT_PATH),
-        "input_file_regex": INPUT_FILE_REGEX,
-        "output_path": Path(OUTPUT_PATH),
-        "anthropic_api_key": ANTHROPIC_API_KEY,
-    }
+def create_default_pipeline():
+    env_config = load_env_config()
     pipeline = Pipeline([
-        StepCopyPDFs({**base_config, "n_workers": cpu_count()}),
-        StepExtractPageImages({**base_config, "n_workers": 2}),
-        StepExtractPageImageLabs({**base_config, "n_workers": 2}),
-        StepMergePageImageLabs({**base_config, "n_workers": 2}),
-        StepPlotLabs({**base_config, "n_workers": 2})
+        StepCopyPDFs({**env_config, "n_workers": cpu_count()}),
+        StepExtractPageImages({**env_config, "n_workers": 2}),
+        StepExtractPageImageLabs({**env_config, "n_workers": 2}),
+        StepMergePageImageLabs({**env_config, "n_workers": 2}),
+        StepPlotLabs({**env_config, "n_workers": 2})
     ])
+    return pipeline
+
+def main():
+    pipeline = create_default_pipeline()
     pipeline.execute()
 
 if __name__ == "__main__":
