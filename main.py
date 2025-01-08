@@ -213,15 +213,15 @@ class StepCopyPDFs(PipelineStep):
         
         # Read configuration
         input_path = self.config["input_path"]
+        input_file_regex = self.config["input_file_regex"]
         output_path = self.config["output_path"]
+        n_workers = self.config.get("n_workers", cpu_count())
 
-        # Collect file paths for extraction
-        # TODO: softcode regex
-        input_pdf_paths = [f for f in input_path.glob("*.pdf") if "analises" in f.name.lower()]
+        # Collect file paths for extraction using regex pattern
+        input_pdf_paths = [f for f in input_path.iterdir() if re.search(input_file_regex, str(f), re.IGNORECASE)]
 
-        # Calculate number of parallel workers to use in this step
-        # (use all available CPU cores)
-        n_workers = max(len(input_pdf_paths), cpu_count())
+        # Limit number of workers to number of input PDFs
+        n_workers = min(n_workers, len(input_pdf_paths))
 
         # Copy PDFs to output directory in parallel
         pdf_hashes_map = {}
@@ -244,7 +244,7 @@ class StepCopyPDFs(PipelineStep):
         }
 
 # Step 2: Extract Pages
-def _StepExtractPages_worker_fn(args):
+def _StepExtractPageImages_worker_fn(args):
     """Extract pages from a single PDF with error handling"""
     pdf_path, output_dir = args
     try:
@@ -264,22 +264,24 @@ def _StepExtractPages_worker_fn(args):
         logger.error(f"Error extracting pages from {pdf_path}: {e}", exc_info=True)
         return []
 
-class StepExtractPages(PipelineStep):
+class StepExtractPageImages(PipelineStep):
     def execute(self, data: dict) -> dict:
-        self.logger.info("Stage 2: Extracting PDF pages")
         
         # Read configuration
         output_path = self.config["output_path"]
-        n_workers = min(self.config["n_workers"], cpu_count())
+        n_workers = self.config.get("n_workers", cpu_count())
         
         # Get input data
         input_pdf_paths = data["input_pdf_paths"]
+
+        # Limit number of workers to number of input PDFs
+        n_workers = min(n_workers, len(input_pdf_paths))
         
         # Extract pages in parallel
         all_image_paths = []
         with Pool(n_workers) as pool:
             args = [(path, path.parent) for path in input_pdf_paths]
-            results = pool.map(_StepExtractPages_worker_fn, args)
+            results = pool.map(_StepExtractPageImages_worker_fn, args)
             for paths in results:
                 all_image_paths.extend(paths)
                 
@@ -287,12 +289,14 @@ class StepExtractPages(PipelineStep):
         return {"pdf_page_image_paths": all_image_paths}
 
 # Step 3: Process Images
-def _StepProcessImages_worker_fn(args):
+def _StepExtractPageImageLabs_worker_fn(args):
     """Process single image with Claude"""
     image_path, api_key, output_dir = args
     try:
-        client = anthropic.Anthropic(api_key=api_key)
         logger.info(f"Processing {image_path}")
+
+        # Initialize Claude client
+        client = anthropic.Anthropic(api_key=api_key)
         
         # Extract labs
         labs = extract_labs_from_page_image(image_path, client)
@@ -308,29 +312,30 @@ def _StepProcessImages_worker_fn(args):
         logger.error(f"Error processing {image_path}: {e}", exc_info=True)
         return image_path, []
 
-class StepProcessImages(PipelineStep):
+class StepExtractPageImageLabs(PipelineStep):
     def execute(self, data: dict) -> dict:
         self.logger.info("Stage 3: Processing images")
         
         # Read configuration
         api_key = self.config["anthropic_api_key"]
-        output_path = self.config["output_path"]
-        n_workers = min(self.config["n_workers"], cpu_count())
+        n_workers = self.config.get("n_workers", cpu_count())
         
-        # Get input data
-        image_paths = data["pdf_page_image_paths"]
+        # Read previous step's output
+        pdf_page_image_paths = data["pdf_page_image_paths"]
         
+        # Limit number of workers to number of input images
+        n_workers = min(n_workers, len(pdf_page_image_paths))
+
         # Process images in parallel
         with Pool(n_workers) as pool:
-            args = [(path, api_key, path.parent) for path in image_paths]
-            results = pool.map(_StepProcessImages_worker_fn, args)
+            args = [(path, api_key, path.parent) for path in pdf_page_image_paths]
+            results = pool.map(_StepExtractPageImageLabs_worker_fn, args)
         
         # Group results by PDF
         pdf_results = {}
         for img_path, labs in results:
             pdf_path = img_path.parent / f"{img_path.parent.name}.pdf"
-            if pdf_path not in pdf_results:
-                pdf_results[pdf_path] = []
+            if pdf_path not in pdf_results: pdf_results[pdf_path] = []
             pdf_results[pdf_path].extend(labs)
         
         # Save aggregated results
@@ -345,7 +350,6 @@ class StepProcessImages(PipelineStep):
         
         return {"results": all_results}
 
-# Step 4: Merge Results
 def _StepMergeResults_worker_fn(args):
     """Process single CSV file"""
     csv_path, = args
@@ -357,7 +361,7 @@ def _StepMergeResults_worker_fn(args):
         logger.error(f"Error reading {csv_path}: {e}", exc_info=True)
         return None
 
-class StepMergeResults(PipelineStep):
+class StepMergePageImageLabs(PipelineStep):
     def execute(self, data: dict) -> dict:
         self.logger.info("Stage 4: Merging results")
         
@@ -397,7 +401,7 @@ class StepMergeResults(PipelineStep):
         """Save statistics and unique values"""
         # ...existing statistics code...
 
-class StepGeneratePlots(PipelineStep):
+class StepPlotLabs(PipelineStep):
 
     def execute(self, data: dict) -> dict:
         # Read configuration
@@ -446,6 +450,7 @@ def main():
     INPUT_PATH = os.getenv("INPUT_PATH")
     OUTPUT_PATH = os.getenv("OUTPUT_PATH")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+    INPUT_FILE_REGEX = r".*analises.*\.pdf$" # TODO: move to .env
 
     # Assert input path exists
     if not INPUT_PATH or not Path(INPUT_PATH).exists():
@@ -465,15 +470,16 @@ def main():
     # Execute pipeline
     base_config = {
         "input_path": Path(INPUT_PATH),
+        "input_file_regex": INPUT_FILE_REGEX,
         "output_path": Path(OUTPUT_PATH),
-        "anthropic_api_key": ANTHROPIC_API_KEY
+        "anthropic_api_key": ANTHROPIC_API_KEY,
     }
     pipeline = Pipeline([
         StepCopyPDFs({**base_config, "n_workers": cpu_count()}),
-        StepExtractPages({**base_config, "n_workers": 2}),
-        StepProcessImages({**base_config, "n_workers": 2}),
-        StepMergeResults({**base_config, "n_workers": 2}),
-        StepGeneratePlots({**base_config, "n_workers": 2})
+        StepExtractPageImages({**base_config, "n_workers": 2}),
+        StepExtractPageImageLabs({**base_config, "n_workers": 2}),
+        StepMergePageImageLabs({**base_config, "n_workers": 2}),
+        StepPlotLabs({**base_config, "n_workers": 2})
     ])
     pipeline.execute()
 
