@@ -123,7 +123,7 @@ def extract_labs_from_page_image(image_path, client):
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
 
     message = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-3-5-sonnet-20241022", # TODO: softcode
         max_tokens=8192,
         system=[
             {
@@ -206,6 +206,7 @@ class PipelineStep(ABC):
         self.config = config
         step_name = self.__class__.__name__
         self.logger = logging.getLogger(f"{step_name}")
+        
         # Add prefix to all log messages for this step
         for handler in self.logger.handlers:
             handler.setFormatter(
@@ -308,15 +309,18 @@ class StepExtractPageImages(PipelineStep):
         n_workers = min(n_workers, len(input_pdf_paths))
         
         # Extract pages in parallel
-        all_image_paths = []
+        pdf_page_image_paths = []
         with Pool(n_workers) as pool:
             args = [(path, path.parent, self.logger) for path in input_pdf_paths]
             results = pool.map(_StepExtractPageImages_worker_fn, args)
-            for paths in results:
-                all_image_paths.extend(paths)
+            for paths in results: pdf_page_image_paths.extend(paths)
                 
-        self.logger.info(f"Total pages extracted: {len(all_image_paths)}")
-        return {"pdf_page_image_paths": all_image_paths}
+        self.logger.info(f"Total pages extracted: {len(pdf_page_image_paths)}")
+
+        # Return pipeline step output
+        return {
+            "pdf_page_image_paths": pdf_page_image_paths
+        }
 
 # Step 3: Process Images
 def _StepExtractPageImageLabs_worker_fn(args):
@@ -376,7 +380,10 @@ class StepExtractPageImageLabs(PipelineStep):
                 self.logger.info(f"Saved aggregated results to {csv_path}")
                 all_results.extend(labs)
         
-        return {"results": all_results}
+        # Return pipeline step output
+        return {
+            "results": all_results
+        }
 
 def _StepMergeResults_worker_fn(args):
     """Process single CSV file"""
@@ -426,8 +433,6 @@ class StepPlotLabs(PipelineStep):
     def execute(self, data: dict) -> dict:
         # Read configuration
         output_path = self.config["output_path"]
-
-        self.logger.info("Stage 4: Generating plots")
 
         # Ensure output directories exist
         plots_dir = output_path / "plots"
