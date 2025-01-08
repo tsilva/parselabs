@@ -31,24 +31,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger('labs-parser')
 
-# Directory constants
-INPUT_PATH = Path(os.getenv("SOURCE_PATH"))
-OUTPUT_PATH = Path(os.getenv("DESTINATION_PATH"))
-PLOTS_DIR = OUTPUT_PATH / "plots"
-
-# Validate required paths exist
-if not INPUT_PATH.exists():
-    logger.error(f"Source path does not exist: {INPUT_PATH}")
-    sys.exit(1)
-
-if not OUTPUT_PATH.exists():
-    logger.error(f"Destination path does not exist: {OUTPUT_PATH}")
-    sys.exit(1)
-
-# Ensure output directories exist
-# DESTINATION_PATH.mkdir(exist_ok=True)
-PLOTS_DIR.mkdir(exist_ok=True)
-
 with open("config/lab_names.json", "r") as f: LAB_NAMES = json.load(f)
 with open("config/lab_methods.json", "r") as f: LAB_METHODS = json.load(f)
 with open("config/lab_units.json", "r") as f: LAB_UNITS = json.load(f)
@@ -116,37 +98,7 @@ Para testes sem um limite máximo especificado, use 9999.""",
     }
 ]
 
-def hash_file(file_path, length=4):
-    """Calculate MD5 hash of a file"""
-    hash_md5 = hashlib.md5()
-    with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_md5.update(chunk)
-    full_hash = hash_md5.hexdigest()
-    short_hash = full_hash[:length]
-    return short_hash
-
-def preprocess_page_image(image):
-    """Optimize image by converting to grayscale, resizing if needed, and quantizing"""
-
-    # Convert to grayscale
-    gray_image = image.convert('L')
-    
-    # Only resize if image is wider than maximum width
-    MAX_WIDTH = 800
-    if gray_image.width > MAX_WIDTH:
-        # Calculate new height maintaining aspect ratio
-        ratio = MAX_WIDTH / gray_image.width
-        height = int(gray_image.height * ratio)
-        # Resize image
-        gray_image = gray_image.resize((MAX_WIDTH, height), Image.Resampling.LANCZOS)
-    
-    # Quantize to 128 colors and convert back to grayscale for JPEG compatibility
-    quantized = gray_image.quantize(colors=128)
-    final_image = quantized.convert('L')
-    return final_image
-
-def parse_labs_from_page_image(image_path, client):
+def extract_labs_from_page_image(image_path, client):
     """Process a single image with Claude"""
     with open(image_path, "rb") as img_file:
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
@@ -180,6 +132,35 @@ def parse_labs_from_page_image(image_path, client):
         for result in results: labs.append(result)
     return labs
 
+def hash_file(file_path, length=4):
+    """Calculate MD5 hash of a file"""
+    hash_md5 = hashlib.md5()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""): hash_md5.update(chunk)
+    full_hash = hash_md5.hexdigest()
+    short_hash = full_hash[:length]
+    return short_hash
+
+def preprocess_page_image(image):
+    """Optimize image by converting to grayscale, resizing if needed, and quantizing"""
+
+    # Convert to grayscale
+    gray_image = image.convert('L')
+    
+    # Only resize if image is wider than maximum width
+    MAX_WIDTH = 800
+    if gray_image.width > MAX_WIDTH:
+        # Calculate new height maintaining aspect ratio
+        ratio = MAX_WIDTH / gray_image.width
+        height = int(gray_image.height * ratio)
+        # Resize image
+        gray_image = gray_image.resize((MAX_WIDTH, height), Image.Resampling.LANCZOS)
+    
+    # Quantize to 128 colors and convert back to grayscale for JPEG compatibility
+    quantized = gray_image.quantize(colors=128)
+    final_image = quantized.convert('L')
+    return final_image
+
 def create_lab_test_plot(df_test, lab_name, output_dir):
     """Create a time series plot for a specific lab test"""
     plt.figure(figsize=(10, 6))
@@ -194,62 +175,67 @@ def create_lab_test_plot(df_test, lab_name, output_dir):
     plt.close()
     logger.info(f"Saved plot for {lab_name} to {output_file}")
 
-def plot_labs_from_csv(input_path):
-    df = pd.read_csv(input_path, sep=';')
-    
-    # Convert date column
-    df['date'] = pd.to_datetime(df['date'])
-    
-    # Process each unique lab test
-    for lab_name in df['lab_name'].unique():
-        logger.info(f"Processing {lab_name}")
-        df_test = df[df['lab_name'] == lab_name]
-        create_lab_test_plot(df_test, lab_name, PLOTS_DIR)
 
 class PipelineStep(ABC):
     """Abstract base class for pipeline steps"""
-    def __init__(self, n_workers=1):
-        self.n_workers = n_workers
+    def __init__(self, config):
+        self.config = config
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
     
     @abstractmethod
     def execute(self, data: dict) -> dict:
         pass
 
+def _StepCopyPDFs_worker_fn(args):
+    """Copy PDF file to destination directory"""
+    
+    # Read worker args
+    pdf_path, output_path = args
+
+    # Create output directory for document assets
+    output_dir = output_path / pdf_path.stem
+    output_dir.mkdir(exist_ok=True)
+    
+    # Copy PDF file to output directory
+    output_pdf_path = output_dir / pdf_path.name
+    shutil.copy2(pdf_path, output_pdf_path)
+                 
+    # Hash file
+    pdf_hash = hash_file(output_pdf_path)
+
+    # Return output path and hash
+    return output_pdf_path, pdf_hash
+
 class StepCopyPDFs(PipelineStep):
     """Step 1: Copy PDFs to destination"""
     def execute(self, data: dict) -> dict:
         self.logger.info("Stage 1: Copying PDFs to destination directories")
         
+        # Read configuration
+        input_path = self.config["input_path"]
+        output_path = self.config["output_path"]
+        n_workers = self.config["n_workers"]
+
         # TODO: softcode regex
         # Collect file paths for extraction
-        input_pdf_paths = [f for f in INPUT_PATH.glob("*.pdf") if "analises" in f.name.lower()]
-
+        pdf_hashes_map = {}
         output_pdf_paths = []
-        hash_map = {}
-        for pdf_file in input_pdf_paths:
-            # Calculate file hash and store in registry
-            file_hash = hash_file(pdf_file)
-            hash_map[file_hash] = pdf_file.name
-            
-            # Create output directory for PDF
-            output_dir = OUTPUT_PATH / pdf_file.stem
-            output_dir.mkdir(exist_ok=True)
-            
-            # Copy file to output directory
-            new_pdf_path = output_dir / pdf_file.name
-            shutil.copy2(pdf_file, new_pdf_path)
-            output_pdf_paths.append(new_pdf_path)
-            self.logger.info(f"Copied {pdf_file.name} to {new_pdf_path}")
-        
+        input_pdf_paths = [f for f in input_path.glob("*.pdf") if "analises" in f.name.lower()]
+        n_workers = max(min(n_workers, len(input_pdf_paths)), cpu_count())
+        with Pool(n_workers) as pool:
+            results = pool.map(_StepCopyPDFs_worker_fn, [(path, output_path) for path in input_pdf_paths])
+            for (path, file_hash) in results: 
+                pdf_hashes_map[file_hash] = path.name
+                output_pdf_paths.append(path)
+
         # Save hash registry
-        registry_path = OUTPUT_PATH / "hashes.json"
+        registry_path = output_path / "hashes.json"
         with open(registry_path, 'w', encoding='utf-8') as f:
-            json.dump(hash_map, f, indent=2, ensure_ascii=False)
+            json.dump(pdf_hashes_map, f, indent=2, ensure_ascii=False)
         
         return {
             "input_pdf_paths": input_pdf_paths, 
-            "hash_registry": hash_map
+            "hash_registry": pdf_hashes_map
         }
 
 def _StepExtractPages_worker_fn(args):
@@ -281,8 +267,10 @@ class StepExtractPages(PipelineStep):
     def execute(self, data: dict) -> dict:
         self.logger.info("Stage 2: Extracting PDF pages")
 
+        n_workers = self.config["n_workers"]
+
         input_pdf_paths = data["input_pdf_paths"]
-        n_workers = min(self.n_workers, len(input_pdf_paths))
+        n_workers = max(min(n_workers, len(input_pdf_paths)), cpu_count())
         self.logger.info(f"Extracting pages from {len(input_pdf_paths)} PDFs using {n_workers} workers")
         
         pdf_page_image_paths = []
@@ -297,11 +285,12 @@ class StepExtractPages(PipelineStep):
 
 def _StepProcessImages_worker_fn(args):
     """Process a single page with error handling"""
-    image_path, client_key = args
+    image_path, anthropic_api_key = args
     try:
+        # Initialize Claude client
+        claude_client = anthropic.Anthropic(api_key=anthropic_api_key)
         logger.info(f"Processing {image_path}")
-        client = anthropic.Anthropic(api_key=client_key)
-        labs = parse_labs_from_page_image(image_path, client)
+        labs = extract_labs_from_page_image(image_path, claude_client)
         df = pd.DataFrame(labs)
         csv_path = image_path.with_suffix('.csv')
         df.to_csv(csv_path, index=False, sep=';')
@@ -317,13 +306,15 @@ class StepProcessImages(PipelineStep):
     def execute(self, data: dict) -> dict:
         self.logger.info("Stage 3: Processing images")
 
+        anthropic_api_key = self.config["anthropic_api_key"]
+        n_workers = self.config["n_workers"]
+
         pdf_page_image_paths = data["pdf_page_image_paths"]
-        client = anthropic.Anthropic()
 
         # Process images in parallel
-        n_workers = min(self.n_workers, len(pdf_page_image_paths))
+        n_workers = min(n_workers, len(pdf_page_image_paths))
         self.logger.info(f"Processing {len(pdf_page_image_paths)} images with {n_workers} workers")
-        with Pool(n_workers) as pool: results = pool.map(_StepProcessImages_worker_fn, [(path, client.api_key) for path in pdf_page_image_paths])
+        with Pool(n_workers) as pool: results = pool.map(_StepProcessImages_worker_fn, [(path, anthropic_api_key) for path in pdf_page_image_paths])
         
         # Group results by PDF
         pdf_results = {}
@@ -351,10 +342,12 @@ class StepMergeResults(PipelineStep):
     def execute(self, data: dict) -> dict:
         self.logger.info("Stage 3: Merging results")
 
+        # Read configuration
+        output_path = self.config["output_path"]
+
         """Merge all CSV files in directory into a single sorted file"""
         # Find all CSV files, excluding page-specific CSVs using regex
-        csv_files = [f for f in OUTPUT_PATH.glob("**/*.csv") 
-                    if not re.search(r'\.\d{3}\.csv$', str(f))]
+        csv_files = [f for f in output_path.glob("**/*.csv") if not re.search(r'\.\d{3}\.csv$', str(f))]
         logger.info(f"Merging {len(csv_files)} CSV files")
         
         # Read and combine all CSVs
@@ -378,7 +371,7 @@ class StepMergeResults(PipelineStep):
         )
         
         # Export merged results
-        output_path = OUTPUT_PATH / "merged_results.csv"
+        output_path = output_path / "merged_results.csv"
         merged_df.to_csv(output_path, index=False, sep=';')
         logger.info(f"Saved merged results to {output_path}")
         
@@ -394,7 +387,7 @@ class StepMergeResults(PipelineStep):
         }
         
         for key, values in unique_values.items():
-            json_path = OUTPUT_PATH / f"unique_{key}.json"
+            json_path = output_path / f"unique_{key}.json"
             with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(values, f, ensure_ascii=False, indent=2)
             logger.info(f"Saved unique {key} to {json_path}")
@@ -404,8 +397,28 @@ class StepMergeResults(PipelineStep):
 class StepGeneratePlots(PipelineStep):
 
     def execute(self, data: dict) -> dict:
+        # Read configuration
+        output_path = self.config["output_path"]
+
         self.logger.info("Stage 4: Generating plots")
-        plot_labs_from_csv(OUTPUT_PATH / "merged_results.csv")
+
+        # Ensure output directories exist
+        # DESTINATION_PATH.mkdir(exist_ok=True)
+        plots_dir = output_path / "plots"
+        plots_dir.mkdir(exist_ok=True)
+
+        input_path = output_path / "merged_results.csv"
+        df = pd.read_csv(input_path, sep=';')
+        
+        # Convert date column
+        df['date'] = pd.to_datetime(df['date'])
+        
+        # Process each unique lab test
+        for lab_name in df['lab_name'].unique():
+            logger.info(f"Processing {lab_name}")
+            df_test = df[df['lab_name'] == lab_name]
+            create_lab_test_plot(df_test, lab_name, plots_dir)
+
         return data
 
 class Pipeline:
@@ -417,19 +430,50 @@ class Pipeline:
     def execute(self):
         data = {}
         for step in self.steps: 
-            _data = step.execute(data)
+            _data = step.execute(data) or {}
             data = {**data, **_data}
         return data
 
-if __name__ == "__main__":
+# TODO: should env vars be read here?
+# TODO: is there an easier way to perform env validation?
+def main():
     logger.info("Starting pipeline execution")
-    
+
+    # Directory constants
+    INPUT_PATH = os.getenv("INPUT_PATH")
+    OUTPUT_PATH = os.getenv("OUTPUT_PATH")
+    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+    # Assert input path exists
+    if not INPUT_PATH or not Path(INPUT_PATH).exists():
+        logger.error(f"Input path does not exist: {INPUT_PATH}")
+        sys.exit(1)
+
+    # Assert output path exists
+    if not OUTPUT_PATH or not Path(OUTPUT_PATH).exists():
+        logger.error(f"Output path does not exist: {OUTPUT_PATH}")
+        sys.exit(1)
+
+    # Assert API key is set
+    if not ANTHROPIC_API_KEY:
+        logger.error("Anthropic API key not found")
+        sys.exit(1)
+
     # Execute pipeline
+    base_config = {
+        "input_path": Path(INPUT_PATH),
+        "output_path": Path(OUTPUT_PATH),
+        "anthropic_api_key": ANTHROPIC_API_KEY
+    }
     pipeline = Pipeline([
-        StepCopyPDFs(),
-        StepExtractPages(n_workers=2),
-        StepProcessImages(n_workers=2),
-        StepMergeResults(),
-        StepGeneratePlots()
+        StepCopyPDFs({**base_config, "n_workers": cpu_count()}),
+        StepExtractPages({**base_config, "n_workers": 2}),
+        StepProcessImages({**base_config, "n_workers": 2}),
+        StepMergeResults({**base_config, "n_workers": 2}),
+        StepGeneratePlots({**base_config, "n_workers": 2})
     ])
     pipeline.execute()
+
+if __name__ == "__main__":
+    main()
+    
