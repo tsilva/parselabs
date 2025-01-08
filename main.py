@@ -4,11 +4,12 @@ load_dotenv()
 import logging
 import os
 import json
+import shutil
 import anthropic
 import base64
 from pathlib import Path
 import pandas as pd
-from pdf2image import convert_from_path
+import pdf2image
 import re
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -31,17 +32,17 @@ logging.basicConfig(
 logger = logging.getLogger('labs-parser')
 
 # Directory constants
-SOURCE_PATH = Path(os.getenv("SOURCE_PATH"))
-DESTINATION_PATH = Path(os.getenv("DESTINATION_PATH"))
-PLOTS_DIR = DESTINATION_PATH / "plots"
+INPUT_PATH = Path(os.getenv("SOURCE_PATH"))
+OUTPUT_PATH = Path(os.getenv("DESTINATION_PATH"))
+PLOTS_DIR = OUTPUT_PATH / "plots"
 
 # Validate required paths exist
-if not SOURCE_PATH.exists():
-    logger.error(f"Source path does not exist: {SOURCE_PATH}")
+if not INPUT_PATH.exists():
+    logger.error(f"Source path does not exist: {INPUT_PATH}")
     sys.exit(1)
 
-if not DESTINATION_PATH.exists():
-    logger.error(f"Destination path does not exist: {DESTINATION_PATH}")
+if not OUTPUT_PATH.exists():
+    logger.error(f"Destination path does not exist: {OUTPUT_PATH}")
     sys.exit(1)
 
 # Ensure output directories exist
@@ -127,6 +128,7 @@ def hash_file(file_path, length=4):
 
 def preprocess_page_image(image):
     """Optimize image by converting to grayscale, resizing if needed, and quantizing"""
+
     # Convert to grayscale
     gray_image = image.convert('L')
     
@@ -143,22 +145,6 @@ def preprocess_page_image(image):
     quantized = gray_image.quantize(colors=128)
     final_image = quantized.convert('L')
     return final_image
-
-def extract_pdf_pages(pdf_path):
-    """Extract each page of PDF as an image"""
-    images = convert_from_path(pdf_path)
-    base_name = pdf_path.stem
-    output_dir = pdf_path.parent  # Use the same directory as the PDF
-    image_paths = []
-    
-    for i, image in enumerate(images, start=1):
-        # Optimize image before saving
-        processed_image = preprocess_page_image(image)
-        image_path = output_dir / f"{base_name}.{i:03d}.jpg"  # Changed extension to jpg
-        processed_image.save(image_path, "JPEG", quality=80)  # Save as JPEG with 80% quality
-        image_paths.append(image_path)
-    
-    return image_paths
 
 def parse_labs_from_page_image(image_path, client):
     """Process a single image with Claude"""
@@ -242,84 +228,85 @@ class PipelineStep(ABC):
     def execute(self, data: dict, pool: Pool = None) -> dict:
         pass
 
+# TODO: parallelize
 class StepCopyPDFs(PipelineStep):
     """Step 1: Copy PDFs to destination"""
     def execute(self, data: dict) -> dict:
         self.logger.info("Stage 1: Copying PDFs to destination directories")
+        
+        # TODO: softcode regex
+        # Collect file paths for extraction
+        input_pdf_paths = [f for f in INPUT_PATH.glob("*.pdf") if "analises" in f.name.lower()]
 
-        pdf_files = [f for f in SOURCE_PATH.glob("*.pdf") if "analises" in f.name.lower()]
-        copied_paths = []
+        output_pdf_paths = []
+        hash_map = {}
+        for pdf_file in input_pdf_paths:
+            # Calculate file hash and store in registry
+            file_hash = hash_file(pdf_file)
+            hash_map[file_hash] = pdf_file.name
+            
+            # Create output directory for PDF
+            output_dir = OUTPUT_PATH / pdf_file.stem
+            output_dir.mkdir(exist_ok=True)
+            
+            # Copy file to output directory
+            new_pdf_path = output_dir / pdf_file.name
+            shutil.copy2(pdf_file, new_pdf_path)
+            output_pdf_paths.append(new_pdf_path)
+            self.logger.info(f"Copied {pdf_file.name} to {new_pdf_path}")
         
-        logger.info("Stage 1: Copying PDFs to destination directories")
-        for pdf_file in pdf_files:
-            short_hash = hash_file(pdf_file)
-            
-            # Create hash-based directory name with original filename
-            dir_name = f"[{short_hash}]-{pdf_file.stem}"  # Changed format to use square brackets
-            hash_dir = DESTINATION_PATH / dir_name
-            hash_dir.mkdir(exist_ok=True)
-            
-            # New PDF path
-            new_pdf_path = hash_dir / f"{dir_name}.pdf"
-            
-            # Copy file if it doesn't exist
-            if not new_pdf_path.exists():
-                from shutil import copy2
-                copy2(pdf_file, new_pdf_path)
-                logger.info(f"Copied {pdf_file.name} to {new_pdf_path}")
-            
-            copied_paths.append(new_pdf_path)
-            logger.info(f"Prepared {new_pdf_path}")
+        # Save hash registry
+        registry_path = OUTPUT_PATH / "hashes.json"
+        with open(registry_path, 'w', encoding='utf-8') as f:
+            json.dump(hash_map, f, indent=2, ensure_ascii=False)
         
-        return {"pdf_paths": copied_paths}
+        return {
+            "input_pdf_paths": input_pdf_paths, 
+            "hash_registry": hash_map
+        }
 
 def _StepExtractPages_worker_fn(args):
-    """Extract pages from a single PDF with error handling"""
-    logger = logging.getLogger(f"{__name__}.extract_single_pdf")
+    """Extract each page of PDF as an image"""
+
+    # Extract images from PDF
     pdf_path, = args
-    try:
-        images = convert_from_path(pdf_path)
-        base_name = pdf_path.stem
-        output_dir = pdf_path.parent
-        image_paths = []
-        
-        for i, image in enumerate(images, start=1):
-            optimized = preprocess_page_image(image)
-            image_path = output_dir / f"{base_name}.{i:03d}.jpg"
-            optimized.save(image_path, "JPEG", quality=80)
-            image_paths.append(image_path)
-        
-        logger.info(f"Extracted {len(image_paths)} pages from {pdf_path}")
-        return image_paths
-    except Exception as e:
-        logger.error(f"Error extracting pages from {pdf_path}: {e}", exc_info=True)
-        return []
+    images = pdf2image.convert_from_path(pdf_path)
+
+    # Create output path creator function
+    base_name = pdf_path.stem
+    output_dir = pdf_path.parent
+    output_path_fn = lambda x: output_dir / f"{base_name}.{x:03d}.jpg"
+
+    # Process and save each image
+    image_paths = []
+    for i, image in enumerate(images, start=1):
+        processed_image = preprocess_page_image(image)
+        image_path = output_path_fn(i)
+        processed_image.save(image_path, "JPEG", quality=80)
+        image_paths.append(image_path)
+    
+    # Return paths of extracted images
+    return image_paths
 
 class StepExtractPages(PipelineStep):
     """Step 2: Extract pages from PDFs as images"""
 
     def execute(self, data: dict) -> dict:
-
         self.logger.info("Stage 2: Extracting PDF pages")
-        pdf_paths = data["pdf_paths"]
+
+        input_pdf_paths = data["input_pdf_paths"]
         
-        # Prepare arguments for parallel processing
-        args = [(path,) for path in pdf_paths]
-        
-        # Configure parallel processing
+        pdf_page_image_paths = []
         n_workers = self.config.get_workers("extract_pages", cpu_count())
-        n_workers = min(n_workers, len(pdf_paths))
-        
-        all_image_paths = []
-        self.logger.info(f"Extracting pages from {len(pdf_paths)} PDFs using {n_workers} workers")
+        self.logger.info(f"Extracting pages from {len(input_pdf_paths)} PDFs using {n_workers} workers")
+        n_workers = min(n_workers, len(input_pdf_paths))
         with Pool(n_workers) as pool:
-            results = pool.map(_StepExtractPages_worker_fn, args)
-            for paths in results: all_image_paths.extend(paths)
-        
-        self.logger.info(f"Total pages extracted: {len(all_image_paths)}")
+            results = pool.map(_StepExtractPages_worker_fn, [(path,) for path in input_pdf_paths])
+            for paths in results: pdf_page_image_paths.extend(paths)
+        self.logger.info(f"Total pages extracted: {len(pdf_page_image_paths)}")
+
         return {
-            "pdf_paths": pdf_paths,
-            "image_paths": all_image_paths
+            "pdf_page_image_paths": pdf_page_image_paths
         }
 
 def _StepProcessImages_worker_fn(args):
@@ -342,24 +329,20 @@ class StepProcessImages(PipelineStep):
     """Step 3: Process extracted images"""
 
     def execute(self, data: dict) -> dict:
-
         self.logger.info("Stage 3: Processing images")
-        image_paths = data["image_paths"]
+
+        pdf_page_image_paths = data["pdf_page_image_paths"]
         client = anthropic.Anthropic()
-        
-        # Prepare args for parallel processing
-        args = [(path, client.api_key) for path in image_paths]
-        
+
         # Process images in parallel
         n_workers = self.config.get_workers("process_images", cpu_count())
-        n_workers = min(n_workers, len(image_paths))
-        
-        self.logger.info(f"Processing {len(image_paths)} images with {n_workers} workers")
-        with Pool(n_workers) as pool: results = pool.map(_StepProcessImages_worker_fn, args)
+        n_workers = min(n_workers, len(pdf_page_image_paths))
+        self.logger.info(f"Processing {len(pdf_page_image_paths)} images with {n_workers} workers")
+        with Pool(n_workers) as pool: results = pool.map(_StepProcessImages_worker_fn, [(path, client.api_key) for path in pdf_page_image_paths])
         
         # Group results by PDF
         pdf_results = {}
-        for img_path, labs in zip(image_paths, results):
+        for img_path, labs in zip(pdf_page_image_paths, results):
             pdf_path = img_path.parent / f"{img_path.parent.name}.pdf"
             if pdf_path not in pdf_results:
                 pdf_results[pdf_path] = []
@@ -385,7 +368,7 @@ class StepMergeResults(PipelineStep):
 
         """Merge all CSV files in directory into a single sorted file"""
         # Find all CSV files, excluding page-specific CSVs using regex
-        csv_files = [f for f in DESTINATION_PATH.glob("**/*.csv") 
+        csv_files = [f for f in OUTPUT_PATH.glob("**/*.csv") 
                     if not re.search(r'\.\d{3}\.csv$', str(f))]
         logger.info(f"Merging {len(csv_files)} CSV files")
         
@@ -410,7 +393,7 @@ class StepMergeResults(PipelineStep):
         )
         
         # Export merged results
-        output_path = DESTINATION_PATH / "merged_results.csv"
+        output_path = OUTPUT_PATH / "merged_results.csv"
         merged_df.to_csv(output_path, index=False, sep=';')
         logger.info(f"Saved merged results to {output_path}")
         
@@ -426,7 +409,7 @@ class StepMergeResults(PipelineStep):
         }
         
         for key, values in unique_values.items():
-            json_path = DESTINATION_PATH / f"unique_{key}.json"
+            json_path = OUTPUT_PATH / f"unique_{key}.json"
             with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(values, f, ensure_ascii=False, indent=2)
             logger.info(f"Saved unique {key} to {json_path}")
@@ -437,9 +420,8 @@ class StepGeneratePlots(PipelineStep):
 
     def execute(self, data: dict) -> dict:
         self.logger.info("Stage 4: Generating plots")
-        plot_labs_from_csv(DESTINATION_PATH / "merged_results.csv")
+        plot_labs_from_csv(OUTPUT_PATH / "merged_results.csv")
         return data
-
 
 class Pipeline:
     """Main pipeline executor"""
@@ -456,7 +438,9 @@ class Pipeline:
 
     def execute(self):
         data = {}
-        for step in self.steps: data = step.execute(data)
+        for step in self.steps: 
+            _data = step.execute(data)
+            data = {**data, **_data}
         return data
 
 if __name__ == "__main__":
