@@ -22,7 +22,16 @@ conda env update --file environment.yml --prune
 
 The `--prune` flag will remove any dependencies that are no longer required.
 
+## Testing
+
+```sh
+python -m tests.test_pipeline
+```
+
 ## TODO
 
-- [ ] Instead of adding hash as file prefix, create an hashes.json file at the root mapping the hash to the file name
+- [ ] Prescan for missing enum values using function call
+- [ ] Fix expected.csv
+- [ ] Run multiple parsers in parallel and merge their results
 - [ ] Add unit test for single document parsing
+- [ ] Upgrade to use langchain (abstract underlying model)
