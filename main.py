@@ -214,28 +214,33 @@ class StepCopyPDFs(PipelineStep):
         # Read configuration
         input_path = self.config["input_path"]
         output_path = self.config["output_path"]
-        n_workers = self.config["n_workers"]
+
+        # Calculate number of parallel workers to use in this step
+        # (use all available CPU cores)
+        n_workers = max(len(input_pdf_paths), cpu_count())
 
         # TODO: softcode regex
         # Collect file paths for extraction
+        input_pdf_paths = [f for f in input_path.glob("*.pdf") if "analises" in f.name.lower()]
+
+        # Copy PDFs to output directory in parallel
         pdf_hashes_map = {}
         output_pdf_paths = []
-        input_pdf_paths = [f for f in input_path.glob("*.pdf") if "analises" in f.name.lower()]
-        n_workers = max(min(n_workers, len(input_pdf_paths)), cpu_count())
         with Pool(n_workers) as pool:
             results = pool.map(_StepCopyPDFs_worker_fn, [(path, output_path) for path in input_pdf_paths])
             for (path, file_hash) in results: 
                 pdf_hashes_map[file_hash] = path.name
                 output_pdf_paths.append(path)
 
-        # Save hash registry
+        # Save registry of file hashes for quick 
+        # lookup of existing files in future runs
         registry_path = output_path / "hashes.json"
         with open(registry_path, 'w', encoding='utf-8') as f:
             json.dump(pdf_hashes_map, f, indent=2, ensure_ascii=False)
         
+        # Return pipeline step output
         return {
-            "input_pdf_paths": input_pdf_paths, 
-            "hash_registry": pdf_hashes_map
+            "input_pdf_paths": input_pdf_paths
         }
 
 def _StepExtractPages_worker_fn(args):
