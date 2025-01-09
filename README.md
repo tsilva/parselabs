@@ -76,3 +76,5 @@ python -m tests.test_pipeline TestPipeline.test_extract_labs
 - [ ] Add caching support
 - [ ] Make tests use same folder structure as output
 - [ ] Bump up number of workers
+- [ ] BUG: ferritin plot not working
+- [ ] BUG: merged csv should point to file hashes
