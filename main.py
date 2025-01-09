@@ -61,7 +61,7 @@ Para testes sem um limite máximo especificado, use 9999.""",
                             "lab_method" : {
                                 "type": "string",
                                 "enum": LAB_METHODS,
-                                "description": "Método de medição do resultado do exame laboratorial; N/A para resultados sem método especificado no documento."
+                                "description": "Método de medição do resultado do exame laboratorial; N/A para resultados sem método especificado"
                             },
                             "lab_value": {
                                 "type": "number",
@@ -339,7 +339,7 @@ class StepExtractPageImages(PipelineStep):
 
 def _StepExtractPageImageLabs_worker_fn(args):
     """Process single image with Claude"""
-    image_path, api_key, output_dir, logger = args  # Add logger to args
+    image_path, api_key, output_dir, logger = args
     try:
         logger.info(f"Processing {image_path}")
 
@@ -347,18 +347,18 @@ def _StepExtractPageImageLabs_worker_fn(args):
         client = anthropic.Anthropic(api_key=api_key)
         
         # Extract labs
-        labs = extract_labs_from_page_image(image_path, client)
+        labs_df = extract_labs_from_page_image(image_path, client)
         
         # Save page results
-        df = pd.DataFrame(labs)
         csv_path = output_dir / f"{image_path.stem}.csv"
-        df.to_csv(csv_path, index=False, sep=';')
+        labs_df.to_csv(csv_path, index=False, sep=';')
         logger.info(f"Saved page results to {csv_path}")
         
-        return image_path, labs
+        return image_path, labs_df
+
     except Exception as e:
         logger.error(f"Error processing {image_path}: {e}", exc_info=True)
-        return image_path, []
+        return image_path, pd.DataFrame()
 
 class StepExtractPageImageLabs(PipelineStep):
     def execute(self, data: dict) -> dict:
@@ -382,28 +382,43 @@ class StepExtractPageImageLabs(PipelineStep):
         for img_path, labs in results:
             pdf_path = img_path.parent / f"{img_path.parent.name}.pdf"
             if pdf_path not in pdf_results: pdf_results[pdf_path] = []
-            pdf_results[pdf_path].extend(labs)
+            pdf_results[pdf_path].append(labs)
         
         # Save aggregated results
         all_results = []
-        for pdf_path, labs in pdf_results.items():
-            if labs:
-                df = pd.DataFrame(labs)
+        for pdf_path, labs_list in pdf_results.items():
+            if labs_list:
+                # Concatenate all dataframes from this PDF
+                pdf_df = pd.concat(labs_list, ignore_index=True)
                 csv_path = pdf_path.with_suffix('.csv')
-                df.to_csv(csv_path, index=False, sep=';')
-                all_results.extend(labs)
+                pdf_df.to_csv(csv_path, index=False, sep=';')
+                all_results.append(pdf_df)
                 self.logger.info(f"Saved page results to {csv_path}")
         
         # Return pipeline step output
         return {
-            "results": all_results
+            "results": pd.concat(all_results, ignore_index=True) if all_results else pd.DataFrame()
         }
 
 def _StepMergeResults_worker_fn(args):
     """Process single CSV file"""
-    csv_path, logger = args  # Add logger to args
+    csv_path, logger = args
     try:
         df = pd.read_csv(csv_path, sep=';')
+        if len(df.columns) <= 1:  # Skip if file is malformed
+            logger.warning(f"Skipping malformed CSV: {csv_path}")
+            return None
+            
+        df['date'] = pd.to_datetime(df['date'])
+        df = df[[
+            "date",
+            "lab_name",
+            "lab_method",
+            "lab_value",
+            "lab_unit",
+            "lab_range_min",
+            "lab_range_max"
+        ]]
         df['source_file'] = csv_path.name
         return df
     except Exception as e:
