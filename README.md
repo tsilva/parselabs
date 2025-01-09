@@ -31,6 +31,7 @@ python -m tests.test_pipeline
 ## TODO
 
 - [ ] Fix expected.csv / unit test
+- [ ] Remove repo files
 - [ ] Prescan for missing enum values using function call
 - [ ] Run multiple parsers in parallel and merge their results
 - [ ] Remove PII

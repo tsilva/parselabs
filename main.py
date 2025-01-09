@@ -170,6 +170,10 @@ def extract_labs_from_page_image(image_path, client):
         "lab_range_max"
     ]]
 
+    # Normalize N/A values
+    labs_df = labs_df.replace({pd.NA: 'N/A', 'nan': 'N/A', pd.NaT: 'N/A'})
+    labs_df = labs_df.fillna('N/A')
+
     return labs_df
 
 def hash_file(file_path, length=4):
