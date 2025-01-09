@@ -1,6 +1,24 @@
 # labs-parser
 
+A Python tool that extracts and processes laboratory test results from medical documents using Claude 3 AI model. The tool can:
+- Extract structured data from PDF lab reports
+- Process multiple documents in parallel
+- Generate time series visualizations for lab results
+- Merge results into a standardized CSV format
+
 [Logo](logo.jpg)
+
+## Project Structure
+
+```
+labs-parser/
+├── config/               # Configuration files
+│   ├── lab_names.json   # Valid laboratory test names
+│   ├── lab_methods.json # Valid measurement methods
+│   └── lab_units.json   # Valid measurement units
+├── tests/               # Test files
+└── main.py             # Main pipeline implementation
+```
 
 ## Installation
 
@@ -11,6 +29,28 @@ conda env create -f environment.yml
 ```
 
 This will create a new conda environment with all the dependencies specified in the `environment.yml` file.
+
+## Usage
+
+1. Set up environment variables:
+   ```
+   INPUT_PATH=path/to/input/pdfs
+   OUTPUT_PATH=path/to/output
+   ANTHROPIC_API_KEY=your-api-key
+   INPUT_FILE_REGEX=.*analises.*\.pdf$  # Optional
+   ```
+
+2. Run the parser:
+   ```sh
+   python main.py
+   ```
+
+3. Check output directory for:
+   - Extracted page images (JPG)
+   - Page transcriptions (TXT)
+   - Structured results per page (CSV)
+   - Merged results (merged_results.csv)
+   - Time series plots (plots/*.png)
 
 ## Updating the Environment
 
@@ -27,12 +67,3 @@ The `--prune` flag will remove any dependencies that are no longer required.
 ```sh
 python -m tests.test_pipeline
 ```
-
-## TODO
-
-- [ ] Fix expected.csv / unit test
-- [ ] Remove repo files
-- [ ] Prescan for missing enum values using function call
-- [ ] Run multiple parsers in parallel and merge their results
-- [ ] Remove PII
-- [ ] Upgrade to use langchain (abstract underlying model)
