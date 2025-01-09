@@ -71,6 +71,8 @@ python -m tests.test_pipeline TestPipeline.test_extract_labs
 
 ## 📝 TODO
 
-- [ ] Smart file caching for images & transcriptions
-- [ ] PDF preview in results dashboard
-- [ ] Interactive time series plots
+- [ ] Split transcription into its own step, add progress bar
+- [ ] Add progress bar to extraction step
+- [ ] Add caching support
+- [ ] Make tests use same folder structure as output
+- [ ] Bump up number of workers
