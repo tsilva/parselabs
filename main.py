@@ -123,20 +123,36 @@ def load_env_config():
         "output_path" : Path(output_path),
         "anthropic_api_key" : anthropic_api_key
     }
-    
-def extract_labs_from_page_image(image_path, client, max_passes=3):
-    """Process a single image with Claude"""
+
+def transcription_from_page_image(image_path, client):
+    """Get a verbatim transcription of the lab report"""
     with open(image_path, "rb") as img_file:
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
 
-    pass_dfs = []
-    for pass_idx in range(max_passes):
-        logger.info(f"Processing {image_path} (Pass {pass_idx + 1})")
-
-        user_messages = [
+    message = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        max_tokens=8192,
+        temperature=0.0,
+        system=[
+            {
+                "type": "text",
+                "text": """You are a precise document transcriber. Your task is to:
+1. Write out ALL text visible in the image exactly as it appears
+2. Preserve the document's layout and formatting as much as possible using spaces and newlines
+3. Include ALL numbers, units, and reference ranges exactly as shown
+4. Use the exact same text case (uppercase/lowercase) as the document
+5. Do not interpret, summarize, or structure the content - just transcribe it""",
+                "cache_control": {"type": "ephemeral"}
+            }
+        ],
+        messages=[
             {
                 "role": "user",
                 "content": [
+                    {
+                        "type": "text",
+                        "text": "Please transcribe this lab report exactly as it appears, preserving layout and all details. Write the text exactly as shown in the document."
+                    },
                     {
                         "type": "image",
                         "source": {
@@ -148,91 +164,79 @@ def extract_labs_from_page_image(image_path, client, max_passes=3):
                 ]
             }
         ]
+    )
+    
+    return message.content[0].text
 
-        previous_df = pass_dfs[-1] if pass_dfs else None
-        if previous_df is not None:
-            from io import StringIO
-            buffer = StringIO()
-            previous_df.to_csv(buffer, index=False)
-            csv_data = buffer.getvalue()
-            buffer.close()
-            refine_messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"""Review your previous extraction attempt:
-{csv_data}
-
-Please perform a thorough review:
-1. Check for any missing tests by comparing image and CSV line by line
-2. Verify all methods are either exact match or N/A
-3. Confirm units match the document exactly
-4. Validate all numeric values are correctly converted
-5. Ensure no duplicate tests were missed
-
-Extract everything again with these improvements."""
-                        }
-                    ]
-                }
-            ]
-            user_messages.extend(refine_messages)
-
-        message = client.messages.create(
-            model="claude-3-5-sonnet-20241022", # TODO: softcode
-            max_tokens=8192,
-            temperature=0.0,
-            system=[
-                {
-                    "type": "text",
-                    "text": """You are a medical lab report analyzer with the following strict requirements:
-1. COMPLETENESS: Extract ALL test results, even if they seem redundant
-2. ACCURACY: Values and units must match the document exactly
+def extract_labs_from_page_transcription(transcription, client):
+    # Extract structured data from transcription
+    message = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        max_tokens=8192,
+        temperature=0.0,
+        system=[
+            {
+                "type": "text",
+                "text": """You are a medical lab report analyzer with the following strict requirements:
+1. COMPLETENESS: Extract ALL test results from the provided transcription
+2. ACCURACY: Values and units must match exactly
 3. CONSISTENCY: Use N/A for missing methods, never leave blank
-4. VALIDATION: Verify each extraction against these rules:
-   - All numeric values must be properly converted
-   - Units must match document exactly
-   - Methods must be either exact match or N/A
-   - Dates must be in YYYY-MM-DD format
-5. THOROUGHNESS: Process the document line by line to ensure nothing is missed""",
-                    "cache_control": {"type": "ephemeral"}
-                }
-            ],
-            messages=user_messages,
-            tools=TOOLS
-        )
+4. VALIDATION: Verify each extraction matches the source text exactly
+5. THOROUGHNESS: Process the text line by line to ensure nothing is missed""",
+                "cache_control": {"type": "ephemeral"}
+            }
+        ],
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"""Here is the verbatim transcription of a lab report. Extract all test results from this text:
 
-        labs = []
-        for content in message.content:
-            if not hasattr(content, "input"): continue
-            results = content.input["results"]
-            for result in results: labs.append(result)
+{transcription}
 
-        labs_df = pd.DataFrame(labs)
-        labs_df['date'] = pd.to_datetime(labs_df['date'])
-        labs_df = labs_df[[
-            "date",
-            "lab_name",
-            "lab_method",
-            "lab_value",
-            "lab_unit",
-            "lab_range_min",
-            "lab_range_max"
-        ]]
+Extract ALL lab results following these steps:
+1. Read through the entire text carefully
+2. For each test result found:
+   - Copy the test name exactly as written
+   - Note the method if specified (use N/A if not)
+   - Copy the numeric value exactly
+   - Copy the unit exactly as shown
+   - Record the reference ranges (use 0/9999 if not specified)
+3. Verify each extraction against the source text
+4. Double-check that no results were missed"""
+                    }
+                ]
+            }
+        ],
+        tools=TOOLS
+    )
 
-        # Normalize N/A values
-        labs_df = labs_df.replace({pd.NA: 'N/A', 'nan': 'N/A', pd.NaT: 'N/A'})
-        labs_df = labs_df.fillna('N/A')
+    # Process response
+    labs = []
+    for content in message.content:
+        if not hasattr(content, "input"): continue
+        results = content.input["results"]
+        for result in results: labs.append(result)
 
-        pass_dfs.append(labs_df)
+    labs_df = pd.DataFrame(labs)
+    labs_df['date'] = pd.to_datetime(labs_df['date'])
+    labs_df = labs_df[[
+        "date",
+        "lab_name",
+        "lab_method",
+        "lab_value",
+        "lab_unit",
+        "lab_range_min",
+        "lab_range_max"
+    ]]
 
-        # if labs_df matches previous then
-        if labs_df.equals(previous_df):
-            logger.info(f"Stopping at pass {pass_idx}")
-            break
-        
-    return pass_dfs
+    # Normalize N/A values
+    labs_df = labs_df.replace({pd.NA: 'N/A', 'nan': 'N/A', pd.NaT: 'N/A'})
+    labs_df = labs_df.fillna('N/A')
+
+    return labs_df
 
 def hash_file(file_path, length=4):
     """Calculate MD5 hash of a file"""
@@ -406,11 +410,18 @@ def _StepExtractPageImageLabs_worker_fn(args):
         # Initialize Claude client
         client = anthropic.Anthropic(api_key=api_key)
         
-        # Extract labs
-        labs_dfs = extract_labs_from_page_image(image_path, client)
-        labs_df = labs_dfs[-1]
+        # Transcribe image verbatim
+        transcription = transcription_from_page_image(image_path, client)
         
-        # Save page results
+        # Save transcription
+        txt_path = output_dir / f"{image_path.stem}.txt"
+        txt_path.write_text(transcription, encoding='utf-8')
+        logger.info(f"Saved transcription to {txt_path}")
+        
+        # Extract structured data from transcription
+        labs_df = extract_labs_from_page_transcription(transcription, client)
+        
+        # Save structured results
         csv_path = output_dir / f"{image_path.stem}.csv"
         labs_df.to_csv(csv_path, index=False, sep=';')
         logger.info(f"Saved page results to {csv_path}")

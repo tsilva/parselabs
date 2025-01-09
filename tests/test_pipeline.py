@@ -7,7 +7,7 @@ import pandas as pd
 import tempfile
 import shutil
 import os
-from main import extract_labs_from_page_image
+from main import extract_labs_from_page_transcription
 
 def find_test_pairs(fixtures_dir: Path):
     """Find all matching jpg/csv pairs in fixtures directory"""
@@ -34,7 +34,7 @@ class TestPipeline(unittest.TestCase):
         self.output_dir = Path(self.temp_dir) / "output"
         self.input_dir.mkdir()
         self.output_dir.mkdir()
-        #self.addCleanup(lambda: shutil.rmtree(self.temp_dir))
+        self.addCleanup(lambda: shutil.rmtree(self.temp_dir))
 
         # Update environment variables (cleaned up after test)
         #original_env = dict(os.environ)
@@ -72,7 +72,7 @@ class TestPipeline(unittest.TestCase):
                 expected_df = expected_df.fillna('N/A')
 
                 # Run extraction
-                actual_df = extract_labs_from_page_image(image_path, client)
+                actual_df = extract_labs_from_page_transcription(image_path, client)
                 
                 # TODO: move normalization inside extract_labs_from_page_image and create a csv reader for these files
                 # Normalize N/A values in actual results
