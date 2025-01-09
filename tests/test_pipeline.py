@@ -35,16 +35,7 @@ class TestPipeline(unittest.TestCase):
         self.input_dir.mkdir()
         self.output_dir.mkdir()
         self.addCleanup(lambda: shutil.rmtree(self.temp_dir))
-
-        # Update environment variables (cleaned up after test)
-        #original_env = dict(os.environ)
-        #os.environ.update({
-        #    "INPUT_PATH": str(self.input_dir),
-        #    "OUTPUT_PATH": str(self.output_dir),
-        #    "INPUT_FILE_REGEX": r".*\.jpg$"
-        #})
-        #self.addCleanup(lambda: os.environ.clear(), original_env)
-
+        
     def test_extract_labs_from_page_image(self):
         import anthropic
         api_key = os.getenv("ANTHROPIC_API_KEY")

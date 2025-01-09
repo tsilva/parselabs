@@ -107,7 +107,7 @@ Specific requirements:
 def load_env_config():
     # Read environment variables
     input_path = os.getenv("INPUT_PATH")
-    input_file_regex = os.getenv("INPUT_FILE_REGEX") or r".*analises.*\.pdf$" # TODO: add .env support
+    input_file_regex = os.getenv("INPUT_FILE_REGEX")
     output_path = os.getenv("OUTPUT_PATH")
     anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
     
@@ -116,7 +116,7 @@ def load_env_config():
     if not input_file_regex: raise ValueError("INPUT_FILE_REGEX not set")
     if not output_path or not Path(output_path).exists(): raise ValueError("OUTPUT_PATH not set")
     if not anthropic_api_key: raise ValueError("ANTHROPIC_API_KEY not set")
-        
+
     return {
         "input_path" : Path(input_path),
         "input_file_regex" : input_file_regex,
@@ -543,7 +543,6 @@ class StepMergePageLabs(PipelineStep):
         return {"merged_results": merged_df}
 
 class StepPlotLabs(PipelineStep):
-
     def execute(self, data: dict) -> dict:
         # Read configuration
         output_path = self.config["output_path"]
@@ -560,8 +559,14 @@ class StepPlotLabs(PipelineStep):
         
         # Process each unique lab test
         for lab_name in df['lab_name'].unique():
-            logger.info(f"Processing {lab_name}")
             df_test = df[df['lab_name'] == lab_name]
+            
+            # Skip if only one data point
+            if len(df_test) <= 1:
+                self.logger.info(f"Skipping plot for {lab_name} - only {len(df_test)} data point(s)")
+                continue
+                
+            self.logger.info(f"Creating plot for {lab_name} with {len(df_test)} data points")
             create_lab_test_plot(df_test, lab_name, plots_dir)
 
         return data
@@ -584,7 +589,7 @@ def create_default_pipeline(plot_labs=True):
     steps = [x for x in [
         StepCopyPDFs({**env_config}),
         StepExtractPageImages({**env_config}),
-        StepExtractPageImageLabs({**env_config, "n_workers": 2}), # TODO: softcode n_workers
+        StepExtractPageImageLabs({**env_config, "n_workers": 2}),
         StepMergePageLabs({**env_config}),
         StepPlotLabs({**env_config}) if plot_labs else None
     ] if x is not None]
