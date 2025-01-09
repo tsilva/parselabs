@@ -1,6 +1,8 @@
 # labs-parser
 
-[Logo](logo.jpg)
+<p align="center">
+  <img src="logo.jpg" alt="Labs Parser Logo" width="400"/>
+</p>
 
 A Python tool that extracts and processes laboratory test results from medical documents using Claude 3 AI model. The tool can:
 - Extract structured data from PDF lab reports
