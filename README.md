@@ -1,12 +1,12 @@
 # labs-parser
 
+[Logo](logo.jpg)
+
 A Python tool that extracts and processes laboratory test results from medical documents using Claude 3 AI model. The tool can:
 - Extract structured data from PDF lab reports
 - Process multiple documents in parallel
 - Generate time series visualizations for lab results
 - Merge results into a standardized CSV format
-
-[Logo](logo.jpg)
 
 ## Project Structure
 
@@ -71,3 +71,7 @@ The `--prune` flag will remove any dependencies that are no longer required.
 ```sh
 python -m tests.test_pipeline
 ```
+
+## TODO
+
+- [ ] Skip generated files (csv, txt, etc) if they already exist
