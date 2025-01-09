@@ -70,6 +70,8 @@
     "Monócitos",
     "Neutrófilos",
     "Plaquetas",
+    "Plaquetocrito",
+    "Eritroblastos por 100 Leucócitos",
     "Potássio",
     "Proteína C Reativa (PCR)",
     "Proteínas Totais",
@@ -146,5 +148,6 @@
     "Urina - Proteínas",
     "Urina - Glicose",
     "Urina - Corpos Cetónicos",
-    "Urina - Sangue"
+    "Urina - Sangue",
+    "Taxa de Filtração Glomerular (TFG)"
 ]
