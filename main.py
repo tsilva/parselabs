@@ -51,7 +51,7 @@ Para testes sem um limite máximo especificado, use 9999.""",
                         "properties": {
                             "date": {
                                 "type": "string",
-                                "description": "Data em formato ISO 8601 (por exemplo, '2022-01-01')",
+                                "description": "Data de realizacao dos exames, em formato ISO 8601 (por exemplo, '2022-01-01'): N/A caso a data nao esteja especificada no documento",
                             },
                             "lab_name": {
                                 "type": "string",
@@ -61,7 +61,7 @@ Para testes sem um limite máximo especificado, use 9999.""",
                             "lab_method" : {
                                 "type": "string",
                                 "enum": LAB_METHODS,
-                                "description": "Método de medição do resultado do exame laboratorial; N/A para resultados sem método especificado ou inferivel."
+                                "description": "Método de medição do resultado do exame laboratorial; N/A para resultados sem método especificado no documento."
                             },
                             "lab_value": {
                                 "type": "number",
@@ -82,6 +82,7 @@ Para testes sem um limite máximo especificado, use 9999.""",
                             }
                         },
                         "required": [
+                            "date",
                             "lab_name",
                             "lab_method",
                             "lab_value",
@@ -156,7 +157,20 @@ def extract_labs_from_page_image(image_path, client):
         if not hasattr(content, "input"): continue
         results = content.input["results"]
         for result in results: labs.append(result)
-    return labs
+
+    labs_df = pd.DataFrame(labs)
+    labs_df['date'] = pd.to_datetime(labs_df['date'])
+    labs_df = labs_df[[
+        "date",
+        "lab_name",
+        "lab_method",
+        "lab_value",
+        "lab_unit",
+        "lab_range_min",
+        "lab_range_max"
+    ]]
+
+    return labs_df
 
 def hash_file(file_path, length=4):
     """Calculate MD5 hash of a file"""
