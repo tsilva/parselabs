@@ -118,23 +118,16 @@ def load_env_config():
         "anthropic_api_key" : anthropic_api_key
     }
     
-def extract_labs_from_page_image(image_path, client):
+def extract_labs_from_page_image(image_path, client, max_passes=3):
     """Process a single image with Claude"""
     with open(image_path, "rb") as img_file:
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
 
-    message = client.messages.create(
-        model="claude-3-5-sonnet-20241022", # TODO: softcode
-        max_tokens=8192,
-        temperature=0.0,
-        system=[
-            {
-                "type": "text",
-                "text": "You are a meticulous medical lab report analyzer. Extract ALL laboratory test results from this image - missing even one result is considered a failure.",
-                "cache_control": {"type": "ephemeral"}
-            }
-        ],
-        messages=[
+    pass_dfs = []
+    for pass_idx in range(max_passes):
+        logger.info(f"Processing {image_path} (Pass {pass_idx + 1})")
+
+        user_messages = [
             {
                 "role": "user",
                 "content": [
@@ -148,33 +141,84 @@ def extract_labs_from_page_image(image_path, client):
                     }
                 ]
             }
-        ],
-        tools=TOOLS
-    )
+        ]
 
-    labs = []
-    for content in message.content:
-        if not hasattr(content, "input"): continue
-        results = content.input["results"]
-        for result in results: labs.append(result)
+        previous_df = pass_dfs[-1] if pass_dfs else None
+        if previous_df is not None:
+            from io import StringIO
+            buffer = StringIO()
+            previous_df.to_csv(buffer, index=False)
+            csv_data = buffer.getvalue()
+            buffer.close()
+            refine_messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"""
+This will be your second attempt to extract the lab results from the image. This was the result of your previous attempt after converting your tool calls to a CSV:
+{csv_data}
+""".strip()
+                            }
+                        ]
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Now that you've seen your previous attempt, carefully compare the image against your previous attempt and extract everything again from scratch but now with even more accuracy and completeness."
+                            }
+                        ]
+                    }
+            ]
+            user_messages.extend(refine_messages)
 
-    labs_df = pd.DataFrame(labs)
-    labs_df['date'] = pd.to_datetime(labs_df['date'])
-    labs_df = labs_df[[
-        "date",
-        "lab_name",
-        "lab_method",
-        "lab_value",
-        "lab_unit",
-        "lab_range_min",
-        "lab_range_max"
-    ]]
+        message = client.messages.create(
+            model="claude-3-5-sonnet-20241022", # TODO: softcode
+            max_tokens=8192,
+            system=[
+                {
+                    "type": "text",
+                    "text": "You are a meticulous medical lab report analyzer. Extract all laboratory test results from the provided image with absolute accuracy. Ensure that no result is missed, and include all variants of the same test if they appear with different units.",
+                    "cache_control": {"type": "ephemeral"}
+                }
+            ],
+            messages=user_messages,
+            tools=TOOLS
+        )
 
-    # Normalize N/A values
-    labs_df = labs_df.replace({pd.NA: 'N/A', 'nan': 'N/A', pd.NaT: 'N/A'})
-    labs_df = labs_df.fillna('N/A')
+        labs = []
+        for content in message.content:
+            if not hasattr(content, "input"): continue
+            results = content.input["results"]
+            for result in results: labs.append(result)
 
-    return labs_df
+        labs_df = pd.DataFrame(labs)
+        labs_df['date'] = pd.to_datetime(labs_df['date'])
+        labs_df = labs_df[[
+            "date",
+            "lab_name",
+            "lab_method",
+            "lab_value",
+            "lab_unit",
+            "lab_range_min",
+            "lab_range_max"
+        ]]
+
+        # Normalize N/A values
+        labs_df = labs_df.replace({pd.NA: 'N/A', 'nan': 'N/A', pd.NaT: 'N/A'})
+        labs_df = labs_df.fillna('N/A')
+
+        pass_dfs.append(labs_df)
+
+        # if labs_df matches previous then
+        if labs_df.equals(previous_df):
+            logger.info(f"Stopping at pass {pass_idx}")
+            break
+        
+    return pass_dfs
 
 def hash_file(file_path, length=4):
     """Calculate MD5 hash of a file"""
@@ -345,13 +389,12 @@ def _StepExtractPageImageLabs_worker_fn(args):
     """Process single image with Claude"""
     image_path, api_key, output_dir, logger = args
     try:
-        logger.info(f"Processing {image_path}")
-
         # Initialize Claude client
         client = anthropic.Anthropic(api_key=api_key)
         
         # Extract labs
-        labs_df = extract_labs_from_page_image(image_path, client)
+        labs_dfs = extract_labs_from_page_image(image_path, client)
+        labs_df = labs_dfs[-1]
         
         # Save page results
         csv_path = output_dir / f"{image_path.stem}.csv"
@@ -359,7 +402,6 @@ def _StepExtractPageImageLabs_worker_fn(args):
         logger.info(f"Saved page results to {csv_path}")
         
         return image_path, labs_df
-
     except Exception as e:
         logger.error(f"Error processing {image_path}: {e}", exc_info=True)
         return image_path, pd.DataFrame()
