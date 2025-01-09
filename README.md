@@ -4,11 +4,12 @@
   <img src="logo.jpg" alt="Labs Parser Logo" width="400"/>
 </p>
 
-A Python tool that extracts and processes laboratory test results from medical documents using Claude 3 AI model. The tool can:
+A Python tool that extracts laboratory test results from medical documents. The tool can:
+
 - Extract structured data from PDF lab reports
 - Process multiple documents in parallel
-- Generate time series visualizations for lab results
 - Merge results into a standardized CSV format
+- Generate time series visualizations for lab results
 
 ## Project Structure
 
@@ -24,34 +25,25 @@ labs-parser/
 
 ## Installation
 
-To set up the conda environment using the `environment.yml` file, run the following command:
+1. Set up the conda environment:
+   ```sh
+   conda env create -f environment.yml
+   ```
 
-```sh
-conda env create -f environment.yml
-```
-
-This will create a new conda environment with all the dependencies specified in the `environment.yml` file.
-
-## Usage
-
-1. Create and configure environment file:
+2. Create and configure environment file:
    ```sh
    cp .env.example .env
    ```
-   Then edit `.env` with your specific configuration:
-   ```
-   INPUT_PATH=path/to/input/pdfs
-   OUTPUT_PATH=path/to/output
-   ANTHROPIC_API_KEY=your-api-key
-   INPUT_FILE_REGEX=.*analises.*\.pdf$  # Optional
-   ```
+   Then edit `.env` with your configuration. See `.env.example` for required variables and their descriptions.
 
-2. Run the parser:
+## Usage
+
+1. Run the parser:
    ```sh
    python main.py
    ```
 
-3. Check output directory for:
+2. Check output directory for:
    - Extracted page images (JPG)
    - Page transcriptions (TXT)
    - Structured results per page (CSV)
@@ -70,8 +62,14 @@ The `--prune` flag will remove any dependencies that are no longer required.
 
 ## Testing
 
+The project includes unit tests to verify the parsing pipeline functionality:
+
 ```sh
+# Run all tests
 python -m tests.test_pipeline
+
+# Run specific test case
+python -m tests.test_pipeline TestPipeline.test_extract_labs
 ```
 
 ## TODO
