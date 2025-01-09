@@ -37,9 +37,15 @@ with open("config/lab_units.json", "r") as f: LAB_UNITS = json.load(f)
 TOOLS = [
     {
         "name": "extract_lab_results",
-        "description": f"""Extrair resultados estruturados de exames laboratoriais a partir de documentos médicos. 
-Para testes sem um limite mínimo especificado, use 0. 
-Para testes sem um limite máximo especificado, use 9999.""",
+        "description": f"""Extract structured laboratory test results from medical documents with high precision.
+Specific requirements:
+1. Extract EVERY test result visible in the image, including variants with different units
+2. Use N/A for missing methods, never leave blank or use nan
+3. For numeric ranges:
+   - Use 0 when no minimum is specified
+   - Use 9999 when no maximum is specified
+4. Dates must be in ISO 8601 format (YYYY-MM-DD)
+5. Units must match exactly as shown in the document""",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -151,37 +157,45 @@ def extract_labs_from_page_image(image_path, client, max_passes=3):
             csv_data = buffer.getvalue()
             buffer.close()
             refine_messages = [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": f"""
-This will be your second attempt to extract the lab results from the image. This was the result of your previous attempt after converting your tool calls to a CSV:
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"""Review your previous extraction attempt:
 {csv_data}
-""".strip()
-                            }
-                        ]
-                    },
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": "Now that you've seen your previous attempt, carefully compare the image against your previous attempt and extract everything again from scratch but now with even more accuracy and completeness."
-                            }
-                        ]
-                    }
+
+Please perform a thorough review:
+1. Check for any missing tests by comparing image and CSV line by line
+2. Verify all methods are either exact match or N/A
+3. Confirm units match the document exactly
+4. Validate all numeric values are correctly converted
+5. Ensure no duplicate tests were missed
+
+Extract everything again with these improvements."""
+                        }
+                    ]
+                }
             ]
             user_messages.extend(refine_messages)
 
         message = client.messages.create(
             model="claude-3-5-sonnet-20241022", # TODO: softcode
             max_tokens=8192,
+            temperature=0.0,
             system=[
                 {
                     "type": "text",
-                    "text": "You are a meticulous medical lab report analyzer. Extract all laboratory test results from the provided image with absolute accuracy. Ensure that no result is missed, and include all variants of the same test if they appear with different units.",
+                    "text": """You are a medical lab report analyzer with the following strict requirements:
+1. COMPLETENESS: Extract ALL test results, even if they seem redundant
+2. ACCURACY: Values and units must match the document exactly
+3. CONSISTENCY: Use N/A for missing methods, never leave blank
+4. VALIDATION: Verify each extraction against these rules:
+   - All numeric values must be properly converted
+   - Units must match document exactly
+   - Methods must be either exact match or N/A
+   - Dates must be in YYYY-MM-DD format
+5. THOROUGHNESS: Process the document line by line to ensure nothing is missed""",
                     "cache_control": {"type": "ephemeral"}
                 }
             ],
