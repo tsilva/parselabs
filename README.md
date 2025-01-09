@@ -32,7 +32,11 @@ This will create a new conda environment with all the dependencies specified in 
 
 ## Usage
 
-1. Set up environment variables:
+1. Create and configure environment file:
+   ```sh
+   cp .env.example .env
+   ```
+   Then edit `.env` with your specific configuration:
    ```
    INPUT_PATH=path/to/input/pdfs
    OUTPUT_PATH=path/to/output
