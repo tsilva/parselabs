@@ -16,9 +16,12 @@ def find_test_pairs(fixtures_dir: Path):
     
     for jpg_file in jpg_files:
         csv_file = jpg_file.with_suffix('.csv')
-        if csv_file.exists():
-            pairs.append((jpg_file, csv_file))
+        if not csv_file.exists(): continue
+        pairs.append((jpg_file, csv_file))
     
+    # Sort by name (ascending)
+    pairs.sort(key=lambda pair: pair[0].name)
+
     return pairs
 
 class TestPipeline(unittest.TestCase):
@@ -51,17 +54,11 @@ class TestPipeline(unittest.TestCase):
         fixtures_dir = Path("tests/fixtures")
         test_pairs = find_test_pairs(fixtures_dir)
         self.assertTrue(len(test_pairs) > 0, "No test pairs (jpg/csv) found in fixtures directory")
-        
-        # Log which pairs will be tested
-        print("\nFound the following test pairs:")
-        for img, csv in test_pairs:
-            print(f"  - {img.name} -> {csv.name}")
-        print()
 
         # Process each pair
         for image_path, expected_csv_path in test_pairs:
             with self.subTest(f"Testing {image_path.stem}"):
-                print(f"\nTesting file pair: {image_path.name} against {expected_csv_path.name}")
+                print(f"\nTesting: {image_path.name}")
 
                 # Copy image to input directory
                 shutil.copy2(image_path, self.input_dir / image_path.name)
@@ -69,9 +66,18 @@ class TestPipeline(unittest.TestCase):
                 # Load expected results
                 expected_df = pd.read_csv(expected_csv_path, sep=';')
                 expected_df['date'] = pd.to_datetime(expected_df['date'])
+                
+                # Normalize N/A values
+                expected_df = expected_df.replace({pd.NA: 'N/A', 'nan': 'N/A', pd.NaT: 'N/A'})
+                expected_df = expected_df.fillna('N/A')
 
                 # Run extraction
                 actual_df = extract_labs_from_page_image(image_path, client)
+                
+                # TODO: move normalization inside extract_labs_from_page_image and create a csv reader for these files
+                # Normalize N/A values in actual results
+                actual_df = actual_df.replace({pd.NA: 'N/A', 'nan': 'N/A', pd.NaT: 'N/A'})
+                actual_df = actual_df.fillna('N/A')
 
                 # Prepare error message if there are differences
                 error_msg = []
