@@ -7,7 +7,7 @@ import pandas as pd
 import tempfile
 import shutil
 import os
-from main import extract_labs_from_page_transcription
+from main import transcription_from_page_image, extract_labs_from_page_transcription
 
 def find_test_pairs(fixtures_dir: Path):
     """Find all matching jpg/csv pairs in fixtures directory"""
@@ -63,22 +63,19 @@ class TestPipeline(unittest.TestCase):
                 # Copy image to input directory
                 shutil.copy2(image_path, self.input_dir / image_path.name)
 
+                # TODO: extract into util
                 # Load expected results
                 expected_df = pd.read_csv(expected_csv_path, sep=';')
                 expected_df['date'] = pd.to_datetime(expected_df['date'])
                 
-                # Normalize N/A values
+                # Normalize N/A values 
                 expected_df = expected_df.replace({pd.NA: 'N/A', 'nan': 'N/A', pd.NaT: 'N/A'})
                 expected_df = expected_df.fillna('N/A')
 
                 # Run extraction
-                actual_df = extract_labs_from_page_transcription(image_path, client)
+                transcription = transcription_from_page_image(image_path, client)
+                actual_df = extract_labs_from_page_transcription(transcription, client)
                 
-                # TODO: move normalization inside extract_labs_from_page_image and create a csv reader for these files
-                # Normalize N/A values in actual results
-                actual_df = actual_df.replace({pd.NA: 'N/A', 'nan': 'N/A', pd.NaT: 'N/A'})
-                actual_df = actual_df.fillna('N/A')
-
                 # Prepare error message if there are differences
                 error_msg = []
 
