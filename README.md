@@ -1,17 +1,21 @@
-# labs-parser
+# 🧪 labs-parser
 
 <p align="center">
   <img src="logo.jpg" alt="Labs Parser Logo" width="400"/>
 </p>
 
-A Python tool that extracts laboratory test results from medical documents. The tool can:
+> 🤖 AI-powered lab report parser that turns medical PDFs into structured data
 
-- Extract structured data from PDF lab reports
-- Process multiple documents in parallel
-- Merge results into a standardized CSV format
-- Generate time series visualizations for lab results
+A Python tool that extracts laboratory test results from medical documents with high precision:
 
-## Project Structure
+🎯 **Key Features**:
+- 📄 Extract structured data from PDF lab reports
+- ⚡ Process multiple documents in parallel
+- 📊 Generate beautiful time series visualizations
+- 🔄 Smart caching to avoid reprocessing
+- 📁 Clean, standardized CSV output
+
+## 🗂️ Project Structure
 
 ```
 labs-parser/
@@ -23,7 +27,7 @@ labs-parser/
 └── main.py             # Main pipeline implementation
 ```
 
-## Installation
+## ⚙️ Installation
 
 1. Set up the conda environment:
    ```sh
@@ -34,9 +38,9 @@ labs-parser/
    ```sh
    cp .env.example .env
    ```
-   Then edit `.env` with your configuration. See `.env.example` for required variables and their descriptions.
+   Then edit `.env` with your configuration. See `.env.example` for required variables.
 
-## Usage
+## 🚀 Usage
 
 1. Run the parser:
    ```sh
@@ -44,34 +48,29 @@ labs-parser/
    ```
 
 2. Check output directory for:
-   - Extracted page images (JPG)
-   - Page transcriptions (TXT)
-   - Structured results per page (CSV)
-   - Merged results (merged_results.csv)
-   - Time series plots (plots/*.png)
+   ```
+   📂 output/
+   ├── 📊 plots/          # Time series visualizations
+   ├── 🖼️ *.jpg           # Extracted page images
+   ├── 📝 *.txt           # Page transcriptions
+   ├── 📑 *.csv           # Structured results
+   └── 📈 merged_results.csv
+   ```
 
-## Updating the Environment
+## 🧪 Testing
 
-If you need to update the conda environment with any changes made to the `environment.yml` file, run:
-
-```sh
-conda env update --file environment.yml --prune
-```
-
-The `--prune` flag will remove any dependencies that are no longer required.
-
-## Testing
-
-The project includes unit tests to verify the parsing pipeline functionality:
+Run the test suite to verify functionality:
 
 ```sh
-# Run all tests
+# Run all tests 🔍
 python -m tests.test_pipeline
 
-# Run specific test case
+# Run specific test case 🎯
 python -m tests.test_pipeline TestPipeline.test_extract_labs
 ```
 
-## TODO
+## 📝 TODO
 
-- [ ] Skip generated files (csv, txt, etc) if they already exist
+- [ ] Smart file caching for images & transcriptions
+- [ ] PDF preview in results dashboard
+- [ ] Interactive time series plots
