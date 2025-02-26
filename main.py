@@ -7,7 +7,6 @@ import json
 import shutil
 import anthropic
 import base64
-from pathlib import Path
 import pandas as pd
 import pdf2image
 import re
@@ -18,7 +17,6 @@ from multiprocessing import Pool, cpu_count
 from abc import ABC, abstractmethod
 from PIL import Image
 from pathlib import Path
-import os
 
 # Configure logging
 logging.basicConfig(
@@ -85,6 +83,14 @@ Specific requirements:
                             "lab_range_max": {
                                 "type": "number",
                                 "description": "Limite superior do intervalo de referência normal. Use 9999 se nenhum limite máximo for especificado."
+                            },
+                            "confidence" : {
+                                "type": "number",
+                                "description": "Confiança do modelo na extração fidedigna do resultado do exame laboratorial; entre 0 e 1"
+                            },
+                            "lack_of_confidence_reason": {
+                                "type": "string",
+                                "description": "Motivo para a falta de confiança no resultado do exame laboratorial; opcional, fornecido apenas se a confiança for menor que 1"
                             }
                         },
                         "required": [
@@ -94,12 +100,21 @@ Specific requirements:
                             "lab_value",
                             "lab_unit",
                             "lab_range_min",
-                            "lab_range_max"
+                            "lab_range_max",
+                            "confidence"
                         ]
                     }
+                },
+                "confidence": {
+                    "type": "number",
+                    "description": "Confiança geral do modelo na extração fidedigna de todos os resultados de exames laboratoriais; entre 0 e 1"
+                },
+                "lack_of_confidence_reason": {
+                    "type": "string",
+                    "description": "Motivo para a falta de confiança em um ou mais resultados de exames laboratoriais; opcional, fornecido apenas se a confiança for menor que 1"
                 }
             },
-            "required": ["results"]
+            "required": ["results", "confidence"]
         }
     }
 ]
@@ -214,29 +229,13 @@ Extract ALL lab results following these steps:
     )
 
     # Process response
-    labs = []
+    tool_result = None
     for content in message.content:
         if not hasattr(content, "input"): continue
-        results = content.input["results"]
-        for result in results: labs.append(result)
-
-    labs_df = pd.DataFrame(labs)
-    labs_df['date'] = pd.to_datetime(labs_df['date'])
-    labs_df = labs_df[[
-        "date",
-        "lab_name",
-        "lab_method",
-        "lab_value",
-        "lab_unit",
-        "lab_range_min",
-        "lab_range_max"
-    ]]
-
-    # Normalize N/A values
-    labs_df = labs_df.replace({pd.NA: 'N/A', 'nan': 'N/A', pd.NaT: 'N/A'})
-    labs_df = labs_df.fillna('N/A')
-
-    return labs_df
+        assert tool_result is None, "Multiple tools detected in message"
+        tool_result = content.input
+        
+    return tool_result
 
 def hash_file(file_path, length=4):
     """Calculate MD5 hash of a file"""
@@ -410,16 +409,58 @@ def _StepExtractPageImageLabs_worker_fn(args):
         # Initialize Claude client
         client = anthropic.Anthropic(api_key=api_key)
         
-        # Transcribe image verbatim
-        transcription = transcription_from_page_image(image_path, client)
-        
-        # Save transcription
         txt_path = output_dir / f"{image_path.stem}.txt"
-        txt_path.write_text(transcription, encoding='utf-8')
-        logger.info(f"Saved transcription to {txt_path}")
-        
+        if not txt_path.exists():
+            # Transcribe image verbatim
+            transcription = transcription_from_page_image(image_path, client)
+            
+            # Save transcription
+            txt_path.write_text(transcription, encoding='utf-8')
+            logger.info(f"Saved transcription to {txt_path}")
+        else:
+            # Load existing transcription
+            transcription = txt_path.read_text(encoding='utf-8')
+            logger.info(f"Loaded existing transcription from {txt_path}")
+            
         # Extract structured data from transcription
-        labs_df = extract_labs_from_page_transcription(transcription, client)
+        extracted_data = extract_labs_from_page_transcription(transcription, client)
+        
+        # Log warnings for low confidence
+        confidence = extracted_data["confidence"]
+        lack_of_confidence_reason = extracted_data.get("lack_of_confidence_reason")
+        if confidence < 1:
+            logger.warning(f"Confidence below 1 for {image_path}: {confidence}")
+            if lack_of_confidence_reason: logger.warning(f" - Lack of confidence reason: {lack_of_confidence_reason}")
+        
+        # Save structured results
+        json_path = output_dir / f"{image_path.stem}.json"
+        with open(json_path, 'w', encoding='utf-8') as f: json.dump(extracted_data, f, indent=2, ensure_ascii=False)
+        logger.info(f"Saved extraction results to {json_path}")
+
+        # Process structured data
+        labs = []
+        results = extracted_data["results"]
+        for result in results: labs.append(result)
+        labs_df = pd.DataFrame(labs)
+        labs_df['date'] = pd.to_datetime(labs_df['date'])
+        labs_df = labs_df[[
+            "date",
+            "lab_name",
+            "lab_method",
+            "lab_value",
+            "lab_unit",
+            "lab_range_min",
+            "lab_range_max",
+            "confidence",
+            "lack_of_confidence_reason",
+        ]]
+
+        # Normalize N/A values
+        labs_df = labs_df.replace({pd.NA: 'N/A', 'nan': 'N/A', pd.NaT: 'N/A'})
+        labs_df = labs_df.fillna('N/A')
+
+        # Add source file name
+        labs_df['source_file'] = image_path.parent.name + ".pdf"
         
         # Save structured results
         csv_path = output_dir / f"{image_path.stem}.csv"
@@ -488,9 +529,11 @@ def _StepMergeResults_worker_fn(args):
             "lab_value",
             "lab_unit",
             "lab_range_min",
-            "lab_range_max"
+            "lab_range_max",
+            "source_file",
+            "confidence",
+            "lack_of_confidence_reason",
         ]]
-        df['source_file'] = csv_path.name
         return df
     except Exception as e:
         logger.error(f"Error reading {csv_path}: {e}", exc_info=True)
