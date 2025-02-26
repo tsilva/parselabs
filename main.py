@@ -130,7 +130,7 @@ def transcription_from_page_image(image_path, client):
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
 
     message = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-3-7-sonnet-latest",
         max_tokens=8192,
         temperature=0.0,
         system=[
@@ -171,7 +171,7 @@ def transcription_from_page_image(image_path, client):
 def extract_labs_from_page_transcription(transcription, client):
     # Extract structured data from transcription
     message = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-3-7-sonnet-latest",
         max_tokens=8192,
         temperature=0.0,
         system=[
