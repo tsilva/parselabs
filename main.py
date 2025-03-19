@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(override=True)
 
 from enum import Enum
 import logging
@@ -20,7 +20,6 @@ from PIL import Image
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Any, Literal
-from datetime import date
 
 # Configure logging
 logging.basicConfig(
@@ -37,8 +36,9 @@ with open("config/lab_methods.json", "r") as f: LAB_METHODS = json.load(f)
 with open("config/lab_units.json", "r") as f: LAB_UNITS = json.load(f)
 
 # Create dynamic enums for lab names and units
-def create_dynamic_enum(name, data): return Enum(name, data)
+def create_dynamic_enum(name, data): return Enum(name, dict([(k, k) for k in data]), type=str)
 LabTestNameEnum = create_dynamic_enum('LabTestNameEnum', LAB_NAMES)
+LabMethodEnum = create_dynamic_enum('LabMethodEnum', LAB_METHODS)
 LabTestUnitEnum = create_dynamic_enum('LabTestUnitEnum', LAB_UNITS)
 
 class LabResult(BaseModel):
@@ -47,21 +47,21 @@ class LabResult(BaseModel):
     Includes measurement details, reference ranges, and status flags.
     """
     lab_name: LabTestNameEnum = Field(
-        description="The standardized name of the laboratory test performed, when unrecognized, select `N/A`"
+        description="The standardized name of the laboratory test performed, when unrecognized, select `#N/A`"
     )
     lab_value: float = Field(
         description="Quantitative result of the laboratory test"
     )
     lab_unit: LabTestUnitEnum = Field(
-        description="Unit of measurement for the test result (e.g., mg/dL, mmol/L, IU/mL), when unrecognized, select `N/A`"
+        description="Unit of measurement for the test result (e.g., mg/dL, mmol/L, IU/mL), when unrecognized, select `#N/A`"
     )
-    lab_method: Optional[str] = Field(
-        description="Analytical method or technique used (e.g., ELISA, HPLC, Microscopy)"
+    lab_method: LabMethodEnum = Field(
+        description="Analytical method or technique used (e.g., ELISA, HPLC, Microscopy), when unrecognized, select `#N/A`"
     )
-    lab_range_min: Optional[float] = Field(
+    lab_range_min: float = Field(
         description="Lower bound of the reference range for this test"
     )
-    lab_range_max: Optional[float] = Field(
+    lab_range_max: float = Field(
         description="Upper bound of the reference range for this test"
     )
     lab_status: Optional[Literal["low", "normal", "high", "abnormal"]] = Field(
@@ -70,7 +70,7 @@ class LabResult(BaseModel):
     lab_comments: Optional[str] = Field(
         description="Additional notes or observations about this specific result"
     )
-    confidence: Optional[float] = Field(
+    confidence: float = Field(
         description="Confidence score of the extraction process, ranging from 0 to 1"
     )
     lack_of_confidence_reason: Optional[str] = Field(
@@ -100,7 +100,7 @@ class HealthLabReport(BaseModel):
     physician_name: Optional[str] = Field(
         description="Name of the requesting or reviewing physician"
     )
-    confidence: Optional[float] = Field(
+    confidence: float = Field(
         description="Confidence score of the extraction process, ranging from 0 to 1"
     )
     lack_of_confidence_reason: Optional[str] = Field(
@@ -110,7 +110,9 @@ class HealthLabReport(BaseModel):
 TOOLS = [
     {
         "name": "extract_lab_results",
-        "description": f"""Extract structured laboratory test results from medical documents with high precision.
+        "description": f"""
+Extract structured laboratory test results from medical documents with high precision.
+
 Specific requirements:
 1. Extract EVERY test result visible in the image, including variants with different units
 2. Use N/A for missing methods, never leave blank or use nan
@@ -118,8 +120,9 @@ Specific requirements:
    - Use 0 when no minimum is specified
    - Use 9999 when no maximum is specified
 4. Dates must be in ISO 8601 format (YYYY-MM-DD)
-5. Units must match exactly as shown in the document""",
-        "input_schema": HealthLabReport.schema()
+5. Units must match exactly as shown in the document
+""".strip(),
+        "input_schema": HealthLabReport.model_json_schema()
     }
 ]
 
@@ -411,6 +414,7 @@ class StepExtractPageImages(PipelineStep):
 def _StepExtractPageImageLabs_worker_fn(args):
     """Process single image with Claude"""
     model_id, image_path, api_key, output_dir, logger = args
+
     try:
         # Initialize Claude client
         client = anthropic.Anthropic(api_key=api_key)
@@ -437,8 +441,7 @@ def _StepExtractPageImageLabs_worker_fn(args):
         lack_of_confidence_reason = extracted_data.get("lack_of_confidence_reason")
         if confidence < 1:
             logger.warning(f"Confidence below 1 for {image_path}: {confidence}")
-            if lack_of_confidence_reason: logger.warning(f" - Lack of confidence reason: {lack_of_confidence_reason}")
-        
+
         # Save structured results
         json_path = output_dir / f"{image_path.stem}.json"
         with open(json_path, 'w', encoding='utf-8') as f: json.dump(extracted_data, f, indent=2, ensure_ascii=False)
