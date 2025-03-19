@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+from enum import Enum
 import logging
 import os
 import json
@@ -17,6 +18,9 @@ from multiprocessing import Pool, cpu_count
 from abc import ABC, abstractmethod
 from PIL import Image
 from pathlib import Path
+from pydantic import BaseModel, Field
+from typing import List, Optional, Any, Literal
+from datetime import date
 
 # Configure logging
 logging.basicConfig(
@@ -32,6 +36,77 @@ with open("config/lab_names.json", "r") as f: LAB_NAMES = json.load(f)
 with open("config/lab_methods.json", "r") as f: LAB_METHODS = json.load(f)
 with open("config/lab_units.json", "r") as f: LAB_UNITS = json.load(f)
 
+# Create dynamic enums for lab names and units
+def create_dynamic_enum(name, data): return Enum(name, data)
+LabTestNameEnum = create_dynamic_enum('LabTestNameEnum', LAB_NAMES)
+LabTestUnitEnum = create_dynamic_enum('LabTestUnitEnum', LAB_UNITS)
+
+class LabResult(BaseModel):
+    """
+    Model representing an individual laboratory test result from a blood test or similar analysis.
+    Includes measurement details, reference ranges, and status flags.
+    """
+    lab_name: LabTestNameEnum = Field(
+        description="The standardized name of the laboratory test performed, when unrecognized, select `N/A`"
+    )
+    lab_value: float = Field(
+        description="Quantitative result of the laboratory test"
+    )
+    lab_unit: LabTestUnitEnum = Field(
+        description="Unit of measurement for the test result (e.g., mg/dL, mmol/L, IU/mL), when unrecognized, select `N/A`"
+    )
+    lab_method: Optional[str] = Field(
+        description="Analytical method or technique used (e.g., ELISA, HPLC, Microscopy)"
+    )
+    lab_range_min: Optional[float] = Field(
+        description="Lower bound of the reference range for this test"
+    )
+    lab_range_max: Optional[float] = Field(
+        description="Upper bound of the reference range for this test"
+    )
+    lab_status: Optional[Literal["low", "normal", "high", "abnormal"]] = Field(
+        description="Interpretation of the result relative to reference range"
+    )
+    lab_comments: Optional[str] = Field(
+        description="Additional notes or observations about this specific result"
+    )
+    confidence: Optional[float] = Field(
+        description="Confidence score of the extraction process, ranging from 0 to 1"
+    )
+    lack_of_confidence_reason: Optional[str] = Field(
+        description="Reason for low confidence in the extraction, if applicable"
+    )
+
+class HealthLabReport(BaseModel):
+    """
+    Model representing a complete laboratory report, typically for blood tests or similar analyses.
+    Includes patient information, report metadata, and test results.
+    """
+    report_date: str = Field(
+        description="Date when the laboratory report was issued, formatted as YYYY-MM-DD"
+    )
+    patient_name: str = Field(
+        description="Full name of the patient"
+    )
+    lab_results: List[LabResult] = Field(
+        description="Collection of individual test results included in this report"
+    )
+    lab_facility: Optional[str] = Field(
+        description="Name of the laboratory or facility performing the tests"
+    )
+    collection_date: Optional[str] = Field(
+        description="Date when the specimen was collected, formatted as YYYY-MM-DD"
+    )
+    physician_name: Optional[str] = Field(
+        description="Name of the requesting or reviewing physician"
+    )
+    confidence: Optional[float] = Field(
+        description="Confidence score of the extraction process, ranging from 0 to 1"
+    )
+    lack_of_confidence_reason: Optional[str] = Field(
+        description="Reason for low confidence in the extraction, if applicable"
+    )
+
 TOOLS = [
     {
         "name": "extract_lab_results",
@@ -44,108 +119,40 @@ Specific requirements:
    - Use 9999 when no maximum is specified
 4. Dates must be in ISO 8601 format (YYYY-MM-DD)
 5. Units must match exactly as shown in the document""",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "results": {
-                    "type": "array",
-                    "description": "Lista de resultados de exames laboratoriais",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "date": {
-                                "type": "string",
-                                "description": "Data de realizacao dos exames, em formato ISO 8601 (por exemplo, '2022-01-01'): N/A caso a data nao esteja especificada no documento",
-                            },
-                            "lab_name": {
-                                "type": "string",
-                                "enum": LAB_NAMES,
-                                "description": "Nome do exame laboratorial"
-                            },
-                            "lab_method" : {
-                                "type": "string",
-                                "enum": LAB_METHODS,
-                                "description": "Método de medição do resultado do exame laboratorial; N/A para resultados sem método especificado"
-                            },
-                            "lab_value": {
-                                "type": "number",
-                                "description": "Valor numérico medido do resultado do exame laboratorial"
-                            },
-                            "lab_unit": {
-                                "type": "string",
-                                "enum": LAB_UNITS,
-                                "description": "Unidade de medida para o resultado do exame; N/A para resultados sem unidade"
-                            },
-                            "lab_range_min": {
-                                "type": "number",
-                                "description": "Limite inferior do intervalo de referência normal. Use 0 se nenhum limite mínimo for especificado."
-                            },
-                            "lab_range_max": {
-                                "type": "number",
-                                "description": "Limite superior do intervalo de referência normal. Use 9999 se nenhum limite máximo for especificado."
-                            },
-                            "confidence" : {
-                                "type": "number",
-                                "description": "Confiança do modelo na extração fidedigna do resultado do exame laboratorial; entre 0 e 1"
-                            },
-                            "lack_of_confidence_reason": {
-                                "type": "string",
-                                "description": "Motivo para a falta de confiança no resultado do exame laboratorial; opcional, fornecido apenas se a confiança for menor que 1"
-                            }
-                        },
-                        "required": [
-                            "date",
-                            "lab_name",
-                            "lab_method",
-                            "lab_value",
-                            "lab_unit",
-                            "lab_range_min",
-                            "lab_range_max",
-                            "confidence"
-                        ]
-                    }
-                },
-                "confidence": {
-                    "type": "number",
-                    "description": "Confiança geral do modelo na extração fidedigna de todos os resultados de exames laboratoriais; entre 0 e 1"
-                },
-                "lack_of_confidence_reason": {
-                    "type": "string",
-                    "description": "Motivo para a falta de confiança em um ou mais resultados de exames laboratoriais; opcional, fornecido apenas se a confiança for menor que 1"
-                }
-            },
-            "required": ["results", "confidence"]
-        }
+        "input_schema": HealthLabReport.schema()
     }
 ]
 
 def load_env_config():
     # Read environment variables
+    model_id = os.getenv("MODEL_ID")
     input_path = os.getenv("INPUT_PATH")
     input_file_regex = os.getenv("INPUT_FILE_REGEX")
     output_path = os.getenv("OUTPUT_PATH")
     anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
     
     # Validate required fields
+    if not model_id: raise ValueError("MODEL_ID not set")
     if not input_path or not Path(input_path).exists(): raise ValueError(f"INPUT_PATH not set or does not exist: {input_path}")
     if not input_file_regex: raise ValueError("INPUT_FILE_REGEX not set")
     if not output_path or not Path(output_path).exists(): raise ValueError("OUTPUT_PATH not set")
     if not anthropic_api_key: raise ValueError("ANTHROPIC_API_KEY not set")
 
     return {
+        "model_id" : model_id,
         "input_path" : Path(input_path),
         "input_file_regex" : input_file_regex,
         "output_path" : Path(output_path),
         "anthropic_api_key" : anthropic_api_key
     }
 
-def transcription_from_page_image(image_path, client):
+def transcription_from_page_image(model_id, image_path, client):
     """Get a verbatim transcription of the lab report"""
     with open(image_path, "rb") as img_file:
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
 
     message = client.messages.create(
-        model="claude-3-7-sonnet-latest",
+        model=model_id,
         max_tokens=8192,
         temperature=0.0,
         system=[
@@ -183,10 +190,10 @@ def transcription_from_page_image(image_path, client):
     
     return message.content[0].text
 
-def extract_labs_from_page_transcription(transcription, client):
+def extract_labs_from_page_transcription(model_id, transcription, client):
     # Extract structured data from transcription
     message = client.messages.create(
-        model="claude-3-7-sonnet-latest",
+        model=model_id,
         max_tokens=8192,
         temperature=0.0,
         system=[
@@ -378,7 +385,6 @@ def _StepExtractPageImages_worker_fn(args):
 
 class StepExtractPageImages(PipelineStep):
     def execute(self, data: dict) -> dict:
-        
         # Read configuration
         n_workers = self.config.get("n_workers", cpu_count())
         
@@ -404,7 +410,7 @@ class StepExtractPageImages(PipelineStep):
 
 def _StepExtractPageImageLabs_worker_fn(args):
     """Process single image with Claude"""
-    image_path, api_key, output_dir, logger = args
+    model_id, image_path, api_key, output_dir, logger = args
     try:
         # Initialize Claude client
         client = anthropic.Anthropic(api_key=api_key)
@@ -412,7 +418,7 @@ def _StepExtractPageImageLabs_worker_fn(args):
         txt_path = output_dir / f"{image_path.stem}.txt"
         if not txt_path.exists():
             # Transcribe image verbatim
-            transcription = transcription_from_page_image(image_path, client)
+            transcription = transcription_from_page_image(model_id, image_path, client)
             
             # Save transcription
             txt_path.write_text(transcription, encoding='utf-8')
@@ -423,7 +429,8 @@ def _StepExtractPageImageLabs_worker_fn(args):
             logger.info(f"Loaded existing transcription from {txt_path}")
             
         # Extract structured data from transcription
-        extracted_data = extract_labs_from_page_transcription(transcription, client)
+        extracted_data = extract_labs_from_page_transcription(model_id, transcription, client)
+        logger.info(f"Extracted data from {image_path}")
         
         # Log warnings for low confidence
         confidence = extracted_data["confidence"]
@@ -439,10 +446,10 @@ def _StepExtractPageImageLabs_worker_fn(args):
 
         # Process structured data
         labs = []
-        results = extracted_data["results"]
+        results = extracted_data["lab_results"]
         for result in results: labs.append(result)
         labs_df = pd.DataFrame(labs)
-        labs_df['date'] = pd.to_datetime(labs_df['date'])
+        labs_df['date'] = pd.to_datetime(extracted_data['collection_date'])
         labs_df = labs_df[[
             "date",
             "lab_name",
@@ -475,6 +482,7 @@ def _StepExtractPageImageLabs_worker_fn(args):
 class StepExtractPageImageLabs(PipelineStep):
     def execute(self, data: dict) -> dict:
         # Read configuration
+        model_id = self.config["model_id"]
         api_key = self.config["anthropic_api_key"]
         n_workers = self.config.get("n_workers", cpu_count())
         
@@ -486,7 +494,7 @@ class StepExtractPageImageLabs(PipelineStep):
 
         # Process images in parallel
         with Pool(n_workers) as pool:
-            args = [(path, api_key, path.parent, self.logger) for path in pdf_page_image_paths]
+            args = [(model_id, path, api_key, path.parent, self.logger) for path in pdf_page_image_paths]
             results = pool.map(_StepExtractPageImageLabs_worker_fn, args)
         
         # Group results by PDF
@@ -546,9 +554,11 @@ class StepMergePageLabs(PipelineStep):
         n_workers = self.config.get("n_workers", cpu_count())
 
         # Find CSVs to merge
-        csv_files = [f for f in output_path.glob("**/*.csv") 
-                    if not re.search(r'\.\d{3}\.csv$', str(f))
-                    and f.name != "merged_results.csv"]
+        csv_files = [
+            f for f in output_path.glob("**/*.csv") 
+            if not re.search(r'\.\d{3}\.csv$', str(f))
+            and f.name != "merged_results.csv"
+        ]
         
         # Merge CSVs in parallel
         with Pool(n_workers) as pool:
