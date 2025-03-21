@@ -101,7 +101,7 @@ class LabResult(BaseModel):
         description="Name of the laboratory test as extracted verbatim from the document"
     )
     standardized_lab_name: LabTestNameEnum = Field(
-        description="Standardized name of the laboratory test using controlled vocabulary"
+        description="Standardized name of the laboratory test using controlled vocabulary; when unsure output `$UNKNOWN$`",
     )
     lab_value: float = Field(
         description="Quantitative result of the laboratory test"
@@ -110,13 +110,13 @@ class LabResult(BaseModel):
         description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL)"
     )
     standardized_lab_unit: LabTestUnitEnum = Field(
-        description="Standardized unit of measurement"
+        description="Standardized unit of measurement; when unsure output `$UNKNOWN$`",
     )
     lab_method: Optional[str] = Field(
         description="Analytical method or technique as extracted verbatim (e.g., ELISA, HPLC, Microscopy), if available"
     )
     standardized_lab_method: Optional[LabMethodEnum] = Field(
-        description="Standardized analytical method using controlled vocabulary"
+        description="Standardized analytical method using controlled vocabulary; when unsure output `$UNKNOWN$`",
     )
     lab_range_min: float = Field(
         description="Lower bound of the reference range, 0 if not specified"
@@ -425,7 +425,7 @@ def process_single_pdf(
                     page_txt,
                     model_id
                 )
-
+                
                 # If this is the first page, save the report date
                 if page_number == 1: 
                     report_date = page_json.get("report_date")
@@ -479,7 +479,7 @@ def process_single_pdf(
 
         logger.info(f"[{pdf_stem}] - processing finished successfully")
     except Exception as e:
-        logger.error(f"[{pdf_stem}] - error processing {pdf_path}: {e}")
+        logger.error(f"[{pdf_stem}] - error processing: {e}")
         return {}
 
     return {}
