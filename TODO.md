@@ -1,2 +1,5 @@
 - Date injection from first page, won't work when just regenerating specific pages
 - Perform assertions during steps
+- Add unit conversion support
+- Add support for plotting
+- Added outlier detection (let llm judge based on user data)
