@@ -84,9 +84,9 @@ def load_env_config():
 # LLM Tools
 ########################################
 
-with open("config/lab_names.json", "r") as f: LAB_NAMES = json.load(f)
-with open("config/lab_methods.json", "r") as f: LAB_METHODS = json.load(f)
-with open("config/lab_units.json", "r") as f: LAB_UNITS = json.load(f)
+with open("config/lab_names.json", "r", encoding="utf-8") as f: LAB_NAMES = json.load(f)
+with open("config/lab_methods.json", "r", encoding="utf-8") as f: LAB_METHODS = json.load(f)
+with open("config/lab_units.json", "r", encoding="utf-8") as f: LAB_UNITS = json.load(f)
 
 # Create dynamic enums for lab names and units
 def create_dynamic_enum(name, data): return Enum(name, dict([(k, k) for k in data]), type=str)
@@ -108,7 +108,7 @@ class LabResult(BaseModel):
         description="Quantitative result of the laboratory test"
     )
     lab_unit: str = Field(
-        description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL)"
+        description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL)."
     )
     standardized_lab_unit: LabTestUnitEnum = Field(
         description="Standardized unit of measurement; when unsure output `$UNKNOWN$`",
@@ -426,17 +426,17 @@ def process_single_pdf(
                     page_txt,
                     model_id
                 )
-                
-                # If this is the first page, save the report date
-                if page_number == 1: 
-                    report_date = page_json.get("report_date")
-                    collection_date = page_json.get("collection_date")
-                    document_date = collection_date if collection_date else report_date
-                    assert document_date, "Document date is missing"
-                    assert document_date in pdf_stem, "Document date not in filename"
 
                 # If parsing succeeded, add the date to lab results
-                if valid:
+                if valid:       
+                    # If this is the first page, save the report date
+                    if page_number == 1: 
+                        report_date = page_json.get("report_date")
+                        collection_date = page_json.get("collection_date")
+                        document_date = collection_date if collection_date else report_date
+                        assert document_date, "Document date is missing"
+                        assert document_date in pdf_stem, "Document date not in filename"
+
                     page_json["source_file"] = page_file_name
                     lab_results = page_json.get("lab_results", [])
                     for lab_result in lab_results: lab_result["date"] = document_date
