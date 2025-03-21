@@ -385,7 +385,7 @@ def process_single_pdf(
         pages = pdf2image.convert_from_path(str(copied_pdf_path))
         
         # 4) For each page: preprocess, transcribe, parse labs
-        first_page_json = None
+        document_date = None
         for page_number, page_image in enumerate(pages, start=1):
             page_file_name = f"{pdf_stem}.{page_number:03d}"
 
@@ -421,30 +421,30 @@ def process_single_pdf(
 
                 # Parse labs
                 page_txt = page_txt_path.read_text(encoding='utf-8')
-                valid, result = extract_labs_from_page_transcription(
+                valid, page_json = extract_labs_from_page_transcription(
                     page_txt,
                     model_id
                 )
 
+                # If this is the first page, save the report date
+                if page_number == 1: 
+                    report_date = page_json.get("report_date")
+                    collection_date = page_json.get("collection_date")
+                    document_date = collection_date if collection_date else report_date
+                    assert document_date, "Document date is missing"
+                    assert document_date in pdf_stem, "Document date not in filename"
+
+                # If parsing succeeded, add the date to lab results
+                if valid:
+                    page_json["source_file"] = page_file_name
+                    lab_results = page_json.get("lab_results", [])
+                    for lab_result in lab_results: lab_result["date"] = document_date
+                    page_json["lab_results"] = lab_results
                 # If parsing failed, log the error
-                if not valid:
-                    logger.error(f"[{page_file_name}] - failed to extract: {json.dumps(result, indent=2)}")
-                    continue
-
-                # Inject page metadata
-                page_json = result
-                page_json["page_number"] = page_number
-
-                # If this is the first page, save the metadata
-                if page_number == 1:
-                    first_page_json = page_json
-                # Otherwise, copy metadata from the first page
                 else:
-                    keys_to_copy = ["report_date", "collection_date", "lab_facility", "patient_name", "physician_name"]
-                    for key in keys_to_copy:
-                        first_value = first_page_json.get(key)
-                        if first_value is not None: page_json[key] = first_value
-                        
+                    logger.error(f"[{page_file_name}] - failed to extract: {json.dumps(page_json, indent=2)}")
+                    continue
+  
                 # Save parsed labs
                 page_json_path.write_text(json.dumps(page_json, indent=2), encoding='utf-8')
 
@@ -457,12 +457,29 @@ def process_single_pdf(
                 page_json = json.loads(page_json_path.read_text(encoding='utf-8'))
                 df = pd.json_normalize(page_json["lab_results"])
 
+                # Ensure 'date' is the first column if it exists
+                if 'date' in df.columns:
+                    cols = ['date'] + [col for col in df.columns if col != 'date']
+                    df = df[cols]
+
                 # Save DataFrame to CSV
                 df.to_csv(page_csv_path, index=False)
 
+        # Loop through files in the directory
+        dataframes = []
+        for file in os.listdir(doc_out_dir):
+            if not file.endswith('.csv'): continue
+            file_path = os.path.join(doc_out_dir, file)
+            df = pd.read_csv(file_path)
+            dataframes.append(df)
+
+        # Concatenate all dataframes and save to a single CSV
+        merged_df = pd.concat(dataframes, ignore_index=True)
+        merged_df.to_csv(os.path.join(doc_out_dir, f"{pdf_stem}.csv"), index=False)
+
         logger.info(f"[{pdf_stem}] - processing finished successfully")
     except Exception as e:
-        logger.error(f"Error processing {pdf_path}: {e}")
+        logger.error(f"[{pdf_stem}] - error processing {pdf_path}: {e}")
         return {}
 
     return {}
