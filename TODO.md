@@ -1,1 +1,2 @@
-- assert outputs
+- Date injection from first page, won't work when just regenerating specific pages
+- Perform assertions during steps
