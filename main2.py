@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv(override=True)
 
+import glob
 from enum import Enum
 import logging
 import os
@@ -509,7 +510,18 @@ def main():
     # We’ll combine all results into a single DataFrame afterward
     with Pool(n_workers) as pool:
         for _ in pool.starmap(process_single_pdf, tasks): pass
-        
+
+    # Get all CSV files in the directory and create dataframes
+    dataframes = []
+    for file_path in glob.glob(os.path.join(output_dir, '**', '*.csv'), recursive=True):
+        if "all.csv" in file_path: continue
+        df = pd.read_csv(file_path)
+        dataframes.append(df)
+
+    # Concatenate all dataframes and save to a single CSV
+    merged_df = pd.concat(dataframes, ignore_index=True)
+    merged_df.to_csv(os.path.join(output_dir, "all.csv"), index=False)
+
     logger.info("All PDFs processed.")
 
 if __name__ == "__main__":
