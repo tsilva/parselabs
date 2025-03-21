@@ -260,8 +260,8 @@ Pay special attention to numbers, units (e.g., mg/dL), and reference ranges.
         system=[
             {
                 "type": "text",
-                "text": system_prompt#,
-                #"cache_control": {"type": "ephemeral"}
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"}
             }
         ],
         messages=[
@@ -320,8 +320,8 @@ You are a medical lab report analyzer with the following strict requirements:
         system=[
             {
                 "type": "text",
-                "text": system_prompt#,
-                #"cache_control": {"type": "ephemeral"}
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"}
             }
         ],
         messages=[
@@ -342,12 +342,11 @@ You are a medical lab report analyzer with the following strict requirements:
 
     try:
         model = HealthLabReport.model_validate(tool_result)
+        model_dict = model.model_dump()
+        return True, model_dict
     except ValidationError as e:
         error_list = e.errors()
         return False, error_list
-    
-    model_dict = model.model_dump()
-    return True, model_dict
 
 
 ########################################
@@ -395,7 +394,10 @@ def process_single_pdf(
             if not page_jpg_path.exists():
                 logger.info(f"[{page_file_name}] - preprocessing page JPG")
 
+                # Preprocess the page image
                 processed_image = preprocess_page_image(page_image)
+
+                # Save the processed image as JPEG
                 processed_image.save(page_jpg_path, "JPEG", quality=95)
 
             # Transcribe
@@ -403,11 +405,13 @@ def process_single_pdf(
             if not page_txt_path.exists():
                 logger.info(f"[{page_file_name}] - extracting TXT from page JPG")
 
+                # Transcribe the page image
                 page_txt = transcription_from_page_image(
                     page_jpg_path,
                     model_id
                 )
 
+                # Save the transcription
                 page_txt_path.write_text(page_txt, encoding='utf-8')
             
             # Extract labs
@@ -432,7 +436,6 @@ def process_single_pdf(
                 page_json["page_number"] = page_number
 
                 # If this is the first page, save the metadata
-                first_page_json = None
                 if page_number == 1:
                     first_page_json = page_json
                 # Otherwise, copy metadata from the first page
