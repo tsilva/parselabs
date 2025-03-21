@@ -141,7 +141,7 @@ class HealthLabReport(BaseModel):
     """
     Represents a complete laboratory report, including patient information, metadata, and a collection of test results.
     """
-    report_date: str = Field(
+    report_date: Optional[str] = Field(
         description="Date the laboratory report was issued (YYYY-MM-DD)"
     )
     collection_date: Optional[str] = Field(
@@ -150,7 +150,7 @@ class HealthLabReport(BaseModel):
     lab_facility: Optional[str] = Field(
         description="Name of the laboratory or facility that performed the tests, if available"
     )
-    patient_name: str = Field(
+    patient_name: Optional[str] = Field(
         description="Full name of the patient"
     )
     physician_name: Optional[str] = Field(
@@ -192,20 +192,31 @@ def hash_file(file_path: Path, length=4) -> str:
 def preprocess_page_image(image: Image.Image) -> Image.Image:
     """
     Optimize the page image by:
-      - converting to grayscale
-      - optionally resizing (width <= 800 px)
-      - quantizing
+      - Converting to grayscale
+      - Resizing only if width exceeds a higher threshold (1200 px)
+      - Enhancing contrast for better text readability
+      - Saving in a lossless format (PNG) for maximum clarity
     """
+    from PIL import Image, ImageEnhance
+
+    # Convert to grayscale
     gray_image = image.convert('L')
-    MAX_WIDTH = 800
+
+    # Set a higher maximum width to preserve detail (only resize if necessary)
+    MAX_WIDTH = 1200  # Increased from 800 to retain more detail
     if gray_image.width > MAX_WIDTH:
         ratio = MAX_WIDTH / gray_image.width
         new_height = int(gray_image.height * ratio)
         gray_image = gray_image.resize((MAX_WIDTH, new_height), Image.Resampling.LANCZOS)
 
-    # Quantize to 128 colors, then convert back to grayscale for JPEG
-    quantized = gray_image.quantize(colors=128)
-    final_image = quantized.convert('L')
+    # Enhance contrast to make text stand out
+    enhanced_image = ImageEnhance.Contrast(gray_image).enhance(1.5)  # Adjust contrast by 1.5x
+
+    # Optional: Quantize to reduce noise while preserving readability (128 colors)
+    # Comment this out if you want maximum fidelity without quantization
+    final_image = enhanced_image.quantize(colors=128).convert('L')
+
+    # Return the processed image (to be saved as PNG later for lossless quality)
     return final_image
 
 
@@ -223,7 +234,7 @@ def transcription_from_page_image(
 
     # Define system prompt
     system_prompt = """
-You are a precise document transcriber. Your task is to:
+You are a precise document transcriber for medical lab reports. Your task is to:
 1. Write out ALL text visible in the image exactly as it appears
 2. Preserve the document's layout and formatting as much as possible using spaces and newlines
 3. Include ALL numbers, units, and reference ranges exactly as shown
@@ -233,7 +244,8 @@ You are a precise document transcriber. Your task is to:
     
     # Define user prompt
     user_prompt = """
-Please transcribe this lab report exactly as it appears, preserving layout and all details. Write the text exactly as shown in the document.
+Please transcribe this lab report exactly as it appears, preserving layout and all details. 
+Pay special attention to numbers, units (e.g., mg/dL), and reference ranges.
 """.strip()
     
     # Encode image as base64
@@ -248,8 +260,8 @@ Please transcribe this lab report exactly as it appears, preserving layout and a
         system=[
             {
                 "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"}
+                "text": system_prompt#,
+                #"cache_control": {"type": "ephemeral"}
             }
         ],
         messages=[
@@ -308,8 +320,8 @@ You are a medical lab report analyzer with the following strict requirements:
         system=[
             {
                 "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"}
+                "text": system_prompt#,
+                #"cache_control": {"type": "ephemeral"}
             }
         ],
         messages=[
@@ -374,8 +386,9 @@ def process_single_pdf(
         pages = pdf2image.convert_from_path(str(copied_pdf_path))
         
         # 4) For each page: preprocess, transcribe, parse labs
-        for i, page_image in enumerate(pages, start=1):
-            page_file_name = f"{pdf_stem}.{i:03d}"
+        first_page_json = None
+        for page_number, page_image in enumerate(pages, start=1):
+            page_file_name = f"{pdf_stem}.{page_number:03d}"
 
             # Preprocess
             page_jpg_path = doc_out_dir / f"{page_file_name}.jpg"
@@ -383,7 +396,7 @@ def process_single_pdf(
                 logger.info(f"[{page_file_name}] - preprocessing page JPG")
 
                 processed_image = preprocess_page_image(page_image)
-                processed_image.save(page_jpg_path, "JPEG", quality=80)
+                processed_image.save(page_jpg_path, "JPEG", quality=95)
 
             # Transcribe
             page_txt_path = doc_out_dir / f"{page_file_name}.txt"
@@ -413,11 +426,22 @@ def process_single_pdf(
                 if not valid:
                     logger.error(f"[{page_file_name}] - failed to extract: {json.dumps(result, indent=2)}")
                     continue
-                
+
                 # Inject page metadata
                 page_json = result
-                page_json["page_number"] = i
+                page_json["page_number"] = page_number
 
+                # If this is the first page, save the metadata
+                first_page_json = None
+                if page_number == 1:
+                    first_page_json = page_json
+                # Otherwise, copy metadata from the first page
+                else:
+                    keys_to_copy = ["report_date", "collection_date", "lab_facility", "patient_name", "physician_name"]
+                    for key in keys_to_copy:
+                        first_value = first_page_json.get(key)
+                        if first_value is not None: page_json[key] = first_value
+                        
                 # Save parsed labs
                 page_json_path.write_text(json.dumps(page_json, indent=2), encoding='utf-8')
 
