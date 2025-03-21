@@ -43,68 +43,75 @@ LabTestUnitEnum = create_dynamic_enum('LabTestUnitEnum', LAB_UNITS)
 
 class LabResult(BaseModel):
     """
-    Model representing an individual laboratory test result from a blood test or similar analysis.
-    Includes measurement details, reference ranges, and status flags.
+    Represents an individual laboratory test result, including measurement details, reference ranges, and status interpretation.
     """
-    lab_name: LabTestNameEnum = Field(
-        description="The standardized name of the laboratory test performed, when unrecognized, select `#N/A`"
+    lab_name: str = Field(
+        description="Name of the laboratory test as extracted verbatim from the document"
+    )
+    standardized_lab_name: LabTestNameEnum = Field(
+        description="Standardized name of the laboratory test using controlled vocabulary; select `#N/A` if unrecognized"
     )
     lab_value: float = Field(
         description="Quantitative result of the laboratory test"
     )
-    lab_unit: LabTestUnitEnum = Field(
-        description="Unit of measurement for the test result (e.g., mg/dL, mmol/L, IU/mL), when unrecognized, select `#N/A`"
+    lab_unit: str = Field(
+        description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL)"
     )
-    lab_method: LabMethodEnum = Field(
-        description="Analytical method or technique used (e.g., ELISA, HPLC, Microscopy), when unrecognized, select `#N/A`"
+    standardized_lab_unit: LabTestUnitEnum = Field(
+        description="Standardized unit of measurement; select `#N/A` if unrecognized"
+    )
+    lab_method: Optional[str] = Field(
+        description="Analytical method or technique as extracted verbatim (e.g., ELISA, HPLC, Microscopy), if available"
+    )
+    standardized_lab_method: Optional[LabMethodEnum] = Field(
+        description="Standardized analytical method using controlled vocabulary; select `#N/A` if unrecognized"
     )
     lab_range_min: float = Field(
-        description="Lower bound of the reference range for this test"
+        description="Lower bound of the reference range"
     )
     lab_range_max: float = Field(
-        description="Upper bound of the reference range for this test"
+        description="Upper bound of the reference range"
     )
     lab_status: Optional[Literal["low", "normal", "high", "abnormal"]] = Field(
-        description="Interpretation of the result relative to reference range"
+        description="Interpretation of the result relative to the reference range"
     )
     lab_comments: Optional[str] = Field(
-        description="Additional notes or observations about this specific result"
+        description="Additional notes or observations about this result, if available"
     )
     confidence: float = Field(
         description="Confidence score of the extraction process, ranging from 0 to 1"
     )
-    lack_of_confidence_reason: Optional[str] = Field(
-        description="Reason for low confidence in the extraction, if applicable"
+    lack_of_confidence_reason: str = Field(
+        description="Reason for low extraction confidence, if not applicable use `#N/A`"
     )
 
 class HealthLabReport(BaseModel):
     """
-    Model representing a complete laboratory report, typically for blood tests or similar analyses.
-    Includes patient information, report metadata, and test results.
+    Represents a complete laboratory report, including patient information, metadata, and a collection of test results.
     """
     report_date: str = Field(
-        description="Date when the laboratory report was issued, formatted as YYYY-MM-DD"
+        description="Date the laboratory report was issued (YYYY-MM-DD)"
     )
     patient_name: str = Field(
         description="Full name of the patient"
     )
     lab_results: List[LabResult] = Field(
-        description="Collection of individual test results included in this report"
+        description="List of individual laboratory test results in this report"
     )
     lab_facility: Optional[str] = Field(
-        description="Name of the laboratory or facility performing the tests"
+        description="Name of the laboratory or facility that performed the tests, if available"
     )
     collection_date: Optional[str] = Field(
-        description="Date when the specimen was collected, formatted as YYYY-MM-DD"
+        description="Date the specimen was collected (YYYY-MM-DD), if available"
     )
     physician_name: Optional[str] = Field(
-        description="Name of the requesting or reviewing physician"
+        description="Name of the requesting or reviewing physician, if available"
     )
     confidence: float = Field(
         description="Confidence score of the extraction process, ranging from 0 to 1"
     )
-    lack_of_confidence_reason: Optional[str] = Field(
-        description="Reason for low confidence in the extraction, if applicable"
+    lack_of_confidence_reason: str = Field(
+        description="Reason for low extraction confidence, if not applicable use `#N/A`"
     )
 
 TOOLS = [
@@ -145,12 +152,25 @@ def load_env_config():
         "model_id" : model_id,
         "input_path" : Path(input_path),
         "input_file_regex" : input_file_regex,
-        "output_path" : Path(output_path),
-        "anthropic_api_key" : anthropic_api_key
+        "output_path" : Path(output_path)
     }
 
 def transcription_from_page_image(model_id, image_path, client):
-    """Get a verbatim transcription of the lab report"""
+    """Get a verbatim transcription of the lab report """
+
+    system_prompt = """
+You are a precise document transcriber. Your task is to:
+1. Write out ALL text visible in the image exactly as it appears
+2. Preserve the document's layout and formatting as much as possible using spaces and newlines
+3. Include ALL numbers, units, and reference ranges exactly as shown
+4. Use the exact same text case (uppercase/lowercase) as the document
+5. Do not interpret, summarize, or structure the content - just transcribe it
+""".strip()
+    
+    user_prompt = """
+Please transcribe this lab report exactly as it appears, preserving layout and all details. Write the text exactly as shown in the document.
+""".strip()
+    
     with open(image_path, "rb") as img_file:
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
 
@@ -161,12 +181,7 @@ def transcription_from_page_image(model_id, image_path, client):
         system=[
             {
                 "type": "text",
-                "text": """You are a precise document transcriber. Your task is to:
-1. Write out ALL text visible in the image exactly as it appears
-2. Preserve the document's layout and formatting as much as possible using spaces and newlines
-3. Include ALL numbers, units, and reference ranges exactly as shown
-4. Use the exact same text case (uppercase/lowercase) as the document
-5. Do not interpret, summarize, or structure the content - just transcribe it""",
+                "text": system_prompt,
                 "cache_control": {"type": "ephemeral"}
             }
         ],
@@ -176,7 +191,7 @@ def transcription_from_page_image(model_id, image_path, client):
                 "content": [
                     {
                         "type": "text",
-                        "text": "Please transcribe this lab report exactly as it appears, preserving layout and all details. Write the text exactly as shown in the document."
+                        "text": user_prompt
                     },
                     {
                         "type": "image",
@@ -194,30 +209,17 @@ def transcription_from_page_image(model_id, image_path, client):
     return message.content[0].text
 
 def extract_labs_from_page_transcription(model_id, transcription, client):
-    # Extract structured data from transcription
-    message = client.messages.create(
-        model=model_id,
-        max_tokens=8192,
-        temperature=0.0,
-        system=[
-            {
-                "type": "text",
-                "text": """You are a medical lab report analyzer with the following strict requirements:
+    system_prompt = """
+You are a medical lab report analyzer with the following strict requirements:
 1. COMPLETENESS: Extract ALL test results from the provided transcription
 2. ACCURACY: Values and units must match exactly
 3. CONSISTENCY: Use N/A for missing methods, never leave blank
 4. VALIDATION: Verify each extraction matches the source text exactly
-5. THOROUGHNESS: Process the text line by line to ensure nothing is missed""",
-                "cache_control": {"type": "ephemeral"}
-            }
-        ],
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": f"""Here is the verbatim transcription of a lab report. Extract all test results from this text:
+5. THOROUGHNESS: Process the text line by line to ensure nothing is missed
+""".strip()
+    
+    user_prompt = f"""
+Here is the verbatim transcription of a lab report. Extract all test results from this text:
 
 {transcription}
 
@@ -230,22 +232,53 @@ Extract ALL lab results following these steps:
    - Copy the unit exactly as shown
    - Record the reference ranges (use 0/9999 if not specified)
 3. Verify each extraction against the source text
-4. Double-check that no results were missed"""
-                    }
-                ]
+4. Double-check that no results were missed
+""".strip()
+    
+    # Extract structured data from transcription
+    response = client.messages.create(
+        model=model_id,
+        #max_tokens=8192,
+        max_tokens=20000,
+        thinking={
+            "type": "enabled",
+            "budget_tokens": 10000
+        },
+        temperature=1,
+        system=[
+            {
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"}
+            }
+        ],
+        messages=[
+            {
+                "role": "user",
+                "content": user_prompt
             }
         ],
         tools=TOOLS
     )
 
+    print(response)
+    
     # Process response
     tool_result = None
-    for content in message.content:
+    for content in response.content:
         if not hasattr(content, "input"): continue
         assert tool_result is None, "Multiple tools detected in message"
         tool_result = content.input
         
-    return tool_result
+    try:
+        tool_result_data = HealthLabReport.model_validate(tool_result)
+    except Exception as e:
+        error_list = e.errors()
+        for err in error_list:
+            print(f"Error in field '{err['loc']}': {err['msg']} (type: {err['type']})")
+        raise e
+
+    return tool_result_data
 
 def hash_file(file_path, length=4):
     """Calculate MD5 hash of a file"""
@@ -413,11 +446,11 @@ class StepExtractPageImages(PipelineStep):
 
 def _StepExtractPageImageLabs_worker_fn(args):
     """Process single image with Claude"""
-    model_id, image_path, api_key, output_dir, logger = args
+    model_id, image_path, output_dir, logger = args
 
     try:
         # Initialize Claude client
-        client = anthropic.Anthropic(api_key=api_key)
+        client = anthropic.Anthropic()
         
         txt_path = output_dir / f"{image_path.stem}.txt"
         if not txt_path.exists():
@@ -437,22 +470,25 @@ def _StepExtractPageImageLabs_worker_fn(args):
         logger.info(f"Extracted data from {image_path}")
         
         # Log warnings for low confidence
-        confidence = extracted_data["confidence"]
-        lack_of_confidence_reason = extracted_data.get("lack_of_confidence_reason")
+        confidence = extracted_data.confidence
         if confidence < 1:
             logger.warning(f"Confidence below 1 for {image_path}: {confidence}")
 
         # Save structured results
         json_path = output_dir / f"{image_path.stem}.json"
-        with open(json_path, 'w', encoding='utf-8') as f: json.dump(extracted_data, f, indent=2, ensure_ascii=False)
+        extracted_data_json = extracted_data.model_dump()
+        with open(json_path, 'w', encoding='utf-8') as f: json.dump(extracted_data_json, f, indent=2, ensure_ascii=False)
         logger.info(f"Saved extraction results to {json_path}")
 
         # Process structured data
         labs = []
-        results = extracted_data["lab_results"]
+        results = extracted_data.lab_results
         for result in results: labs.append(result)
         labs_df = pd.DataFrame(labs)
-        labs_df['date'] = pd.to_datetime(extracted_data['collection_date'])
+
+        report_date = extracted_data.report_date if hasattr(extracted_data, 'report_date') else None
+        collection_date = extracted_data.collection_date if hasattr(extracted_data, 'collection_date') else None
+        labs_df['date'] = pd.to_datetime(collection_date) if collection_date else pd.to_datetime(report_date)
         labs_df = labs_df[[
             "date",
             "lab_name",
@@ -486,7 +522,6 @@ class StepExtractPageImageLabs(PipelineStep):
     def execute(self, data: dict) -> dict:
         # Read configuration
         model_id = self.config["model_id"]
-        api_key = self.config["anthropic_api_key"]
         n_workers = self.config.get("n_workers", cpu_count())
         
         # Read previous step's output
@@ -497,7 +532,7 @@ class StepExtractPageImageLabs(PipelineStep):
 
         # Process images in parallel
         with Pool(n_workers) as pool:
-            args = [(model_id, path, api_key, path.parent, self.logger) for path in pdf_page_image_paths]
+            args = [(model_id, path, path.parent, self.logger) for path in pdf_page_image_paths]
             results = pool.map(_StepExtractPageImageLabs_worker_fn, args)
         
         # Group results by PDF

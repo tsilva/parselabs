@@ -166,3 +166,4 @@ output/
 plots/
 user.json
 tests/fixtures/*
+logs/
