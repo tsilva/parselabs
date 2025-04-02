@@ -1,3 +1,4 @@
+- Convert to command-line tool installable with pipx
 - Date injection from first page, won't work when just regenerating specific pages
 - Perform assertions during steps
 - Add unit conversion support

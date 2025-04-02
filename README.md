@@ -1,134 +1,65 @@
-# 🧪 labs-parser
+# 🧪 lab-parser
 
 <p align="center">
-  <img src="logo.jpg" alt="Labs Parser Logo" width="400"/>
+  <img src="logo.jpg" alt="Logo" width="400"/>
 </p>
 
-> 🤖 AI-powered lab report parser that turns medical PDFs into structured data
+> 🔬 Extract structured lab test results from medical documents with AI precision
 
-A Python tool that extracts laboratory test results from medical documents with high precision:
+Labs Parser is a Python tool that uses Claude AI to extract laboratory test results from medical documents, converting them into structured data for analysis and visualization. It processes images of lab reports, transcribes the text, and extracts standardized test results with high accuracy.
 
-🎯 **Key Features**:
-- 📄 Extract structured data from PDF lab reports
-- ⚡ Process multiple documents in parallel
-- 📊 Generate beautiful time series visualizations
-- 🔄 Smart caching to avoid reprocessing
-- 📁 Clean, standardized CSV output
-
-## 🗂️ Project Structure
-
-```
-labs-parser/
-├── config/               # Configuration files
-│   ├── lab_names.json   # Valid laboratory test names
-│   ├── lab_methods.json # Valid measurement methods
-│   └── lab_units.json   # Valid measurement units
-├── tests/               # Test files
-└── main.py             # Main pipeline implementation
-```
-
-## ⚙️ Installation
+## 🚀 Installation
 
 ```bash
-git clone https://github.com/tsilva/labs-parser.git
-cd github-bootstrapper
-curl -L https://gist.githubusercontent.com/tsilva/258374c1ba2296d8ba22fffbf640f183/raw/venv-install.sh -o install.sh && chmod +x install.sh && ./install.sh
+# Clone the repository
+git clone https://github.com/yourusername/labs-parser.git
+cd labs-parser
+
+# Install with pipx for isolated environment
+pipx install . --force
 ```
+
+## 🛠️ Usage
+
+1. Configure your environment variables in a `.env` file:
+
+```
+MODEL_ID=claude-3-7-sonnet-latest
+INPUT_PATH=./path/to/lab/reports
+INPUT_FILE_REGEX=.*\.jpg
+OUTPUT_PATH=./output
+ANTHROPIC_API_KEY=your_api_key_here
+```
+
+2. Run the parser:
 
 ```bash
-curl -L https://gist.githubusercontent.com/tsilva/8588cb367242e3db8f1b33c42e4e5e06/raw/venv-run.sh -o run.sh && chmod +x run.sh && ./run.sh
+python main.py
 ```
 
-## 🚀 Usage
+3. The tool will:
+   - Process each lab report image
+   - Transcribe the text content
+   - Extract structured lab results
+   - Save results as CSV files
 
-1. Run the parser:
-   ```sh
-   python main.py
-   ```
+## ✨ Features
 
-2. Check output directory for:
-   ```
-   📂 output/
-   ├── 📊 plots/          # Time series visualizations
-   ├── 🖼️ *.jpg           # Extracted page images
-   ├── 📝 *.txt           # Page transcriptions
-   ├── 📑 *.csv           # Structured results
-   └── 📈 merged_results.csv
-   ```
+- Extracts lab test names, values, units, and reference ranges
+- Standardizes lab names and units using controlled vocabularies
+- Processes multiple documents in parallel
+- Caches results to avoid reprocessing
+- Generates clean, structured CSV output
 
-## 🧪 Testing
+## 📊 Output
 
-Run the test suite to verify functionality:
+For each processed document, the tool generates:
+- Preprocessed images (JPG)
+- Text transcriptions (TXT)
+- Structured data (JSON)
+- Tabular data (CSV)
+- A merged CSV with all results
 
-```sh
-# Run all tests 🔍
-python -m tests.test_pipeline
+## 📄 License
 
-# Run specific test case 🎯
-python -m tests.test_pipeline TestPipeline.test_extract_labs
-```
-
-## 📝 TODO
-
-- [ ] Split transcription into its own step, add progress bar
-- [ ] Add progress bar to extraction step
-- [ ] Add caching support
-- [ ] Make tests use same folder structure as output
-- [ ] Bump up number of workers
-- [ ] BUG: ferritin plot not working
-- [ ] BUG: merged csv should point to file hashes
-
-# Labs Parser Verification Tool
-
-This tool uses Claude AI to verify the accuracy of lab test data extraction from images to CSV files.
-
-## Requirements
-
-- Python 3.7+
-- Anthropic API key (for Claude)
-- Required Python packages:
-  - pandas
-  - anthropic
-  - tqdm
-
-## Installation
-
-```bash
-pip install pandas anthropic tqdm
-```
-
-## Usage
-
-Set your Anthropic API key:
-
-```bash
-export ANTHROPIC_API_KEY="your_api_key_here"
-```
-
-Run the verification script:
-
-```bash
-python test.py --output-dir ./output
-```
-
-### Command-line options:
-
-- `--api-key`: Your Anthropic API key (alternatively, set ANTHROPIC_API_KEY environment variable)
-- `--output-dir`: Directory to scan for lab test files (default: ./output)
-- `--limit`: Limit number of files to process (optional)
-
-## How It Works
-
-1. The script recursively searches the specified directory for matching pairs of .jpg and .csv files
-2. For each pair, it:
-   - Reads the lab data from the CSV
-   - Sends the JPG to Claude for analysis
-   - Compares Claude's interpretation with the CSV data
-   - Reports any discrepancies
-
-## Output
-
-Results are written to `claude_verification_results.txt` in the output directory. For each file pair, the assessment includes:
-- Whether all tests from the image are in the CSV
-- List of any missing tests or discrepancies
-- Claude's confidence level in the assessment
+This project is licensed under the [MIT License](LICENSE).
