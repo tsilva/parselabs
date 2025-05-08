@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, ValidationError
 from typing import List, Optional, Any, Literal
 from collections import Counter
 from functools import wraps
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Add OpenAI import for OpenRouter
 from openai import OpenAI
@@ -60,6 +60,11 @@ error_handler.setFormatter(formatter)
 logger = logging.getLogger(__name__)
 logger.addHandler(info_handler)
 logger.addHandler(error_handler)
+
+client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv("OPENROUTER_API_KEY")
+)
 
 def load_env_config():
     """
@@ -240,27 +245,31 @@ def self_consistency(fn, n, *args, **kwargs):
     If n == 1, just returns the single result.
 
     Returns a tuple: (voted_result, [all_versions])
-    Parallelizes the N calls for efficiency.
+    Stops and raises if any call fails.
     """
     if n == 1:
         result = fn(*args, **kwargs)
         return result, [result]
-    
-    # Parallelize the N runs
-    def call_with_temp(): return fn(*args, **kwargs, temperature=0.5)
-    with ThreadPoolExecutor(max_workers=n) as executor:
-        results = list(executor.map(lambda _: call_with_temp(), range(n)))
 
-    # If all results are identical, return immediately
+    def call_with_temp():
+        return fn(*args, **kwargs, temperature=0.5)
+
+    results = []
+    with ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(call_with_temp) for _ in range(n)]
+        for future in as_completed(futures):
+            try:
+                res = future.result()
+                results.append(res)
+            except Exception as e:
+                for f in futures:
+                    f.cancel()
+                raise
+
+    # All succeeded, extract only the result part for voting
     if all(r == results[0] for r in results):
         return results[0], results
 
-    # Use OpenRouter for voting
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=kwargs.get("openrouter_api_key") or os.getenv("OPENROUTER_API_KEY"),
-    )
-    # Prompt focuses on content, not layout
     prompt = (
         "You are an expert at comparing multiple outputs of the same extraction task. "
         "Given the following N outputs, select the one that is most likely to be correct, "
@@ -268,46 +277,32 @@ def self_consistency(fn, n, *args, **kwargs):
         "Ignore formatting, whitespace, and layout differences. "
         "Return ONLY the best output, verbatim, with no extra commentary.\n\n"
     )
-    for idx, r in enumerate(results, 1):
-        prompt += f"--- Output {idx} ---\n{r}\n\n"
+    prompt += "".join(f"--- Output {i+1} ---\n{json.dumps(v) if type(v) in [list, dict] else v}\n\n" for i, v in enumerate(results))
     prompt += "Best output:"
 
     completion = client.chat.completions.create(
         model=os.getenv("MODEL_ID"),
         messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a careful judge for self-consistency voting. "
-                    "Prioritize agreement on extracted content (test names, values, units, reference ranges, etc). "
-                )
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
+            {"role": "system", "content": (
+                "You are a careful judge for self-consistency voting. "
+                "Prioritize agreement on extracted content (test names, values, units, reference ranges, etc). "
+            )},
+            {"role": "user", "content": prompt}
         ]
     )
     voted = completion.choices[0].message.content.strip()
+    if type(results[0]) != str: voted = json.loads(voted)
     return voted, results
-
 
 def transcription_from_page_image(
     image_path: Path, 
     model_id: str,
-    temperature: float = 0.0,
-    openrouter_api_key: str = None
+    temperature: float = 0.0
 ) -> str:
     """
     1) Read the image as base64
     2) Send to OpenRouter to transcribe exactly
     """
-
-    # Create OpenRouter client
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=openrouter_api_key
-    )
 
     # Define system prompt
     system_prompt = """
@@ -360,17 +355,12 @@ Pay special attention to numbers, units (e.g., mg/dL), and reference ranges.
 def extract_labs_from_page_transcription(
     transcription: str, 
     model_id: str,
-    temperature: float = 0.0,
-    openrouter_api_key: str = None
+    temperature: float = 0.0
 ) -> pd.DataFrame:
     """
     1) Ask OpenRouter to parse out labs from the transcription
     2) Return them as a DataFrame
     """
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=openrouter_api_key
-    )
 
     system_prompt = """
 You are a medical lab report analyzer with the following strict requirements:
@@ -398,17 +388,13 @@ You are a medical lab report analyzer with the following strict requirements:
         tools=TOOLS
     )
     
-    # Process response
     tool_args = completion.choices[0].message.tool_calls[0].function.arguments
     tool_result = json.loads(tool_args)
 
-    try:
-        model = HealthLabReport.model_validate(tool_result)
-        model_dict = model.model_dump()
-        return True, model_dict
-    except ValidationError as e:
-        error_list = e.errors()
-        return False, error_list
+    model = HealthLabReport.model_validate(tool_result)
+    model_dict = model.model_dump()
+
+    return model_dict
 
 ########################################
 # The Single-PDF Processor
@@ -419,8 +405,7 @@ def process_single_pdf(
     output_dir: Path,
     model_id: str,
     n_transcribe: int,
-    n_extract: int,
-    openrouter_api_key: str
+    n_extract: int
 ) -> pd.DataFrame:
     """
     High-level function that:
@@ -432,139 +417,127 @@ def process_single_pdf(
     Returns a single merged DataFrame for the entire PDF.
     """
 
-    try:
-        # 1) Set up subdirectory
-        pdf_stem = pdf_path.stem
-        logger.info(f"[{pdf_stem}] - loaded: {pdf_path}")
-        doc_out_dir = output_dir / pdf_stem
-        doc_out_dir.mkdir(exist_ok=True, parents=True)
+    # 1) Set up subdirectory
+    pdf_stem = pdf_path.stem
+    logger.info(f"[{pdf_stem}] - loaded: {pdf_path}")
+    doc_out_dir = output_dir / pdf_stem
+    doc_out_dir.mkdir(exist_ok=True, parents=True)
 
-        # 2) Copy PDF to output subdirectory
-        copied_pdf_path = doc_out_dir / pdf_path.name
-        if not copied_pdf_path.exists(): 
-            logger.info(f"[{pdf_stem}] - copying: {copied_pdf_path}")
-            shutil.copy2(pdf_path, copied_pdf_path)
+    # 2) Copy PDF to output subdirectory
+    copied_pdf_path = doc_out_dir / pdf_path.name
+    if not copied_pdf_path.exists(): 
+        logger.info(f"[{pdf_stem}] - copying: {copied_pdf_path}")
+        shutil.copy2(pdf_path, copied_pdf_path)
 
-        # 3) Extract PDF pages
-        pages = pdf2image.convert_from_path(str(copied_pdf_path))
+    # 3) Extract PDF pages
+    pages = pdf2image.convert_from_path(str(copied_pdf_path))
+    
+    # 4) For each page: preprocess, transcribe, parse labs
+    document_date = None
+    for page_number, page_image in enumerate(pages, start=1):
+        page_file_name = f"{pdf_stem}.{page_number:03d}"
+
+        # Preprocess
+        page_jpg_path = doc_out_dir / f"{page_file_name}.jpg"
+        if not page_jpg_path.exists():
+            logger.info(f"[{page_file_name}] - preprocessing page JPG")
+
+            # Preprocess the page image
+            processed_image = preprocess_page_image(page_image)
+
+            # Save the processed image as JPEG
+            processed_image.save(page_jpg_path, "JPEG", quality=95)
+
+        # Transcribe
+        page_txt_path = doc_out_dir / f"{page_file_name}.txt"
+        if not page_txt_path.exists():
+            logger.info(f"[{page_file_name}] - extracting TXT from page JPG")
+
+            # Transcribe the page image with self-consistency
+            voted_txt, all_txt_versions = self_consistency(
+                lambda **kwargs: transcription_from_page_image(
+                    page_jpg_path,
+                    model_id,
+                    **kwargs
+                ), n_transcribe
+            )
+
+            # Only save versioned files if n_transcribe > 1
+            if n_transcribe > 1:
+                for idx, txt in enumerate(all_txt_versions, 1):
+                    versioned_txt_path = doc_out_dir / f"{page_file_name}.v{idx}.txt"
+                    versioned_txt_path.write_text(txt, encoding='utf-8')
+
+            # Save the voted transcription as the main .txt
+            page_txt_path.write_text(voted_txt, encoding='utf-8')
         
-        # 4) For each page: preprocess, transcribe, parse labs
-        document_date = None
-        for page_number, page_image in enumerate(pages, start=1):
-            page_file_name = f"{pdf_stem}.{page_number:03d}"
+        # Extract labs
+        page_json_path = doc_out_dir / f"{page_file_name}.json"
+        if not page_json_path.exists():
+            logger.info(f"[{page_file_name}] - extracting JSON from page TXT")
 
-            # Preprocess
-            page_jpg_path = doc_out_dir / f"{page_file_name}.jpg"
-            if not page_jpg_path.exists():
-                logger.info(f"[{page_file_name}] - preprocessing page JPG")
+            # Parse labs with self-consistency
+            page_txt = page_txt_path.read_text(encoding='utf-8')
+            page_json, all_json_versions = self_consistency(
+                lambda **kwargs: extract_labs_from_page_transcription(
+                    page_txt,
+                    model_id,
+                    **kwargs
+                ), n_extract
+            )
 
-                # Preprocess the page image
-                processed_image = preprocess_page_image(page_image)
+            # Only save versioned files if n_extract > 1
+            if n_extract > 1:
+                for idx, j in enumerate(all_json_versions, 1):
+                    versioned_json_path = doc_out_dir / f"{page_file_name}.v{idx}.json"
+                    versioned_json_path.write_text(json.dumps(j, indent=2), encoding='utf-8')
 
-                # Save the processed image as JPEG
-                processed_image.save(page_jpg_path, "JPEG", quality=95)
+            # If this is the first page, save the report date
+            if page_number == 1: 
+                report_date = page_json.get("report_date")
+                collection_date = page_json.get("collection_date")
+                document_date = collection_date if collection_date else report_date
+                assert document_date, "Document date is missing"
+                assert document_date in pdf_stem, "Document date not in filename"
 
-            # Transcribe
-            page_txt_path = doc_out_dir / f"{page_file_name}.txt"
-            if not page_txt_path.exists():
-                logger.info(f"[{page_file_name}] - extracting TXT from page JPG")
+            page_json["source_file"] = page_file_name
+            lab_results = page_json.get("lab_results", [])
+            for lab_result in lab_results: lab_result["date"] = document_date
+            page_json["lab_results"] = lab_results
 
-                # Transcribe the page image with self-consistency
-                voted_txt, all_txt_versions = self_consistency(
-                    lambda **kwargs: transcription_from_page_image(
-                        page_jpg_path,
-                        model_id,
-                        **kwargs
-                    ), n_transcribe, openrouter_api_key=openrouter_api_key
-                )
+            # Save parsed labs
+            page_json_path.write_text(json.dumps(page_json, indent=2), encoding='utf-8')
 
-                # Only save versioned files if n_transcribe > 1
-                if n_transcribe > 1:
-                    for idx, txt in enumerate(all_txt_versions, 1):
-                        versioned_txt_path = doc_out_dir / f"{page_file_name}.v{idx}.txt"
-                        versioned_txt_path.write_text(txt, encoding='utf-8')
+        # Export to CSV
+        page_csv_path = doc_out_dir / f"{page_file_name}.csv"
+        if not page_csv_path.exists():
+            logger.info(f"[{page_file_name}] - converting JSON to CSV")
 
-                # Save the voted transcription as the main .txt
-                page_txt_path.write_text(voted_txt, encoding='utf-8')
-            
-            # Extract labs
-            page_json_path = doc_out_dir / f"{page_file_name}.json"
-            if not page_json_path.exists():
-                logger.info(f"[{page_file_name}] - extracting JSON from page TXT")
+            # Load JSON and convert to DataFrame
+            page_json = json.loads(page_json_path.read_text(encoding='utf-8'))
+            df = pd.json_normalize(page_json["lab_results"])
 
-                # Parse labs with self-consistency
-                page_txt = page_txt_path.read_text(encoding='utf-8')
-                (valid, page_json), all_json_versions = self_consistency(
-                    lambda **kwargs: extract_labs_from_page_transcription(
-                        page_txt,
-                        model_id,
-                        **kwargs
-                    ), n_extract, openrouter_api_key=openrouter_api_key
-                )
+            # Ensure 'date' is the first column if it exists
+            if 'date' in df.columns:
+                cols = ['date'] + [col for col in df.columns if col != 'date']
+                df = df[cols]
 
-                # Only save versioned files if n_extract > 1
-                if n_extract > 1:
-                    for idx, (v, j) in enumerate(all_json_versions, 1):
-                        versioned_json_path = doc_out_dir / f"{page_file_name}.v{idx}.json"
-                        versioned_json_path.write_text(json.dumps(j, indent=2), encoding='utf-8')
+            # Save DataFrame to CSV
+            df.to_csv(page_csv_path, index=False)
 
-                # If parsing succeeded, add the date to lab results
-                if valid:       
-                    # If this is the first page, save the report date
-                    if page_number == 1: 
-                        report_date = page_json.get("report_date")
-                        collection_date = page_json.get("collection_date")
-                        document_date = collection_date if collection_date else report_date
-                        assert document_date, "Document date is missing"
-                        assert document_date in pdf_stem, "Document date not in filename"
+    # Loop through files in the directory
+    dataframes = []
+    for file in os.listdir(doc_out_dir):
+        if not file.endswith('.csv'): continue
+        file_path = os.path.join(doc_out_dir, file)
+        df = pd.read_csv(file_path)
+        dataframes.append(df)
 
-                    page_json["source_file"] = page_file_name
-                    lab_results = page_json.get("lab_results", [])
-                    for lab_result in lab_results: lab_result["date"] = document_date
-                    page_json["lab_results"] = lab_results
-                # If parsing failed, log the error
-                else:
-                    logger.error(f"[{page_file_name}] - failed to extract: {json.dumps(page_json, indent=2)}")
-                    continue
-  
-                # Save parsed labs
-                page_json_path.write_text(json.dumps(page_json, indent=2), encoding='utf-8')
+    # Concatenate all dataframes and save to a single CSV
+    merged_df = pd.concat(dataframes, ignore_index=True)
+    merged_df.to_csv(os.path.join(doc_out_dir, f"{pdf_stem}.csv"), index=False)
 
-            # Export to CSV
-            page_csv_path = doc_out_dir / f"{page_file_name}.csv"
-            if not page_csv_path.exists():
-                logger.info(f"[{page_file_name}] - converting JSON to CSV")
-
-                # Load JSON and convert to DataFrame
-                page_json = json.loads(page_json_path.read_text(encoding='utf-8'))
-                df = pd.json_normalize(page_json["lab_results"])
-
-                # Ensure 'date' is the first column if it exists
-                if 'date' in df.columns:
-                    cols = ['date'] + [col for col in df.columns if col != 'date']
-                    df = df[cols]
-
-                # Save DataFrame to CSV
-                df.to_csv(page_csv_path, index=False)
-
-        # Loop through files in the directory
-        dataframes = []
-        for file in os.listdir(doc_out_dir):
-            if not file.endswith('.csv'): continue
-            file_path = os.path.join(doc_out_dir, file)
-            df = pd.read_csv(file_path)
-            dataframes.append(df)
-
-        # Concatenate all dataframes and save to a single CSV
-        merged_df = pd.concat(dataframes, ignore_index=True)
-        merged_df.to_csv(os.path.join(doc_out_dir, f"{pdf_stem}.csv"), index=False)
-
-        logger.info(f"[{pdf_stem}] - processing finished successfully")
-    except Exception as e:
-        logger.error(f"[{pdf_stem}] - error processing: {e}")
-        return {}
-
-    return {}
+    logger.info(f"[{pdf_stem}] - processing finished successfully")
 
 ########################################
 # The Main Function
@@ -578,7 +551,6 @@ def main():
     pattern = config["input_file_regex"]
     n_transcriptions = config["n_transcriptions"]
     n_extractions = config["n_extractions"]
-    openrouter_api_key = config["openrouter_api_key"]
 
     # Gather PDFs
     pdf_files = [f for f in input_dir.glob("*") if re.search(pattern, f.name, re.IGNORECASE)][:1]
@@ -586,11 +558,11 @@ def main():
 
     # Parallel process each PDF
     n_workers = min(cpu_count(), len(pdf_files)) # TODO: move max paralellism to env file
-    n_workers = 2 # TODO: remove this
+    n_workers = 3 # TODO: remove this
     logger.info(f"Using up to {n_workers} worker(s)")
 
     # Prepare argument tuples for each PDF
-    tasks = [(pdf_path, output_dir, model_id, n_transcriptions, n_extractions, openrouter_api_key) for pdf_path in pdf_files]
+    tasks = [(pdf_path, output_dir, model_id, n_transcriptions, n_extractions) for pdf_path in pdf_files]
 
     # We’ll combine all results into a single DataFrame afterward
     with Pool(n_workers) as pool:
