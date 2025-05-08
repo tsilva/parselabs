@@ -421,9 +421,14 @@ def process_single_pdf(
 
     # 1) Set up subdirectory
     pdf_stem = pdf_path.stem
-    logger.info(f"[{pdf_stem}] - loaded: {pdf_path}")
+    logger.info(f"[{pdf_stem}] - processing: {pdf_path}")
     doc_out_dir = output_dir / pdf_stem
     doc_out_dir.mkdir(exist_ok=True, parents=True)
+
+    final_csv_path = os.path.join(doc_out_dir, f"{pdf_stem}.csv")
+    if os.path.exists(final_csv_path):
+        logger.info(f"[{pdf_stem}] - already processed, skipping")
+        return pd.read_csv(final_csv_path)
 
     # 2) Copy PDF to output subdirectory
     copied_pdf_path = doc_out_dir / pdf_path.name
@@ -436,7 +441,6 @@ def process_single_pdf(
     existing_jpgs = sorted(doc_out_dir.glob(f"{pdf_stem}.*.jpg"))
     if existing_jpgs:
         # If any JPGs exist, assume all pages are already extracted
-        logger.info(f"[{pdf_stem}] - found {len(existing_jpgs)} pre-extracted page JPG(s)")
         pages = [Image.open(jpg_path) for jpg_path in existing_jpgs]
     else:
         # No JPGs found, extract pages from PDF
@@ -544,12 +548,14 @@ def process_single_pdf(
     for file in os.listdir(doc_out_dir):
         if not file.endswith('.csv'): continue
         file_path = os.path.join(doc_out_dir, file)
+        contents = open(file_path, 'r', encoding='utf-8').read()
+        if not contents.strip(): continue
         df = pd.read_csv(file_path)
         dataframes.append(df)
 
     # Concatenate all dataframes and save to a single CSV
     merged_df = pd.concat(dataframes, ignore_index=True)
-    merged_df.to_csv(os.path.join(doc_out_dir, f"{pdf_stem}.csv"), index=False)
+    merged_df.to_csv(final_csv_path, index=False)
 
     logger.info(f"[{pdf_stem}] - processing finished successfully")
 
@@ -581,11 +587,13 @@ def main():
     # We’ll combine all results into a single DataFrame afterward
     with Pool(n_workers) as pool:
         for _ in pool.starmap(process_single_pdf, tasks): pass
-
+    
     # Get all CSV files in the directory and create dataframes
     dataframes = []
     for file_path in glob.glob(os.path.join(output_dir, '**', '*.csv'), recursive=True):
         if "all.csv" in file_path: continue
+        contents = open(file_path, 'r', encoding='utf-8').read()
+        if not contents.strip(): continue
         df = pd.read_csv(file_path)
         dataframes.append(df)
 
