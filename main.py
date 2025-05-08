@@ -437,7 +437,7 @@ def process_single_pdf(
     # 3) Check if all expected page JPGs exist, else extract PDF pages
     # Try to find the number of pages by looking for existing JPGs
     existing_jpgs = sorted(doc_out_dir.glob(f"{pdf_stem}.*.jpg"))
-    if False and existing_jpgs:
+    if existing_jpgs:
         # If any JPGs exist, assume all pages are already extracted
         pages = [Image.open(jpg_path) for jpg_path in existing_jpgs]
     else:
