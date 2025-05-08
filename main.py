@@ -18,6 +18,8 @@ from PIL import Image
 from pathlib import Path
 from pydantic import BaseModel, Field, ValidationError
 from typing import List, Optional, Any, Literal
+from collections import Counter
+from functools import wraps
 
 ########################################
 # Config / Logging
@@ -220,10 +222,63 @@ def preprocess_page_image(image: Image.Image) -> Image.Image:
     # Return the processed image (to be saved as PNG later for lossless quality)
     return final_image
 
+def self_consistency(fn, n, *args, **kwargs):
+    """
+    Calls the function `fn` N times with the same arguments,
+    then uses the LLM to select the most consistent result.
+    If n == 1, just returns the single result.
+    """
+    if n == 1:
+        return fn(*args, **kwargs)
+    
+    results = [fn(*args, **kwargs, temperature=0.5) for _ in range(n)]
+
+    # If all results are identical, return immediately
+    if all(r == results[0] for r in results):
+        return results[0]
+
+    # Use LLM to select the most consistent result
+    client = anthropic.Anthropic()
+    
+    # Prepare prompt for LLM voting
+    prompt = (
+        "You are an expert at comparing multiple outputs of the same task. "
+        "Given the following N outputs, select the one that is most likely to be correct, "
+        "most complete, and most faithful to the intended task. "
+        "Return ONLY the best output, verbatim, with no extra commentary.\n\n"
+    )
+    for idx, r in enumerate(results, 1):
+        prompt += f"--- Output {idx} ---\n{r}\n\n"
+    prompt += "Best output:"
+
+    # Use a simple text model for voting
+    message = client.messages.create(
+        model=os.getenv("MODEL_ID"),
+        max_tokens=8192,
+        temperature=0.0,
+        system=[
+            {
+                "type": "text",
+                "text": "You are a careful judge for self-consistency voting.",
+                "cache_control": {"type": "ephemeral"}
+            }
+        ],
+        messages=[
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+    )
+    # Return the LLM's selected output (strip any whitespace)
+    voted = message.content[0].text.strip()
+    return voted
+
 
 def transcription_from_page_image(
     image_path: Path, 
-    model_id: str
+    model_id: str,
+    temperature: float = 0.0
 ) -> str:
     """
     1) Read the image as base64
@@ -253,11 +308,13 @@ Pay special attention to numbers, units (e.g., mg/dL), and reference ranges.
     with open(image_path, "rb") as img_file:
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
 
+    print("TEMPERATURE", temperature)
+
     # Prompt for image transcription
     message = client.messages.create(
         model=model_id,
         max_tokens=8192,
-        temperature=0.0,
+        temperature=temperature,
         system=[
             {
                 "type": "text",
@@ -287,12 +344,13 @@ Pay special attention to numbers, units (e.g., mg/dL), and reference ranges.
     )
     
     transcription =  message.content[0].text.strip()
+    print(transcription)
     return transcription
-
 
 def extract_labs_from_page_transcription(
     transcription: str, 
-    model_id: str
+    model_id: str,
+    temperature: float = 0.0
 ) -> pd.DataFrame:
     """
     1) Ask Anthropic to parse out labs from the transcription
@@ -313,11 +371,11 @@ You are a medical lab report analyzer with the following strict requirements:
         model=model_id,
         #max_tokens=8192,
         max_tokens=20000,
-        thinking={
-            "type": "enabled",
-            "budget_tokens": 10000
-        },
-        temperature=1,
+        #thinking={
+        #    "type": "enabled",
+        #    "budget_tokens": 10000
+        #},
+        temperature=temperature,
         system=[
             {
                 "type": "text",
@@ -349,7 +407,6 @@ You are a medical lab report analyzer with the following strict requirements:
         error_list = e.errors()
         return False, error_list
 
-
 ########################################
 # The Single-PDF Processor
 ########################################
@@ -368,6 +425,10 @@ def process_single_pdf(
       5) Saves the PDF-level CSV inside that directory.
     Returns a single merged DataFrame for the entire PDF.
     """
+
+    # Set self-consistency parameters here
+    N_TRANSCRIBE = 3  # Number of times to run transcription_from_page_image
+    N_EXTRACT = 3     # Number of times to run extract_labs_from_page_transcription
 
     try:
         # 1) Set up subdirectory
@@ -406,11 +467,12 @@ def process_single_pdf(
             if not page_txt_path.exists():
                 logger.info(f"[{page_file_name}] - extracting TXT from page JPG")
 
-                # Transcribe the page image
-                page_txt = transcription_from_page_image(
+                # Transcribe the page image with self-consistency
+                page_txt = self_consistency(lambda **kwargs: transcription_from_page_image(
                     page_jpg_path,
-                    model_id
-                )
+                    model_id,
+                    **kwargs
+                ), N_TRANSCRIBE)
 
                 # Save the transcription
                 page_txt_path.write_text(page_txt, encoding='utf-8')
@@ -420,12 +482,13 @@ def process_single_pdf(
             if not page_json_path.exists():
                 logger.info(f"[{page_file_name}] - extracting JSON from page TXT")
 
-                # Parse labs
+                # Parse labs with self-consistency
                 page_txt = page_txt_path.read_text(encoding='utf-8')
-                valid, page_json = extract_labs_from_page_transcription(
+                valid, page_json = self_consistency(lambda **kwargs: extract_labs_from_page_transcription(
                     page_txt,
-                    model_id
-                )
+                    model_id,
+                    **kwargs
+                ), N_EXTRACT)
 
                 # If parsing succeeded, add the date to lab results
                 if valid:       
@@ -508,6 +571,7 @@ def main():
     tasks = [(pdf_path, output_dir, model_id) for pdf_path in pdf_files]
 
     # We’ll combine all results into a single DataFrame afterward
+    n_workers = 1 # TODO: remove this
     with Pool(n_workers) as pool:
         for _ in pool.starmap(process_single_pdf, tasks): pass
 
