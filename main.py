@@ -225,33 +225,35 @@ def preprocess_page_image(image: Image.Image) -> Image.Image:
 def self_consistency(fn, n, *args, **kwargs):
     """
     Calls the function `fn` N times with the same arguments,
-    then uses the LLM to select the most consistent result.
+    then uses the LLM to select the most content-consistent result.
     If n == 1, just returns the single result.
+
+    The LLM is instructed to maximize agreement on extracted content (numbers, units, test names, values, reference ranges, etc),
+    not on formatting or layout.
     """
     if n == 1:
         return fn(*args, **kwargs)
     
+    # Run all samples with higher temperature for diversity
     results = [fn(*args, **kwargs, temperature=0.5) for _ in range(n)]
 
     # If all results are identical, return immediately
     if all(r == results[0] for r in results):
         return results[0]
 
-    # Use LLM to select the most consistent result
     client = anthropic.Anthropic()
-    
-    # Prepare prompt for LLM voting
+    # Prompt focuses on content, not layout
     prompt = (
-        "You are an expert at comparing multiple outputs of the same task. "
+        "You are an expert at comparing multiple outputs of the same extraction task. "
         "Given the following N outputs, select the one that is most likely to be correct, "
-        "most complete, and most faithful to the intended task. "
+        "most complete, and most consistent in terms of extracted content (test names, values, units, reference ranges, etc). "
+        "Ignore formatting, whitespace, and layout differences. "
         "Return ONLY the best output, verbatim, with no extra commentary.\n\n"
     )
     for idx, r in enumerate(results, 1):
         prompt += f"--- Output {idx} ---\n{r}\n\n"
     prompt += "Best output:"
 
-    # Use a simple text model for voting
     message = client.messages.create(
         model=os.getenv("MODEL_ID"),
         max_tokens=8192,
@@ -259,7 +261,10 @@ def self_consistency(fn, n, *args, **kwargs):
         system=[
             {
                 "type": "text",
-                "text": "You are a careful judge for self-consistency voting.",
+                "text": (
+                    "You are a careful judge for self-consistency voting. "
+                    "Prioritize agreement on extracted content (test names, values, units, reference ranges, etc). "
+                ),
                 "cache_control": {"type": "ephemeral"}
             }
         ],
@@ -270,7 +275,6 @@ def self_consistency(fn, n, *args, **kwargs):
             }
         ]
     )
-    # Return the LLM's selected output (strip any whitespace)
     voted = message.content[0].text.strip()
     return voted
 
