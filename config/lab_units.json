@@ -40,8 +40,12 @@
   "uUI/mL",
   "mUI/L",
   "mUI/mL",
+  "KU/L",
+  "mL/min",
+  "μU/mL",
   "Campo 100X",
   "Campo 400X",
+  "/CAMPO",
   "Índice",
   "boolean"
 ]
