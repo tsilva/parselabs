@@ -291,9 +291,7 @@ def self_consistency(fn, n, *args, **kwargs):
         ]
     )
     voted = completion.choices[0].message.content.strip()
-    print(voted)
-    if type(results[0]) != str:
-        voted = json.loads(voted)
+    if type(results[0]) != str: voted = json.loads(voted)
     return voted, results
 
 def transcription_from_page_image(
@@ -555,12 +553,12 @@ def main():
     n_extractions = config["n_extractions"]
 
     # Gather PDFs
-    pdf_files = [f for f in input_dir.glob("*") if re.search(pattern, f.name, re.IGNORECASE)][:1]
+    pdf_files = [f for f in input_dir.glob("*") if re.search(pattern, f.name, re.IGNORECASE)]
     logger.info(f"Found {len(pdf_files)} PDF(s) matching pattern {pattern}")
 
     # Parallel process each PDF
     n_workers = min(cpu_count(), len(pdf_files)) # TODO: move max paralellism to env file
-    n_workers = 3 # TODO: remove this
+    n_workers = 10 # TODO: remove this
     logger.info(f"Using up to {n_workers} worker(s)")
 
     # Prepare argument tuples for each PDF
