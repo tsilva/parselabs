@@ -449,6 +449,8 @@ def process_single_pdf(
     
     # 4) For each page: preprocess, transcribe, parse labs
     document_date = None
+    report_date = None
+    collection_date = None
     for page_number, page_image in enumerate(pages, start=1):
         page_file_name = f"{pdf_stem}.{page_number:03d}"
 
@@ -515,6 +517,8 @@ def process_single_pdf(
                 assert document_date, "Document date is missing"
                 assert document_date in pdf_stem, f"Document date not in filename: {pdf_stem} vs {document_date}"
 
+            page_json["report_date"] = report_date
+            page_json["collection_date"] = collection_date
             page_json["source_file"] = page_file_name
             lab_results = page_json.get("lab_results", [])
             for lab_result in lab_results: lab_result["date"] = document_date
