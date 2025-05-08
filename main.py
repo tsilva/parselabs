@@ -587,21 +587,25 @@ def main():
     # We’ll combine all results into a single DataFrame afterward
     with Pool(n_workers) as pool:
         for _ in pool.starmap(process_single_pdf, tasks): pass
-    
-    # Get all CSV files in the directory and create dataframes
+
+    # Find all PDFs in the output directory (recursively)
+    pdf_paths = glob.glob(os.path.join(output_dir, '**', '*.pdf'), recursive=True)
     dataframes = []
-    for file_path in glob.glob(os.path.join(output_dir, '**', '*.csv'), recursive=True):
-        if "all.csv" in file_path: continue
-        contents = open(file_path, 'r', encoding='utf-8').read()
-        if not contents.strip(): continue
-        df = pd.read_csv(file_path)
-        # Add source_file column with the CSV file name for each row
-        df['source_file'] = os.path.basename(file_path)
+    for pdf_path in pdf_paths:
+        pdf_dir = os.path.dirname(pdf_path)
+        pdf_stem = Path(pdf_path).stem
+        csv_path = os.path.join(pdf_dir, f"{pdf_stem}.csv")
+        if not os.path.exists(csv_path): continue
+        df = pd.read_csv(csv_path)
+        df['source_file'] = os.path.basename(csv_path)
         dataframes.append(df)
 
     # Concatenate all dataframes and save to a single CSV
-    merged_df = pd.concat(dataframes, ignore_index=True)
-    merged_df.to_csv(os.path.join(output_dir, "all.csv"), index=False)
+    if dataframes:
+        merged_df = pd.concat(dataframes, ignore_index=True)
+        merged_df.to_csv(os.path.join(output_dir, "all.csv"), index=False)
+    else:
+        logger.warning("No per-PDF CSVs found for merging.")
 
     logger.info("All PDFs processed.")
 
