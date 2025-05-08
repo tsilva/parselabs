@@ -7,7 +7,6 @@ import logging
 import os
 import json
 import shutil
-import anthropic
 import base64
 import pandas as pd
 import pdf2image
@@ -21,6 +20,9 @@ from typing import List, Optional, Any, Literal
 from collections import Counter
 from functools import wraps
 from concurrent.futures import ThreadPoolExecutor
+
+# Add OpenAI import for OpenRouter
+from openai import OpenAI
 
 ########################################
 # Config / Logging
@@ -170,8 +172,10 @@ class HealthLabReport(BaseModel):
 
 TOOLS = [
     {
-        "name": "extract_lab_results",
-        "description": f"""
+        "type": "function",
+        "function" : {
+            "name": "extract_lab_results",
+            "description": f"""
 Extract structured laboratory test results from medical documents with high precision.
 
 Specific requirements:
@@ -180,7 +184,8 @@ Specific requirements:
 3. Dates must be in ISO 8601 format (YYYY-MM-DD)
 4. Units must match exactly as shown in the document
 """.strip(),
-        "input_schema": HealthLabReport.model_json_schema()
+            "parameters": HealthLabReport.model_json_schema()
+        }
     }
 ]
 
@@ -250,7 +255,11 @@ def self_consistency(fn, n, *args, **kwargs):
     if all(r == results[0] for r in results):
         return results[0], results
 
-    client = anthropic.Anthropic()
+    # Use OpenRouter for voting
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+    )
     # Prompt focuses on content, not layout
     prompt = (
         "You are an expert at comparing multiple outputs of the same extraction task. "
@@ -263,28 +272,23 @@ def self_consistency(fn, n, *args, **kwargs):
         prompt += f"--- Output {idx} ---\n{r}\n\n"
     prompt += "Best output:"
 
-    message = client.messages.create(
+    completion = client.chat.completions.create(
         model=os.getenv("MODEL_ID"),
-        max_tokens=8192,
-        temperature=0.0,
-        system=[
+        messages=[
             {
-                "type": "text",
-                "text": (
+                "role": "system",
+                "content": (
                     "You are a careful judge for self-consistency voting. "
                     "Prioritize agreement on extracted content (test names, values, units, reference ranges, etc). "
-                ),
-                "cache_control": {"type": "ephemeral"}
-            }
-        ],
-        messages=[
+                )
+            },
             {
                 "role": "user",
                 "content": prompt
             }
         ]
     )
-    voted = message.content[0].text.strip()
+    voted = completion.choices[0].message.content.strip()
     return voted, results
 
 
@@ -295,11 +299,14 @@ def transcription_from_page_image(
 ) -> str:
     """
     1) Read the image as base64
-    2) Send to Anthropic to transcribe exactly
+    2) Send to OpenRouter to transcribe exactly
     """
 
-    # Create anthropic client
-    client = anthropic.Anthropic()
+    # Create OpenRouter client
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+    )
 
     # Define system prompt
     system_prompt = """
@@ -321,43 +328,32 @@ Pay special attention to numbers, units (e.g., mg/dL), and reference ranges.
     with open(image_path, "rb") as img_file:
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
 
-    print("TEMPERATURE", temperature)
-
     # Prompt for image transcription
-    message = client.messages.create(
+    completion = client.chat.completions.create(
         model=model_id,
-        max_tokens=8192,
-        temperature=temperature,
-        system=[
-            {
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"}
-            }
-        ],
         messages=[
+            {
+                "role": "system",
+                "content": system_prompt
+            },
             {
                 "role": "user",
                 "content": [
+                    {"type": "text", "text": user_prompt},
                     {
-                        "type": "text",
-                        "text": user_prompt
-                    },
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/jpeg",
-                            "data": img_data
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{img_data}"
                         }
                     }
                 ]
             }
-        ]
+        ],
+        temperature=temperature,
+        max_tokens=8192
     )
     
-    transcription =  message.content[0].text.strip()
-    print(transcription)
+    transcription = completion.choices[0].message.content.strip()
     return transcription
 
 def extract_labs_from_page_transcription(
@@ -366,10 +362,13 @@ def extract_labs_from_page_transcription(
     temperature: float = 0.0
 ) -> pd.DataFrame:
     """
-    1) Ask Anthropic to parse out labs from the transcription
+    1) Ask OpenRouter to parse out labs from the transcription
     2) Return them as a DataFrame
     """
-    client = anthropic.Anthropic()
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+    )
 
     system_prompt = """
 You are a medical lab report analyzer with the following strict requirements:
@@ -380,37 +379,26 @@ You are a medical lab report analyzer with the following strict requirements:
 """.strip()
 
     # Extract structured data from transcription
-    response = client.messages.create(
+    completion = client.chat.completions.create(
         model=model_id,
-        #max_tokens=8192,
-        max_tokens=20000,
-        #thinking={
-        #    "type": "enabled",
-        #    "budget_tokens": 10000
-        #},
-        temperature=temperature,
-        system=[
-            {
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"}
-            }
-        ],
         messages=[
+            {
+                "role": "system",
+                "content": system_prompt
+            },
             {
                 "role": "user",
                 "content": transcription
             }
         ],
+        temperature=temperature,
+        max_tokens=20000,
         tools=TOOLS
     )
-
+    
     # Process response
-    tool_result = None
-    for content in response.content:
-        if not hasattr(content, "input"): continue
-        assert tool_result is None, "Multiple tools detected in message"
-        tool_result = content.input
+    tool_args = completion.choices[0].message.tool_calls[0].function.arguments
+    tool_result = json.loads(tool_args)
 
     try:
         model = HealthLabReport.model_validate(tool_result)
@@ -585,7 +573,7 @@ def main():
     n_extractions = config["n_extractions"]
 
     # Gather PDFs
-    pdf_files = [f for f in input_dir.glob("*") if re.search(pattern, f.name, re.IGNORECASE)]
+    pdf_files = [f for f in input_dir.glob("*") if re.search(pattern, f.name, re.IGNORECASE)][:1]
     logger.info(f"Found {len(pdf_files)} PDF(s) matching pattern {pattern}")
 
     # Parallel process each PDF
