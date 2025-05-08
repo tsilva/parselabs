@@ -271,8 +271,10 @@ def self_consistency(fn, n, *args, **kwargs):
 
     system_prompt = (
         "You are an expert at comparing multiple outputs of the same extraction task. "
-        "Given several outputs, select the one that is most likely to be correct, most complete, "
-        "and most consistent in terms of extracted content (test names, values, units, reference ranges, etc). "
+        "We have extracted several samples from the same prompt in order to average out any errors or inconsistencies that may appear in individual outputs. "
+        "Your job is to select the output that is most consistent with the majority of the provided samples—"
+        "in other words, the output that best represents the 'average' or consensus among all outputs. "
+        "Prioritize agreement on extracted content (test names, values, units, reference ranges, etc). "
         "Ignore formatting, whitespace, and layout differences. "
         "Return ONLY the best output, verbatim, with no extra commentary. "
         "Do NOT include any delimiters, output numbers, or extra labels in your response—return only the raw content of the best output."
