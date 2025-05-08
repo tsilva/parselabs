@@ -72,19 +72,22 @@ def load_env_config():
     output_path = os.getenv("OUTPUT_PATH")
     n_transcriptions = int(os.getenv("N_TRANSCRIPTIONS"))
     n_extractions = int(os.getenv("N_EXTRACTIONS"))
+    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
 
     if not model_id: raise ValueError("MODEL_ID not set")
     if not input_path or not Path(input_path).exists(): raise ValueError(f"INPUT_PATH not set or does not exist: {input_path}")
     if not input_file_regex: raise ValueError("INPUT_FILE_REGEX not set")
     if not output_path or not Path(output_path).exists(): raise ValueError("OUTPUT_PATH not set")
-    
+    if not openrouter_api_key: raise ValueError("OPENROUTER_API_KEY not set")
+
     return {
         "model_id" : model_id,
         "input_path" : Path(input_path),
         "input_file_regex" : input_file_regex,
         "output_path" : Path(output_path),
         "n_transcriptions": n_transcriptions,
-        "n_extractions": n_extractions
+        "n_extractions": n_extractions,
+        "openrouter_api_key": openrouter_api_key
     }
 
 ########################################
@@ -256,7 +259,7 @@ def self_consistency(fn, n, *args, **kwargs):
     # Use OpenRouter for voting
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key=os.getenv("OPENROUTER_API_KEY"),
+        api_key=kwargs.get("openrouter_api_key") or os.getenv("OPENROUTER_API_KEY"),
     )
     # Prompt focuses on content, not layout
     prompt = (
@@ -293,7 +296,8 @@ def self_consistency(fn, n, *args, **kwargs):
 def transcription_from_page_image(
     image_path: Path, 
     model_id: str,
-    temperature: float = 0.0
+    temperature: float = 0.0,
+    openrouter_api_key: str = None
 ) -> str:
     """
     1) Read the image as base64
@@ -303,7 +307,7 @@ def transcription_from_page_image(
     # Create OpenRouter client
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key=os.getenv("OPENROUTER_API_KEY"),
+        api_key=openrouter_api_key or os.getenv("OPENROUTER_API_KEY"),
     )
 
     # Define system prompt
@@ -357,7 +361,8 @@ Pay special attention to numbers, units (e.g., mg/dL), and reference ranges.
 def extract_labs_from_page_transcription(
     transcription: str, 
     model_id: str,
-    temperature: float = 0.0
+    temperature: float = 0.0,
+    openrouter_api_key: str = None
 ) -> pd.DataFrame:
     """
     1) Ask OpenRouter to parse out labs from the transcription
@@ -365,7 +370,7 @@ def extract_labs_from_page_transcription(
     """
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key=os.getenv("OPENROUTER_API_KEY"),
+        api_key=openrouter_api_key or os.getenv("OPENROUTER_API_KEY"),
     )
 
     system_prompt = """
@@ -415,7 +420,8 @@ def process_single_pdf(
     output_dir: Path,
     model_id: str,
     n_transcribe: int,
-    n_extract: int
+    n_extract: int,
+    openrouter_api_key: str
 ) -> pd.DataFrame:
     """
     High-level function that:
@@ -465,11 +471,14 @@ def process_single_pdf(
                 logger.info(f"[{page_file_name}] - extracting TXT from page JPG")
 
                 # Transcribe the page image with self-consistency
-                voted_txt, all_txt_versions = self_consistency(lambda **kwargs: transcription_from_page_image(
-                    page_jpg_path,
-                    model_id,
-                    **kwargs
-                ), n_transcribe)
+                voted_txt, all_txt_versions = self_consistency(
+                    lambda **kwargs: transcription_from_page_image(
+                        page_jpg_path,
+                        model_id,
+                        openrouter_api_key=openrouter_api_key,
+                        **kwargs
+                    ), n_transcribe, openrouter_api_key=openrouter_api_key
+                )
 
                 # Only save versioned files if n_transcribe > 1
                 if n_transcribe > 1:
@@ -487,11 +496,14 @@ def process_single_pdf(
 
                 # Parse labs with self-consistency
                 page_txt = page_txt_path.read_text(encoding='utf-8')
-                (valid, page_json), all_json_versions = self_consistency(lambda **kwargs: extract_labs_from_page_transcription(
-                    page_txt,
-                    model_id,
-                    **kwargs
-                ), n_extract)
+                (valid, page_json), all_json_versions = self_consistency(
+                    lambda **kwargs: extract_labs_from_page_transcription(
+                        page_txt,
+                        model_id,
+                        openrouter_api_key=openrouter_api_key,
+                        **kwargs
+                    ), n_extract, openrouter_api_key=openrouter_api_key
+                )
 
                 # Only save versioned files if n_extract > 1
                 if n_extract > 1:
@@ -569,6 +581,7 @@ def main():
     pattern = config["input_file_regex"]
     n_transcriptions = config["n_transcriptions"]
     n_extractions = config["n_extractions"]
+    openrouter_api_key = config["openrouter_api_key"]
 
     # Gather PDFs
     pdf_files = [f for f in input_dir.glob("*") if re.search(pattern, f.name, re.IGNORECASE)][:1]
@@ -579,7 +592,7 @@ def main():
     logger.info(f"Using up to {n_workers} worker(s)")
 
     # Prepare argument tuples for each PDF
-    tasks = [(pdf_path, output_dir, model_id, n_transcriptions, n_extractions) for pdf_path in pdf_files]
+    tasks = [(pdf_path, output_dir, model_id, n_transcriptions, n_extractions, openrouter_api_key) for pdf_path in pdf_files]
 
     # We’ll combine all results into a single DataFrame afterward
     n_workers = 1 # TODO: remove this
