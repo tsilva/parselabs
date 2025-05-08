@@ -589,8 +589,8 @@ def main():
         for _ in pool.starmap(process_single_pdf, tasks): pass
 
     # Find all PDFs in the output directory (recursively)
-    pdf_paths = glob.glob(os.path.join(output_dir, '**', '*.pdf'), recursive=True)
     dataframes = []
+    pdf_paths = glob.glob(os.path.join(output_dir, '**', '*.pdf'), recursive=True)
     for pdf_path in pdf_paths:
         pdf_dir = os.path.dirname(pdf_path)
         pdf_stem = Path(pdf_path).stem
@@ -601,11 +601,8 @@ def main():
         dataframes.append(df)
 
     # Concatenate all dataframes and save to a single CSV
-    if dataframes:
-        merged_df = pd.concat(dataframes, ignore_index=True)
-        merged_df.to_csv(os.path.join(output_dir, "all.csv"), index=False)
-    else:
-        logger.warning("No per-PDF CSVs found for merging.")
+    merged_df = pd.concat(dataframes, ignore_index=True)
+    merged_df.to_csv(os.path.join(output_dir, "all.csv"), index=False)
 
     logger.info("All PDFs processed.")
 
