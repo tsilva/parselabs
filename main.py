@@ -480,10 +480,11 @@ def process_single_pdf(
                     **kwargs
                 ), n_transcribe)
 
-                # Save each versioned transcription
-                for idx, txt in enumerate(all_txt_versions, 1):
-                    versioned_txt_path = doc_out_dir / f"{page_file_name}.v{idx}.txt"
-                    versioned_txt_path.write_text(txt, encoding='utf-8')
+                # Only save versioned files if n_transcribe > 1
+                if n_transcribe > 1:
+                    for idx, txt in enumerate(all_txt_versions, 1):
+                        versioned_txt_path = doc_out_dir / f"{page_file_name}.v{idx}.txt"
+                        versioned_txt_path.write_text(txt, encoding='utf-8')
 
                 # Save the voted transcription as the main .txt
                 page_txt_path.write_text(voted_txt, encoding='utf-8')
@@ -501,10 +502,11 @@ def process_single_pdf(
                     **kwargs
                 ), n_extract)
 
-                # Save each versioned extraction
-                for idx, (v, j) in enumerate(all_json_versions, 1):
-                    versioned_json_path = doc_out_dir / f"{page_file_name}.v{idx}.json"
-                    versioned_json_path.write_text(json.dumps(j, indent=2), encoding='utf-8')
+                # Only save versioned files if n_extract > 1
+                if n_extract > 1:
+                    for idx, (v, j) in enumerate(all_json_versions, 1):
+                        versioned_json_path = doc_out_dir / f"{page_file_name}.v{idx}.json"
+                        versioned_json_path.write_text(json.dumps(j, indent=2), encoding='utf-8')
 
                 # If parsing succeeded, add the date to lab results
                 if valid:       
