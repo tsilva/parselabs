@@ -16,7 +16,8 @@ from multiprocessing import Pool, cpu_count
 from PIL import Image
 from pathlib import Path
 from pydantic import BaseModel, Field, ValidationError
-from typing import List, Optional, Literal
+from typing import List, Optional, Any, Literal
+from collections import Counter
 from functools import wraps
 from concurrent.futures import ThreadPoolExecutor
 
@@ -246,8 +247,7 @@ def self_consistency(fn, n, *args, **kwargs):
         return result, [result]
     
     # Parallelize the N runs
-    def call_with_temp():
-        return fn(*args, **kwargs, temperature=0.5)
+    def call_with_temp(): return fn(*args, **kwargs, temperature=0.5)
     with ThreadPoolExecutor(max_workers=n) as executor:
         results = list(executor.map(lambda _: call_with_temp(), range(n)))
 
@@ -306,7 +306,7 @@ def transcription_from_page_image(
     # Create OpenRouter client
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key=openrouter_api_key or os.getenv("OPENROUTER_API_KEY"),
+        api_key=openrouter_api_key
     )
 
     # Define system prompt
@@ -369,7 +369,7 @@ def extract_labs_from_page_transcription(
     """
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key=openrouter_api_key or os.getenv("OPENROUTER_API_KEY"),
+        api_key=openrouter_api_key
     )
 
     system_prompt = """
@@ -474,7 +474,6 @@ def process_single_pdf(
                     lambda **kwargs: transcription_from_page_image(
                         page_jpg_path,
                         model_id,
-                        openrouter_api_key=openrouter_api_key,
                         **kwargs
                     ), n_transcribe, openrouter_api_key=openrouter_api_key
                 )
@@ -499,7 +498,6 @@ def process_single_pdf(
                     lambda **kwargs: extract_labs_from_page_transcription(
                         page_txt,
                         model_id,
-                        openrouter_api_key=openrouter_api_key,
                         **kwargs
                     ), n_extract, openrouter_api_key=openrouter_api_key
                 )
@@ -587,14 +585,14 @@ def main():
     logger.info(f"Found {len(pdf_files)} PDF(s) matching pattern {pattern}")
 
     # Parallel process each PDF
-    n_workers = min(cpu_count(), len(pdf_files))
+    n_workers = min(cpu_count(), len(pdf_files)) # TODO: move max paralellism to env file
+    n_workers = 2 # TODO: remove this
     logger.info(f"Using up to {n_workers} worker(s)")
 
     # Prepare argument tuples for each PDF
     tasks = [(pdf_path, output_dir, model_id, n_transcriptions, n_extractions, openrouter_api_key) for pdf_path in pdf_files]
 
     # We’ll combine all results into a single DataFrame afterward
-    n_workers = 1 # TODO: remove this
     with Pool(n_workers) as pool:
         for _ in pool.starmap(process_single_pdf, tasks): pass
 
