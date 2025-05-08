@@ -4,3 +4,4 @@
 - Add unit conversion support
 - Add support for plotting
 - Added outlier detection (let llm judge based on user data)
+- Add support for performing self-consistency with multiple models

@@ -78,6 +78,7 @@ def load_env_config():
     n_transcriptions = int(os.getenv("N_TRANSCRIPTIONS"))
     n_extractions = int(os.getenv("N_EXTRACTIONS"))
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+    max_workers = int(os.getenv("MAX_WORKERS"))
 
     if not model_id: raise ValueError("MODEL_ID not set")
     if not input_path or not Path(input_path).exists(): raise ValueError(f"INPUT_PATH not set or does not exist: {input_path}")
@@ -92,7 +93,8 @@ def load_env_config():
         "output_path" : Path(output_path),
         "n_transcriptions": n_transcriptions,
         "n_extractions": n_extractions,
-        "openrouter_api_key": openrouter_api_key
+        "openrouter_api_key": openrouter_api_key,
+        "max_workers": max_workers
     }
 
 ########################################
