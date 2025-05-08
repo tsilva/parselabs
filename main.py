@@ -266,32 +266,32 @@ def self_consistency(fn, n, *args, **kwargs):
                     f.cancel()
                 raise
 
-    # All succeeded, extract only the result part for voting
     if all(r == results[0] for r in results):
         return results[0], results
 
-    prompt = (
+    system_prompt = (
         "You are an expert at comparing multiple outputs of the same extraction task. "
-        "Given the following N outputs, select the one that is most likely to be correct, "
-        "most complete, and most consistent in terms of extracted content (test names, values, units, reference ranges, etc). "
+        "Given several outputs, select the one that is most likely to be correct, most complete, "
+        "and most consistent in terms of extracted content (test names, values, units, reference ranges, etc). "
         "Ignore formatting, whitespace, and layout differences. "
-        "Return ONLY the best output, verbatim, with no extra commentary.\n\n"
+        "Return ONLY the best output, verbatim, with no extra commentary. "
+        "Do NOT include any delimiters, output numbers, or extra labels in your response—return only the raw content of the best output."
     )
+    prompt = ""
     prompt += "".join(f"--- Output {i+1} ---\n{json.dumps(v) if type(v) in [list, dict] else v}\n\n" for i, v in enumerate(results))
     prompt += "Best output:"
 
     completion = client.chat.completions.create(
         model=os.getenv("MODEL_ID"),
         messages=[
-            {"role": "system", "content": (
-                "You are a careful judge for self-consistency voting. "
-                "Prioritize agreement on extracted content (test names, values, units, reference ranges, etc). "
-            )},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
         ]
     )
     voted = completion.choices[0].message.content.strip()
-    if type(results[0]) != str: voted = json.loads(voted)
+    print(voted)
+    if type(results[0]) != str:
+        voted = json.loads(voted)
     return voted, results
 
 def transcription_from_page_image(
