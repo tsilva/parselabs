@@ -70,7 +70,6 @@ def load_env_config():
     input_path = os.getenv("INPUT_PATH")
     input_file_regex = os.getenv("INPUT_FILE_REGEX")
     output_path = os.getenv("OUTPUT_PATH")
-    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
     n_transcriptions = int(os.getenv("N_TRANSCRIPTIONS"))
     n_extractions = int(os.getenv("N_EXTRACTIONS"))
 
@@ -78,8 +77,7 @@ def load_env_config():
     if not input_path or not Path(input_path).exists(): raise ValueError(f"INPUT_PATH not set or does not exist: {input_path}")
     if not input_file_regex: raise ValueError("INPUT_FILE_REGEX not set")
     if not output_path or not Path(output_path).exists(): raise ValueError("OUTPUT_PATH not set")
-    if not anthropic_api_key: raise ValueError("ANTHROPIC_API_KEY not set")
-
+    
     return {
         "model_id" : model_id,
         "input_path" : Path(input_path),
