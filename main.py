@@ -16,8 +16,7 @@ from multiprocessing import Pool, cpu_count
 from PIL import Image
 from pathlib import Path
 from pydantic import BaseModel, Field, ValidationError
-from typing import List, Optional, Any, Literal
-from collections import Counter
+from typing import List, Optional, Literal
 from functools import wraps
 from concurrent.futures import ThreadPoolExecutor
 
