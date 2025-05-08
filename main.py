@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field, ValidationError
 from typing import List, Optional, Any, Literal
 from collections import Counter
 from functools import wraps
+from concurrent.futures import ThreadPoolExecutor
 
 ########################################
 # Config / Logging
@@ -233,13 +234,17 @@ def self_consistency(fn, n, *args, **kwargs):
     If n == 1, just returns the single result.
 
     Returns a tuple: (voted_result, [all_versions])
+    Parallelizes the N calls for efficiency.
     """
     if n == 1:
         result = fn(*args, **kwargs)
         return result, [result]
     
-    # Run all samples with higher temperature for diversity
-    results = [fn(*args, **kwargs, temperature=0.5) for _ in range(n)]
+    # Parallelize the N runs
+    def call_with_temp():
+        return fn(*args, **kwargs, temperature=0.5)
+    with ThreadPoolExecutor(max_workers=n) as executor:
+        results = list(executor.map(lambda _: call_with_temp(), range(n)))
 
     # If all results are identical, return immediately
     if all(r == results[0] for r in results):
