@@ -437,12 +437,18 @@ def process_single_pdf(
     # 3) Check if all expected page JPGs exist, else extract PDF pages
     # Try to find the number of pages by looking for existing JPGs
     existing_jpgs = sorted(doc_out_dir.glob(f"{pdf_stem}.*.jpg"))
-    if existing_jpgs:
+    if False and existing_jpgs:
         # If any JPGs exist, assume all pages are already extracted
         pages = [Image.open(jpg_path) for jpg_path in existing_jpgs]
     else:
-        # No JPGs found, extract pages from PDF
-        pages = pdf2image.convert_from_path(str(copied_pdf_path))
+        # No JPGs found, extract pages from PDF and save images immediately
+        pages = []
+        pil_pages = pdf2image.convert_from_path(str(copied_pdf_path))
+        for idx, page_image in enumerate(pil_pages, start=1):
+            page_file_name = f"{pdf_stem}.{idx:03d}"
+            page_jpg_path = doc_out_dir / f"{page_file_name}.jpg"
+            page_image.save(page_jpg_path, "JPEG", quality=95)
+            pages.append(page_image)
         logger.info(f"[{pdf_stem}] - extracted {len(pages)} page(s) from PDF")
     
     # 4) For each page: preprocess, transcribe, parse labs
