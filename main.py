@@ -284,7 +284,7 @@ def self_consistency(fn, n, *args, **kwargs):
     prompt = ""
     prompt += "".join(f"--- Output {i+1} ---\n{json.dumps(v) if type(v) in [list, dict] else v}\n\n" for i, v in enumerate(results))
     prompt += "Best output:"
-
+    
     completion = client.chat.completions.create(
         model=os.getenv("MODEL_ID"),
         messages=[
@@ -509,7 +509,7 @@ def process_single_pdf(
                 collection_date = page_json.get("collection_date")
                 document_date = collection_date if collection_date else report_date
                 assert document_date, "Document date is missing"
-                assert document_date in pdf_stem, "Document date not in filename"
+                assert document_date in pdf_stem, f"Document date not in filename: {pdf_stem} vs {document_date}"
 
             page_json["source_file"] = page_file_name
             lab_results = page_json.get("lab_results", [])
@@ -518,6 +518,9 @@ def process_single_pdf(
 
             # Save parsed labs
             page_json_path.write_text(json.dumps(page_json, indent=2), encoding='utf-8')
+        else:
+            # If JSON already exists, just load it
+            page_json = json.loads(page_json_path.read_text(encoding='utf-8'))
 
         # Export to CSV
         page_csv_path = doc_out_dir / f"{page_file_name}.csv"
