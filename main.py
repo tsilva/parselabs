@@ -595,6 +595,8 @@ def main():
         contents = open(file_path, 'r', encoding='utf-8').read()
         if not contents.strip(): continue
         df = pd.read_csv(file_path)
+        # Add source_file column with the CSV file name for each row
+        df['source_file'] = os.path.basename(file_path)
         dataframes.append(df)
 
     # Concatenate all dataframes and save to a single CSV
