@@ -1,0 +1,11 @@
+name: labs-parser
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - anthropic
+      - pillow
+      - pdf2image
+      - python-dotenv
