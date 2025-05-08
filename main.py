@@ -68,6 +68,8 @@ def load_env_config():
     input_file_regex = os.getenv("INPUT_FILE_REGEX")
     output_path = os.getenv("OUTPUT_PATH")
     anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+    n_transcribe = int(os.getenv("N_TRANSCRIBE", "3"))
+    n_extract = int(os.getenv("N_EXTRACT", "3"))
 
     if not model_id: raise ValueError("MODEL_ID not set")
     if not input_path or not Path(input_path).exists(): raise ValueError(f"INPUT_PATH not set or does not exist: {input_path}")
@@ -79,7 +81,9 @@ def load_env_config():
         "model_id" : model_id,
         "input_path" : Path(input_path),
         "input_file_regex" : input_file_regex,
-        "output_path" : Path(output_path)
+        "output_path" : Path(output_path),
+        "n_transcribe": n_transcribe,
+        "n_extract": n_extract
     }
 
 ########################################
@@ -418,7 +422,9 @@ You are a medical lab report analyzer with the following strict requirements:
 def process_single_pdf(
     pdf_path: Path,
     output_dir: Path,
-    model_id: str
+    model_id: str,
+    n_transcribe: int,
+    n_extract: int
 ) -> pd.DataFrame:
     """
     High-level function that:
@@ -429,10 +435,6 @@ def process_single_pdf(
       5) Saves the PDF-level CSV inside that directory.
     Returns a single merged DataFrame for the entire PDF.
     """
-
-    # Set self-consistency parameters here
-    N_TRANSCRIBE = 3  # Number of times to run transcription_from_page_image
-    N_EXTRACT = 3     # Number of times to run extract_labs_from_page_transcription
 
     try:
         # 1) Set up subdirectory
@@ -476,7 +478,7 @@ def process_single_pdf(
                     page_jpg_path,
                     model_id,
                     **kwargs
-                ), N_TRANSCRIBE)
+                ), n_transcribe)
 
                 # Save the transcription
                 page_txt_path.write_text(page_txt, encoding='utf-8')
@@ -492,7 +494,7 @@ def process_single_pdf(
                     page_txt,
                     model_id,
                     **kwargs
-                ), N_EXTRACT)
+                ), n_extract)
 
                 # If parsing succeeded, add the date to lab results
                 if valid:       
@@ -562,6 +564,8 @@ def main():
     input_dir = config["input_path"]
     output_dir = config["output_path"]
     pattern = config["input_file_regex"]
+    n_transcribe = config["n_transcribe"]
+    n_extract = config["n_extract"]
 
     # Gather PDFs
     pdf_files = [f for f in input_dir.glob("*") if re.search(pattern, f.name, re.IGNORECASE)]
@@ -572,7 +576,7 @@ def main():
     logger.info(f"Using up to {n_workers} worker(s)")
 
     # Prepare argument tuples for each PDF
-    tasks = [(pdf_path, output_dir, model_id) for pdf_path in pdf_files]
+    tasks = [(pdf_path, output_dir, model_id, n_transcribe, n_extract) for pdf_path in pdf_files]
 
     # We’ll combine all results into a single DataFrame afterward
     n_workers = 1 # TODO: remove this
