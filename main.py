@@ -431,8 +431,17 @@ def process_single_pdf(
         logger.info(f"[{pdf_stem}] - copying: {copied_pdf_path}")
         shutil.copy2(pdf_path, copied_pdf_path)
 
-    # 3) Extract PDF pages
-    pages = pdf2image.convert_from_path(str(copied_pdf_path))
+    # 3) Check if all expected page JPGs exist, else extract PDF pages
+    # Try to find the number of pages by looking for existing JPGs
+    existing_jpgs = sorted(doc_out_dir.glob(f"{pdf_stem}.*.jpg"))
+    if existing_jpgs:
+        # If any JPGs exist, assume all pages are already extracted
+        logger.info(f"[{pdf_stem}] - found {len(existing_jpgs)} pre-extracted page JPG(s)")
+        pages = [Image.open(jpg_path) for jpg_path in existing_jpgs]
+    else:
+        # No JPGs found, extract pages from PDF
+        pages = pdf2image.convert_from_path(str(copied_pdf_path))
+        logger.info(f"[{pdf_stem}] - extracted {len(pages)} page(s) from PDF")
     
     # 4) For each page: preprocess, transcribe, parse labs
     document_date = None
