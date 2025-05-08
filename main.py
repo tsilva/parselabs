@@ -161,7 +161,7 @@ class HealthLabReport(BaseModel):
         description="Date the laboratory report was issued (YYYY-MM-DD)"
     )
     collection_date: Optional[str] = Field(
-        description="Date the specimen was collected (YYYY-MM-DD), if available"
+        description="Date the specimen was collected (YYYY-MM-DD), if available (also called subscription date)"
     )
     lab_facility: Optional[str] = Field(
         description="Name of the laboratory or facility that performed the tests, if available"
