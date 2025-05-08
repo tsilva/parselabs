@@ -564,8 +564,8 @@ def main():
     input_dir = config["input_path"]
     output_dir = config["output_path"]
     pattern = config["input_file_regex"]
-    n_transcribe = config["n_transcribe"]
-    n_extract = config["n_extract"]
+    n_transcribe = config["selfconsistency_runs_transcription"]
+    n_extract = config["selfconsistency_runs_extraction"]
 
     # Gather PDFs
     pdf_files = [f for f in input_dir.glob("*") if re.search(pattern, f.name, re.IGNORECASE)]
