@@ -12,13 +12,11 @@ import pandas as pd
 import pdf2image
 import re
 import hashlib
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool
 from PIL import Image
 from pathlib import Path
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 from typing import List, Optional, Any, Literal
-from collections import Counter
-from functools import wraps
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Add OpenAI import for OpenRouter
