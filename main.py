@@ -68,8 +68,8 @@ def load_env_config():
     input_file_regex = os.getenv("INPUT_FILE_REGEX")
     output_path = os.getenv("OUTPUT_PATH")
     anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
-    n_transcribe = int(os.getenv("N_TRANSCRIBE", "3"))
-    n_extract = int(os.getenv("N_EXTRACT", "3"))
+    n_transcriptions = int(os.getenv("N_TRANSCRIPTIONS"))
+    n_extractions = int(os.getenv("N_EXTRACTIONS"))
 
     if not model_id: raise ValueError("MODEL_ID not set")
     if not input_path or not Path(input_path).exists(): raise ValueError(f"INPUT_PATH not set or does not exist: {input_path}")
@@ -82,8 +82,8 @@ def load_env_config():
         "input_path" : Path(input_path),
         "input_file_regex" : input_file_regex,
         "output_path" : Path(output_path),
-        "n_transcribe": n_transcribe,
-        "n_extract": n_extract
+        "n_transcriptions": n_transcriptions,
+        "n_extractions": n_extractions
     }
 
 ########################################
@@ -232,18 +232,18 @@ def self_consistency(fn, n, *args, **kwargs):
     then uses the LLM to select the most content-consistent result.
     If n == 1, just returns the single result.
 
-    The LLM is instructed to maximize agreement on extracted content (numbers, units, test names, values, reference ranges, etc),
-    not on formatting or layout.
+    Returns a tuple: (voted_result, [all_versions])
     """
     if n == 1:
-        return fn(*args, **kwargs)
+        result = fn(*args, **kwargs)
+        return result, [result]
     
     # Run all samples with higher temperature for diversity
     results = [fn(*args, **kwargs, temperature=0.5) for _ in range(n)]
 
     # If all results are identical, return immediately
     if all(r == results[0] for r in results):
-        return results[0]
+        return results[0], results
 
     client = anthropic.Anthropic()
     # Prompt focuses on content, not layout
@@ -280,7 +280,7 @@ def self_consistency(fn, n, *args, **kwargs):
         ]
     )
     voted = message.content[0].text.strip()
-    return voted
+    return voted, results
 
 
 def transcription_from_page_image(
@@ -474,14 +474,19 @@ def process_single_pdf(
                 logger.info(f"[{page_file_name}] - extracting TXT from page JPG")
 
                 # Transcribe the page image with self-consistency
-                page_txt = self_consistency(lambda **kwargs: transcription_from_page_image(
+                voted_txt, all_txt_versions = self_consistency(lambda **kwargs: transcription_from_page_image(
                     page_jpg_path,
                     model_id,
                     **kwargs
                 ), n_transcribe)
 
-                # Save the transcription
-                page_txt_path.write_text(page_txt, encoding='utf-8')
+                # Save each versioned transcription
+                for idx, txt in enumerate(all_txt_versions, 1):
+                    versioned_txt_path = doc_out_dir / f"{page_file_name}.v{idx}.txt"
+                    versioned_txt_path.write_text(txt, encoding='utf-8')
+
+                # Save the voted transcription as the main .txt
+                page_txt_path.write_text(voted_txt, encoding='utf-8')
             
             # Extract labs
             page_json_path = doc_out_dir / f"{page_file_name}.json"
@@ -490,11 +495,16 @@ def process_single_pdf(
 
                 # Parse labs with self-consistency
                 page_txt = page_txt_path.read_text(encoding='utf-8')
-                valid, page_json = self_consistency(lambda **kwargs: extract_labs_from_page_transcription(
+                (valid, page_json), all_json_versions = self_consistency(lambda **kwargs: extract_labs_from_page_transcription(
                     page_txt,
                     model_id,
                     **kwargs
                 ), n_extract)
+
+                # Save each versioned extraction
+                for idx, (v, j) in enumerate(all_json_versions, 1):
+                    versioned_json_path = doc_out_dir / f"{page_file_name}.v{idx}.json"
+                    versioned_json_path.write_text(json.dumps(j, indent=2), encoding='utf-8')
 
                 # If parsing succeeded, add the date to lab results
                 if valid:       
@@ -564,8 +574,8 @@ def main():
     input_dir = config["input_path"]
     output_dir = config["output_path"]
     pattern = config["input_file_regex"]
-    n_transcribe = config["selfconsistency_runs_transcription"]
-    n_extract = config["selfconsistency_runs_extraction"]
+    n_transcriptions = config["n_transcriptions"]
+    n_extractions = config["n_extractions"]
 
     # Gather PDFs
     pdf_files = [f for f in input_dir.glob("*") if re.search(pattern, f.name, re.IGNORECASE)]
@@ -576,7 +586,7 @@ def main():
     logger.info(f"Using up to {n_workers} worker(s)")
 
     # Prepare argument tuples for each PDF
-    tasks = [(pdf_path, output_dir, model_id, n_transcribe, n_extract) for pdf_path in pdf_files]
+    tasks = [(pdf_path, output_dir, model_id, n_transcriptions, n_extractions) for pdf_path in pdf_files]
 
     # We’ll combine all results into a single DataFrame afterward
     n_workers = 1 # TODO: remove this
