@@ -551,14 +551,14 @@ def main():
     pattern = config["input_file_regex"]
     n_transcriptions = config["n_transcriptions"]
     n_extractions = config["n_extractions"]
+    max_workers = config.get("max_workers", 1)
 
     # Gather PDFs
     pdf_files = [f for f in input_dir.glob("*") if re.search(pattern, f.name, re.IGNORECASE)]
     logger.info(f"Found {len(pdf_files)} PDF(s) matching pattern {pattern}")
 
     # Parallel process each PDF
-    n_workers = min(cpu_count(), len(pdf_files)) # TODO: move max paralellism to env file
-    n_workers = 10 # TODO: remove this
+    n_workers = min(max_workers, len(pdf_files))
     logger.info(f"Using up to {n_workers} worker(s)")
 
     # Prepare argument tuples for each PDF
