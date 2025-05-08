@@ -167,3 +167,5 @@ plots/
 user.json
 tests/fixtures/*
 logs/
+
+__pycache__/
