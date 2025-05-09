@@ -122,7 +122,16 @@
   },
   "25-Hidroxivitamina D": {
     "primary_unit": "ng/mL",
-    "alternatives": []
+    "alternatives": [
+      {
+        "unit": "μg/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "nmol/L",
+        "factor": 0.4
+      }
+    ]
   },
   "Ácido Ascórbico": {
     "primary_unit": "mg/dL",
@@ -715,10 +724,10 @@
     ]
   },
   "Leucócitos": {
-    "primary_unit": "10^3/µL",
+    "primary_unit": "10³/µL",
     "alternatives": [
       {
-        "unit": "10^9/L",
+        "unit": "10⁹/L",
         "factor": 1
       }
     ]
@@ -752,10 +761,10 @@
     "alternatives": []
   },
   "Plaquetas": {
-    "primary_unit": "10^3/µL",
+    "primary_unit": "10³/µL",
     "alternatives": [
       {
-        "unit": "10^9/L",
+        "unit": "10⁹/L",
         "factor": 1
       }
     ]
@@ -832,7 +841,7 @@
     "primary_unit": "%",
     "alternatives": [
       {
-        "unit": "10^3/µL",
+        "unit": "10³/µL",
         "factor": 0
       }
     ]
