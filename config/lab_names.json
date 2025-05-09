@@ -1,4 +1,40 @@
 {
+  "Eletroforese de Proteínas - Proteínas Totais": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Eletroforese de Proteínas - Albumina": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Eletroforese de Proteínas - Globulina": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Eletroforese de Proteínas - Albumina (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Eletroforese de Proteínas - Alfa 1": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Eletroforese de Proteínas - Alfa 2": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Eletroforese de Proteínas - Beta": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Eletroforese de Proteínas - Gama": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Eletroforese de Proteínas - Albumina/Globulina": {
+    "primary_unit": "Indice",
+    "alternatives": []
+  },
   "Glicose": {
     "primary_unit": "mg/dL",
     "alternatives": [
@@ -180,26 +216,14 @@
       }
     ]
   },
-  "Albumina": {
-    "primary_unit": "g/dL",
-    "alternatives": [
-      {
-        "unit": "g/L",
-        "factor": 0.1
-      }
-    ]
-  },
-  "Alfa 1": {
-    "primary_unit": "g/dL",
-    "alternatives": []
-  },
-  "Alfa 2": {
-    "primary_unit": "g/dL",
-    "alternatives": []
-  },
   "Alfa-Fetoproteína": {
     "primary_unit": "ng/mL",
-    "alternatives": []
+    "alternatives": [
+      {
+        "unit": "µg/L",
+        "factor": 0.001
+      }
+    ]
   },
   "Alto Teor em RNA (%)": {
     "primary_unit": "%",
@@ -256,7 +280,12 @@
   },
   "Anticorpo Anti-HBs": {
     "primary_unit": "mIU/mL",
-    "alternatives": []
+    "alternatives": [
+      {
+        "unit": "UI/mL",
+        "factor": 1
+      }
+    ]
   },
   "Anticorpo Anti-HCV": {
     "primary_unit": "boolean",
@@ -329,7 +358,7 @@
     "alternatives": []
   },
   "Anticorpos Antinucleares - ANA": {
-    "primary_unit": "Títulos (1:x)",
+    "primary_unit": "string",
     "alternatives": []
   },
   "Antígeno Carcinoembrionário (CEA)": {
@@ -337,11 +366,11 @@
     "alternatives": []
   },
   "Antígeno HBe": {
-    "primary_unit": "Index",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Antígeno HBs": {
-    "primary_unit": "IU/mL",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Anti-HCV": {
@@ -447,7 +476,7 @@
     "alternatives": []
   },
   "Células Epiteliais Escamosas": {
-    "primary_unit": "Campo 100X",
+    "primary_unit": "Campo 400X",
     "alternatives": [
       {
         "unit": "/uL",
@@ -631,14 +660,6 @@
     "primary_unit": "U/g Hb",
     "alternatives": []
   },
-  "Globulina Beta": {
-    "primary_unit": "g/dL",
-    "alternatives": []
-  },
-  "Globulina Gama": {
-    "primary_unit": "g/dL",
-    "alternatives": []
-  },
   "Granulócitos Imaturos (%)": {
     "primary_unit": "%",
     "alternatives": []
@@ -740,7 +761,12 @@
   },
   "Haptoglobina": {
     "primary_unit": "mg/dL",
-    "alternatives": []
+    "alternatives": [
+      {
+        "unit": "g/L",
+        "factor": 0.01
+      }
+    ]
   },
   "HLA B27": {
     "primary_unit": "boolean",
@@ -784,7 +810,15 @@
     "primary_unit": "µIU/mL",
     "alternatives": [
       {
+        "unit": "mUI/mL",
+        "factor": 1
+      },
+      {
         "unit": "mUI/L",
+        "factor": 1
+      },
+      {
+        "unit": "µUI/mL",
         "factor": 1
       }
     ]
@@ -1009,10 +1043,6 @@
   "Proteína C Reativa (boolean)": {
     "primary_unit": "boolean"
   },
-  "Proteínas Totais": {
-    "primary_unit": "g/dL",
-    "alternatives": []
-  },
   "PSA Fração Livre": {
     "primary_unit": "ng/mL",
     "alternatives": [
@@ -1036,10 +1066,6 @@
     "alternatives": []
   },
   "Razão PSA Livre/PSA Total": {
-    "primary_unit": "Indice",
-    "alternatives": []
-  },
-  "Relação Albumina-Globulina": {
     "primary_unit": "Indice",
     "alternatives": []
   },
@@ -1134,7 +1160,12 @@
   },
   "Triiodotironina - T3": {
     "primary_unit": "ng/dL",
-    "alternatives": []
+    "alternatives": [
+      {
+        "unit": "ng/mL",
+        "factor": 1.0
+      }
+    ]
   },
   "Urina Tipo II - Aspecto": {
     "primary_unit": "string",
