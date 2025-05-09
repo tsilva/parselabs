@@ -248,7 +248,7 @@ def preprocess_page_image(image: Image.Image) -> Image.Image:
         gray_image = gray_image.resize((MAX_WIDTH, new_height), Image.Resampling.LANCZOS)
 
     # Enhance contrast to make text stand out
-    enhanced_image = ImageEnhance.Contrast(gray_image).enhance(1.5)  # Adjust contrast by 1.5x
+    enhanced_image = ImageEnhance.Contrast(gray_image).enhance(2.0)  # Adjust contrast by 2x
 
     # Optional: Quantize to reduce noise while preserving readability (128 colors)
     # Comment this out if you want maximum fidelity without quantization
@@ -426,81 +426,6 @@ You are a medical lab report analyzer with the following strict requirements:
 
     return model_dict
 
-def normalize_unit(unit):
-    """
-    Normalize unit string for comparison (e.g., replace similar unicode chars).
-    """
-    if not isinstance(unit, str):
-        return unit
-    # Replace common unicode variants with ASCII equivalents
-    replacements = {
-        "μ": "µ",  # micro sign
-        "u": "µ",  # sometimes 'u' is used for micro
-        "U": "U",  # leave capital U as is
-        "ℓ": "L",  # script small l to L
-        "¹": "1", "²": "2", "³": "3",  # superscripts
-        "⁶": "6", "⁹": "9", "¹²": "12",  # more superscripts
-        # Add more as needed
-    }
-    for k, v in replacements.items():
-        unit = unit.replace(k, v)
-    # Remove spaces and unify dashes
-    unit = unit.replace(" ", "").replace("-", "")
-    return unit
-
-def convert_to_primary_unit(lab_name, value, unit, lab_names_config):
-    """
-    Convert value to the primary unit for the given lab_name using lab_names_config.
-    Returns (normalized_value, normalized_unit). If conversion is not possible, returns (UNKNOWN_VALUE, UNKNOWN_VALUE).
-    """
-    info = lab_names_config.get(lab_name)
-    if not info:
-        logger.warning(f"Lab name '{lab_name}' not found in lab_specs.json.")
-        return UNKNOWN_VALUE, UNKNOWN_VALUE
-    primary_unit = info.get("primary_unit")
-    if not primary_unit or primary_unit == "N/A":
-        logger.warning(f"No primary unit for lab '{lab_name}'.")
-        return UNKNOWN_VALUE, UNKNOWN_VALUE
-    norm_unit = normalize_unit(unit)
-    norm_primary = normalize_unit(primary_unit)
-    # Use lowercase for case-insensitive comparison
-    if isinstance(norm_unit, str) and isinstance(norm_primary, str):
-        if norm_unit.lower() == norm_primary.lower():
-            return value, primary_unit
-    else:
-        if norm_unit == norm_primary:
-            return value, primary_unit
-    # Try to find conversion factor in alternatives
-    for alt in info.get("alternatives", []):
-        alt_unit = normalize_unit(alt.get("unit"))
-        # Use lowercase for case-insensitive comparison
-        if isinstance(alt_unit, str) and isinstance(norm_unit, str):
-            if alt_unit.lower() == norm_unit.lower():
-                try:
-                    factor = float(alt.get("factor"))
-                    if factor == 0:
-                        logger.warning(f"Conversion factor is zero for lab '{lab_name}' unit '{unit}'.")
-                        return UNKNOWN_VALUE, UNKNOWN_VALUE
-                    converted = float(value) / factor
-                    return converted, primary_unit
-                except Exception as e:
-                    logger.warning(f"Error converting {lab_name} from {unit} to {primary_unit}: {e}")
-                    return UNKNOWN_VALUE, UNKNOWN_VALUE
-        else:
-            if alt_unit == norm_unit:
-                try:
-                    factor = float(alt.get("factor"))
-                    if factor == 0:
-                        logger.warning(f"Conversion factor is zero for lab '{lab_name}' unit '{unit}'.")
-                        return UNKNOWN_VALUE, UNKNOWN_VALUE
-                    converted = float(value) / factor
-                    return converted, primary_unit
-                except Exception as e:
-                    logger.warning(f"Error converting {lab_name} from {unit} to {primary_unit}: {e}")
-                    return UNKNOWN_VALUE, UNKNOWN_VALUE
-    logger.warning(f"Unit '{unit}' for lab '{lab_name}' not found in alternatives or as primary unit.")
-    return UNKNOWN_VALUE, UNKNOWN_VALUE
-
 ########################################
 # The Single-PDF Processor
 ########################################
@@ -654,28 +579,6 @@ def process_single_pdf(
                 cols = ['date'] + [col for col in df.columns if col != 'date']
                 df = df[cols]
             
-            """ @TODO: do this before csv
-            # Add normalized_lab_value and normalized_lab_unit columns
-            normalized_values = []
-            normalized_units = []
-            for idx, row in df.iterrows():
-                lab_name = row.get("enum_lab_name")
-                value = row.get("lab_value")
-                unit = row.get("enum_lab_unit")
-                # Only attempt conversion if all fields are present and value is a number
-                try:
-                    normalized_value, normalized_unit = convert_to_primary_unit(
-                        lab_name, value, unit, LAB_NAMES_CONFIG
-                    )
-                except Exception as e:
-                    logger.warning(f"Error in conversion for row {idx}: {e}")
-                    normalized_value, normalized_unit = UNKNOWN_VALUE, UNKNOWN_VALUE
-                normalized_values.append(normalized_value)
-                normalized_units.append(normalized_unit)
-            df["normalized_lab_value"] = normalized_values
-            df["normalized_lab_unit"] = normalized_units
-            """
-
             # Save DataFrame to CSV
             df.to_csv(page_csv_path, index=False)
 
@@ -740,46 +643,7 @@ def main():
     # Concatenate all dataframes and save to a single CSV
     merged_df = pd.concat(dataframes, ignore_index=True)
 
-    # --------- Inject enum fields as $UNKNOWN ---------
-    # Add stub enum fields to each row
-    merged_df["enum_lab_name"] = "$UNKNOWN"
-    merged_df["enum_lab_unit"] = "$UNKNOWN"
-    merged_df["enum_lab_method"] = "$UNKNOWN"
-    # --------------------------------------------------
-
     merged_df.to_csv(os.path.join(output_dir, "all.csv"), index=False)
-
-    # --------- Export latest status per lab test ---------
-    # Only consider rows with valid date and enum_lab_name
-    df_stats = merged_df.copy()
-    if "date" in df_stats.columns and "enum_lab_name" in df_stats.columns:
-        df_stats["date"] = pd.to_datetime(df_stats["date"], errors="coerce")
-        df_stats = df_stats.dropna(subset=["date", "enum_lab_name", "normalized_lab_value"])
-        df_stats["normalized_lab_value"] = pd.to_numeric(df_stats["normalized_lab_value"], errors="coerce")
-        df_stats = df_stats.dropna(subset=["normalized_lab_value"])
-        # Group by test name and unit
-        group_cols = ["enum_lab_name", "normalized_lab_unit"]
-        stats_rows = []
-        for (test, unit), group in df_stats.groupby(group_cols):
-            group = group.sort_values("date")
-            last_row = group.iloc[-1]
-            stats = {
-                "enum_lab_name": test,
-                "normalized_lab_unit": unit,
-                "last_date": last_row["date"],
-                "last_value": last_row["normalized_lab_value"],
-                "mean": group["normalized_lab_value"].mean(),
-                "median": group["normalized_lab_value"].median(),
-                "std": group["normalized_lab_value"].std(),
-                "var": group["normalized_lab_value"].var(),
-                "min": group["normalized_lab_value"].min(),
-                "max": group["normalized_lab_value"].max(),
-                "count": group["normalized_lab_value"].count(),
-            }
-            stats_rows.append(stats)
-        df_latest = pd.DataFrame(stats_rows)
-        df_latest.to_csv(os.path.join(output_dir, "all-latest.csv"), index=False)
-    # ----------------------------------------------------
 
     logger.info("All PDFs processed.")
 
@@ -800,67 +664,6 @@ def main():
     # Convert date column to datetime if present
     if "date" in merged_df.columns:
         merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce")
-
-    # For each unique enum_lab_name, plot only values with matching enum_lab_unit
-    def slugify(value):
-        import re
-        value = str(value)
-        value = value.lower()
-        value = re.sub(r"[^\w\s-]", "", value)
-        value = re.sub(r"[\s_-]+", "-", value)
-        value = re.sub(r"^-+|-+$", "", value)
-        return value
-
-    for lab_name, lab_info in lab_names_config.items():
-        std_unit = lab_info.get("primary_unit")
-        if not std_unit or std_unit == "N/A":
-            continue
-        mask_name = merged_df["enum_lab_name"] == lab_name
-        mask_unit = merged_df["normalized_lab_unit"] == std_unit
-        df_lab = merged_df[mask_name & mask_unit]
-        # Log skipped rows due to mismatched units
-        skipped = merged_df[mask_name & (~mask_unit)]
-        if not skipped.empty:
-            for _, row in skipped.iterrows():
-                logger.info(
-                    f"Skipping row for lab '{lab_name}': "
-                    f"date={row.get('date')}, value={row.get('normalized_lab_value')}, "
-                    f"unit={row.get('normalized_lab_unit')} (expected {std_unit}), "
-                    f"source_file={row.get('source_file')}"
-                )
-        if df_lab.empty or "date" not in df_lab.columns or "normalized_lab_value" not in df_lab.columns:
-            continue
-
-        # --- FIX: Ensure normalized_lab_value is numeric and drop NaNs ---
-        df_lab = df_lab.copy()
-        df_lab["normalized_lab_value"] = pd.to_numeric(df_lab["normalized_lab_value"], errors="coerce")
-        before_drop = len(df_lab)
-        df_lab = df_lab.dropna(subset=["normalized_lab_value", "date"])
-        after_drop = len(df_lab)
-        if before_drop != after_drop:
-            logger.info(
-                f"Dropped {before_drop - after_drop} non-numeric or missing values for lab '{lab_name}'"
-            )
-        if df_lab.empty:
-            continue
-        # -----------------------------------------------------------
-
-        # --- SKIP PLOT IF LESS THAN 2 VALUES ---
-        if len(df_lab) < 2:
-            logger.info(f"Skipping plot for lab '{lab_name}' ({std_unit}) because only {len(df_lab)} value(s) found.")
-            continue
-        # ---------------------------------------
-
-        df_lab = df_lab.sort_values("date")
-        plt.figure(figsize=(8, 4))
-        plt.plot(df_lab["date"], df_lab["normalized_lab_value"], marker="o")
-        plt.title(f"{lab_name} ({std_unit})")
-        plt.xlabel("Date")
-        plt.ylabel(f"Value ({std_unit})")
-        plt.tight_layout()
-        plot_filename = slugify(lab_name) + ".png"
-        plt.savefig(plots_dir / plot_filename)
-        plt.close()
 
 if __name__ == "__main__":
     main()
