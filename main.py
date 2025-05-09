@@ -133,7 +133,7 @@ class LabResult(BaseModel):
     lab_name: str = Field(
         description="Name of the laboratory test as extracted verbatim from the document"
     )
-    #standardized_lab_name: LabTestNameEnum = Field(
+    #enum_lab_name: LabTestNameEnum = Field(
     #    description=f"Standardized name of the laboratory test using controlled vocabulary; when unsure output `{UNKNOWN_VALUE}`",
     #)
     lab_value: float = Field(
@@ -142,24 +142,24 @@ class LabResult(BaseModel):
     lab_unit: str = Field(
         description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL)."
     )
-    #standardized_lab_unit: LabTestUnitEnum = Field(
+    #enum_lab_unit: LabTestUnitEnum = Field(
     #    description=f"Standardized unit of measurement; when unsure output `{UNKNOWN_VALUE}`",
     #)
     lab_method: Optional[str] = Field(
         description="Analytical method or technique as extracted verbatim (e.g., ELISA, HPLC, Microscopy), if available"
     )
-    #standardized_lab_method: Optional[LabMethodEnum] = Field(
+    #enum_lab_method: Optional[LabMethodEnum] = Field(
     #    description=f"Standardized analytical method using controlled vocabulary; when unsure output `{UNKNOWN_VALUE}`",
     #)
-    lab_range_min: float = Field(
-        description="Lower bound of the reference range, 0 if not specified"
+    lab_range_min: Optional[float] = Field(
+        description="Lower bound of the reference range"
     )
-    lab_range_max: float = Field(
-        description="Upper bound of the reference range, 9999 if not specified"
+    lab_range_max: Optional[float] = Field(
+        description="Upper bound of the reference range"
     )
-    lab_status: Optional[Literal["low", "normal", "high", "abnormal"]] = Field(
-        description="Interpretation of the result relative to the reference range"
-    )
+    #lab_status: Optional[Literal["low", "normal", "high", "abnormal"]] = Field(
+    #    description="Interpretation of the result relative to the reference range"
+    #)
     lab_comments: Optional[str] = Field(
         description="Additional notes or observations about this result, if available"
     )
@@ -252,10 +252,10 @@ def preprocess_page_image(image: Image.Image) -> Image.Image:
 
     # Optional: Quantize to reduce noise while preserving readability (128 colors)
     # Comment this out if you want maximum fidelity without quantization
-    final_image = enhanced_image.quantize(colors=128).convert('L')
+    normalized_image = enhanced_image.quantize(colors=128).convert('L')
 
     # Return the processed image (to be saved as PNG later for lossless quality)
-    return final_image
+    return normalized_image
 
 def self_consistency(fn, n, *args, **kwargs):
     """
@@ -409,13 +409,20 @@ You are a medical lab report analyzer with the following strict requirements:
     
     tool_args = completion.choices[0].message.tool_calls[0].function.arguments
     tool_result = json.loads(tool_args)
+    
+    lab_results = tool_result.get("lab_results", [])
+    for lab_result in lab_results:
+        lab_range_min = lab_result.get("lab_range_min")
+        lab_range_max = lab_result.get("lab_range_max")
+        if lab_range_min is None: lab_result["lab_range_min"] = 0
+        if lab_range_max is None: lab_result["lab_range_max"] = 9999
+        lab_result["enum_lab_name"] = "$UNKNOWN"
+        lab_result["enum_lab_unit"] = "$UNKNOWN"
+        lab_result["enum_lab_method"] = "$UNKNOWN"
+    tool_result["lab_results"] = lab_results
 
-    try:
-        model = HealthLabReport.model_validate(tool_result)
-        model_dict = model.model_dump()
-    except Exception as e:
-        logger.error(f"Validation error in HealthLabReport: {e}\nRaw tool_result: {json.dumps(tool_result, indent=2, ensure_ascii=False)}")
-        model_dict = tool_result  # fallback to raw result
+    model = HealthLabReport.model_validate(tool_result)
+    model_dict = model.model_dump()
 
     return model_dict
 
@@ -444,7 +451,7 @@ def normalize_unit(unit):
 def convert_to_primary_unit(lab_name, value, unit, lab_names_config):
     """
     Convert value to the primary unit for the given lab_name using lab_names_config.
-    Returns (final_value, final_unit). If conversion is not possible, returns (UNKNOWN_VALUE, UNKNOWN_VALUE).
+    Returns (normalized_value, normalized_unit). If conversion is not possible, returns (UNKNOWN_VALUE, UNKNOWN_VALUE).
     """
     info = lab_names_config.get(lab_name)
     if not info:
@@ -521,10 +528,10 @@ def process_single_pdf(
     doc_out_dir = output_dir / pdf_stem
     doc_out_dir.mkdir(exist_ok=True, parents=True)
 
-    final_csv_path = os.path.join(doc_out_dir, f"{pdf_stem}.csv")
-    if os.path.exists(final_csv_path):
+    normalized_csv_path = os.path.join(doc_out_dir, f"{pdf_stem}.csv")
+    if os.path.exists(normalized_csv_path):
         logger.info(f"[{pdf_stem}] - already processed, skipping")
-        return pd.read_csv(final_csv_path)
+        return pd.read_csv(normalized_csv_path)
 
     # 2) Copy PDF to output subdirectory
     copied_pdf_path = doc_out_dir / pdf_path.name
@@ -623,7 +630,8 @@ def process_single_pdf(
             page_json["collection_date"] = collection_date
             page_json["source_file"] = page_file_name
             lab_results = page_json.get("lab_results", [])
-            for lab_result in lab_results: lab_result["date"] = document_date
+            for lab_result in lab_results: 
+                lab_result["date"] = document_date
             page_json["lab_results"] = lab_results
 
             # Save parsed labs
@@ -645,26 +653,28 @@ def process_single_pdf(
             if 'date' in df.columns:
                 cols = ['date'] + [col for col in df.columns if col != 'date']
                 df = df[cols]
-
-            # Add final_lab_value and final_lab_unit columns
-            final_values = []
-            final_units = []
+            
+            """ @TODO: do this before csv
+            # Add normalized_lab_value and normalized_lab_unit columns
+            normalized_values = []
+            normalized_units = []
             for idx, row in df.iterrows():
-                lab_name = row.get("standardized_lab_name")
+                lab_name = row.get("enum_lab_name")
                 value = row.get("lab_value")
-                unit = row.get("standardized_lab_unit")
+                unit = row.get("enum_lab_unit")
                 # Only attempt conversion if all fields are present and value is a number
                 try:
-                    final_value, final_unit = convert_to_primary_unit(
+                    normalized_value, normalized_unit = convert_to_primary_unit(
                         lab_name, value, unit, LAB_NAMES_CONFIG
                     )
                 except Exception as e:
                     logger.warning(f"Error in conversion for row {idx}: {e}")
-                    final_value, final_unit = UNKNOWN_VALUE, UNKNOWN_VALUE
-                final_values.append(final_value)
-                final_units.append(final_unit)
-            df["final_lab_value"] = final_values
-            df["final_lab_unit"] = final_units
+                    normalized_value, normalized_unit = UNKNOWN_VALUE, UNKNOWN_VALUE
+                normalized_values.append(normalized_value)
+                normalized_units.append(normalized_unit)
+            df["normalized_lab_value"] = normalized_values
+            df["normalized_lab_unit"] = normalized_units
+            """
 
             # Save DataFrame to CSV
             df.to_csv(page_csv_path, index=False)
@@ -681,7 +691,8 @@ def process_single_pdf(
 
     # Concatenate all dataframes and save to a single CSV
     merged_df = pd.concat(dataframes, ignore_index=True)
-    merged_df.to_csv(final_csv_path, index=False)
+
+    merged_df.to_csv(normalized_csv_path, index=False)
 
     logger.info(f"[{pdf_stem}] - processing finished successfully")
 
@@ -728,35 +739,42 @@ def main():
 
     # Concatenate all dataframes and save to a single CSV
     merged_df = pd.concat(dataframes, ignore_index=True)
+
+    # --------- Inject enum fields as $UNKNOWN ---------
+    # Add stub enum fields to each row
+    merged_df["enum_lab_name"] = "$UNKNOWN"
+    merged_df["enum_lab_unit"] = "$UNKNOWN"
+    merged_df["enum_lab_method"] = "$UNKNOWN"
+    # --------------------------------------------------
+
     merged_df.to_csv(os.path.join(output_dir, "all.csv"), index=False)
 
     # --------- Export latest status per lab test ---------
-    # Only consider rows with valid date and standardized_lab_name
+    # Only consider rows with valid date and enum_lab_name
     df_stats = merged_df.copy()
-    if "date" in df_stats.columns and "standardized_lab_name" in df_stats.columns:
+    if "date" in df_stats.columns and "enum_lab_name" in df_stats.columns:
         df_stats["date"] = pd.to_datetime(df_stats["date"], errors="coerce")
-        df_stats = df_stats.dropna(subset=["date", "standardized_lab_name", "final_lab_value"])
-        df_stats["final_lab_value"] = pd.to_numeric(df_stats["final_lab_value"], errors="coerce")
-        df_stats = df_stats.dropna(subset=["final_lab_value"])
+        df_stats = df_stats.dropna(subset=["date", "enum_lab_name", "normalized_lab_value"])
+        df_stats["normalized_lab_value"] = pd.to_numeric(df_stats["normalized_lab_value"], errors="coerce")
+        df_stats = df_stats.dropna(subset=["normalized_lab_value"])
         # Group by test name and unit
-        group_cols = ["standardized_lab_name", "final_lab_unit"]
+        group_cols = ["enum_lab_name", "normalized_lab_unit"]
         stats_rows = []
         for (test, unit), group in df_stats.groupby(group_cols):
             group = group.sort_values("date")
             last_row = group.iloc[-1]
             stats = {
-                "standardized_lab_name": test,
-                "final_lab_unit": unit,
+                "enum_lab_name": test,
+                "normalized_lab_unit": unit,
                 "last_date": last_row["date"],
-                "last_value": last_row["final_lab_value"],
-                "last_status": last_row.get("lab_status", None),
-                "mean": group["final_lab_value"].mean(),
-                "median": group["final_lab_value"].median(),
-                "std": group["final_lab_value"].std(),
-                "var": group["final_lab_value"].var(),
-                "min": group["final_lab_value"].min(),
-                "max": group["final_lab_value"].max(),
-                "count": group["final_lab_value"].count(),
+                "last_value": last_row["normalized_lab_value"],
+                "mean": group["normalized_lab_value"].mean(),
+                "median": group["normalized_lab_value"].median(),
+                "std": group["normalized_lab_value"].std(),
+                "var": group["normalized_lab_value"].var(),
+                "min": group["normalized_lab_value"].min(),
+                "max": group["normalized_lab_value"].max(),
+                "count": group["normalized_lab_value"].count(),
             }
             stats_rows.append(stats)
         df_latest = pd.DataFrame(stats_rows)
@@ -783,7 +801,7 @@ def main():
     if "date" in merged_df.columns:
         merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce")
 
-    # For each unique standardized_lab_name, plot only values with matching standardized_lab_unit
+    # For each unique enum_lab_name, plot only values with matching enum_lab_unit
     def slugify(value):
         import re
         value = str(value)
@@ -797,8 +815,8 @@ def main():
         std_unit = lab_info.get("primary_unit")
         if not std_unit or std_unit == "N/A":
             continue
-        mask_name = merged_df["standardized_lab_name"] == lab_name
-        mask_unit = merged_df["final_lab_unit"] == std_unit
+        mask_name = merged_df["enum_lab_name"] == lab_name
+        mask_unit = merged_df["normalized_lab_unit"] == std_unit
         df_lab = merged_df[mask_name & mask_unit]
         # Log skipped rows due to mismatched units
         skipped = merged_df[mask_name & (~mask_unit)]
@@ -806,18 +824,18 @@ def main():
             for _, row in skipped.iterrows():
                 logger.info(
                     f"Skipping row for lab '{lab_name}': "
-                    f"date={row.get('date')}, value={row.get('final_lab_value')}, "
-                    f"unit={row.get('final_lab_unit')} (expected {std_unit}), "
+                    f"date={row.get('date')}, value={row.get('normalized_lab_value')}, "
+                    f"unit={row.get('normalized_lab_unit')} (expected {std_unit}), "
                     f"source_file={row.get('source_file')}"
                 )
-        if df_lab.empty or "date" not in df_lab.columns or "final_lab_value" not in df_lab.columns:
+        if df_lab.empty or "date" not in df_lab.columns or "normalized_lab_value" not in df_lab.columns:
             continue
 
-        # --- FIX: Ensure final_lab_value is numeric and drop NaNs ---
+        # --- FIX: Ensure normalized_lab_value is numeric and drop NaNs ---
         df_lab = df_lab.copy()
-        df_lab["final_lab_value"] = pd.to_numeric(df_lab["final_lab_value"], errors="coerce")
+        df_lab["normalized_lab_value"] = pd.to_numeric(df_lab["normalized_lab_value"], errors="coerce")
         before_drop = len(df_lab)
-        df_lab = df_lab.dropna(subset=["final_lab_value", "date"])
+        df_lab = df_lab.dropna(subset=["normalized_lab_value", "date"])
         after_drop = len(df_lab)
         if before_drop != after_drop:
             logger.info(
@@ -835,7 +853,7 @@ def main():
 
         df_lab = df_lab.sort_values("date")
         plt.figure(figsize=(8, 4))
-        plt.plot(df_lab["date"], df_lab["final_lab_value"], marker="o")
+        plt.plot(df_lab["date"], df_lab["normalized_lab_value"], marker="o")
         plt.title(f"{lab_name} ({std_unit})")
         plt.xlabel("Date")
         plt.ylabel(f"Value ({std_unit})")
