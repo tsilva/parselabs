@@ -7,3 +7,6 @@
 - Convert lab spec names to standard names with LOINQ codes
 - Generate excel instead of csv
 - Get rid of lab_methods.json method, let LLM map to LOINQ codes instead
+- Convert ranges to standardized as well
+- Add converted ranges to latest csv
+- Create validation mode that validates all schemas

@@ -410,8 +410,12 @@ You are a medical lab report analyzer with the following strict requirements:
     tool_args = completion.choices[0].message.tool_calls[0].function.arguments
     tool_result = json.loads(tool_args)
 
-    model = HealthLabReport.model_validate(tool_result)
-    model_dict = model.model_dump()
+    try:
+        model = HealthLabReport.model_validate(tool_result)
+        model_dict = model.model_dump()
+    except Exception as e:
+        logger.error(f"Validation error in HealthLabReport: {e}\nRaw tool_result: {json.dumps(tool_result, indent=2)}")
+        model_dict = tool_result  # fallback to raw result
 
     return model_dict
 
