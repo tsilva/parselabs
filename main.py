@@ -127,71 +127,23 @@ LabMethodEnum = create_dynamic_enum('LabMethodEnum', LAB_METHODS)
 LabTestUnitEnum = create_dynamic_enum('LabTestUnitEnum', LAB_UNITS)
 
 class LabResult(BaseModel):
-    """
-    Represents an individual laboratory test result, including measurement details, reference ranges, and status interpretation.
-    """
-    lab_name: str = Field(
-        description="Name of the laboratory test as extracted verbatim from the document"
-    )
-    #enum_lab_name: LabTestNameEnum = Field(
-    #    description=f"Standardized name of the laboratory test using controlled vocabulary; when unsure output `{UNKNOWN_VALUE}`",
-    #)
-    lab_value: float = Field(
-        description="Quantitative result of the laboratory test"
-    )
-    lab_unit: str = Field(
-        description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL)."
-    )
-    #enum_lab_unit: LabTestUnitEnum = Field(
-    #    description=f"Standardized unit of measurement; when unsure output `{UNKNOWN_VALUE}`",
-    #)
-    lab_method: Optional[str] = Field(
-        description="Analytical method or technique as extracted verbatim (e.g., ELISA, HPLC, Microscopy), if available"
-    )
-    #enum_lab_method: Optional[LabMethodEnum] = Field(
-    #    description=f"Standardized analytical method using controlled vocabulary; when unsure output `{UNKNOWN_VALUE}`",
-    #)
-    lab_range_min: Optional[float] = Field(
-        description="Lower bound of the reference range"
-    )
-    lab_range_max: Optional[float] = Field(
-        description="Upper bound of the reference range"
-    )
-    #lab_status: Optional[Literal["low", "normal", "high", "abnormal"]] = Field(
-    #    description="Interpretation of the result relative to the reference range"
-    #)
-    lab_comments: Optional[str] = Field(
-        description="Additional notes or observations about this result, if available"
-    )
-    confidence: float = Field(
-        description="Confidence score of the extraction process, ranging from 0 to 1"
-    )
-    lack_of_confidence_reason: Optional[str] = Field(
-        description="Reason for low extraction confidence"
-    )
+    lab_name: str = Field(description="Name of the laboratory test as extracted verbatim from the document")
+    lab_value: float = Field(description="Quantitative result of the laboratory test")
+    lab_unit: str = Field(description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL).")
+    lab_method: Optional[str] = Field(description="Analytical method or technique as extracted verbatim (e.g., ELISA, HPLC, Microscopy), if available")
+    lab_range_min: Optional[float] = Field(description="Lower bound of the reference range")
+    lab_range_max: Optional[float] = Field(description="Upper bound of the reference range")
+    lab_comments: Optional[str] = Field(description="Additional notes or observations about this result, if available")
+    confidence: float = Field(description="Confidence score of the extraction process, ranging from 0 to 1")
+    lack_of_confidence_reason: Optional[str] = Field(description="Reason for low extraction confidence")
 
 class HealthLabReport(BaseModel):
-    """
-    Represents a complete laboratory report, including patient information, metadata, and a collection of test results.
-    """
-    report_date: Optional[str] = Field(
-        description="Date the laboratory report was issued (YYYY-MM-DD)"
-    )
-    collection_date: Optional[str] = Field(
-        description="Date the specimen was collected (YYYY-MM-DD), if available (also called subscription date)"
-    )
-    lab_facility: Optional[str] = Field(
-        description="Name of the laboratory or facility that performed the tests, if available"
-    )
-    patient_name: Optional[str] = Field(
-        description="Full name of the patient"
-    )
-    physician_name: Optional[str] = Field(
-        description="Name of the requesting or reviewing physician, if available"
-    )
-    lab_results: List[LabResult] = Field(
-        description="List of individual laboratory test results in this report"
-    )
+    report_date: Optional[str] = Field(description="Date the laboratory report was issued (YYYY-MM-DD)")
+    collection_date: Optional[str] = Field(description="Date the specimen was collected (YYYY-MM-DD), if available (also called subscription date)")
+    lab_facility: Optional[str] = Field(description="Name of the laboratory or facility that performed the tests, if available")
+    patient_name: Optional[str] = Field(description="Full name of the patient")
+    physician_name: Optional[str] = Field(description="Name of the requesting or reviewing physician, if available")
+    lab_results: List[LabResult] = Field(description="List of individual laboratory test results in this report")
 
 TOOLS = [
     {
@@ -219,13 +171,11 @@ IMPORTANT: Your output MUST FULLY comply with the provided schema. NEVER skip or
 ########################################
 
 def hash_file(file_path: Path, length=4) -> str:
-    """Calculate MD5 hash of a file, return hex digest truncated to `length` characters."""
-    hash_md5 = hashlib.md5()
     with open(file_path, "rb") as f:
+        h = hashlib.md5()
         for chunk in iter(lambda: f.read(4096), b""):
-            hash_md5.update(chunk)
-    return hash_md5.hexdigest()[:length]
-
+            h.update(chunk)
+    return h.hexdigest()[:length]
 
 def preprocess_page_image(image: Image.Image) -> Image.Image:
     """
