@@ -1,11 +1,8 @@
-- Add support for plotting
-- Call standardized_* to enum_*
-- Add support for standardized unit columns
-- Merge lab_test_standard_units.json with lab_names.json
-
 - Convert to command-line tool installable with pipx
 - Date injection from first page, won't work when just regenerating specific pages
 - Perform assertions during steps
 - Added outlier detection (let llm judge based on user data)
-- Add support for performing self-consistency with multiple models
+- Add support for LOINQ codes
+- Prefix lab test names with LOINQ codes
+- Convert lab spec names to standard names with LOINQ codes
 - Generate excel instead of csv
