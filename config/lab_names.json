@@ -1101,6 +1101,10 @@
     "primary_unit": "Nº/µL",
     "alternatives": [
       {
+        "unit" : "cells/uL",
+        "factor": 1.0
+      },
+      {
         "unit": "/uL",
         "factor": 1.0
       },

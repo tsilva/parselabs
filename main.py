@@ -448,23 +448,41 @@ def convert_to_primary_unit(lab_name, value, unit, lab_names_config):
         return "$UNKNOWN$", "$UNKNOWN$"
     norm_unit = normalize_unit(unit)
     norm_primary = normalize_unit(primary_unit)
-    # Already in primary unit
-    if norm_unit == norm_primary:
-        return value, primary_unit
+    # Use lowercase for case-insensitive comparison
+    if isinstance(norm_unit, str) and isinstance(norm_primary, str):
+        if norm_unit.lower() == norm_primary.lower():
+            return value, primary_unit
+    else:
+        if norm_unit == norm_primary:
+            return value, primary_unit
     # Try to find conversion factor in alternatives
     for alt in info.get("alternatives", []):
         alt_unit = normalize_unit(alt.get("unit"))
-        if alt_unit == norm_unit:
-            try:
-                factor = float(alt.get("factor"))
-                if factor == 0:
-                    logger.warning(f"Conversion factor is zero for lab '{lab_name}' unit '{unit}'.")
+        # Use lowercase for case-insensitive comparison
+        if isinstance(alt_unit, str) and isinstance(norm_unit, str):
+            if alt_unit.lower() == norm_unit.lower():
+                try:
+                    factor = float(alt.get("factor"))
+                    if factor == 0:
+                        logger.warning(f"Conversion factor is zero for lab '{lab_name}' unit '{unit}'.")
+                        return "$UNKNOWN$", "$UNKNOWN$"
+                    converted = float(value) / factor
+                    return converted, primary_unit
+                except Exception as e:
+                    logger.warning(f"Error converting {lab_name} from {unit} to {primary_unit}: {e}")
                     return "$UNKNOWN$", "$UNKNOWN$"
-                converted = float(value) / factor
-                return converted, primary_unit
-            except Exception as e:
-                logger.warning(f"Error converting {lab_name} from {unit} to {primary_unit}: {e}")
-                return "$UNKNOWN$", "$UNKNOWN$"
+        else:
+            if alt_unit == norm_unit:
+                try:
+                    factor = float(alt.get("factor"))
+                    if factor == 0:
+                        logger.warning(f"Conversion factor is zero for lab '{lab_name}' unit '{unit}'.")
+                        return "$UNKNOWN$", "$UNKNOWN$"
+                    converted = float(value) / factor
+                    return converted, primary_unit
+                except Exception as e:
+                    logger.warning(f"Error converting {lab_name} from {unit} to {primary_unit}: {e}")
+                    return "$UNKNOWN$", "$UNKNOWN$"
     logger.warning(f"Unit '{unit}' for lab '{lab_name}' not found in alternatives or as primary unit.")
     return "$UNKNOWN$", "$UNKNOWN$"
 
@@ -744,6 +762,21 @@ def main():
                 )
         if df_lab.empty or "date" not in df_lab.columns or "final_lab_value" not in df_lab.columns:
             continue
+
+        # --- FIX: Ensure final_lab_value is numeric and drop NaNs ---
+        df_lab = df_lab.copy()
+        df_lab["final_lab_value"] = pd.to_numeric(df_lab["final_lab_value"], errors="coerce")
+        before_drop = len(df_lab)
+        df_lab = df_lab.dropna(subset=["final_lab_value", "date"])
+        after_drop = len(df_lab)
+        if before_drop != after_drop:
+            logger.info(
+                f"Dropped {before_drop - after_drop} non-numeric or missing values for lab '{lab_name}'"
+            )
+        if df_lab.empty:
+            continue
+        # -----------------------------------------------------------
+
         df_lab = df_lab.sort_values("date")
         plt.figure(figsize=(8, 4))
         plt.plot(df_lab["date"], df_lab["final_lab_value"], marker="o")
