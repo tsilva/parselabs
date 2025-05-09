@@ -133,24 +133,24 @@ class LabResult(BaseModel):
     lab_name: str = Field(
         description="Name of the laboratory test as extracted verbatim from the document"
     )
-    standardized_lab_name: LabTestNameEnum = Field(
-        description=f"Standardized name of the laboratory test using controlled vocabulary; when unsure output `{UNKNOWN_VALUE}`",
-    )
+    #standardized_lab_name: LabTestNameEnum = Field(
+    #    description=f"Standardized name of the laboratory test using controlled vocabulary; when unsure output `{UNKNOWN_VALUE}`",
+    #)
     lab_value: float = Field(
         description="Quantitative result of the laboratory test"
     )
     lab_unit: str = Field(
         description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL)."
     )
-    standardized_lab_unit: LabTestUnitEnum = Field(
-        description=f"Standardized unit of measurement; when unsure output `{UNKNOWN_VALUE}`",
-    )
+    #standardized_lab_unit: LabTestUnitEnum = Field(
+    #    description=f"Standardized unit of measurement; when unsure output `{UNKNOWN_VALUE}`",
+    #)
     lab_method: Optional[str] = Field(
         description="Analytical method or technique as extracted verbatim (e.g., ELISA, HPLC, Microscopy), if available"
     )
-    standardized_lab_method: Optional[LabMethodEnum] = Field(
-        description=f"Standardized analytical method using controlled vocabulary; when unsure output `{UNKNOWN_VALUE}`",
-    )
+    #standardized_lab_method: Optional[LabMethodEnum] = Field(
+    #    description=f"Standardized analytical method using controlled vocabulary; when unsure output `{UNKNOWN_VALUE}`",
+    #)
     lab_range_min: float = Field(
         description="Lower bound of the reference range, 0 if not specified"
     )
@@ -414,7 +414,7 @@ You are a medical lab report analyzer with the following strict requirements:
         model = HealthLabReport.model_validate(tool_result)
         model_dict = model.model_dump()
     except Exception as e:
-        logger.error(f"Validation error in HealthLabReport: {e}\nRaw tool_result: {json.dumps(tool_result, indent=2)}")
+        logger.error(f"Validation error in HealthLabReport: {e}\nRaw tool_result: {json.dumps(tool_result, indent=2, ensure_ascii=False)}")
         model_dict = tool_result  # fallback to raw result
 
     return model_dict
@@ -609,7 +609,7 @@ def process_single_pdf(
             if n_extract > 1:
                 for idx, j in enumerate(all_json_versions, 1):
                     versioned_json_path = doc_out_dir / f"{page_file_name}.v{idx}.json"
-                    versioned_json_path.write_text(json.dumps(j, indent=2), encoding='utf-8')
+                    versioned_json_path.write_text(json.dumps(j, indent=2, ensure_ascii=False), encoding='utf-8')
 
             # If this is the first page, save the report date
             if page_number == 1: 
@@ -627,7 +627,7 @@ def process_single_pdf(
             page_json["lab_results"] = lab_results
 
             # Save parsed labs
-            page_json_path.write_text(json.dumps(page_json, indent=2), encoding='utf-8')
+            page_json_path.write_text(json.dumps(page_json, indent=2, ensure_ascii=False), encoding='utf-8')
         else:
             # If JSON already exists, just load it
             page_json = json.loads(page_json_path.read_text(encoding='utf-8'))

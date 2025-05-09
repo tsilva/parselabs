@@ -10,3 +10,4 @@
 - Convert ranges to standardized as well
 - Add converted ranges to latest csv
 - Create validation mode that validates all schemas
+- Decouple unit standardization, do that in another pass
