@@ -1258,7 +1258,7 @@
   {
     "name": "Pesquisa de Imunocomplexos",
     "units": {
-      "ug/ml eq.IgGL": {
+      "μg/ml eq.IgGL": {
         "min": 0,
         "max": 5
       }
