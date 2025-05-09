@@ -726,6 +726,39 @@ def main():
     merged_df = pd.concat(dataframes, ignore_index=True)
     merged_df.to_csv(os.path.join(output_dir, "all.csv"), index=False)
 
+    # --------- Export latest status per lab test ---------
+    # Only consider rows with valid date and standardized_lab_name
+    df_stats = merged_df.copy()
+    if "date" in df_stats.columns and "standardized_lab_name" in df_stats.columns:
+        df_stats["date"] = pd.to_datetime(df_stats["date"], errors="coerce")
+        df_stats = df_stats.dropna(subset=["date", "standardized_lab_name", "final_lab_value"])
+        df_stats["final_lab_value"] = pd.to_numeric(df_stats["final_lab_value"], errors="coerce")
+        df_stats = df_stats.dropna(subset=["final_lab_value"])
+        # Group by test name and unit
+        group_cols = ["standardized_lab_name", "final_lab_unit"]
+        stats_rows = []
+        for (test, unit), group in df_stats.groupby(group_cols):
+            group = group.sort_values("date")
+            last_row = group.iloc[-1]
+            stats = {
+                "standardized_lab_name": test,
+                "final_lab_unit": unit,
+                "last_date": last_row["date"],
+                "last_value": last_row["final_lab_value"],
+                "last_status": last_row.get("lab_status", None),
+                "mean": group["final_lab_value"].mean(),
+                "median": group["final_lab_value"].median(),
+                "std": group["final_lab_value"].std(),
+                "var": group["final_lab_value"].var(),
+                "min": group["final_lab_value"].min(),
+                "max": group["final_lab_value"].max(),
+                "count": group["final_lab_value"].count(),
+            }
+            stats_rows.append(stats)
+        df_latest = pd.DataFrame(stats_rows)
+        df_latest.to_csv(os.path.join(output_dir, "all-latest.csv"), index=False)
+    # ----------------------------------------------------
+
     logger.info("All PDFs processed.")
 
     # --------- Plotting Section ---------
@@ -747,6 +780,15 @@ def main():
         merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce")
 
     # For each unique standardized_lab_name, plot only values with matching standardized_lab_unit
+    def slugify(value):
+        import re
+        value = str(value)
+        value = value.lower()
+        value = re.sub(r"[^\w\s-]", "", value)
+        value = re.sub(r"[\s_-]+", "-", value)
+        value = re.sub(r"^-+|-+$", "", value)
+        return value
+
     for lab_name, lab_info in lab_names_config.items():
         std_unit = lab_info.get("primary_unit")
         if not std_unit or std_unit == "N/A":
@@ -794,7 +836,8 @@ def main():
         plt.xlabel("Date")
         plt.ylabel(f"Value ({std_unit})")
         plt.tight_layout()
-        plt.savefig(plots_dir / f"{lab_name}.png")
+        plot_filename = slugify(lab_name) + ".png"
+        plt.savefig(plots_dir / plot_filename)
         plt.close()
 
 if __name__ == "__main__":
