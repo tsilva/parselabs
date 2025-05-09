@@ -411,6 +411,63 @@ You are a medical lab report analyzer with the following strict requirements:
 
     return model_dict
 
+def normalize_unit(unit):
+    """
+    Normalize unit string for comparison (e.g., replace similar unicode chars).
+    """
+    if not isinstance(unit, str):
+        return unit
+    # Replace common unicode variants with ASCII equivalents
+    replacements = {
+        "μ": "µ",  # micro sign
+        "u": "µ",  # sometimes 'u' is used for micro
+        "U": "U",  # leave capital U as is
+        "ℓ": "L",  # script small l to L
+        "¹": "1", "²": "2", "³": "3",  # superscripts
+        "⁶": "6", "⁹": "9", "¹²": "12",  # more superscripts
+        # Add more as needed
+    }
+    for k, v in replacements.items():
+        unit = unit.replace(k, v)
+    # Remove spaces and unify dashes
+    unit = unit.replace(" ", "").replace("-", "")
+    return unit
+
+def convert_to_primary_unit(lab_name, value, unit, lab_names_config):
+    """
+    Convert value to the primary unit for the given lab_name using lab_names_config.
+    Returns (final_value, final_unit). If conversion is not possible, returns ($UNKNOWN$, $UNKNOWN$).
+    """
+    info = lab_names_config.get(lab_name)
+    if not info:
+        logger.warning(f"Lab name '{lab_name}' not found in lab_names.json.")
+        return "$UNKNOWN$", "$UNKNOWN$"
+    primary_unit = info.get("primary_unit")
+    if not primary_unit or primary_unit == "N/A":
+        logger.warning(f"No primary unit for lab '{lab_name}'.")
+        return "$UNKNOWN$", "$UNKNOWN$"
+    norm_unit = normalize_unit(unit)
+    norm_primary = normalize_unit(primary_unit)
+    # Already in primary unit
+    if norm_unit == norm_primary:
+        return value, primary_unit
+    # Try to find conversion factor in alternatives
+    for alt in info.get("alternatives", []):
+        alt_unit = normalize_unit(alt.get("unit"))
+        if alt_unit == norm_unit:
+            try:
+                factor = float(alt.get("factor"))
+                if factor == 0:
+                    logger.warning(f"Conversion factor is zero for lab '{lab_name}' unit '{unit}'.")
+                    return "$UNKNOWN$", "$UNKNOWN$"
+                converted = float(value) / factor
+                return converted, primary_unit
+            except Exception as e:
+                logger.warning(f"Error converting {lab_name} from {unit} to {primary_unit}: {e}")
+                return "$UNKNOWN$", "$UNKNOWN$"
+    logger.warning(f"Unit '{unit}' for lab '{lab_name}' not found in alternatives or as primary unit.")
+    return "$UNKNOWN$", "$UNKNOWN$"
+
 ########################################
 # The Single-PDF Processor
 ########################################
@@ -562,6 +619,26 @@ def process_single_pdf(
             if 'date' in df.columns:
                 cols = ['date'] + [col for col in df.columns if col != 'date']
                 df = df[cols]
+
+            # Add final_lab_value and final_lab_unit columns
+            final_values = []
+            final_units = []
+            for idx, row in df.iterrows():
+                lab_name = row.get("standardized_lab_name")
+                value = row.get("lab_value")
+                unit = row.get("standardized_lab_unit")
+                # Only attempt conversion if all fields are present and value is a number
+                try:
+                    final_value, final_unit = convert_to_primary_unit(
+                        lab_name, value, unit, LAB_NAMES_CONFIG
+                    )
+                except Exception as e:
+                    logger.warning(f"Error in conversion for row {idx}: {e}")
+                    final_value, final_unit = "$UNKNOWN$", "$UNKNOWN$"
+                final_values.append(final_value)
+                final_units.append(final_unit)
+            df["final_lab_value"] = final_values
+            df["final_lab_unit"] = final_units
 
             # Save DataFrame to CSV
             df.to_csv(page_csv_path, index=False)
