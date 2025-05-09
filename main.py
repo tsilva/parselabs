@@ -99,9 +99,24 @@ def load_env_config():
 # LLM Tools
 ########################################
 
-with open("config/lab_names.json", "r", encoding="utf-8") as f: LAB_NAMES = json.load(f)
+with open("config/lab_names.json", "r", encoding="utf-8") as f: LAB_NAMES_CONFIG = json.load(f)
+
+def extract_all_lab_units(lab_names_config):
+    units = set()
+    for v in lab_names_config.values():
+        primary = v.get("primary_unit")
+        if primary and primary != "N/A":
+            units.add(primary)
+        for alt in v.get("alternatives", []):
+            unit = alt.get("unit")
+            if unit and unit != "N/A":
+                units.add(unit)
+    return sorted(units)
+
+LAB_NAMES = list(LAB_NAMES_CONFIG.keys())
+LAB_UNITS = extract_all_lab_units(LAB_NAMES_CONFIG)
+
 with open("config/lab_methods.json", "r", encoding="utf-8") as f: LAB_METHODS = json.load(f)
-with open("config/lab_units.json", "r", encoding="utf-8") as f: LAB_UNITS = json.load(f)
 
 # Create dynamic enums for lab names and units
 def create_dynamic_enum(name, data): return Enum(name, dict([(k, k) for k in data]), type=str)
