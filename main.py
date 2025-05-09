@@ -26,6 +26,8 @@ from openai import OpenAI
 # Config / Logging
 ########################################
 
+UNKNOWN_VALUE = "$UNKNOWN$"
+
 # Create logs directory if it doesn't exist
 LOG_DIR = Path("./logs")
 LOG_DIR.mkdir(exist_ok=True)
@@ -132,7 +134,7 @@ class LabResult(BaseModel):
         description="Name of the laboratory test as extracted verbatim from the document"
     )
     standardized_lab_name: LabTestNameEnum = Field(
-        description="Standardized name of the laboratory test using controlled vocabulary; when unsure output `$UNKNOWN$`",
+        description=f"Standardized name of the laboratory test using controlled vocabulary; when unsure output `{UNKNOWN_VALUE}`",
     )
     lab_value: float = Field(
         description="Quantitative result of the laboratory test"
@@ -141,13 +143,13 @@ class LabResult(BaseModel):
         description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL)."
     )
     standardized_lab_unit: LabTestUnitEnum = Field(
-        description="Standardized unit of measurement; when unsure output `$UNKNOWN$`",
+        description=f"Standardized unit of measurement; when unsure output `{UNKNOWN_VALUE}`",
     )
     lab_method: Optional[str] = Field(
         description="Analytical method or technique as extracted verbatim (e.g., ELISA, HPLC, Microscopy), if available"
     )
     standardized_lab_method: Optional[LabMethodEnum] = Field(
-        description="Standardized analytical method using controlled vocabulary; when unsure output `$UNKNOWN$`",
+        description=f"Standardized analytical method using controlled vocabulary; when unsure output `{UNKNOWN_VALUE}`",
     )
     lab_range_min: float = Field(
         description="Lower bound of the reference range, 0 if not specified"
@@ -436,16 +438,16 @@ def normalize_unit(unit):
 def convert_to_primary_unit(lab_name, value, unit, lab_names_config):
     """
     Convert value to the primary unit for the given lab_name using lab_names_config.
-    Returns (final_value, final_unit). If conversion is not possible, returns ($UNKNOWN$, $UNKNOWN$).
+    Returns (final_value, final_unit). If conversion is not possible, returns (UNKNOWN_VALUE, UNKNOWN_VALUE).
     """
     info = lab_names_config.get(lab_name)
     if not info:
         logger.warning(f"Lab name '{lab_name}' not found in lab_names.json.")
-        return "$UNKNOWN$", "$UNKNOWN$"
+        return UNKNOWN_VALUE, UNKNOWN_VALUE
     primary_unit = info.get("primary_unit")
     if not primary_unit or primary_unit == "N/A":
         logger.warning(f"No primary unit for lab '{lab_name}'.")
-        return "$UNKNOWN$", "$UNKNOWN$"
+        return UNKNOWN_VALUE, UNKNOWN_VALUE
     norm_unit = normalize_unit(unit)
     norm_primary = normalize_unit(primary_unit)
     # Use lowercase for case-insensitive comparison
@@ -465,26 +467,26 @@ def convert_to_primary_unit(lab_name, value, unit, lab_names_config):
                     factor = float(alt.get("factor"))
                     if factor == 0:
                         logger.warning(f"Conversion factor is zero for lab '{lab_name}' unit '{unit}'.")
-                        return "$UNKNOWN$", "$UNKNOWN$"
+                        return UNKNOWN_VALUE, UNKNOWN_VALUE
                     converted = float(value) / factor
                     return converted, primary_unit
                 except Exception as e:
                     logger.warning(f"Error converting {lab_name} from {unit} to {primary_unit}: {e}")
-                    return "$UNKNOWN$", "$UNKNOWN$"
+                    return UNKNOWN_VALUE, UNKNOWN_VALUE
         else:
             if alt_unit == norm_unit:
                 try:
                     factor = float(alt.get("factor"))
                     if factor == 0:
                         logger.warning(f"Conversion factor is zero for lab '{lab_name}' unit '{unit}'.")
-                        return "$UNKNOWN$", "$UNKNOWN$"
+                        return UNKNOWN_VALUE, UNKNOWN_VALUE
                     converted = float(value) / factor
                     return converted, primary_unit
                 except Exception as e:
                     logger.warning(f"Error converting {lab_name} from {unit} to {primary_unit}: {e}")
-                    return "$UNKNOWN$", "$UNKNOWN$"
+                    return UNKNOWN_VALUE, UNKNOWN_VALUE
     logger.warning(f"Unit '{unit}' for lab '{lab_name}' not found in alternatives or as primary unit.")
-    return "$UNKNOWN$", "$UNKNOWN$"
+    return UNKNOWN_VALUE, UNKNOWN_VALUE
 
 ########################################
 # The Single-PDF Processor
@@ -652,7 +654,7 @@ def process_single_pdf(
                     )
                 except Exception as e:
                     logger.warning(f"Error in conversion for row {idx}: {e}")
-                    final_value, final_unit = "$UNKNOWN$", "$UNKNOWN$"
+                    final_value, final_unit = UNKNOWN_VALUE, UNKNOWN_VALUE
                 final_values.append(final_value)
                 final_units.append(final_unit)
             df["final_lab_value"] = final_values
