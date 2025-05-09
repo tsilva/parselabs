@@ -1,188 +1,974 @@
-[
-    "17-Alfa-Hidroxiprogesterona",
-    "25-Hidroxivitamina D",
-    "Ácido Ascórbico",
-    "Ácido Fólico",
-    "Ácido Metilmalônico",
-    "Ácido Úrico",
-    "Alanina Aminotransferase (ALT)",
-    "Albumina",
-    "Alfa 1",
-    "Alfa 2",
-    "Alfa-Fetoproteína",
-    "Alto Teor em RNA",
-    "Amilase",
-    "Amónia",
-    "Anticorpo Anti-DNA",
-    "Anticorpo Anti-Endomísio (IgA)",
-    "Anticorpo Anti-Endomísio (IgG)",
-    "Anticorpo Anti-Fator Intrínseco",
-    "Anticorpo Anti-Gliadina (IgA)",
-    "Anticorpo Anti-Gliadina (IgG)",
-    "Anticorpo Anti-HAV",
-    "Anticorpo Anti-HBc",
-    "Anticorpo Anti-HBe",
-    "Anticorpo Anti-HBs",
-    "Anticorpo Anti-HCV",
-    "Anticorpo Anti-Peptídeo Citrulinado (CPP)",
-    "Anticorpo Anti-Scl 70",
-    "Anticorpo Anti-Tiroglobulina",
-    "Anticorpo Anti-TPO (IgG)",
-    "Anticorpo Anti-Transglutaminase (IgA)",
-    "Anticorpo Anti-Transglutaminase (IgG)",
-    "Anticorpo SS-A",
-    "Anticorpo SS-B",
-    "Anticorpos Anti-Citomegalovírus IgG",
-    "Anticorpos Anti-Citomegalovírus IgM",
-    "Anticorpos Anti-Gliadina Deaminada Classe IgA",
-    "Anticorpos Anti-Gliadina Deaminada Classe IgG",
-    "Anticorpos Anti-Vírus Epstein Barr VCA IgG",
-    "Anticorpos Anti-Vírus Epstein Barr VCA IgM",
-    "Anticorpos Antinucleares - ANA",
-    "Antígeno Carcinoembrionário (CEA)",
-    "Antígeno HBe",
-    "Antígeno HBs",
-    "Anti-HCV",
-    "Anti-HIV 1/2",
-    "Anti-M2 Mitocondrial",
-    "Aspartato Aminotransferase (AST)",
-    "Azoto Ureico",
-    "Baixo Teor em RNA",
-    "Basófilos",
-    "Bilirrubina Conjugada",
-    "Bilirrubina Direta",
-    "Bilirrubina Indireta",
-    "Bilirrubina Total",
-    "Calprotectina",
-    "Capacidade de Fixação do Ferro",
-    "Células Epiteliais Escamosas",
-    "Células Linfoplasmocitárias",
-    "Ceruloplasmina",
-    "Cilindros",
-    "CK Total (Atividade Enzimática)",
-    "Creatinina",
-    "Cloretos",
-    "Colesterol Total",
-    "Colesterol HDL",
-    "Colesterol LDL",
-    "COOMBS Direta (Teste de Antiglobulina Direta - TAD)",
-    "Cor (Urina)",
-    "Cortisol",
-    "Cortisol Livre",
-    "Crioglobulinas (Pesquisa)",
-    "Desidrogenase do Lactato (DHL)",
-    "Eosinófilos",
-    "Eritroblastos por 100 Leucócitos",
-    "Eritrócitos",
-    "Estradiol",
-    "Estudo Morfológico Leucocitário",
-    "Estudo Morfológico Plaquetário",
-    "Exame Parasitológico",
-    "Ferritina",
-    "Ferro",
-    "Fosfatase Alcalina",
-    "Fósforo Inorgânico",
-    "Gama-Glutamil Transferase (GGT)",
-    "Glicose",
-    "Glucose-6-Fosfato Desidrogenase",
-    "Globulina Beta",
-    "Globulina Gama",
-    "Granulócitos Imaturos",
-    "Hb A2",
-    "Hb F",
-    "Hematócrito",
-    "Hemoglobina",
-    "Hemoglobina A",
-    "Hemoglobina A1C",
-    "Hemoglobina A1C (DCCT)",
-    "Hemoglobina A1C (IFCC)",
-    "Hemoglobina A1C - Glicose Média Estimada (eAG)",
-    "Hemoglobina Corpuscular Média",
-    "Hemoglobina Fetal (Doseamento)",
-    "Hemoglobina Reticulocitária",
-    "Concentração Hemoglobínica",
-    "Hemólise Inicial",
-    "Hemólise Total",
-    "Hepatite A, Ac. Anti-HAV IgG",
-    "Hepatite B, Antig. HBs",
-    "Hepatite C, Ac. Anti-VHC",
-    "Haptoglobina",
-    "HLA B27",
-    "HIV (Ac. Anti-HIV I/II + Ag p24)",
-    "Homocisteína",
-    "Hormona Adrenocorticotrópica (ACTH)",
-    "Hormona Folículo Estimulante (FSH)",
-    "Hormona Luteotrófica (LH)",
-    "Hormona Paratiroideia Intacta (PTH-I)",
-    "Hormona Tiro-Estimulante (TSH)",
-    "I.R.F. (Fração de Reticulócitos Imaturos)",
-    "IgA",
-    "IgG",
-    "IgM",
-    "Índice",
-    "Índice de Anisocitose RBC (RDW-CV)",
-    "Índice Distribuição da Hemoglobina (HDW)",
-    "Índice Distribuição Eritrocitária (RDW)",
-    "Índice Distribuição Plaquetas (PDW)",
-    "Índice Reticulócitos",
-    "Insulina",
-    "Leucócitos",
-    "Lítio",
-    "Linfócitos",
-    "Magnésio",
-    "Médio Teor em RNA",
-    "Monócitos",
-    "Morfologia Celular",
-    "Morfologia dos Eritrócitos",
-    "Neutrófilos",
-    "Plaquetas",
-    "Plaquetocrito",
-    "Piruvatoquinase Eritrocitária",
-    "Potássio",
-    "Progesterona",
-    "Prolactina",
-    "Proteína C Reativa",
-    "Proteínas Totais",
-    "PSA Fração Livre",
-    "PSA Total",
-    "Quimotripsina",
-    "Razão PSA Livre/PSA Total",
-    "Relação Albumina-Globulina",
-    "RBC Hipocrómicos",
-    "Reticulócitos",
-    "Saturação da Transferrina",
-    "Selénio",
-    "Sódio",
-    "Somatomedina Basal (IGF-1)",
-    "T3 Livre",
-    "T3 Total",
-    "T4 Livre",
-    "T4 Total",
-    "Tiroxina - T4",
-    "Testosterona Livre",
-    "Testosterona Total",
-    "Título Antiestreptolisina O (ASO)",
-    "Transferrina",
-    "Triglicerídeos",
-    "Triiodotironina - T3",
-    "Ureia",
-    "Urina Tipo II - Bilirrubina",
-    "Urina Tipo II - Corpos Cetónicos",
-    "Urina Tipo II - Densidade",
-    "Urina Tipo II - Glicose",
-    "Urina Tipo II - Leucócitos",
-    "Urina Tipo II - Nitritos",
-    "Urina Tipo II - pH",
-    "Urina Tipo II - Proteínas",
-    "Urina Tipo II - Sangue",
-    "Urina Tipo II - Urobilinogénio",
-    "VDRL (RPR)",
-    "Velocidade de Sedimentação - 1ª Hora",
-    "Velocidade de Sedimentação - 2ª Hora",
-    "Velocidade de Sedimentação - Índice de Katz",
-    "Volume Globular Médio (VGM)",
-    "Volume Plaquetário Médio",
-    "Zinco Sérico",
-    "$UNKNOWN$"
-  ]
-  
+{
+  "Glicose": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 18.0182
+      }
+    ]
+  },
+  "Creatinina": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "µmol/L",
+        "factor": 0.0113
+      }
+    ]
+  },
+  "Ureia": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 6.0
+      }
+    ]
+  },
+  "Ácido Úrico": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "µmol/L",
+        "factor": 0.01681
+      }
+    ]
+  },
+  "Colesterol Total": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
+    ]
+  },
+  "Colesterol LDL": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
+    ]
+  },
+  "Colesterol HDL": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
+    ]
+  },
+  "Triglicerídeos": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 88.57
+      }
+    ]
+  },
+  "Potássio": {
+    "primary_unit": "mmol/L",
+    "alternatives": [
+      {
+        "unit": "mEq/L",
+        "factor": 1
+      }
+    ]
+  },
+  "Sódio": {
+    "primary_unit": "mmol/L",
+    "alternatives": [
+      {
+        "unit": "mEq/L",
+        "factor": 1
+      }
+    ]
+  },
+  "Cloretos": {
+    "primary_unit": "mmol/L",
+    "alternatives": [
+      {
+        "unit": "mEq/L",
+        "factor": 1
+      }
+    ]
+  },
+  "Magnésio": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 2.429
+      }
+    ]
+  },
+  "Cálcio Total": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 4.0
+      }
+    ]
+  },
+  "17-Alfa-Hidroxiprogesterona": {
+    "primary_unit": "ng/dL",
+    "alternatives": []
+  },
+  "25-Hidroxivitamina D": {
+    "primary_unit": "ng/mL",
+    "alternatives": []
+  },
+  "Ácido Ascórbico": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Ácido Fólico": {
+    "primary_unit": "ng/mL",
+    "alternatives": []
+  },
+  "Ácido Metilmalônico": {
+    "primary_unit": "nmol/L",
+    "alternatives": []
+  },
+  "Alanina Aminotransferase (ALT)": {
+    "primary_unit": "U/L",
+    "alternatives": [
+      {
+        "unit": "IU/L",
+        "factor": 1
+      },
+      {
+        "unit": "kat/L",
+        "factor": 60000000.0
+      }
+    ]
+  },
+  "Albumina": {
+    "primary_unit": "g/dL",
+    "alternatives": [
+      {
+        "unit": "g/L",
+        "factor": 0.1
+      }
+    ]
+  },
+  "Alfa 1": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Alfa 2": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Alfa-Fetoproteína": {
+    "primary_unit": "ng/mL",
+    "alternatives": []
+  },
+  "Alto Teor em RNA": {
+    "primary_unit": "N/A",
+    "alternatives": []
+  },
+  "Amilase": {
+    "primary_unit": "U/L",
+    "alternatives": [
+      {
+        "unit": "IU/L",
+        "factor": 1
+      }
+    ]
+  },
+  "Amónia": {
+    "primary_unit": "µmol/L",
+    "alternatives": []
+  },
+  "Anticorpo Anti-DNA": {
+    "primary_unit": "UI/mL",
+    "alternatives": []
+  },
+  "Anticorpo Anti-Endomísio (IgA)": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Anticorpo Anti-Endomísio (IgG)": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Anticorpo Anti-Fator Intrínseco": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Anticorpo Anti-Gliadina (IgA)": {
+    "primary_unit": "U/mL",
+    "alternatives": []
+  },
+  "Anticorpo Anti-Gliadina (IgG)": {
+    "primary_unit": "U/mL",
+    "alternatives": []
+  },
+  "Anticorpo Anti-HAV": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Anticorpo Anti-HBc": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Anticorpo Anti-HBe": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Anticorpo Anti-HBs": {
+    "primary_unit": "mIU/mL",
+    "alternatives": []
+  },
+  "Anticorpo Anti-HCV": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Anticorpo Anti-Peptídeo Citrulinado (CPP)": {
+    "primary_unit": "U/mL",
+    "alternatives": []
+  },
+  "Anticorpo Anti-Scl 70": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Anticorpo Anti-Tiroglobulina": {
+    "primary_unit": "IU/mL",
+    "alternatives": []
+  },
+  "Anticorpo Anti-TPO (IgG)": {
+    "primary_unit": "IU/mL",
+    "alternatives": []
+  },
+  "Anticorpo Anti-Transglutaminase (IgA)": {
+    "primary_unit": "U/mL",
+    "alternatives": []
+  },
+  "Anticorpo Anti-Transglutaminase (IgG)": {
+    "primary_unit": "U/mL",
+    "alternatives": []
+  },
+  "Anticorpo SS-A": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Anticorpo SS-B": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Anticorpos Anti-Citomegalovírus IgG": {
+    "primary_unit": "AU/mL",
+    "alternatives": []
+  },
+  "Anticorpos Anti-Citomegalovírus IgM": {
+    "primary_unit": "Index",
+    "alternatives": []
+  },
+  "Anticorpos Anti-Gliadina Deaminada Classe IgA": {
+    "primary_unit": "U/mL",
+    "alternatives": []
+  },
+  "Anticorpos Anti-Gliadina Deaminada Classe IgG": {
+    "primary_unit": "U/mL",
+    "alternatives": []
+  },
+  "Anticorpos Anti-Vírus Epstein Barr VCA IgG": {
+    "primary_unit": "U/mL",
+    "alternatives": []
+  },
+  "Anticorpos Anti-Vírus Epstein Barr VCA IgM": {
+    "primary_unit": "U/mL",
+    "alternatives": []
+  },
+  "Anticorpos Antinucleares - ANA": {
+    "primary_unit": "Títulos (1:x)",
+    "alternatives": []
+  },
+  "Antígeno Carcinoembrionário (CEA)": {
+    "primary_unit": "ng/mL",
+    "alternatives": []
+  },
+  "Antígeno HBe": {
+    "primary_unit": "Index",
+    "alternatives": []
+  },
+  "Antígeno HBs": {
+    "primary_unit": "IU/mL",
+    "alternatives": []
+  },
+  "Anti-HCV": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Anti-HIV 1/2": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Anti-M2 Mitocondrial": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Aspartato Aminotransferase (AST)": {
+    "primary_unit": "U/L",
+    "alternatives": [
+      {
+        "unit": "IU/L",
+        "factor": 1
+      },
+      {
+        "unit": "kat/L",
+        "factor": 60000000.0
+      }
+    ]
+  },
+  "Azoto Ureico": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Baixo Teor em RNA": {
+    "primary_unit": "N/A",
+    "alternatives": []
+  },
+  "Basófilos": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Bilirrubina Conjugada": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "µmol/L",
+        "factor": 0.0585
+      }
+    ]
+  },
+  "Bilirrubina Direta": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "µmol/L",
+        "factor": 0.0585
+      }
+    ]
+  },
+  "Bilirrubina Indireta": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "µmol/L",
+        "factor": 0.0585
+      }
+    ]
+  },
+  "Bilirrubina Total": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "µmol/L",
+        "factor": 0.0585
+      }
+    ]
+  },
+  "Calprotectina": {
+    "primary_unit": "µg/g",
+    "alternatives": []
+  },
+  "Capacidade de Fixação do Ferro": {
+    "primary_unit": "µg/dL",
+    "alternatives": []
+  },
+  "Células Epiteliais Escamosas": {
+    "primary_unit": "N/A",
+    "alternatives": []
+  },
+  "Células Linfoplasmocitárias": {
+    "primary_unit": "N/A",
+    "alternatives": []
+  },
+  "Ceruloplasmina": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Cilindros": {
+    "primary_unit": "N/A",
+    "alternatives": []
+  },
+  "CK Total (Atividade Enzimática)": {
+    "primary_unit": "U/L",
+    "alternatives": [
+      {
+        "unit": "IU/L",
+        "factor": 1
+      }
+    ]
+  },
+  "COOMBS Direta (Teste de Antiglobulina Direta - TAD)": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Cor (Urina)": {
+    "primary_unit": "N/A",
+    "alternatives": []
+  },
+  "Cortisol": {
+    "primary_unit": "µg/dL",
+    "alternatives": [
+      {
+        "unit": "nmol/L",
+        "factor": 0.0366
+      }
+    ]
+  },
+  "Cortisol Livre": {
+    "primary_unit": "ng/dL",
+    "alternatives": [
+      {
+        "unit": "nmol/L",
+        "factor": 0.00276
+      }
+    ]
+  },
+  "Crioglobulinas (Pesquisa)": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Desidrogenase do Lactato (DHL)": {
+    "primary_unit": "U/L",
+    "alternatives": [
+      {
+        "unit": "IU/L",
+        "factor": 1
+      }
+    ]
+  },
+  "Eosinófilos": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Eritroblastos por 100 Leucócitos": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Eritrócitos": {
+    "primary_unit": "10^6/µL",
+    "alternatives": [
+      {
+        "unit": "10^12/L",
+        "factor": 1
+      }
+    ]
+  },
+  "Estradiol": {
+    "primary_unit": "pg/mL",
+    "alternatives": [
+      {
+        "unit": "pmol/L",
+        "factor": 0.272
+      }
+    ]
+  },
+  "Estudo Morfológico Leucocitário": {
+    "primary_unit": "N/A",
+    "alternatives": []
+  },
+  "Estudo Morfológico Plaquetário": {
+    "primary_unit": "N/A",
+    "alternatives": []
+  },
+  "Exame Parasitológico": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Ferritina": {
+    "primary_unit": "ng/mL",
+    "alternatives": [
+      {
+        "unit": "µg/L",
+        "factor": 1
+      }
+    ]
+  },
+  "Ferro": {
+    "primary_unit": "µg/dL",
+    "alternatives": [
+      {
+        "unit": "µmol/L",
+        "factor": 5.585
+      }
+    ]
+  },
+  "Fosfatase Alcalina": {
+    "primary_unit": "U/L",
+    "alternatives": [
+      {
+        "unit": "IU/L",
+        "factor": 1
+      }
+    ]
+  },
+  "Fósforo Inorgânico": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 3.1
+      }
+    ]
+  },
+  "Gama-Glutamil Transferase (GGT)": {
+    "primary_unit": "U/L",
+    "alternatives": [
+      {
+        "unit": "IU/L",
+        "factor": 1
+      }
+    ]
+  },
+  "Glucose-6-Fosfato Desidrogenase": {
+    "primary_unit": "U/g Hb",
+    "alternatives": []
+  },
+  "Globulina Beta": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Globulina Gama": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Granulócitos Imaturos": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Hb A2": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Hb F": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Hematócrito": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Hemoglobina": {
+    "primary_unit": "g/dL",
+    "alternatives": [
+      {
+        "unit": "g/L",
+        "factor": 0.1
+      }
+    ]
+  },
+  "Hemoglobina A": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Hemoglobina A1C": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Hemoglobina A1C (DCCT)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Hemoglobina A1C (IFCC)": {
+    "primary_unit": "mmol/mol",
+    "alternatives": []
+  },
+  "Hemoglobina A1C - Glicose Média Estimada (eAG)": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Hemoglobina Corpuscular Média": {
+    "primary_unit": "pg",
+    "alternatives": []
+  },
+  "Hemoglobina Fetal (Doseamento)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Hemoglobina Reticulocitária": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Concentração Hemoglobínica": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Hemólise Inicial": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Hemólise Total": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Hepatite A, Ac. Anti-HAV IgG": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Hepatite B, Antig. HBs": {
+    "primary_unit": "IU/mL",
+    "alternatives": []
+  },
+  "Hepatite C, Ac. Anti-VHC": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Haptoglobina": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "HLA B27": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "HIV (Ac. Anti-HIV I/II + Ag p24)": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Homocisteína": {
+    "primary_unit": "µmol/L",
+    "alternatives": [
+      {
+        "unit": "mg/L",
+        "factor": 0.135
+      }
+    ]
+  },
+  "Hormona Adrenocorticotrópica (ACTH)": {
+    "primary_unit": "pg/mL",
+    "alternatives": []
+  },
+  "Hormona Folículo Estimulante (FSH)": {
+    "primary_unit": "mIU/mL",
+    "alternatives": []
+  },
+  "Hormona Luteotrófica (LH)": {
+    "primary_unit": "mIU/mL",
+    "alternatives": []
+  },
+  "Hormona Paratiroideia Intacta (PTH-I)": {
+    "primary_unit": "pg/mL",
+    "alternatives": []
+  },
+  "Hormona Tiro-Estimulante (TSH)": {
+    "primary_unit": "µIU/mL",
+    "alternatives": []
+  },
+  "I.R.F. (Fração de Reticulócitos Imaturos)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "IgA": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "IgG": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "IgM": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Índice": {
+    "primary_unit": "N/A",
+    "alternatives": []
+  },
+  "Índice de Anisocitose RBC (RDW-CV)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Índice Distribuição da Hemoglobina (HDW)": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Índice Distribuição Eritrocitária (RDW)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Índice Distribuição Plaquetas (PDW)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Índice Reticulócitos": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Insulina": {
+    "primary_unit": "µIU/mL",
+    "alternatives": [
+      {
+        "unit": "pmol/L",
+        "factor": 0.144
+      }
+    ]
+  },
+  "Leucócitos": {
+    "primary_unit": "10^3/µL",
+    "alternatives": [
+      {
+        "unit": "10^9/L",
+        "factor": 1
+      }
+    ]
+  },
+  "Lítio": {
+    "primary_unit": "mEq/L",
+    "alternatives": []
+  },
+  "Linfócitos": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Médio Teor em RNA": {
+    "primary_unit": "N/A",
+    "alternatives": []
+  },
+  "Monócitos": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Morfologia Celular": {
+    "primary_unit": "N/A",
+    "alternatives": []
+  },
+  "Morfologia dos Eritrócitos": {
+    "primary_unit": "N/A",
+    "alternatives": []
+  },
+  "Neutrófilos": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Plaquetas": {
+    "primary_unit": "10^3/µL",
+    "alternatives": [
+      {
+        "unit": "10^9/L",
+        "factor": 1
+      }
+    ]
+  },
+  "Plaquetocrito": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Piruvatoquinase Eritrocitária": {
+    "primary_unit": "U/g Hb",
+    "alternatives": []
+  },
+  "Progesterona": {
+    "primary_unit": "ng/mL",
+    "alternatives": [
+      {
+        "unit": "nmol/L",
+        "factor": 0.314
+      }
+    ]
+  },
+  "Prolactina": {
+    "primary_unit": "ng/mL",
+    "alternatives": [
+      {
+        "unit": "mIU/L",
+        "factor": 0.047
+      }
+    ]
+  },
+  "Proteína C Reativa": {
+    "primary_unit": "mg/L",
+    "alternatives": []
+  },
+  "Proteínas Totais": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "PSA Fração Livre": {
+    "primary_unit": "ng/mL",
+    "alternatives": [
+      {
+        "unit": "µg/L",
+        "factor": 1
+      }
+    ]
+  },
+  "PSA Total": {
+    "primary_unit": "ng/mL",
+    "alternatives": [
+      {
+        "unit": "µg/L",
+        "factor": 1
+      }
+    ]
+  },
+  "Quimotripsina": {
+    "primary_unit": "U/mg",
+    "alternatives": []
+  },
+  "Razão PSA Livre/PSA Total": {
+    "primary_unit": "Proporção",
+    "alternatives": []
+  },
+  "Relação Albumina-Globulina": {
+    "primary_unit": "Proporção",
+    "alternatives": []
+  },
+  "RBC Hipocrómicos": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Reticulócitos": {
+    "primary_unit": "%",
+    "alternatives": [
+      {
+        "unit": "10^3/µL",
+        "factor": 0
+      }
+    ]
+  },
+  "Saturação da Transferrina": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Selénio": {
+    "primary_unit": "µg/L",
+    "alternatives": []
+  },
+  "Somatomedina Basal (IGF-1)": {
+    "primary_unit": "ng/mL",
+    "alternatives": []
+  },
+  "T3 Livre": {
+    "primary_unit": "pg/mL",
+    "alternatives": []
+  },
+  "T3 Total": {
+    "primary_unit": "ng/dL",
+    "alternatives": []
+  },
+  "T4 Livre": {
+    "primary_unit": "ng/dL",
+    "alternatives": []
+  },
+  "T4 Total": {
+    "primary_unit": "µg/dL",
+    "alternatives": []
+  },
+  "Tiroxina - T4": {
+    "primary_unit": "µg/dL",
+    "alternatives": []
+  },
+  "Testosterona Livre": {
+    "primary_unit": "pg/mL",
+    "alternatives": [
+      {
+        "unit": "pmol/L",
+        "factor": 0.347
+      }
+    ]
+  },
+  "Testosterona Total": {
+    "primary_unit": "ng/dL",
+    "alternatives": [
+      {
+        "unit": "nmol/L",
+        "factor": 28.84
+      }
+    ]
+  },
+  "Título Antiestreptolisina O (ASO)": {
+    "primary_unit": "UI/mL",
+    "alternatives": []
+  },
+  "Transferrina": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Triiodotironina - T3": {
+    "primary_unit": "ng/dL",
+    "alternatives": []
+  },
+  "Urina Tipo II - Bilirrubina": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Urina Tipo II - Corpos Cetónicos": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Urina Tipo II - Densidade": {
+    "primary_unit": "g/mL",
+    "alternatives": []
+  },
+  "Urina Tipo II - Glicose": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Urina Tipo II - Leucócitos": {
+    "primary_unit": "Nº/µL",
+    "alternatives": []
+  },
+  "Urina Tipo II - Nitritos": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Urina Tipo II - pH": {
+    "primary_unit": "pH",
+    "alternatives": []
+  },
+  "Urina Tipo II - Proteínas": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Urina Tipo II - Sangue": {
+    "primary_unit": "Pos/Neg",
+    "alternatives": []
+  },
+  "Urina Tipo II - Urobilinogénio": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "VDRL (RPR)": {
+    "primary_unit": "Títulos (1:x)",
+    "alternatives": []
+  },
+  "Velocidade de Sedimentação - 1ª Hora": {
+    "primary_unit": "mm/h",
+    "alternatives": []
+  },
+  "Velocidade de Sedimentação - 2ª Hora": {
+    "primary_unit": "mm/h",
+    "alternatives": []
+  },
+  "Velocidade de Sedimentação - Índice de Katz": {
+    "primary_unit": "N/A",
+    "alternatives": []
+  },
+  "Volume Globular Médio (VGM)": {
+    "primary_unit": "fL",
+    "alternatives": []
+  },
+  "Volume Plaquetário Médio": {
+    "primary_unit": "fL",
+    "alternatives": []
+  },
+  "Zinco Sérico": {
+    "primary_unit": "µg/dL",
+    "alternatives": []
+  },
+  "$UNKNOWN$": {
+    "primary_unit": "N/A",
+    "alternatives": []
+  }
+}
