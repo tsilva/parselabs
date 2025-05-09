@@ -614,5 +614,50 @@ def main():
 
     logger.info("All PDFs processed.")
 
+    # --------- Plotting Section ---------
+    import matplotlib.pyplot as plt
+
+    # Load standard units mapping
+    with open("config/lab_test_standard_units.json", "r", encoding="utf-8") as f:
+        lab_test_standard_unit = json.load(f)
+
+    # Ensure plots directory exists
+    plots_dir = Path("plots")
+    plots_dir.mkdir(exist_ok=True)
+
+    # Reload merged_df to ensure correct dtypes
+    merged_df = pd.read_csv(os.path.join(output_dir, "all.csv"))
+
+    # Convert date column to datetime if present
+    if "date" in merged_df.columns:
+        merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce")
+
+    # For each unique standardized_lab_name, plot only values with matching standardized_lab_unit
+    for lab_name, std_unit in lab_test_standard_unit.items():
+        mask_name = merged_df["standardized_lab_name"] == lab_name
+        mask_unit = merged_df["standardized_lab_unit"] == std_unit
+        df_lab = merged_df[mask_name & mask_unit]
+        # Log skipped rows due to mismatched units
+        skipped = merged_df[mask_name & (~mask_unit)]
+        if not skipped.empty:
+            for _, row in skipped.iterrows():
+                logger.info(
+                    f"Skipping row for lab '{lab_name}': "
+                    f"date={row.get('date')}, value={row.get('lab_value')}, "
+                    f"unit={row.get('standardized_lab_unit')} (expected {std_unit}), "
+                    f"source_file={row.get('source_file')}"
+                )
+        if df_lab.empty or "date" not in df_lab.columns or "lab_value" not in df_lab.columns:
+            continue
+        df_lab = df_lab.sort_values("date")
+        plt.figure(figsize=(8, 4))
+        plt.plot(df_lab["date"], df_lab["lab_value"], marker="o")
+        plt.title(f"{lab_name} ({std_unit})")
+        plt.xlabel("Date")
+        plt.ylabel(f"Value ({std_unit})")
+        plt.tight_layout()
+        plt.savefig(plots_dir / f"{lab_name}.png")
+        plt.close()
+
 if __name__ == "__main__":
     main()
