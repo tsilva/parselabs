@@ -345,7 +345,9 @@
   },
   "Células Epiteliais Escamosas": {
     "primary_unit": "Campo 100X",
-    "alternatives": []
+    "alternatives": [
+      {"unit" : "/uL", "factor": 1.0}
+    ]
   },
   "Células Linfoplasmocitárias (%)": {
     "primary_unit": "%",
@@ -399,7 +401,9 @@
     "primary_unit": "10⁹/L",
     "alternatives": [
       { "unit": "10³/L", "factor": 0.000001 },
-      { "unit": "10³/µL", "factor": 1.0 }
+      { "unit": "10³/µL", "factor": 1.0 },
+      { "unit": "/mm3", "factor": 1.0 },
+      { "unit": "/uL", "factor": 1.0 }
     ]
   },
   "Eosinófilos (%)": {
@@ -600,7 +604,9 @@
   },
   "Hormona Paratiroideia Intacta (PTH-I)": {
     "primary_unit": "pg/mL",
-    "alternatives": []
+    "alternatives": [
+      { "unit": "ng/L", "factor": 1.0 }
+    ]
   },
   "Hormona Tiro-Estimulante (TSH)": {
     "primary_unit": "µIU/mL",
@@ -658,7 +664,9 @@
     "primary_unit": "10³/µL",
     "alternatives": [
       { "unit": "10³/L", "factor": 0.000001 },
-      { "unit": "10⁹/L", "factor": 1.0 }
+      { "unit": "10⁹/L", "factor": 1.0 },
+      { "unit": "/mm3", "factor": 1.0 },
+      { "unit": "/uL", "factor": 1.0 }
     ]
   },
   "Lítio": {
@@ -669,7 +677,9 @@
     "primary_unit": "10⁹/L",
     "alternatives": [
       { "unit": "10³/L", "factor": 0.000001 },
-      { "unit": "10³/µL", "factor": 1.0 }
+      { "unit": "10³/µL", "factor": 1.0 },
+      { "unit": "/mm3", "factor": 1.0 },
+      { "unit": "/uL", "factor": 1.0 }
     ]
   },
   "Linfócitos (%)": {
@@ -684,7 +694,9 @@
     "primary_unit": "10⁹/L",
     "alternatives": [
       { "unit": "10³/L", "factor": 0.000001 },
-      { "unit": "10³/µL", "factor": 1.0 }
+      { "unit": "10³/µL", "factor": 1.0 },
+      { "unit": "/mm3", "factor": 1.0 },
+      { "unit": "/uL", "factor": 1.0 }
     ]
   },
   "Monócitos (%)": {
@@ -696,14 +708,16 @@
     "alternatives": []
   },
   "Morfologia dos Eritrócitos": {
-    "primary_unit": "N/A",
+    "primary_unit": "string",
     "alternatives": []
   },
   "Neutrófilos": {
     "primary_unit": "10⁹/L",
     "alternatives": [
       { "unit": "10³/L", "factor": 0.000001 },
-      { "unit": "10³/µL", "factor": 1.0 }
+      { "unit": "10³/µL", "factor": 1.0 },
+      { "unit": "/mm3", "factor": 1.0 },
+      { "unit": "/uL", "factor": 1.0 }
     ]
   },
   "Neutrófilos (%)": {
@@ -714,7 +728,9 @@
     "primary_unit": "10³/µL",
     "alternatives": [
       { "unit": "10⁹/L", "factor": 1 },
-      { "unit": "10³/L", "factor": 0.000001 }
+      { "unit": "10³/L", "factor": 0.000001 },
+      { "unit": "/mm3", "factor": 1.0 },
+      { "unit": "/uL", "factor": 1.0 }
     ]
   },
   "Plaquetocrito (%)": {
@@ -852,7 +868,9 @@
   },
   "Urina Tipo II - Eritrócitos": {
     "primary_unit": "mg/dL",
-    "alternatives": []
+    "alternatives": [
+      {"unit" : "Campo 400X", "factor": 1.0}
+    ]
   },
   "Urina Tipo II - Hemoglobina": {
     "primary_unit": "mg/dL",
