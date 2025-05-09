@@ -730,7 +730,7 @@ def main():
         if not std_unit or std_unit == "N/A":
             continue
         mask_name = merged_df["standardized_lab_name"] == lab_name
-        mask_unit = merged_df["standardized_lab_unit"] == std_unit
+        mask_unit = merged_df["final_lab_unit"] == std_unit
         df_lab = merged_df[mask_name & mask_unit]
         # Log skipped rows due to mismatched units
         skipped = merged_df[mask_name & (~mask_unit)]
@@ -738,15 +738,15 @@ def main():
             for _, row in skipped.iterrows():
                 logger.info(
                     f"Skipping row for lab '{lab_name}': "
-                    f"date={row.get('date')}, value={row.get('lab_value')}, "
-                    f"unit={row.get('standardized_lab_unit')} (expected {std_unit}), "
+                    f"date={row.get('date')}, value={row.get('final_lab_value')}, "
+                    f"unit={row.get('final_lab_unit')} (expected {std_unit}), "
                     f"source_file={row.get('source_file')}"
                 )
-        if df_lab.empty or "date" not in df_lab.columns or "lab_value" not in df_lab.columns:
+        if df_lab.empty or "date" not in df_lab.columns or "final_lab_value" not in df_lab.columns:
             continue
         df_lab = df_lab.sort_values("date")
         plt.figure(figsize=(8, 4))
-        plt.plot(df_lab["date"], df_lab["lab_value"], marker="o")
+        plt.plot(df_lab["date"], df_lab["final_lab_value"], marker="o")
         plt.title(f"{lab_name} ({std_unit})")
         plt.xlabel("Date")
         plt.ylabel(f"Value ({std_unit})")

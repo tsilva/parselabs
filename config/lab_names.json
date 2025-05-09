@@ -120,6 +120,15 @@
     "primary_unit": "ng/dL",
     "alternatives": []
   },
+  "Colesterol VLDL (calculado)": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
+    ]
+  },
   "25-Hidroxivitamina D": {
     "primary_unit": "ng/mL",
     "alternatives": [
@@ -130,6 +139,19 @@
       {
         "unit": "nmol/L",
         "factor": 0.4
+      },
+      {
+        "unit": "µg/dL",
+        "factor": 0.1
+      }
+    ]
+  },
+  "Vitamina B12": {
+    "primary_unit": "pg/mL",
+    "alternatives": [
+      {
+        "unit": "pmol/L",
+        "factor": 0.738
       }
     ]
   },
@@ -142,7 +164,7 @@
     "alternatives": []
   },
   "Ácido Metilmalônico": {
-    "primary_unit": "nmol/L",
+    "primary_unit": "μmol/L",
     "alternatives": []
   },
   "Alanina Aminotransferase (ALT)": {
@@ -179,8 +201,8 @@
     "primary_unit": "ng/mL",
     "alternatives": []
   },
-  "Alto Teor em RNA": {
-    "primary_unit": "N/A",
+  "Alto Teor em RNA (%)": {
+    "primary_unit": "%",
     "alternatives": []
   },
   "Amilase": {
@@ -201,15 +223,15 @@
     "alternatives": []
   },
   "Anticorpo Anti-Endomísio (IgA)": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Anticorpo Anti-Endomísio (IgG)": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Anticorpo Anti-Fator Intrínseco": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Anticorpo Anti-Gliadina (IgA)": {
@@ -221,15 +243,15 @@
     "alternatives": []
   },
   "Anticorpo Anti-HAV": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Anticorpo Anti-HBc": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Anticorpo Anti-HBe": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Anticorpo Anti-HBs": {
@@ -237,7 +259,7 @@
     "alternatives": []
   },
   "Anticorpo Anti-HCV": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Anticorpo Anti-Peptídeo Citrulinado (CPP)": {
@@ -245,16 +267,26 @@
     "alternatives": []
   },
   "Anticorpo Anti-Scl 70": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Anticorpo Anti-Tiroglobulina": {
     "primary_unit": "IU/mL",
-    "alternatives": []
+    "alternatives": [
+      {
+        "unit": "KU/L",
+        "factor": 1
+      }
+    ]
   },
   "Anticorpo Anti-TPO (IgG)": {
     "primary_unit": "IU/mL",
-    "alternatives": []
+    "alternatives": [
+      {
+        "unit": "KU/L",
+        "factor": 1
+      }
+    ]
   },
   "Anticorpo Anti-Transglutaminase (IgA)": {
     "primary_unit": "U/mL",
@@ -265,11 +297,11 @@
     "alternatives": []
   },
   "Anticorpo SS-A": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Anticorpo SS-B": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Anticorpos Anti-Citomegalovírus IgG": {
@@ -313,15 +345,15 @@
     "alternatives": []
   },
   "Anti-HCV": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Anti-HIV 1/2": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Anti-M2 Mitocondrial": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Aspartato Aminotransferase (AST)": {
@@ -341,11 +373,28 @@
     "primary_unit": "mg/dL",
     "alternatives": []
   },
-  "Baixo Teor em RNA": {
-    "primary_unit": "N/A",
+  "Baixo Teor em RNA (%)": {
+    "primary_unit": "%",
     "alternatives": []
   },
   "Basófilos": {
+    "primary_unit": "10⁹/L",
+    "alternatives": [
+      {
+        "unit": "10³/L",
+        "factor": 0.001
+      },
+      {
+        "unit": "10³/µL",
+        "factor": 1.0
+      },
+      {
+        "unit": "/mm3",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Basófilos (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
@@ -394,11 +443,11 @@
     "alternatives": []
   },
   "Células Epiteliais Escamosas": {
-    "primary_unit": "N/A",
+    "primary_unit": "Campo 100X",
     "alternatives": []
   },
-  "Células Linfoplasmocitárias": {
-    "primary_unit": "N/A",
+  "Células Linfoplasmocitárias (%)": {
+    "primary_unit": "%",
     "alternatives": []
   },
   "Ceruloplasmina": {
@@ -419,7 +468,7 @@
     ]
   },
   "COOMBS Direta (Teste de Antiglobulina Direta - TAD)": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Cor (Urina)": {
@@ -445,7 +494,7 @@
     ]
   },
   "Crioglobulinas (Pesquisa)": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Desidrogenase do Lactato (DHL)": {
@@ -458,19 +507,40 @@
     ]
   },
   "Eosinófilos": {
+    "primary_unit": "10⁹/L",
+    "alternatives": [
+      {
+        "unit": "10³/L",
+        "factor": 0.001
+      },
+      {
+        "unit": "10³/µL",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Eosinófilos (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
-  "Eritroblastos por 100 Leucócitos": {
+  "Eritroblastos por 100 Leucócitos (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
   "Eritrócitos": {
-    "primary_unit": "10^6/µL",
+    "primary_unit": "10⁶/µL",
     "alternatives": [
       {
-        "unit": "10^12/L",
+        "unit": "10¹²/L",
         "factor": 1
+      },
+      {
+        "unit": "10⁶/mm³",
+        "factor": 1
+      },
+      {
+        "unit": "10⁶/L",
+        "factor": 0.001
       }
     ]
   },
@@ -492,7 +562,7 @@
     "alternatives": []
   },
   "Exame Parasitológico": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Ferritina": {
@@ -552,21 +622,26 @@
     "primary_unit": "g/dL",
     "alternatives": []
   },
-  "Granulócitos Imaturos": {
+  "Granulócitos Imaturos (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
-  "Hb A2": {
+  "Hb A2 (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
-  "Hb F": {
+  "Hb F (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
-  "Hematócrito": {
+  "Hematócrito (%)": {
     "primary_unit": "%",
-    "alternatives": []
+    "alternatives": [
+      {
+        "unit": "L/L",
+        "factor": 100
+      }
+    ]
   },
   "Hemoglobina": {
     "primary_unit": "g/dL",
@@ -577,11 +652,11 @@
       }
     ]
   },
-  "Hemoglobina A": {
+  "Hemoglobina A (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
-  "Hemoglobina A1C": {
+  "Hemoglobina A1C (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
@@ -599,13 +674,26 @@
   },
   "Hemoglobina Corpuscular Média": {
     "primary_unit": "pg",
-    "alternatives": []
+    "alternatives": [
+      {
+        "unit": "g/dL",
+        "factor": 0.01
+      }
+    ]
   },
-  "Hemoglobina Fetal (Doseamento)": {
+  "Hemoglobina Fetal (Doseamento) (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
   "Hemoglobina Reticulocitária": {
+    "primary_unit": "pg",
+    "alternatives": []
+  },
+  "Hemoglobina Reticulocitária (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Concentração Hemoglobínica (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
@@ -614,15 +702,13 @@
     "alternatives": []
   },
   "Hemólise Inicial": {
-    "primary_unit": "%",
-    "alternatives": []
+    "primary_unit": "g/dL NaCl"
   },
   "Hemólise Total": {
-    "primary_unit": "%",
-    "alternatives": []
+    "primary_unit": "g/dL NaCl"
   },
   "Hepatite A, Ac. Anti-HAV IgG": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Hepatite B, Antig. HBs": {
@@ -630,7 +716,7 @@
     "alternatives": []
   },
   "Hepatite C, Ac. Anti-VHC": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Haptoglobina": {
@@ -638,11 +724,11 @@
     "alternatives": []
   },
   "HLA B27": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "HIV (Ac. Anti-HIV I/II + Ag p24)": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Homocisteína": {
@@ -672,9 +758,14 @@
   },
   "Hormona Tiro-Estimulante (TSH)": {
     "primary_unit": "µIU/mL",
-    "alternatives": []
+    "alternatives": [
+      {
+        "unit": "mUI/L",
+        "factor": 1
+      }
+    ]
   },
-  "I.R.F. (Fração de Reticulócitos Imaturos)": {
+  "I.R.F. (Fração de Reticulócitos Imaturos) (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
@@ -694,7 +785,7 @@
     "primary_unit": "N/A",
     "alternatives": []
   },
-  "Índice de Anisocitose RBC (RDW-CV)": {
+  "Índice de Anisocitose RBC (RDW-CV) (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
@@ -702,15 +793,15 @@
     "primary_unit": "g/dL",
     "alternatives": []
   },
-  "Índice Distribuição Eritrocitária (RDW)": {
+  "Índice Distribuição Eritrocitária (RDW) (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
-  "Índice Distribuição Plaquetas (PDW)": {
+  "Índice Distribuição Plaquetas (PDW) (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
-  "Índice Reticulócitos": {
+  "Índice Reticulócitos (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
@@ -727,8 +818,12 @@
     "primary_unit": "10³/µL",
     "alternatives": [
       {
+        "unit": "10³/L",
+        "factor": 0.001
+      },
+      {
         "unit": "10⁹/L",
-        "factor": 1
+        "factor": 1.0
       }
     ]
   },
@@ -737,19 +832,45 @@
     "alternatives": []
   },
   "Linfócitos": {
+    "primary_unit": "10⁹/L",
+    "alternatives": [
+      {
+        "unit": "10³/L",
+        "factor": 0.001
+      },
+      {
+        "unit": "10³/µL",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Linfócitos (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
-  "Médio Teor em RNA": {
-    "primary_unit": "N/A",
+  "Médio Teor em RNA (%)": {
+    "primary_unit": "%",
     "alternatives": []
   },
   "Monócitos": {
+    "primary_unit": "10⁹/L",
+    "alternatives": [
+      {
+        "unit": "10³/L",
+        "factor": 0.001
+      },
+      {
+        "unit": "10³/µL",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Monócitos (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
   "Morfologia Celular": {
-    "primary_unit": "N/A",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Morfologia dos Eritrócitos": {
@@ -757,6 +878,19 @@
     "alternatives": []
   },
   "Neutrófilos": {
+    "primary_unit": "10⁹/L",
+    "alternatives": [
+      {
+        "unit": "10³/L",
+        "factor": 0.001
+      },
+      {
+        "unit": "10³/µL",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Neutrófilos (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
@@ -766,10 +900,14 @@
       {
         "unit": "10⁹/L",
         "factor": 1
+      },
+      {
+        "unit": "10³/L",
+        "factor": 0.001
       }
     ]
   },
-  "Plaquetocrito": {
+  "Plaquetocrito (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
@@ -797,7 +935,12 @@
   },
   "Proteína C Reativa": {
     "primary_unit": "mg/L",
-    "alternatives": []
+    "alternatives": [
+      {
+        "unit": "mg/dL",
+        "factor": 0.1
+      }
+    ]
   },
   "Proteínas Totais": {
     "primary_unit": "g/dL",
@@ -833,11 +976,15 @@
     "primary_unit": "Proporção",
     "alternatives": []
   },
-  "RBC Hipocrómicos": {
+  "RBC Hipocrómicos (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
   "Reticulócitos": {
+    "primary_unit": "10⁹/L",
+    "alternatives": []
+  },
+  "Reticulócitos (%)": {
     "primary_unit": "%",
     "alternatives": [
       {
@@ -846,7 +993,7 @@
       }
     ]
   },
-  "Saturação da Transferrina": {
+  "Saturação da Transferrina (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
@@ -864,7 +1011,12 @@
   },
   "T3 Total": {
     "primary_unit": "ng/dL",
-    "alternatives": []
+    "alternatives": [
+      {
+        "unit": "nmol/L",
+        "factor": 0.0154
+      }
+    ]
   },
   "T4 Livre": {
     "primary_unit": "ng/dL",
@@ -872,7 +1024,16 @@
   },
   "T4 Total": {
     "primary_unit": "µg/dL",
-    "alternatives": []
+    "alternatives": [
+      {
+        "unit": "nmol/L",
+        "factor": 12.87
+      },
+      {
+        "unit": "pmol/L",
+        "factor": 0.01287
+      }
+    ]
   },
   "Tiroxina - T4": {
     "primary_unit": "µg/dL",
@@ -908,8 +1069,20 @@
     "primary_unit": "ng/dL",
     "alternatives": []
   },
+  "Urina Tipo II - Aspecto": {
+    "primary_unit": "string",
+    "alternatives": []
+  },
+  "Urina Tipo II - Eritrócitos": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Urina Tipo II - Hemoglobina": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
   "Urina Tipo II - Bilirrubina": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "mg/dL",
     "alternatives": []
   },
   "Urina Tipo II - Corpos Cetónicos": {
@@ -917,7 +1090,7 @@
     "alternatives": []
   },
   "Urina Tipo II - Densidade": {
-    "primary_unit": "g/mL",
+    "primary_unit": "number",
     "alternatives": []
   },
   "Urina Tipo II - Glicose": {
@@ -926,10 +1099,27 @@
   },
   "Urina Tipo II - Leucócitos": {
     "primary_unit": "Nº/µL",
+    "alternatives": [
+      {
+        "unit": "/uL",
+        "factor": 1.0
+      },
+      {
+        "unit": "Leu/uL",
+        "factor": 1.0
+      },
+      {
+        "unit": "Campo 400X",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Urina Tipo II - Cor": {
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Urina Tipo II - Nitritos": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Urina Tipo II - pH": {
@@ -941,7 +1131,7 @@
     "alternatives": []
   },
   "Urina Tipo II - Sangue": {
-    "primary_unit": "Pos/Neg",
+    "primary_unit": "mg/dL",
     "alternatives": []
   },
   "Urina Tipo II - Urobilinogénio": {
@@ -954,14 +1144,24 @@
   },
   "Velocidade de Sedimentação - 1ª Hora": {
     "primary_unit": "mm/h",
-    "alternatives": []
+    "alternatives": [
+      {
+        "unit": "mm",
+        "factor": 1.0
+      }
+    ]
   },
   "Velocidade de Sedimentação - 2ª Hora": {
     "primary_unit": "mm/h",
-    "alternatives": []
+    "alternatives": [
+      {
+        "unit": "mm",
+        "factor": 1.0
+      }
+    ]
   },
   "Velocidade de Sedimentação - Índice de Katz": {
-    "primary_unit": "N/A",
+    "primary_unit": "Índice",
     "alternatives": []
   },
   "Volume Globular Médio (VGM)": {
