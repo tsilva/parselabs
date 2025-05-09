@@ -72,7 +72,7 @@
         "alternatives": []
     },
     "Anti-M2 Mitocondrial": {
-        "primary_unit": "boolean",
+        "primary_unit": "U/mL",
         "alternatives": []
     },
     "Anticorpo Anti-DNA": {
@@ -200,7 +200,7 @@
         "alternatives": []
     },
     "Anticorpos Antinucleares - ANA": {
-        "primary_unit": "string",
+        "primary_unit": "boolean",
         "alternatives": []
     },
     "Antígeno Carcinoembrionário (CEA)": {
@@ -296,6 +296,14 @@
                 "factor": 0.0585
             }
         ]
+    },
+    "C3" : {
+        "primary_unit": "mg/dL",
+        "alternatives": []
+    },
+    "C4" : {
+        "primary_unit": "mg/dL",
+        "alternatives": []
     },
     "CK Total (Atividade Enzimática)": {
         "primary_unit": "U/L",
@@ -1135,7 +1143,7 @@
         "alternatives": []
     },
     "Urina Tipo II - Bilirrubina": {
-        "primary_unit": "mg/dL",
+        "primary_unit": "boolean",
         "alternatives": []
     },
     "Urina Tipo II - Cilindros": {
@@ -1147,7 +1155,7 @@
         "alternatives": []
     },
     "Urina Tipo II - Corpos Cetónicos": {
-        "primary_unit": "mg/dL",
+        "primary_unit": "boolean",
         "alternatives": []
     },
     "Urina Tipo II - Densidade": {
@@ -1168,7 +1176,7 @@
         ]
     },
     "Urina Tipo II - Glicose": {
-        "primary_unit": "mg/dL",
+        "primary_unit": "boolean",
         "alternatives": []
     },
     "Urina Tipo II - Hemoglobina": {
@@ -1201,11 +1209,11 @@
         "alternatives": []
     },
     "Urina Tipo II - Proteínas": {
-        "primary_unit": "mg/dL",
+        "primary_unit": "boolean",
         "alternatives": []
     },
     "Urina Tipo II - Sangue": {
-        "primary_unit": "mg/dL",
+        "primary_unit": "boolean",
         "alternatives": []
     },
     "Urina Tipo II - Urobilinogénio": {
@@ -1269,7 +1277,9 @@
     },
     "Ácido Fólico": {
         "primary_unit": "ng/mL",
-        "alternatives": []
+        "alternatives": [
+          {"unit": "nmol/L", "factor": 2.266}
+        ]
     },
     "Ácido Metilmalônico": {
         "primary_unit": "μmol/L",
