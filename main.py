@@ -777,6 +777,12 @@ def main():
             continue
         # -----------------------------------------------------------
 
+        # --- SKIP PLOT IF LESS THAN 2 VALUES ---
+        if len(df_lab) < 2:
+            logger.info(f"Skipping plot for lab '{lab_name}' ({std_unit}) because only {len(df_lab)} value(s) found.")
+            continue
+        # ---------------------------------------
+
         df_lab = df_lab.sort_values("date")
         plt.figure(figsize=(8, 4))
         plt.plot(df_lab["date"], df_lab["final_lab_value"], marker="o")

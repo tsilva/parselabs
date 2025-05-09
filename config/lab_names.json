@@ -2,79 +2,118 @@
   "Glicose": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "mmol/L", "factor": 18.0182 }
+      {
+        "unit": "mmol/L",
+        "factor": 18.0182
+      }
     ]
   },
   "Creatinina": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "µmol/L", "factor": 0.0113 }
+      {
+        "unit": "µmol/L",
+        "factor": 0.0113
+      }
     ]
   },
   "Ureia": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "mmol/L", "factor": 6.0 }
+      {
+        "unit": "mmol/L",
+        "factor": 6.0
+      }
     ]
   },
   "Ácido Úrico": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "µmol/L", "factor": 0.01681 }
+      {
+        "unit": "µmol/L",
+        "factor": 0.01681
+      }
     ]
   },
   "Colesterol Total": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "mmol/L", "factor": 38.67 }
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
     ]
   },
   "Colesterol LDL": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "mmol/L", "factor": 38.67 }
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
     ]
   },
   "Colesterol HDL": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "mmol/L", "factor": 38.67 }
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
     ]
   },
   "Triglicerídeos": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "mmol/L", "factor": 88.57 }
+      {
+        "unit": "mmol/L",
+        "factor": 88.57
+      }
     ]
   },
   "Potássio": {
     "primary_unit": "mmol/L",
     "alternatives": [
-      { "unit": "mEq/L", "factor": 1 }
+      {
+        "unit": "mEq/L",
+        "factor": 1
+      }
     ]
   },
   "Sódio": {
     "primary_unit": "mmol/L",
     "alternatives": [
-      { "unit": "mEq/L", "factor": 1 }
+      {
+        "unit": "mEq/L",
+        "factor": 1
+      }
     ]
   },
   "Cloretos": {
     "primary_unit": "mmol/L",
     "alternatives": [
-      { "unit": "mEq/L", "factor": 1 }
+      {
+        "unit": "mEq/L",
+        "factor": 1
+      }
     ]
   },
   "Magnésio": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "mmol/L", "factor": 2.429 }
+      {
+        "unit": "mmol/L",
+        "factor": 2.429
+      }
     ]
   },
   "Cálcio Total": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "mmol/L", "factor": 4.0 }
+      {
+        "unit": "mmol/L",
+        "factor": 4.0
+      }
     ]
   },
   "17-Alfa-Hidroxiprogesterona": {
@@ -84,21 +123,36 @@
   "Colesterol VLDL (calculado)": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "mmol/L", "factor": 38.67 }
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
     ]
   },
   "25-Hidroxivitamina D": {
     "primary_unit": "ng/mL",
     "alternatives": [
-      { "unit": "μg/L", "factor": 1.0 },
-      { "unit": "nmol/L", "factor": 0.4 },
-      { "unit": "µg/dL", "factor": 10.0 }
+      {
+        "unit": "μg/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "nmol/L",
+        "factor": 0.4
+      },
+      {
+        "unit": "µg/dL",
+        "factor": 10.0
+      }
     ]
   },
   "Vitamina B12": {
     "primary_unit": "pg/mL",
     "alternatives": [
-      { "unit": "pmol/L", "factor": 1.355 }
+      {
+        "unit": "pmol/L",
+        "factor": 1.355
+      }
     ]
   },
   "Ácido Ascórbico": {
@@ -116,14 +170,23 @@
   "Alanina Aminotransferase (ALT)": {
     "primary_unit": "U/L",
     "alternatives": [
-      { "unit": "IU/L", "factor": 1 },
-      { "unit": "kat/L", "factor": 60000000.0 }
+      {
+        "unit": "IU/L",
+        "factor": 1
+      },
+      {
+        "unit": "kat/L",
+        "factor": 60000000.0
+      }
     ]
   },
   "Albumina": {
     "primary_unit": "g/dL",
     "alternatives": [
-      { "unit": "g/L", "factor": 0.1 }
+      {
+        "unit": "g/L",
+        "factor": 0.1
+      }
     ]
   },
   "Alfa 1": {
@@ -145,7 +208,10 @@
   "Amilase": {
     "primary_unit": "U/L",
     "alternatives": [
-      { "unit": "IU/L", "factor": 1 }
+      {
+        "unit": "IU/L",
+        "factor": 1
+      }
     ]
   },
   "Amónia": {
@@ -207,13 +273,19 @@
   "Anticorpo Anti-Tiroglobulina": {
     "primary_unit": "IU/mL",
     "alternatives": [
-      { "unit": "KU/L", "factor": 1 }
+      {
+        "unit": "KU/L",
+        "factor": 1
+      }
     ]
   },
   "Anticorpo Anti-TPO (IgG)": {
     "primary_unit": "IU/mL",
     "alternatives": [
-      { "unit": "KU/L", "factor": 1 }
+      {
+        "unit": "KU/L",
+        "factor": 1
+      }
     ]
   },
   "Anticorpo Anti-Transglutaminase (IgA)": {
@@ -287,8 +359,14 @@
   "Aspartato Aminotransferase (AST)": {
     "primary_unit": "U/L",
     "alternatives": [
-      { "unit": "IU/L", "factor": 1 },
-      { "unit": "kat/L", "factor": 60000000.0 }
+      {
+        "unit": "IU/L",
+        "factor": 1
+      },
+      {
+        "unit": "kat/L",
+        "factor": 60000000.0
+      }
     ]
   },
   "Azoto Ureico": {
@@ -302,9 +380,22 @@
   "Basófilos": {
     "primary_unit": "10⁹/L",
     "alternatives": [
-      { "unit": "10³/L", "factor": 0.000001 },
-      { "unit": "10³/µL", "factor": 1.0 },
-      { "unit": "/mm3", "factor": 0.001 }
+      {
+        "unit": "/uL",
+        "factor": 1.0
+      },
+      {
+        "unit": "10³/L",
+        "factor": 0.000001
+      },
+      {
+        "unit": "10³/µL",
+        "factor": 1.0
+      },
+      {
+        "unit": "/mm3",
+        "factor": 0.001
+      }
     ]
   },
   "Basófilos (%)": {
@@ -314,25 +405,37 @@
   "Bilirrubina Conjugada": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "µmol/L", "factor": 0.0585 }
+      {
+        "unit": "µmol/L",
+        "factor": 0.0585
+      }
     ]
   },
   "Bilirrubina Direta": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "µmol/L", "factor": 0.0585 }
+      {
+        "unit": "µmol/L",
+        "factor": 0.0585
+      }
     ]
   },
   "Bilirrubina Indireta": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "µmol/L", "factor": 0.0585 }
+      {
+        "unit": "µmol/L",
+        "factor": 0.0585
+      }
     ]
   },
   "Bilirrubina Total": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "µmol/L", "factor": 0.0585 }
+      {
+        "unit": "µmol/L",
+        "factor": 0.0585
+      }
     ]
   },
   "Calprotectina": {
@@ -346,7 +449,10 @@
   "Células Epiteliais Escamosas": {
     "primary_unit": "Campo 100X",
     "alternatives": [
-      {"unit" : "/uL", "factor": 1.0}
+      {
+        "unit": "/uL",
+        "factor": 1.0
+      }
     ]
   },
   "Células Linfoplasmocitárias (%)": {
@@ -357,14 +463,17 @@
     "primary_unit": "mg/dL",
     "alternatives": []
   },
-  "Cilindros": {
-    "primary_unit": "N/A",
+  "Urina Tipo II - Cilindros": {
+    "primary_unit": "Campo 100X",
     "alternatives": []
   },
   "CK Total (Atividade Enzimática)": {
     "primary_unit": "U/L",
     "alternatives": [
-      { "unit": "IU/L", "factor": 1 }
+      {
+        "unit": "IU/L",
+        "factor": 1
+      }
     ]
   },
   "COOMBS Direta (Teste de Antiglobulina Direta - TAD)": {
@@ -378,13 +487,19 @@
   "Cortisol": {
     "primary_unit": "µg/dL",
     "alternatives": [
-      { "unit": "nmol/L", "factor": 0.0366 }
+      {
+        "unit": "nmol/L",
+        "factor": 0.0366
+      }
     ]
   },
   "Cortisol Livre": {
     "primary_unit": "ng/dL",
     "alternatives": [
-      { "unit": "nmol/L", "factor": 36.246 }
+      {
+        "unit": "nmol/L",
+        "factor": 36.246
+      }
     ]
   },
   "Crioglobulinas (Pesquisa)": {
@@ -394,16 +509,31 @@
   "Desidrogenase do Lactato (DHL)": {
     "primary_unit": "U/L",
     "alternatives": [
-      { "unit": "IU/L", "factor": 1 }
+      {
+        "unit": "IU/L",
+        "factor": 1
+      }
     ]
   },
   "Eosinófilos": {
     "primary_unit": "10⁹/L",
     "alternatives": [
-      { "unit": "10³/L", "factor": 0.000001 },
-      { "unit": "10³/µL", "factor": 1.0 },
-      { "unit": "/mm3", "factor": 1.0 },
-      { "unit": "/uL", "factor": 1.0 }
+      {
+        "unit": "10³/L",
+        "factor": 0.000001
+      },
+      {
+        "unit": "10³/µL",
+        "factor": 1.0
+      },
+      {
+        "unit": "/mm3",
+        "factor": 1.0
+      },
+      {
+        "unit": "/uL",
+        "factor": 1.0
+      }
     ]
   },
   "Eosinófilos (%)": {
@@ -417,15 +547,27 @@
   "Eritrócitos": {
     "primary_unit": "10⁶/µL",
     "alternatives": [
-      { "unit": "10¹²/L", "factor": 1 },
-      { "unit": "10⁶/mm³", "factor": 1 },
-      { "unit": "10⁶/L", "factor": 0.000001 }
+      {
+        "unit": "10¹²/L",
+        "factor": 1
+      },
+      {
+        "unit": "10⁶/mm³",
+        "factor": 1
+      },
+      {
+        "unit": "10⁶/L",
+        "factor": 0.000001
+      }
     ]
   },
   "Estradiol": {
     "primary_unit": "pg/mL",
     "alternatives": [
-      { "unit": "pmol/L", "factor": 0.272 }
+      {
+        "unit": "pmol/L",
+        "factor": 0.272
+      }
     ]
   },
   "Estudo Morfológico Leucocitário": {
@@ -443,31 +585,46 @@
   "Ferritina": {
     "primary_unit": "ng/mL",
     "alternatives": [
-      { "unit": "µg/L", "factor": 1 }
+      {
+        "unit": "µg/L",
+        "factor": 1
+      }
     ]
   },
   "Ferro": {
     "primary_unit": "µg/dL",
     "alternatives": [
-      { "unit": "µmol/L", "factor": 5.585 }
+      {
+        "unit": "µmol/L",
+        "factor": 5.585
+      }
     ]
   },
   "Fosfatase Alcalina": {
     "primary_unit": "U/L",
     "alternatives": [
-      { "unit": "IU/L", "factor": 1 }
+      {
+        "unit": "IU/L",
+        "factor": 1
+      }
     ]
   },
   "Fósforo Inorgânico": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      { "unit": "mmol/L", "factor": 3.1 }
+      {
+        "unit": "mmol/L",
+        "factor": 3.1
+      }
     ]
   },
   "Gama-Glutamil Transferase (GGT)": {
     "primary_unit": "U/L",
     "alternatives": [
-      { "unit": "IU/L", "factor": 1 }
+      {
+        "unit": "IU/L",
+        "factor": 1
+      }
     ]
   },
   "Glucose-6-Fosfato Desidrogenase": {
@@ -497,13 +654,19 @@
   "Hematócrito (%)": {
     "primary_unit": "%",
     "alternatives": [
-      { "unit": "L/L", "factor": 100 }
+      {
+        "unit": "L/L",
+        "factor": 100
+      }
     ]
   },
   "Hemoglobina": {
     "primary_unit": "g/dL",
     "alternatives": [
-      { "unit": "g/L", "factor": 0.1 }
+      {
+        "unit": "g/L",
+        "factor": 0.1
+      }
     ]
   },
   "Hemoglobina A (%)": {
@@ -529,7 +692,10 @@
   "Hemoglobina Corpuscular Média": {
     "primary_unit": "pg",
     "alternatives": [
-      { "unit": "g/dL", "factor": 0.01 }
+      {
+        "unit": "g/dL",
+        "factor": 0.01
+      }
     ]
   },
   "Hemoglobina Fetal (Doseamento) (%)": {
@@ -587,7 +753,10 @@
   "Homocisteína": {
     "primary_unit": "µmol/L",
     "alternatives": [
-      { "unit": "mg/L", "factor": 7.40 }
+      {
+        "unit": "mg/L",
+        "factor": 7.40
+      }
     ]
   },
   "Hormona Adrenocorticotrópica (ACTH)": {
@@ -605,13 +774,19 @@
   "Hormona Paratiroideia Intacta (PTH-I)": {
     "primary_unit": "pg/mL",
     "alternatives": [
-      { "unit": "ng/L", "factor": 1.0 }
+      {
+        "unit": "ng/L",
+        "factor": 1.0
+      }
     ]
   },
   "Hormona Tiro-Estimulante (TSH)": {
     "primary_unit": "µIU/mL",
     "alternatives": [
-      { "unit": "mUI/L", "factor": 1 }
+      {
+        "unit": "mUI/L",
+        "factor": 1
+      }
     ]
   },
   "I.R.F. (Fração de Reticulócitos Imaturos) (%)": {
@@ -630,10 +805,6 @@
     "primary_unit": "mg/dL",
     "alternatives": []
   },
-  "Índice": {
-    "primary_unit": "N/A",
-    "alternatives": []
-  },
   "Índice de Anisocitose RBC (RDW-CV) (%)": {
     "primary_unit": "%",
     "alternatives": []
@@ -650,6 +821,10 @@
     "primary_unit": "%",
     "alternatives": []
   },
+  "Índice Reticulócitos": {
+    "primary_unit": "Indice",
+    "alternatives": []
+  },
   "Índice Reticulócitos (%)": {
     "primary_unit": "%",
     "alternatives": []
@@ -657,16 +832,31 @@
   "Insulina": {
     "primary_unit": "µIU/mL",
     "alternatives": [
-      { "unit": "pmol/L", "factor": 0.144 }
+      {
+        "unit": "pmol/L",
+        "factor": 0.144
+      }
     ]
   },
   "Leucócitos": {
     "primary_unit": "10³/µL",
     "alternatives": [
-      { "unit": "10³/L", "factor": 0.000001 },
-      { "unit": "10⁹/L", "factor": 1.0 },
-      { "unit": "/mm3", "factor": 1.0 },
-      { "unit": "/uL", "factor": 1.0 }
+      {
+        "unit": "10³/L",
+        "factor": 0.000001
+      },
+      {
+        "unit": "10⁹/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "/mm3",
+        "factor": 1.0
+      },
+      {
+        "unit": "/uL",
+        "factor": 1.0
+      }
     ]
   },
   "Lítio": {
@@ -676,10 +866,22 @@
   "Linfócitos": {
     "primary_unit": "10⁹/L",
     "alternatives": [
-      { "unit": "10³/L", "factor": 0.000001 },
-      { "unit": "10³/µL", "factor": 1.0 },
-      { "unit": "/mm3", "factor": 1.0 },
-      { "unit": "/uL", "factor": 1.0 }
+      {
+        "unit": "10³/L",
+        "factor": 0.000001
+      },
+      {
+        "unit": "10³/µL",
+        "factor": 1.0
+      },
+      {
+        "unit": "/mm3",
+        "factor": 1.0
+      },
+      {
+        "unit": "/uL",
+        "factor": 1.0
+      }
     ]
   },
   "Linfócitos (%)": {
@@ -693,10 +895,22 @@
   "Monócitos": {
     "primary_unit": "10⁹/L",
     "alternatives": [
-      { "unit": "10³/L", "factor": 0.000001 },
-      { "unit": "10³/µL", "factor": 1.0 },
-      { "unit": "/mm3", "factor": 1.0 },
-      { "unit": "/uL", "factor": 1.0 }
+      {
+        "unit": "10³/L",
+        "factor": 0.000001
+      },
+      {
+        "unit": "10³/µL",
+        "factor": 1.0
+      },
+      {
+        "unit": "/mm3",
+        "factor": 1.0
+      },
+      {
+        "unit": "/uL",
+        "factor": 1.0
+      }
     ]
   },
   "Monócitos (%)": {
@@ -714,10 +928,22 @@
   "Neutrófilos": {
     "primary_unit": "10⁹/L",
     "alternatives": [
-      { "unit": "10³/L", "factor": 0.000001 },
-      { "unit": "10³/µL", "factor": 1.0 },
-      { "unit": "/mm3", "factor": 1.0 },
-      { "unit": "/uL", "factor": 1.0 }
+      {
+        "unit": "10³/L",
+        "factor": 0.000001
+      },
+      {
+        "unit": "10³/µL",
+        "factor": 1.0
+      },
+      {
+        "unit": "/mm3",
+        "factor": 1.0
+      },
+      {
+        "unit": "/uL",
+        "factor": 1.0
+      }
     ]
   },
   "Neutrófilos (%)": {
@@ -727,10 +953,22 @@
   "Plaquetas": {
     "primary_unit": "10³/µL",
     "alternatives": [
-      { "unit": "10⁹/L", "factor": 1 },
-      { "unit": "10³/L", "factor": 0.000001 },
-      { "unit": "/mm3", "factor": 1.0 },
-      { "unit": "/uL", "factor": 1.0 }
+      {
+        "unit": "10⁹/L",
+        "factor": 1
+      },
+      {
+        "unit": "10³/L",
+        "factor": 0.000001
+      },
+      {
+        "unit": "/mm3",
+        "factor": 1.0
+      },
+      {
+        "unit": "/uL",
+        "factor": 1.0
+      }
     ]
   },
   "Plaquetocrito (%)": {
@@ -744,20 +982,32 @@
   "Progesterona": {
     "primary_unit": "ng/mL",
     "alternatives": [
-      { "unit": "nmol/L", "factor": 0.314 }
+      {
+        "unit": "nmol/L",
+        "factor": 0.314
+      }
     ]
   },
   "Prolactina": {
     "primary_unit": "ng/mL",
     "alternatives": [
-      { "unit": "mIU/L", "factor": 0.047 }
+      {
+        "unit": "mIU/L",
+        "factor": 0.047
+      }
     ]
   },
   "Proteína C Reativa": {
     "primary_unit": "mg/L",
     "alternatives": [
-      { "unit": "mg/dL", "factor": 0.1 }
+      {
+        "unit": "mg/dL",
+        "factor": 0.1
+      }
     ]
+  },
+  "Proteína C Reativa (boolean)": {
+    "primary_unit": "boolean"
   },
   "Proteínas Totais": {
     "primary_unit": "g/dL",
@@ -766,13 +1016,19 @@
   "PSA Fração Livre": {
     "primary_unit": "ng/mL",
     "alternatives": [
-      { "unit": "µg/L", "factor": 1 }
+      {
+        "unit": "µg/L",
+        "factor": 1
+      }
     ]
   },
   "PSA Total": {
     "primary_unit": "ng/mL",
     "alternatives": [
-      { "unit": "µg/L", "factor": 1 }
+      {
+        "unit": "µg/L",
+        "factor": 1
+      }
     ]
   },
   "Quimotripsina": {
@@ -780,11 +1036,11 @@
     "alternatives": []
   },
   "Razão PSA Livre/PSA Total": {
-    "primary_unit": "Proporção",
+    "primary_unit": "Indice",
     "alternatives": []
   },
   "Relação Albumina-Globulina": {
-    "primary_unit": "Proporção",
+    "primary_unit": "Indice",
     "alternatives": []
   },
   "RBC Hipocrómicos (%)": {
@@ -794,7 +1050,10 @@
   "Reticulócitos": {
     "primary_unit": "10⁹/L",
     "alternatives": [
-      { "unit": "10³/µL", "factor": 1.0 }
+      {
+        "unit": "10³/µL",
+        "factor": 1.0
+      }
     ]
   },
   "Reticulócitos (%)": {
@@ -820,7 +1079,10 @@
   "T3 Total": {
     "primary_unit": "ng/dL",
     "alternatives": [
-      { "unit": "nmol/L", "factor": 64.94 }
+      {
+        "unit": "nmol/L",
+        "factor": 64.94
+      }
     ]
   },
   "T4 Livre": {
@@ -830,8 +1092,14 @@
   "T4 Total": {
     "primary_unit": "µg/dL",
     "alternatives": [
-      { "unit": "nmol/L", "factor": 0.0777 },
-      { "unit": "pmol/L", "factor": 0.0000777 }
+      {
+        "unit": "nmol/L",
+        "factor": 0.0777
+      },
+      {
+        "unit": "pmol/L",
+        "factor": 0.0000777
+      }
     ]
   },
   "Tiroxina - T4": {
@@ -841,13 +1109,19 @@
   "Testosterona Livre": {
     "primary_unit": "pg/mL",
     "alternatives": [
-      { "unit": "pmol/L", "factor": 0.288 }
+      {
+        "unit": "pmol/L",
+        "factor": 0.288
+      }
     ]
   },
   "Testosterona Total": {
     "primary_unit": "ng/dL",
     "alternatives": [
-      { "unit": "nmol/L", "factor": 28.84 }
+      {
+        "unit": "nmol/L",
+        "factor": 28.84
+      }
     ]
   },
   "Título Antiestreptolisina O (ASO)": {
@@ -869,7 +1143,14 @@
   "Urina Tipo II - Eritrócitos": {
     "primary_unit": "mg/dL",
     "alternatives": [
-      {"unit" : "Campo 400X", "factor": 1.0}
+      {
+        "unit": "/uL",
+        "factor": 1.0
+      },
+      {
+        "unit": "Campo 400X",
+        "factor": 1.0
+      }
     ]
   },
   "Urina Tipo II - Hemoglobina": {
@@ -895,14 +1176,26 @@
   "Urina Tipo II - Leucócitos": {
     "primary_unit": "Nº/µL",
     "alternatives": [
-      { "unit": "cells/uL", "factor": 1.0 },
-      { "unit": "/uL", "factor": 1.0 },
-      { "unit": "Leu/uL", "factor": 1.0 },
-      { "unit": "Campo 400X", "factor": 1.0 }
+      {
+        "unit": "cells/uL",
+        "factor": 1.0
+      },
+      {
+        "unit": "/uL",
+        "factor": 1.0
+      },
+      {
+        "unit": "Leu/uL",
+        "factor": 1.0
+      },
+      {
+        "unit": "Campo 400X",
+        "factor": 1.0
+      }
     ]
   },
   "Urina Tipo II - Cor": {
-    "primary_unit": "boolean",
+    "primary_unit": "string",
     "alternatives": []
   },
   "Urina Tipo II - Nitritos": {
@@ -932,17 +1225,23 @@
   "Velocidade de Sedimentação - 1ª Hora": {
     "primary_unit": "mm/h",
     "alternatives": [
-      { "unit": "mm", "factor": 1.0 }
+      {
+        "unit": "mm",
+        "factor": 1.0
+      }
     ]
   },
   "Velocidade de Sedimentação - 2ª Hora": {
     "primary_unit": "mm/h",
     "alternatives": [
-      { "unit": "mm", "factor": 1.0 }
+      {
+        "unit": "mm",
+        "factor": 1.0
+      }
     ]
   },
   "Velocidade de Sedimentação - Índice de Katz": {
-    "primary_unit": "Índice",
+    "primary_unit": "Indice",
     "alternatives": []
   },
   "Volume Globular Médio (VGM)": {
