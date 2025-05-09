@@ -206,6 +206,8 @@ Specific requirements:
 2. Booleans should be converted to 0/1, where 0 = false/negative and 1 = true/positive
 3. Dates must be in ISO 8601 format (YYYY-MM-DD)
 4. Units must match exactly as shown in the document
+
+IMPORTANT: Your output MUST FULLY comply with the provided schema. NEVER skip or omit any non-optional field. If you are unsure about a required field, use the value `{UNKNOWN_VALUE}`. Every required field must be present for every lab result, even if the value is unknown.
 """.strip(),
             "parameters": HealthLabReport.model_json_schema()
         }
