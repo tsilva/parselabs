@@ -335,7 +335,9 @@
   },
   "Anticorpos Anti-Citomegalovírus IgG": {
     "primary_unit": "AU/mL",
-    "alternatives": []
+    "alternatives": [
+      {"unit" : "UI/mL", "factor": 1}
+    ]
   },
   "Anticorpos Anti-Citomegalovírus IgM": {
     "primary_unit": "Index",
@@ -347,6 +349,10 @@
   },
   "Anticorpos Anti-Gliadina Deaminada Classe IgG": {
     "primary_unit": "U/mL",
+    "alternatives": []
+  },
+  "Anticorpo Anti-HAV IgM": {
+    "primary_unit": "boolean",
     "alternatives": []
   },
   "Anticorpos Anti-Vírus Epstein Barr VCA IgG": {
