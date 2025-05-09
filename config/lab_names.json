@@ -108,11 +108,11 @@
         "alternatives": []
     },
     "Anticorpo Anti-HBc": {
-        "primary_unit": "boolean",
+        "primary_unit": "Index",
         "alternatives": []
     },
     "Anticorpo Anti-HBe": {
-        "primary_unit": "boolean",
+        "primary_unit": "Index",
         "alternatives": []
     },
     "Anticorpo Anti-HBs": {
@@ -192,11 +192,11 @@
         "alternatives": []
     },
     "Anticorpos Anti-Vírus Epstein Barr VCA IgG": {
-        "primary_unit": "U/mL",
+        "primary_unit": "Index",
         "alternatives": []
     },
     "Anticorpos Anti-Vírus Epstein Barr VCA IgM": {
-        "primary_unit": "U/mL",
+        "primary_unit": "Index",
         "alternatives": []
     },
     "Anticorpos Antinucleares - ANA": {
@@ -208,11 +208,11 @@
         "alternatives": []
     },
     "Antígeno HBe": {
-        "primary_unit": "boolean",
+        "primary_unit": "Index",
         "alternatives": []
     },
     "Antígeno HBs": {
-        "primary_unit": "boolean",
+        "primary_unit": "Index",
         "alternatives": []
     },
     "Aspartato Aminotransferase (AST)": {
@@ -707,11 +707,11 @@
         "alternatives": []
     },
     "Hepatite A, Ac. Anti-HAV IgG": {
-        "primary_unit": "boolean",
+        "primary_unit": "Index",
         "alternatives": []
     },
     "Hepatite A, Ac. Anti-HAV IgM": {
-        "primary_unit": "boolean",
+        "primary_unit": "Index",
         "alternatives": []
     },
     "Hepatite B, Ac. Anti-HBs": {
@@ -719,11 +719,11 @@
         "alternatives": []
     },
     "Hepatite B, Antig. HBs": {
-        "primary_unit": "IU/mL",
+        "primary_unit": "Index",
         "alternatives": []
     },
     "Hepatite C, Ac. Anti-VHC": {
-        "primary_unit": "boolean",
+        "primary_unit": "Index",
         "alternatives": []
     },
     "Homocisteína": {
@@ -1014,7 +1014,7 @@
         "alternatives": []
     },
     "Razão PSA Livre/PSA Total": {
-        "primary_unit": "Indice",
+        "primary_unit": "Índice",
         "alternatives": []
     },
     "Reticulócitos": {
@@ -1143,8 +1143,13 @@
         "alternatives": []
     },
     "Urina Tipo II - Bilirrubina": {
-        "primary_unit": "boolean",
-        "alternatives": []
+        "primary_unit": "mg/dL",
+        "alternatives": [
+          {
+              "unit": "boolean",
+              "factor": 1.0
+          }
+        ]
     },
     "Urina Tipo II - Cilindros": {
         "primary_unit": "Campo 100X",
@@ -1155,8 +1160,13 @@
         "alternatives": []
     },
     "Urina Tipo II - Corpos Cetónicos": {
-        "primary_unit": "boolean",
-        "alternatives": []
+        "primary_unit": "mg/dL",
+        "alternatives": [
+          {
+              "unit": "boolean",
+              "factor": 1.0
+          }
+        ]
     },
     "Urina Tipo II - Densidade": {
         "primary_unit": "number",
@@ -1176,11 +1186,16 @@
         ]
     },
     "Urina Tipo II - Glicose": {
-        "primary_unit": "boolean",
-        "alternatives": []
+        "primary_unit": "mg/dL",
+        "alternatives": [
+          {
+              "unit": "boolean",
+              "factor": 1.0
+          }
+        ]
     },
     "Urina Tipo II - Hemoglobina": {
-        "primary_unit": "mg/dL",
+        "primary_unit": "boolean",
         "alternatives": []
     },
     "Urina Tipo II - Leucócitos": {
@@ -1209,12 +1224,22 @@
         "alternatives": []
     },
     "Urina Tipo II - Proteínas": {
-        "primary_unit": "boolean",
-        "alternatives": []
+        "primary_unit": "mg/dL",
+        "alternatives": [
+          {
+              "unit": "boolean",
+              "factor": 1.0
+          }
+        ]
     },
     "Urina Tipo II - Sangue": {
-        "primary_unit": "boolean",
-        "alternatives": []
+        "primary_unit": "mg/dL",
+        "alternatives": [
+          {
+              "unit": "boolean",
+              "factor": 1.0
+          }
+        ]
     },
     "Urina Tipo II - Urobilinogénio": {
         "primary_unit": "mg/dL",
@@ -1225,7 +1250,7 @@
         "alternatives": []
     },
     "VDRL (RPR)": {
-        "primary_unit": "Títulos (1:x)",
+        "primary_unit": "boolean",
         "alternatives": []
     },
     "Velocidade de Sedimentação - 1ª Hora": {
