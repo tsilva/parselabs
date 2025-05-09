@@ -617,9 +617,9 @@ def main():
     # --------- Plotting Section ---------
     import matplotlib.pyplot as plt
 
-    # Load standard units mapping
-    with open("config/lab_test_standard_units.json", "r", encoding="utf-8") as f:
-        lab_test_standard_unit = json.load(f)
+    # Load lab_names.json for unit mapping
+    with open("config/lab_names.json", "r", encoding="utf-8") as f:
+        lab_names_config = json.load(f)
 
     # Ensure plots directory exists
     plots_dir = Path("plots")
@@ -633,7 +633,10 @@ def main():
         merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce")
 
     # For each unique standardized_lab_name, plot only values with matching standardized_lab_unit
-    for lab_name, std_unit in lab_test_standard_unit.items():
+    for lab_name, lab_info in lab_names_config.items():
+        std_unit = lab_info.get("primary_unit")
+        if not std_unit or std_unit == "N/A":
+            continue
         mask_name = merged_df["standardized_lab_name"] == lab_name
         mask_unit = merged_df["standardized_lab_unit"] == std_unit
         df_lab = merged_df[mask_name & mask_unit]
