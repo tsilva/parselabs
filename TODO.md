@@ -7,7 +7,11 @@
 - Convert lab spec names to standard names with LOINQ codes
 - Generate excel instead of csv
 - Get rid of lab_methods.json method, let LLM map to LOINQ codes instead
-- Convert ranges to standardized as well
 - Add converted ranges to latest csv
 - Create validation mode that validates all schemas
 - Decouple unit standardization, do that in another pass
+
+- Perform post json merge validation
+- Match fields against enum and convert units/ranges to create .augmented.json
+- Create csv from .augmented.json
+- Create augmented schema and validate against it
