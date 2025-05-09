@@ -6,3 +6,4 @@
 - Prefix lab test names with LOINQ codes
 - Convert lab spec names to standard names with LOINQ codes
 - Generate excel instead of csv
+- Get rid of lab_methods.json method, let LLM map to LOINQ codes instead
