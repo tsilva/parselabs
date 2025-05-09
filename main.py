@@ -101,7 +101,7 @@ def load_env_config():
 # LLM Tools
 ########################################
 
-with open("config/lab_names.json", "r", encoding="utf-8") as f: LAB_NAMES_CONFIG = json.load(f)
+with open("config/lab_specs.json", "r", encoding="utf-8") as f: LAB_NAMES_CONFIG = json.load(f)
 
 def extract_all_lab_units(lab_names_config):
     units = set()
@@ -444,7 +444,7 @@ def convert_to_primary_unit(lab_name, value, unit, lab_names_config):
     """
     info = lab_names_config.get(lab_name)
     if not info:
-        logger.warning(f"Lab name '{lab_name}' not found in lab_names.json.")
+        logger.warning(f"Lab name '{lab_name}' not found in lab_specs.json.")
         return UNKNOWN_VALUE, UNKNOWN_VALUE
     primary_unit = info.get("primary_unit")
     if not primary_unit or primary_unit == "N/A":
@@ -764,8 +764,8 @@ def main():
     # --------- Plotting Section ---------
     import matplotlib.pyplot as plt
 
-    # Load lab_names.json for unit mapping
-    with open("config/lab_names.json", "r", encoding="utf-8") as f:
+    # Load lab_specs.json for unit mapping
+    with open("config/lab_specs.json", "r", encoding="utf-8") as f:
         lab_names_config = json.load(f)
 
     # Ensure plots directory exists
