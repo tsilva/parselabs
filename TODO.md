@@ -1,5 +1,5 @@
 - Collect raw labs from all pages, then manually use GPT 4.1 to create a mapping dataset, then just manually add missing ones 
-
+- Combine embedding retrieval with LLM for classificaiton (select top K embeddings, then use LLM to classify)
 - Convert to command-line tool installable with pipx
 - Date injection from first page, won't work when just regenerating specific pages
 - Perform assertions during steps
