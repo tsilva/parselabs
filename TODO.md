@@ -1,4 +1,6 @@
 - phase 1 extract, standardize units,dont swap if unavailable but add to map and then we use grmini
+- Collect raw labs from all pages, then manually use GPT 4.1 to create a mapping dataset, then just manually add missing ones 
+- Combine embedding retrieval with LLM for classificaiton (select top K embeddings, then use LLM to classify)
 - Convert to command-line tool installable with pipx
 - Date injection from first page, won't work when just regenerating specific pages
 - Perform assertions during steps
@@ -8,3 +10,11 @@
 - Convert lab spec names to standard names with LOINQ codes
 - Generate excel instead of csv
 - Get rid of lab_methods.json method, let LLM map to LOINQ codes instead
+- Add converted ranges to latest csv
+- Create validation mode that validates all schemas
+- Decouple unit standardization, do that in another pass
+
+- Perform post json merge validation
+- Match fields against enum and convert units/ranges to create .augmented.json
+- Create csv from .augmented.json
+- Create augmented schema and validate against it
