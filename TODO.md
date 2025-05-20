@@ -1,3 +1,4 @@
+- phase 1 extract, standardize units,dont swap if unavailable but add to map and then we use grmini
 - Convert to command-line tool installable with pipx
 - Date injection from first page, won't work when just regenerating specific pages
 - Perform assertions during steps
