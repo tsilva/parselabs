@@ -1342,5 +1342,9 @@
     "Índice de Anisocitose RBC (RDW-CV) (%)": {
         "primary_unit": "%",
         "alternatives": []
+    },
+    "Fator RHESUS (Anti-D)": {
+        "primary_unit": "boolean",
+        "alternatives": []
     }
 }
