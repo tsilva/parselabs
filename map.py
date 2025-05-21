@@ -34,16 +34,16 @@ def slugify(value):
 
 for csv_path in csv_files:
     df = pd.read_csv(csv_path)
-    if "lab_name" not in df.columns:
+    if "lab_name" not in df.columns or "lab_type" not in df.columns:
         continue
     # Add or update lab_name_enum column
     enum_col = []
-    for lab_name in df["lab_name"]:
-        slug = slugify(lab_name)
-        mapped = lab_names_map.get(slug)
+    for lab_type, lab_name in zip(df["lab_type"], df["lab_name"]):
+        key = f"{slugify(lab_type)}-{slugify(lab_name)}"
+        mapped = lab_names_map.get(key)
         if mapped is None:
             mapped = "$UNKNOWN$"
-            lab_names_map[slug] = mapped
+            lab_names_map[key] = mapped
             updated = True
         enum_col.append(mapped)
     df["lab_name_enum"] = enum_col
