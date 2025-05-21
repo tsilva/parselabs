@@ -8,7 +8,7 @@ import os
 # Optionally use OpenAI or OpenRouter client as in main.py
 from openai import OpenAI
 
-LABS_TXT_PATH = Path("config/labs.txt")
+LABS_TXT_PATH = Path("config/all_labs.txt")
 LAB_NAMES_MAP_PATH = Path("config/lab_names_map.json")
 
 # Load labs.txt as set of possible enum values
@@ -80,25 +80,38 @@ def map_batch_with_llm(batch):
         else:
             raise RuntimeError(f"Could not parse LLM output: {content}")
     # Validate keys and values
-    assert set(mapping.keys()) == set(batch), "LLM output keys mismatch"
-    for v in mapping.values():
-        if v not in lab_enum_values:
-            raise ValueError(f"LLM mapped to unknown enum value: {v}")
+    # (Do not assert here, handle invalid values in main loop)
     return mapping
 
-# Main mapping loop
+# Main mapping loop (resilient version)
+remaining_keys = [k for k, v in lab_names_map.items() if v == "$UNKNOWN$"]
 updated = False
-for batch_keys in batch(unknown_keys, BATCH_SIZE):
-    print(f"Mapping batch: {batch_keys[0]} ... ({len(batch_keys)} items)")
-    batch_mapping = map_batch_with_llm(batch_keys)
-    for k, v in batch_mapping.items():
-        lab_names_map[k] = v
-        updated = True
+progress = True
 
-# Save updated mapping
+while remaining_keys and progress:
+    progress = False
+    for batch_keys in batch(remaining_keys, BATCH_SIZE):
+        print(f"Mapping batch: {batch_keys[0]} ... ({len(batch_keys)} items)")
+        batch_mapping = map_batch_with_llm(batch_keys)
+        invalid_keys = []
+        for k, v in batch_mapping.items():
+            if v in lab_enum_values:
+                if lab_names_map[k] != v:
+                    lab_names_map[k] = v
+                    updated = True
+                    progress = True
+            else:
+                print(f"Warning: LLM mapped '{k}' to unknown enum value: '{v}'")
+                invalid_keys.append(k)
+        # Update remaining_keys for next round
+    # Recompute remaining_keys after each round
+    remaining_keys = [k for k, v in lab_names_map.items() if v == "$UNKNOWN$"]
+
 if updated:
     with open(LAB_NAMES_MAP_PATH, "w", encoding="utf-8") as f:
         json.dump(lab_names_map, f, indent=2, ensure_ascii=False)
     print("lab_names_map.json updated.")
 else:
     print("No updates made.")
+if remaining_keys:
+    print(f"Unmapped keys remaining after all attempts: {remaining_keys}")
