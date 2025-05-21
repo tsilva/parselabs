@@ -71,27 +71,31 @@ def load_env_config():
     Load environment variables and return as a dict.
     """
 
-    model_id = os.getenv("MODEL_ID")
+
     input_path = os.getenv("INPUT_PATH")
     input_file_regex = os.getenv("INPUT_FILE_REGEX")
     output_path = os.getenv("OUTPUT_PATH")
+    transcribe_model_id = os.getenv("TRANSCRIBE_MODEL_ID")
     n_transcriptions = int(os.getenv("N_TRANSCRIPTIONS"))
+    extract_model_id = os.getenv("EXTRACT_MODEL_ID")
     n_extractions = int(os.getenv("N_EXTRACTIONS"))
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
     max_workers = int(os.getenv("MAX_WORKERS"))
 
-    if not model_id: raise ValueError("MODEL_ID not set")
+    if not transcribe_model_id: raise ValueError("TRANSCRIBE_MODEL_ID not set")
+    if not extract_model_id: raise ValueError("EXTRACT_MODEL_ID not set")
     if not input_path or not Path(input_path).exists(): raise ValueError(f"INPUT_PATH not set or does not exist: {input_path}")
     if not input_file_regex: raise ValueError("INPUT_FILE_REGEX not set")
     if not output_path or not Path(output_path).exists(): raise ValueError("OUTPUT_PATH not set")
     if not openrouter_api_key: raise ValueError("OPENROUTER_API_KEY not set")
 
     return {
-        "model_id" : model_id,
         "input_path" : Path(input_path),
         "input_file_regex" : input_file_regex,
         "output_path" : Path(output_path),
+        "transcribe_model_id" : transcribe_model_id,
         "n_transcriptions": n_transcriptions,
+        "extract_model_id" : extract_model_id,
         "n_extractions": n_extractions,
         "openrouter_api_key": openrouter_api_key,
         "max_workers": max_workers
@@ -121,10 +125,10 @@ LAB_UNITS = extract_all_lab_units(LAB_NAMES_CONFIG)
 with open("config/lab_methods.json", "r", encoding="utf-8") as f: LAB_METHODS = json.load(f)
 
 # Create dynamic enums for lab names and units
-def create_dynamic_enum(name, data): return Enum(name, dict([(k, k) for k in data]), type=str)
-LabTestNameEnum = create_dynamic_enum('LabTestNameEnum', LAB_NAMES)
-LabMethodEnum = create_dynamic_enum('LabMethodEnum', LAB_METHODS)
-LabTestUnitEnum = create_dynamic_enum('LabTestUnitEnum', LAB_UNITS)
+#def create_dynamic_enum(name, data): return Enum(name, dict([(k, k) for k in data]), type=str)
+#LabTestNameEnum = create_dynamic_enum('LabTestNameEnum', LAB_NAMES)
+#LabMethodEnum = create_dynamic_enum('LabMethodEnum', LAB_METHODS)
+#LabTestUnitEnum = create_dynamic_enum('LabTestUnitEnum', LAB_UNITS)
 
 class LabResult(BaseModel):
     lab_name: str = Field(description="Name of the laboratory test as extracted verbatim from the document")
@@ -366,9 +370,9 @@ You are a medical lab report analyzer with the following strict requirements:
         lab_range_max = lab_result.get("lab_range_max")
         if lab_range_min is None: lab_result["lab_range_min"] = 0
         if lab_range_max is None: lab_result["lab_range_max"] = 9999
-        lab_result["enum_lab_name"] = "$UNKNOWN"
-        lab_result["enum_lab_unit"] = "$UNKNOWN"
-        lab_result["enum_lab_method"] = "$UNKNOWN"
+        lab_result["enum_lab_name"] = "$UNKNOWN$"
+        lab_result["enum_lab_unit"] = "$UNKNOWN$"
+        lab_result["enum_lab_method"] = "$UNKNOWN$"
     tool_result["lab_results"] = lab_results
 
     model = HealthLabReport.model_validate(tool_result)
@@ -383,8 +387,9 @@ You are a medical lab report analyzer with the following strict requirements:
 def process_single_pdf(
     pdf_path: Path,
     output_dir: Path,
-    model_id: str,
+    transcribe_model_id: str,
     n_transcribe: int,
+    extract_model_id: str,
     n_extract: int
 ) -> pd.DataFrame:
     """
@@ -458,7 +463,7 @@ def process_single_pdf(
             voted_txt, all_txt_versions = self_consistency(
                 lambda **kwargs: transcription_from_page_image(
                     page_jpg_path,
-                    model_id,
+                    transcribe_model_id,
                     **kwargs
                 ), n_transcribe
             )
@@ -482,7 +487,7 @@ def process_single_pdf(
             page_json, all_json_versions = self_consistency(
                 lambda **kwargs: extract_labs_from_page_transcription(
                     page_txt,
-                    model_id,
+                    extract_model_id,
                     **kwargs
                 ), n_extract
             )
@@ -555,7 +560,8 @@ def process_single_pdf(
 
 def main():
     config = load_env_config()
-    model_id = config["model_id"]
+    transcribe_model_id = config["transcribe_model_id"]
+    extract_model_id = config["extract_model_id"]
     input_dir = config["input_path"]
     output_dir = config["output_path"]
     pattern = config["input_file_regex"]
@@ -572,7 +578,9 @@ def main():
     logger.info(f"Using up to {n_workers} worker(s)")
 
     # Prepare argument tuples for each PDF
-    tasks = [(pdf_path, output_dir, model_id, n_transcriptions, n_extractions) for pdf_path in pdf_files]
+    tasks = [(
+        pdf_path, output_dir, transcribe_model_id, n_transcriptions, extract_model_id, n_extractions
+    ) for pdf_path in pdf_files]
 
     # We’ll combine all results into a single DataFrame afterward
     with Pool(n_workers) as pool:
