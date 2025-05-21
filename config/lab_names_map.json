@@ -17,5 +17,19 @@
   "blood-factor_rhesus_anti_d": "Factor Rh",
   "sangue-glicose_jejum": "Glicose",
   "sangue-titulo_antiestreptol": "ASLO / TASO - Título de Antiestreptolisina-O",
-  "sangue-proteina_c_reactiva": "Proteína C Reactiva - PCR"
+  "sangue-proteina_c_reactiva": "Proteína C Reactiva - PCR",
+  "blood-eritrocitos": "Eritrócitos",
+  "blood-hemoglobina": "Hemoglobina - Hb",
+  "blood-hematocrito": "Hematócrito",
+  "blood-v_g_m": "VHG, Pesquisa",
+  "blood-h_g_m": "Hepatite G, Pesquisa",
+  "blood-c_h_g_m": "Hepatite G, Pesquisa",
+  "blood-leucocitos": "Glóbulos Brancos - Leucócitos",
+  "blood-granneutrofilos": "Neutrófilos, Capacidade oxidativa",
+  "blood-graneosinofilos": "Eosinófilos, Pesquisa",
+  "blood-granbasofilos": "Teste de desgranulação de Basófilos",
+  "blood-linfocitos": "Populações Linfocitárias, Quantificação [Inclui CD3, CD4, CD8, CD19 e CD56]",
+  "blood-monocitos": "Mononucleose Infecciosa, teste rápido",
+  "blood-velde_sedimentacao_1ahora": "VS - Velocidade de Sedimentação",
+  "blood-velde_sedimentacao_2ahora": "VS - Velocidade de Sedimentação"
 }
