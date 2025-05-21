@@ -5,6 +5,7 @@ import os
 import json
 import pandas as pd
 from pathlib import Path
+import re
 
 # Load OUTPUT_DIR from environment or set manually
 OUTPUT_DIR = os.getenv("OUTPUT_PATH")
@@ -25,6 +26,12 @@ csv_files = [
 # Track if we updated the mapping
 updated = False
 
+def slugify(value):
+    value = str(value).strip().lower()
+    value = re.sub(r"[^\w\s-]", "", value)
+    value = re.sub(r"[\s_-]+", "_", value)
+    return value
+
 for csv_path in csv_files:
     df = pd.read_csv(csv_path)
     if "lab_name" not in df.columns:
@@ -32,10 +39,11 @@ for csv_path in csv_files:
     # Add or update lab_name_enum column
     enum_col = []
     for lab_name in df["lab_name"]:
-        mapped = lab_names_map.get(lab_name)
+        slug = slugify(lab_name)
+        mapped = lab_names_map.get(slug)
         if mapped is None:
             mapped = "$UNKNOWN$"
-            lab_names_map[lab_name] = mapped
+            lab_names_map[slug] = mapped
             updated = True
         enum_col.append(mapped)
     df["lab_name_enum"] = enum_col

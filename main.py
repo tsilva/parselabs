@@ -70,8 +70,7 @@ def load_env_config():
     """
     Load environment variables and return as a dict.
     """
-
-
+    
     input_path = os.getenv("INPUT_PATH")
     input_file_regex = os.getenv("INPUT_FILE_REGEX")
     output_path = os.getenv("OUTPUT_PATH")
@@ -611,7 +610,7 @@ def main():
 
     # Prepare argument tuples for each PDF
     tasks = [(
-        pdf_path, output_dir, transcribe_model_id, n_transcriptions, extract_model_id, n_extractions
+        pdf_path, output_dir, self_consistency_model_id, transcribe_model_id, n_transcriptions, extract_model_id, n_extractions
     ) for pdf_path in pdf_files]
 
     # We’ll combine all results into a single DataFrame afterward
