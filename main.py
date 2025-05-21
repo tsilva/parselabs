@@ -75,6 +75,7 @@ def load_env_config():
     input_path = os.getenv("INPUT_PATH")
     input_file_regex = os.getenv("INPUT_FILE_REGEX")
     output_path = os.getenv("OUTPUT_PATH")
+    self_consistency_model_id = os.getenv("SELF_CONSISTENCY_MODEL_ID")
     transcribe_model_id = os.getenv("TRANSCRIBE_MODEL_ID")
     n_transcriptions = int(os.getenv("N_TRANSCRIPTIONS"))
     extract_model_id = os.getenv("EXTRACT_MODEL_ID")
@@ -82,6 +83,7 @@ def load_env_config():
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
     max_workers = int(os.getenv("MAX_WORKERS"))
 
+    if not self_consistency_model_id: raise ValueError("SELF_CONSISTENCY_MODEL_ID not set")
     if not transcribe_model_id: raise ValueError("TRANSCRIBE_MODEL_ID not set")
     if not extract_model_id: raise ValueError("EXTRACT_MODEL_ID not set")
     if not input_path or not Path(input_path).exists(): raise ValueError(f"INPUT_PATH not set or does not exist: {input_path}")
@@ -93,6 +95,7 @@ def load_env_config():
         "input_path" : Path(input_path),
         "input_file_regex" : input_file_regex,
         "output_path" : Path(output_path),
+        "self_consistency_model_id" : self_consistency_model_id,
         "transcribe_model_id" : transcribe_model_id,
         "n_transcriptions": n_transcriptions,
         "extract_model_id" : extract_model_id,
@@ -211,7 +214,7 @@ def preprocess_page_image(image: Image.Image) -> Image.Image:
     # Return the processed image (to be saved as PNG later for lossless quality)
     return normalized_image
 
-def self_consistency(fn, n, *args, model_id=None, **kwargs):
+def self_consistency(fn, model_id, n, *args, **kwargs):
     """
     Calls the function `fn` N times with the same arguments,
     then uses the LLM to select the most content-consistent result.
@@ -265,7 +268,7 @@ def self_consistency(fn, n, *args, model_id=None, **kwargs):
     
     try:
         completion = client.chat.completions.create(
-            model=model_id,  # CHANGED: Use propagated model_id
+            model=model_id,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
@@ -414,6 +417,7 @@ You are a medical lab report analyzer with the following strict requirements:
 def process_single_pdf(
     pdf_path: Path,
     output_dir: Path,
+    self_consistency_model_id: str,
     transcribe_model_id: str,
     n_transcribe: int,
     extract_model_id: str,
@@ -492,7 +496,7 @@ def process_single_pdf(
                     page_jpg_path,
                     transcribe_model_id,
                     **kwargs
-                ), n_transcribe, model_id=transcribe_model_id  # CHANGED: propagate model_id
+                ), self_consistency_model_id, n_transcribe
             )
 
             # Only save versioned files if n_transcribe > 1
@@ -516,7 +520,7 @@ def process_single_pdf(
                     page_txt,
                     extract_model_id,
                     **kwargs
-                ), n_extract, model_id=extract_model_id  # CHANGED: propagate model_id
+                ), self_consistency_model_id, n_extract
             )
 
             # Only save versioned files if n_extract > 1
@@ -587,6 +591,7 @@ def process_single_pdf(
 
 def main():
     config = load_env_config()
+    self_consistency_model_id = config["self_consistency_model_id"]
     transcribe_model_id = config["transcribe_model_id"]
     extract_model_id = config["extract_model_id"]
     input_dir = config["input_path"]
