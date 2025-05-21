@@ -20,7 +20,7 @@ from typing import List, Optional, Any, Literal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Add OpenAI import for OpenRouter
-from openai import OpenAI
+from openai import OpenAI, APIError
 
 ########################################
 # Config / Logging
@@ -211,7 +211,7 @@ def preprocess_page_image(image: Image.Image) -> Image.Image:
     # Return the processed image (to be saved as PNG later for lossless quality)
     return normalized_image
 
-def self_consistency(fn, n, *args, **kwargs):
+def self_consistency(fn, n, *args, model_id=None, **kwargs):
     """
     Calls the function `fn` N times with the same arguments,
     then uses the LLM to select the most content-consistent result.
@@ -234,9 +234,16 @@ def self_consistency(fn, n, *args, **kwargs):
             try:
                 res = future.result()
                 results.append(res)
+            except APIError as oe:
+                logger.error(f"OpenAI API Error during self-consistency task: {oe}")
+                for f_cancel in futures:
+                    if not f_cancel.done():
+                        f_cancel.cancel()
+                raise RuntimeError(f"OpenAI API Error in self-consistency task: {str(oe)}")
             except Exception as e:
-                for f in futures:
-                    f.cancel()
+                for f_cancel in futures:
+                    if not f_cancel.done():
+                        f_cancel.cancel()
                 raise
 
     if all(r == results[0] for r in results):
@@ -256,16 +263,26 @@ def self_consistency(fn, n, *args, **kwargs):
     prompt += "".join(f"--- Output {i+1} ---\n{json.dumps(v) if type(v) in [list, dict] else v}\n\n" for i, v in enumerate(results))
     prompt += "Best output:"
     
-    completion = client.chat.completions.create(
-        model=os.getenv("MODEL_ID"),
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    voted = completion.choices[0].message.content.strip()
-    if type(results[0]) != str: voted = json.loads(voted)
-    return voted, results
+    try:
+        completion = client.chat.completions.create(
+            model=model_id,  # CHANGED: Use propagated model_id
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        voted_raw = completion.choices[0].message.content.strip()
+        if type(results[0]) != str:
+            voted = json.loads(voted_raw)
+        else:
+            voted = voted_raw
+        return voted, results
+    except APIError as e:
+        logger.error(f"OpenAI API Error during self-consistency voting: {e}")
+        raise RuntimeError(f"Self-consistency voting failed due to API error: {str(e)}")
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error during self-consistency voting. Raw content: '{voted_raw}'")
+        raise RuntimeError(f"Self-consistency voting failed due to JSON decode error: {str(e)}. Raw content: '{voted_raw}'")
 
 def transcription_from_page_image(
     image_path: Path, 
@@ -298,30 +315,33 @@ Pay special attention to numbers, units (e.g., mg/dL), and reference ranges.
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
 
     # Prompt for image transcription
-    completion = client.chat.completions.create(
-        model=model_id,
-        messages=[
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": user_prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{img_data}"
+    try:
+        completion = client.chat.completions.create(
+            model=model_id,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user_prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{img_data}"
+                            }
                         }
-                    }
-                ]
-            }
-        ],
-        temperature=temperature,
-        max_tokens=8192
-    )
-    
+                    ]
+                }
+            ],
+            temperature=temperature,
+            max_tokens=8192
+        )
+    except APIError as e:
+        logger.error(f"OpenAI API Error during transcription for {image_path.name}: {e}")
+        raise RuntimeError(f"Transcription failed for {image_path.name} due to API error: {str(e)}")
     transcription = completion.choices[0].message.content.strip()
     return transcription
 
@@ -344,23 +364,30 @@ You are a medical lab report analyzer with the following strict requirements:
 """.strip()
 
     # Extract structured data from transcription
-    completion = client.chat.completions.create(
-        model=model_id,
-        messages=[
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": transcription
-            }
-        ],
-        temperature=temperature,
-        max_tokens=20000,
-        tools=TOOLS
-    )
-    
+    try:
+        completion = client.chat.completions.create(
+            model=model_id,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": transcription
+                }
+            ],
+            temperature=temperature,
+            max_tokens=20000,
+            tools=TOOLS
+        )
+    except APIError as e:
+        logger.error(f"OpenAI API Error during lab extraction: {e}")
+        raise RuntimeError(f"Lab extraction failed due to API error: {str(e)}")
+    if not completion.choices[0].message.tool_calls:
+        logger.error(f"No tool calls returned by model for extraction. Transcription snippet: {transcription[:200]}")
+        empty_report = HealthLabReport(lab_results=[]).model_dump()
+        return empty_report
     tool_args = completion.choices[0].message.tool_calls[0].function.arguments
     tool_result = json.loads(tool_args)
     
@@ -465,7 +492,7 @@ def process_single_pdf(
                     page_jpg_path,
                     transcribe_model_id,
                     **kwargs
-                ), n_transcribe
+                ), n_transcribe, model_id=transcribe_model_id  # CHANGED: propagate model_id
             )
 
             # Only save versioned files if n_transcribe > 1
@@ -489,7 +516,7 @@ def process_single_pdf(
                     page_txt,
                     extract_model_id,
                     **kwargs
-                ), n_extract
+                ), n_extract, model_id=extract_model_id  # CHANGED: propagate model_id
             )
 
             # Only save versioned files if n_extract > 1

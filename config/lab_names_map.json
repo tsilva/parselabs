@@ -17,5 +17,12 @@
     "FACTOR RHESUS (Anti-D)": "$UNKNOWN$",
     "GLICOSE JEJUM": "$UNKNOWN$",
     "TITULO ANTIESTREPTOL. O": "$UNKNOWN$",
-    "PROTEINA C REACTIVA": "$UNKNOWN$"
+    "PROTEINA C REACTIVA": "$UNKNOWN$",
+    "LEUCOCITOS": "$UNKNOWN$",
+    "Gran.Neutrofilos": "$UNKNOWN$",
+    "Gran.Eosinofilos": "$UNKNOWN$",
+    "Gran.Basofilos": "$UNKNOWN$",
+    "VEL.DE SEDIMENTACAO 1a.Hora": "$UNKNOWN$",
+    "VEL.DE SEDIMENTACAO 2a.Hora": "$UNKNOWN$",
+    "TITULO ANTIESTREPTOL.": "$UNKNOWN$"
 }
