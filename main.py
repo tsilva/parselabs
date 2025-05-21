@@ -107,32 +107,8 @@ def load_env_config():
 # LLM Tools
 ########################################
 
-with open("config/lab_specs.json", "r", encoding="utf-8") as f: LAB_NAMES_CONFIG = json.load(f)
-
-def extract_all_lab_units(lab_names_config):
-    units = set()
-    for v in lab_names_config.values():
-        primary = v.get("primary_unit")
-        if primary and primary != "N/A":
-            units.add(primary)
-        for alt in v.get("alternatives", []):
-            unit = alt.get("unit")
-            if unit and unit != "N/A":
-                units.add(unit)
-    return sorted(units)
-
-LAB_NAMES = list(LAB_NAMES_CONFIG.keys())
-LAB_UNITS = extract_all_lab_units(LAB_NAMES_CONFIG)
-
-with open("config/lab_methods.json", "r", encoding="utf-8") as f: LAB_METHODS = json.load(f)
-
-# Create dynamic enums for lab names and units
-#def create_dynamic_enum(name, data): return Enum(name, dict([(k, k) for k in data]), type=str)
-#LabTestNameEnum = create_dynamic_enum('LabTestNameEnum', LAB_NAMES)
-#LabMethodEnum = create_dynamic_enum('LabMethodEnum', LAB_METHODS)
-#LabTestUnitEnum = create_dynamic_enum('LabTestUnitEnum', LAB_UNITS)
-
 class LabResult(BaseModel):
+    lab_type: str = Field(description="Type of laboratory test (e.g., blood, urine, etc.)")
     lab_name: str = Field(description="Name of the laboratory test as extracted verbatim from the document")
     lab_value: float = Field(description="Quantitative result of the laboratory test")
     lab_unit: str = Field(description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL).")
