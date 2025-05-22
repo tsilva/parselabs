@@ -1178,7 +1178,7 @@ Caniço - Phragmites communis, IgG Específica
 Caniço - Phragmites communis, IgG4 Específica
 Caniço molhado - Elymus triticoides, IgE Específica
 Capacidade oxidativa dos neutrófilos
-Capacidade Total de Fixação do Ferro - CTFF
+Capacidade Total de Fixação do Ferro
 Capsicum frutescens, Piri-piri, Malagueta , IgE Específica
 Captopril, CAST
 Captopril, IgE Específica
@@ -2465,7 +2465,7 @@ Factor IV Plaquetário, Ac.
 Factor IX
 Factor IX, Ag.
 Factor P
-Factor Reumatóide - FR
+Factor Reumatóide
 Factor Reumatóide no derrame de serosa [Pleural, Pericárdico, Ascítico ou Sinovial]
 Factor Reumatóide, [inclui IgA, IgM e IgG(FIA)]
 Factor Reumatóide, Caracterização [ inclui IgA, IgM e IgG(FIA)]
@@ -3722,10 +3722,9 @@ Macrolipase
 Macroprolactina - hPRL macro
 MAG, Ac.
 MAG, Ac. no LCR
-Magnésio - Mg
-Magnésio - Mgﯽ
+Magnésio
 Magnésio Eritrocitário
-Magnésio Ionizado - Mg
+Magnésio Ionizado
 Magnésio na Saliva
 Magnésio na Urina
 Magnésio nas Fezes
@@ -5173,7 +5172,7 @@ Sardinha - Sardina pilchardus, IgE Específica
 Sargaço bravo - Festuca elatior, IgE Específica
 Sargaço bravo - Festuca elatior, IgG Específica
 Sargaço bravo - Festuca elatior, IgG4 Específica
-Saturação da Transferrina - Tsat%
+Saturação da Transferrina
 Savinase, IgE Específica
 Sb - Antimónio
 Scandinibsa , CAST
@@ -5274,11 +5273,11 @@ Sm, Ac.IgG
 Sn - Estanho
 Sobreiro; Azinheiro; Azinho; Carvalho; Roble; Alvar - Quercus alba, IgE Específica
 Soda, IgE Específica
-Sódio - Na
-Sódio - Na na Saliva
-Sódio - Na na Urina
-Sódio - Na nas Fezes
-Sódio - Na no LCR
+Sódio
+Sódio na Saliva
+Sódio na Urina
+Sódio nas Fezes
+Sódio no LCR
 Soja, CAST
 Soja, IgE Específica
 Soja, IgG Específica
@@ -5777,7 +5776,8 @@ Vecurónio, CAST
 Vedolizumab
 Vedolizumab, Ac.
 VEGF-D
-Velocidade de Sedimentação - VS
+Velocidade de Sedimentação (1a hora)
+Velocidade de Sedimentação (2a hora)
 Veneno de Abelha - Apis mellifera, IgE Específica
 Veneno de Abelha - Apis mellifera, IgG Específica
 Veneno de Abelha - Apis mellifera, IgG4 Específica
