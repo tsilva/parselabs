@@ -567,6 +567,7 @@ def process_single_pdf(
 
             # Parse labs with self-consistency
             page_txt = page_txt_path.read_text(encoding='utf-8')
+            print(f"START - {pdf_path}")
             page_json, all_json_versions = self_consistency(
                 lambda **kwargs: extract_labs_from_page_transcription(
                     page_txt,
@@ -574,6 +575,7 @@ def process_single_pdf(
                     **kwargs
                 ), self_consistency_model_id, n_extract
             )
+            print(f"END - {pdf_path}")
 
             # Only save versioned files if n_extract > 1
             if n_extract > 1:
@@ -654,7 +656,7 @@ def main():
     max_workers = config.get("max_workers", 1)
 
     # Gather PDFs
-    pdf_files = [f for f in input_dir.glob("*") if re.search(pattern, f.name, re.IGNORECASE)]
+    pdf_files = sorted([f for f in input_dir.glob("*") if re.search(pattern, f.name, re.IGNORECASE)])
     logger.info(f"Found {len(pdf_files)} PDF(s) matching pattern {pattern}")
 
     # Parallel process each PDF
