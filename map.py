@@ -8,25 +8,28 @@ from pathlib import Path
 import re
 import unicodedata
 
-# Step 1: Map lab_type-lab_name to enum values
-
 OUTPUT_DIR = os.getenv("OUTPUT_PATH")
 OUTPUT_DIR = Path(OUTPUT_DIR)
 
-LAB_NAMES_MAP_PATH = Path("config/lab_names_map.json")
-LABS_TXT_PATH = Path("config/all_labs.txt")
-
-# Read lab_names_map.json
-with open(LAB_NAMES_MAP_PATH, "r", encoding="utf-8") as f:
-    lab_names_map = json.load(f)
-
-# Recursively find all .csv files not ending with .001.csv, .002.csv, etc.
-csv_files = [
-    p for p in OUTPUT_DIR.rglob("*.csv")
-    if not p.name[-7:-4].isdigit()
+# Generalized config for both labs and units
+MAPPING_CONFIGS = [
+    {
+        "col_type": "lab_type",
+        "col_value": "lab_name",
+        "enum_col": "lab_name_enum",
+        "map_path": Path("config/lab_names_mappings.json"),
+        "all_values_path": Path("config/all_lab_names.txt"),
+        "use_type_prefix": True,
+    },
+    {
+        "col_type": "lab_type",
+        "col_value": "lab_unit",
+        "enum_col": "lab_unit_enum",
+        "map_path": Path("config/lab_units_mappings.json"),
+        "all_values_path": Path("config/all_lab_units.txt"),
+        "use_type_prefix": False,
+    }
 ]
-
-updated = False
 
 def slugify(value):
     value = str(value).strip().lower()
@@ -35,59 +38,70 @@ def slugify(value):
     value = re.sub(r"[\s_-]+", "", value)
     return value
 
-for csv_path in csv_files:
-    df = pd.read_csv(csv_path)
-    if "lab_name" not in df.columns or "lab_type" not in df.columns:
-        continue
-    enum_col = []
-    for lab_type, lab_name in zip(df["lab_type"], df["lab_name"]):
-        key = f"{slugify(lab_type)}-{slugify(lab_name)}"
-        mapped = lab_names_map.get(key)
-        if mapped is None:
-            mapped = "$UNKNOWN$"
-            lab_names_map[key] = mapped
-            updated = True
-        enum_col.append(mapped)
-    df["lab_name_enum"] = enum_col
-    df.to_csv(csv_path, index=False)
+def process_mapping(config):
+    # Read mapping file
+    with open(config["map_path"], "r", encoding="utf-8") as f:
+        value_map = json.load(f)
 
-# Write updated mapping if changed
-if updated:
-    # Sort lab_names_map by values alphabetically before writing
-    lab_names_map = dict(sorted(lab_names_map.items(), key=lambda item: item[1]))
-    with open(LAB_NAMES_MAP_PATH, "w", encoding="utf-8") as f:
-        json.dump(lab_names_map, f, indent=4, ensure_ascii=False)
+    # Recursively find all .csv files not ending with .001.csv, .002.csv, etc.
+    csv_files = [
+        p for p in OUTPUT_DIR.rglob("*.csv")
+        if not p.name[-7:-4].isdigit()
+    ]
 
-# Step 2: Fill unknowns using LLM if any remain
+    updated = False
 
-unknown_keys = [k for k, v in lab_names_map.items() if v == "$UNKNOWN$"]
-if unknown_keys:
-    # Load canonical enum values from both LABS_TXT_PATH and lab_names_map.json (excluding $UNKNOWN$)
-    with open(LABS_TXT_PATH, "r", encoding="utf-8") as f:
-        labs_txt_values = set(line.strip() for line in f if line.strip())
-    lab_names_map_values = set(v for v in lab_names_map.values() if v != "$UNKNOWN$")
-    canonical_enum_values = sorted(labs_txt_values | lab_names_map_values)
+    for csv_path in csv_files:
+        df = pd.read_csv(csv_path)
+        if config["col_value"] not in df.columns or config["col_type"] not in df.columns:
+            continue
+        enum_col = []
+        for col_type, col_value in zip(df[config["col_type"]], df[config["col_value"]]):
+            if config.get("use_type_prefix", False):
+                key = f"{slugify(col_type)}-{slugify(col_value)}"
+            else:
+                key = slugify(col_value)
+            mapped = value_map.get(key)
+            if mapped is None:
+                mapped = "$UNKNOWN$"
+                value_map[key] = mapped
+                updated = True
+            enum_col.append(mapped)
+        df[config["enum_col"]] = enum_col
+        df.to_csv(csv_path, index=False)
 
-    # Optionally use OpenAI or OpenRouter client as in main.py
-    from openai import OpenAI
+    # Write updated mapping if changed
+    if updated:
+        value_map = dict(sorted(value_map.items(), key=lambda item: item[1]))
+        with open(config["map_path"], "w", encoding="utf-8") as f:
+            json.dump(value_map, f, indent=4, ensure_ascii=False)
 
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=os.getenv("OPENROUTER_API_KEY")
-    )
-    MODEL_ID = "google/gemini-2.5-flash-preview-05-20"
+    # Step 2: Fill unknowns using LLM if any remain
+    unknown_keys = [k for k, v in value_map.items() if v == "$UNKNOWN$"]
+    if unknown_keys:
+        with open(config["all_values_path"], "r", encoding="utf-8") as f:
+            txt_values = set(line.strip() for line in f if line.strip())
+        value_map_values = set(v for v in value_map.values() if v != "$UNKNOWN$")
+        canonical_enum_values = sorted(txt_values | value_map_values)
 
-    def batch(lst, n):
-        for i in range(0, len(lst), n):
-            yield lst[i:i+n]
+        from openai import OpenAI
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY")
+        )
+        MODEL_ID = "google/gemini-2.5-flash-preview-05-20"
 
-    BATCH_SIZE = 30
+        def batch(lst, n):
+            for i in range(0, len(lst), n):
+                yield lst[i:i+n]
 
-    SYSTEM_PROMPT = f"""
-You are an expert at mapping noisy laboratory test names to a canonical list of lab test names for data normalization.
+        BATCH_SIZE = 30
+
+        SYSTEM_PROMPT = f"""
+You are an expert at mapping noisy laboratory {config['enum_col']}s to a canonical list for data normalization.
 
 Instructions:
-- For each input lab name, select the closest match from the provided canonical list (below).
+- For each input, select the closest match from the provided canonical list (below).
 - Only use values from the canonical list. If there is no close match, pick the closest anyway.
 - Output a JSON dictionary mapping each input to exactly one canonical value.
 - Do not invent or skip any input.
@@ -95,61 +109,64 @@ Instructions:
 {json.dumps(canonical_enum_values, ensure_ascii=False, indent=2)}
 """.strip()
 
-    def map_batch_with_llm(batch):
-        user_prompt = (
-            "Map the following lab names to the canonical list. Output a JSON dictionary mapping each input to a canonical value.\n\n"
-            + json.dumps(batch, ensure_ascii=False, indent=2)
-        )
-        print(f"User prompt: {user_prompt}")
-        completion = client.chat.completions.create(
-            model=MODEL_ID,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.0,
-            max_tokens=4096
-        )
-        content = completion.choices[0].message.content
-        try:
-            mapping = json.loads(content)
-        except Exception:
-            import re
-            match = re.search(r"\{.*\}", content, re.DOTALL)
-            if match:
-                mapping = json.loads(match.group(0))
-            else:
-                raise RuntimeError(f"Could not parse LLM output: {content}")
-        return mapping
-
-    remaining_keys = [k for k, v in lab_names_map.items() if v == "$UNKNOWN$"]
-    updated = False
-    progress = True
-
-    while remaining_keys and progress:
-        progress = False
-        for batch_keys in batch(remaining_keys, BATCH_SIZE):
-            print(f"Mapping batch: {batch_keys[0]} ... ({len(batch_keys)} items)")
-            batch_mapping = map_batch_with_llm(batch_keys)
-            invalid_keys = []
-            for k, v in batch_mapping.items():
-                if v in canonical_enum_values:
-                    if lab_names_map[k] != v:
-                        lab_names_map[k] = v
-                        updated = True
-                        progress = True
+        def map_batch_with_llm(batch):
+            user_prompt = (
+                f"Map the following {config['enum_col']}s to the canonical list. Output a JSON dictionary mapping each input to a canonical value.\n\n"
+                + json.dumps(batch, ensure_ascii=False, indent=2)
+            )
+            print(f"User prompt: {user_prompt}")
+            completion = client.chat.completions.create(
+                model=MODEL_ID,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.0,
+                max_tokens=4096
+            )
+            content = completion.choices[0].message.content
+            try:
+                mapping = json.loads(content)
+            except Exception:
+                import re
+                match = re.search(r"\{.*\}", content, re.DOTALL)
+                if match:
+                    mapping = json.loads(match.group(0))
                 else:
-                    print(f"Warning: LLM mapped '{k}' to unknown enum value: '{v}'")
-                    invalid_keys.append(k)
-        remaining_keys = [k for k, v in lab_names_map.items() if v == "$UNKNOWN$"]
+                    raise RuntimeError(f"Could not parse LLM output: {content}")
+            return mapping
 
-    if updated:
-        # Sort lab_names_map by values alphabetically before writing
-        lab_names_map = dict(sorted(lab_names_map.items(), key=lambda item: item[1]))
-        with open(LAB_NAMES_MAP_PATH, "w", encoding="utf-8") as f:
-            json.dump(lab_names_map, f, indent=2, ensure_ascii=False)
-        print("lab_names_map.json updated.")
-    else:
-        print("No updates made.")
-    if remaining_keys:
-        print(f"Unmapped keys remaining after all attempts: {remaining_keys}")
+        remaining_keys = [k for k, v in value_map.items() if v == "$UNKNOWN$"]
+        updated = False
+        progress = True
+
+        while remaining_keys and progress:
+            progress = False
+            for batch_keys in batch(remaining_keys, BATCH_SIZE):
+                print(f"Mapping batch: {batch_keys[0]} ... ({len(batch_keys)} items)")
+                batch_mapping = map_batch_with_llm(batch_keys)
+                invalid_keys = []
+                for k, v in batch_mapping.items():
+                    if v in canonical_enum_values:
+                        if value_map[k] != v:
+                            value_map[k] = v
+                            updated = True
+                            progress = True
+                    else:
+                        print(f"Warning: LLM mapped '{k}' to unknown enum value: '{v}'")
+                        invalid_keys.append(k)
+            remaining_keys = [k for k, v in value_map.items() if v == "$UNKNOWN$"]
+
+        if updated:
+            value_map = dict(sorted(value_map.items(), key=lambda item: item[1]))
+            with open(config["map_path"], "w", encoding="utf-8") as f:
+                json.dump(value_map, f, indent=2, ensure_ascii=False)
+            print(f"{config['map_path'].name} updated.")
+        else:
+            print("No updates made.")
+        if remaining_keys:
+            print(f"Unmapped keys remaining after all attempts: {remaining_keys}")
+
+# Run for both labs and units
+for config in MAPPING_CONFIGS:
+    process_mapping(config)
