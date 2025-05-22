@@ -1,5 +1,8 @@
-
+- make last csv not have the text
+- make last csv have source file
+- make last csv have enums
 - phase 1 extract, standardize units,dont swap if unavailable but add to map and then we use grmini
+- retry zeroshot single image extraction
 - reduce target list by mapping to LOINQ codes
 - use thinking model for extraction in single pass
 - Collect raw labs from all pages, then manually use GPT 4.1 to create a mapping dataset, then just manually add missing ones 
@@ -16,7 +19,6 @@
 - Add converted ranges to latest csv
 - Create validation mode that validates all schemas
 - Decouple unit standardization, do that in another pass
-
 - Perform post json merge validation
 - Match fields against enum and convert units/ranges to create .augmented.json
 - Create csv from .augmented.json

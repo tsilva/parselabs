@@ -209,6 +209,27 @@ class HealthLabReport(BaseModel):
         description="The filename or identifier of the source file"
     )
 
+    def normalize_empty_optionals(self):
+        """
+        For all optional fields in this report and its LabResult entries,
+        replace empty string values ("") with None.
+        """
+        # Normalize HealthLabReport fields
+        for field, field_info in self.model_fields.items():
+            if field_info.is_required() or field == "lab_results":
+                continue
+            value = getattr(self, field)
+            if value == "":
+                setattr(self, field, None)
+        # Normalize LabResult fields
+        for lab in self.lab_results:
+            for field, field_info in lab.model_fields.items():
+                if field_info.is_required():
+                    continue
+                value = getattr(lab, field)
+                if value == "":
+                    setattr(lab, field, None)
+
 TOOLS = [
     {
         "type": "function",
@@ -461,7 +482,10 @@ You are a medical lab report analyzer with the following strict requirements:
     tool_result = json.loads(tool_args)
 
     try: 
-        model = HealthLabReport.model_validate(tool_result)
+        # Normalize empty strings before validation
+        temp_model = HealthLabReport(**tool_result)
+        temp_model.normalize_empty_optionals()
+        model = HealthLabReport.model_validate(temp_model.model_dump())
     except Exception as e:
         logger.error(f"Model validation error: {e}")
         raise RuntimeError(f"Model validation failed: {str(e)}")
