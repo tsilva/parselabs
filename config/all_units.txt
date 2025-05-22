@@ -1,0 +1,43 @@
+mol/L
+mmol/L
+µmol/L
+nmol/L
+pmol/L
+g/L
+mg/L
+µg/L
+ng/L
+pg/L
+kg
+g
+mg
+µg
+ng
+pg
+L
+mL
+µL
+fL
+s
+min
+h
+d
+U/L
+µKat/L
+nKat/L
+%
+fraction of 1
+ratio
+µmol/g creatinine
+mmol/mol creatinine
+mm Hg
+mm/h
+mOsm/kg
+mmol/kg
+IU/L
+mIU/mL
+cells/µL
+x 10^9/L
+x 10^12/L
+g/dL
+pH

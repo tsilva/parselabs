@@ -8,7 +8,6 @@ from pathlib import Path
 import re
 import unicodedata
 
-print("ASD")
 # Step 1: Map lab_type-lab_name to enum values
 
 OUTPUT_DIR = os.getenv("OUTPUT_PATH")
@@ -54,6 +53,8 @@ for csv_path in csv_files:
 
 # Write updated mapping if changed
 if updated:
+    # Sort lab_names_map by values alphabetically before writing
+    lab_names_map = dict(sorted(lab_names_map.items(), key=lambda item: item[1]))
     with open(LAB_NAMES_MAP_PATH, "w", encoding="utf-8") as f:
         json.dump(lab_names_map, f, indent=4, ensure_ascii=False)
 
@@ -143,6 +144,8 @@ Instructions:
         remaining_keys = [k for k, v in lab_names_map.items() if v == "$UNKNOWN$"]
 
     if updated:
+        # Sort lab_names_map by values alphabetically before writing
+        lab_names_map = dict(sorted(lab_names_map.items(), key=lambda item: item[1]))
         with open(LAB_NAMES_MAP_PATH, "w", encoding="utf-8") as f:
             json.dump(lab_names_map, f, indent=2, ensure_ascii=False)
         print("lab_names_map.json updated.")
