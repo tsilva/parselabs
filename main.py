@@ -113,24 +113,100 @@ class LabType(str, Enum):
     SALIVA = "saliva"
 
 class LabResult(BaseModel):
-    lab_type: LabType = Field(description="Type of laboratory test (must be one of: blood, urine, saliva)")
-    lab_name: str = Field(description="Name of the laboratory test as extracted verbatim from the document")
-    lab_value: float = Field(description="Quantitative result of the laboratory test")
-    lab_unit: str = Field(description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL).")
-    lab_method: Optional[str] = Field(description="Analytical method or technique as extracted verbatim (e.g., ELISA, HPLC, Microscopy), if available")
-    lab_range_min: Optional[float] = Field(description="Lower bound of the reference range")
-    lab_range_max: Optional[float] = Field(description="Upper bound of the reference range")
-    lab_comments: Optional[str] = Field(description="Additional notes or observations about this result, if available")
-    confidence: float = Field(description="Confidence score of the extraction process, ranging from 0 to 1")
-    lack_of_confidence_reason: Optional[str] = Field(description="Reason for low extraction confidence")
+    lab_type: LabType = Field(
+        description="Type of laboratory test (must be one of: blood, urine, saliva)"
+    )
+    lab_name: str = Field(
+        min_length=1,
+        description="Name of the laboratory test as extracted verbatim from the document"
+    )
+    lab_code: Optional[str] = Field(
+        description="Standardized code for the laboratory test (e.g., LOINC, CPT), if available"
+    )
+    lab_value: float = Field(
+        description="Quantitative result of the laboratory test"
+    )
+    lab_unit: str = Field(
+        min_length=1,
+        description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL)"
+    )
+    lab_method: Optional[str] = Field(
+        description="Analytical method or technique as extracted verbatim (e.g., ELISA, HPLC, Microscopy), if available"
+    )
+    lab_range_min: Optional[float] = Field(
+        description="Lower bound of the reference range, if available"
+    )
+    lab_range_max: Optional[float] = Field(
+        description="Upper bound of the reference range, if available"
+    )
+    reference_range_text: Optional[str] = Field(
+        description="Reference range as shown in the document, verbatim (e.g., '4.0-10.0', 'Normal: <5')"
+    )
+    is_flagged: Optional[bool] = Field(
+        description="True if the result is flagged as abnormal/high/low in the document, else False"
+    )
+    lab_comments: Optional[str] = Field(
+        description="Additional notes or observations about this result, if available"
+    )
+    confidence: float = Field(
+        ge=0.0, le=1.0,
+        description="Confidence score of the extraction process, ranging from 0 to 1"
+    )
+    lack_of_confidence_reason: Optional[str] = Field(
+        description="Reason for low extraction confidence"
+    )
+    source_text: Optional[str] = Field(
+        description="The exact line or snippet from the document where this result was extracted"
+    )
+    page_number: Optional[int] = Field(
+        ge=1,
+        description="Page number in the PDF where this result was found, if available"
+    )
+    source_file: Optional[str] = Field(
+        description="The filename or identifier of the source file/page"
+    )
 
 class HealthLabReport(BaseModel):
-    report_date: Optional[str] = Field(description="Date the laboratory report was issued (YYYY-MM-DD)")
-    collection_date: Optional[str] = Field(description="Date the specimen was collected (YYYY-MM-DD), if available (also called subscription date)")
-    lab_facility: Optional[str] = Field(description="Name of the laboratory or facility that performed the tests, if available")
-    patient_name: Optional[str] = Field(description="Full name of the patient")
-    physician_name: Optional[str] = Field(description="Name of the requesting or reviewing physician, if available")
-    lab_results: List[LabResult] = Field(description="List of individual laboratory test results in this report")
+    report_date: Optional[str] = Field(
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Date the laboratory report was issued (YYYY-MM-DD)"
+    )
+    collection_date: Optional[str] = Field(
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Date the specimen was collected (YYYY-MM-DD), if available (also called subscription date)"
+    )
+    lab_facility: Optional[str] = Field(
+        description="Name of the laboratory or facility that performed the tests, if available"
+    )
+    lab_facility_address: Optional[str] = Field(
+        description="Address of the laboratory or facility, if available"
+    )
+    patient_name: Optional[str] = Field(
+        description="Full name of the patient"
+    )
+    patient_id: Optional[str] = Field(
+        description="Patient identifier or medical record number, if available"
+    )
+    patient_birthdate: Optional[str] = Field(
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Birthdate of the patient (YYYY-MM-DD), if available"
+    )
+    physician_name: Optional[str] = Field(
+        description="Name of the requesting or reviewing physician, if available"
+    )
+    physician_id: Optional[str] = Field(
+        description="Identifier for the physician, if available"
+    )
+    page_count: Optional[int] = Field(
+        ge=1,
+        description="Total number of pages in the report, if available"
+    )
+    lab_results: List[LabResult] = Field(
+        description="List of individual laboratory test results in this report"
+    )
+    source_file: Optional[str] = Field(
+        description="The filename or identifier of the source file"
+    )
 
 TOOLS = [
     {
@@ -145,8 +221,10 @@ Specific requirements:
 2. Booleans should be converted to 0/1, where 0 = false/negative and 1 = true/positive
 3. Dates must be in ISO 8601 format (YYYY-MM-DD)
 4. Units must match exactly as shown in the document
-
-IMPORTANT: Your output MUST FULLY comply with the provided schema. NEVER skip or omit any non-optional field. If you are unsure about a required field, use the value `{UNKNOWN_VALUE}`. Every required field must be present for every lab result, even if the value is unknown.
+5. Use the most precise schema possible for each field. 
+6. For each result, include the exact source text/line and page number if possible.
+7. If a field is not present in the document, use null or the value `{UNKNOWN_VALUE}` for required fields.
+8. NEVER skip or omit any non-optional field. Every required field must be present for every lab result, even if the value is unknown.
 """.strip(),
             "parameters": HealthLabReport.model_json_schema()
         }
@@ -367,10 +445,7 @@ You are a medical lab report analyzer with the following strict requirements:
     except APIError as e:
         logger.error(f"OpenAI API Error during lab extraction: {e}")
         raise RuntimeError(f"Lab extraction failed due to API error: {str(e)}")
-    if not completion.choices[0].message.tool_calls:
-        logger.error(f"No tool calls returned by model for extraction. Transcription snippet: {transcription[:200]}")
-        empty_report = HealthLabReport(lab_results=[]).model_dump()
-        return empty_report
+
     tool_args = completion.choices[0].message.tool_calls[0].function.arguments
     tool_result = json.loads(tool_args)
     
@@ -380,9 +455,6 @@ You are a medical lab report analyzer with the following strict requirements:
         lab_range_max = lab_result.get("lab_range_max")
         if lab_range_min is None: lab_result["lab_range_min"] = 0
         if lab_range_max is None: lab_result["lab_range_max"] = 9999
-        lab_result["enum_lab_name"] = "$UNKNOWN$"
-        lab_result["enum_lab_unit"] = "$UNKNOWN$"
-        lab_result["enum_lab_method"] = "$UNKNOWN$"
     tool_result["lab_results"] = lab_results
 
     model = HealthLabReport.model_validate(tool_result)

@@ -6,7 +6,9 @@ import json
 import pandas as pd
 from pathlib import Path
 import re
+import unicodedata
 
+print("ASD")
 # Step 1: Map lab_type-lab_name to enum values
 
 OUTPUT_DIR = os.getenv("OUTPUT_PATH")
@@ -29,8 +31,9 @@ updated = False
 
 def slugify(value):
     value = str(value).strip().lower()
+    value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
     value = re.sub(r"[^\w\s-]", "", value)
-    value = re.sub(r"[\s_-]+", "_", value)
+    value = re.sub(r"[\s_-]+", "", value)
     return value
 
 for csv_path in csv_files:
@@ -58,9 +61,11 @@ if updated:
 
 unknown_keys = [k for k, v in lab_names_map.items() if v == "$UNKNOWN$"]
 if unknown_keys:
-    # Load canonical enum values
+    # Load canonical enum values from both LABS_TXT_PATH and lab_names_map.json (excluding $UNKNOWN$)
     with open(LABS_TXT_PATH, "r", encoding="utf-8") as f:
-        lab_enum_values = set(line.strip() for line in f if line.strip())
+        labs_txt_values = set(line.strip() for line in f if line.strip())
+    lab_names_map_values = set(v for v in lab_names_map.values() if v != "$UNKNOWN$")
+    canonical_enum_values = sorted(labs_txt_values | lab_names_map_values)
 
     # Optionally use OpenAI or OpenRouter client as in main.py
     from openai import OpenAI
@@ -86,7 +91,7 @@ Instructions:
 - Output a JSON dictionary mapping each input to exactly one canonical value.
 - Do not invent or skip any input.
 - Canonical list:
-{json.dumps(sorted(list(lab_enum_values)), ensure_ascii=False, indent=2)}
+{json.dumps(canonical_enum_values, ensure_ascii=False, indent=2)}
 """.strip()
 
     def map_batch_with_llm(batch):
@@ -127,7 +132,7 @@ Instructions:
             batch_mapping = map_batch_with_llm(batch_keys)
             invalid_keys = []
             for k, v in batch_mapping.items():
-                if v in lab_enum_values:
+                if v in canonical_enum_values:
                     if lab_names_map[k] != v:
                         lab_names_map[k] = v
                         updated = True
