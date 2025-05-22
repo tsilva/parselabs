@@ -1,3 +1,4 @@
+
 - phase 1 extract, standardize units,dont swap if unavailable but add to map and then we use grmini
 - reduce target list by mapping to LOINQ codes
 - use thinking model for extraction in single pass
