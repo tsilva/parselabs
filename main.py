@@ -111,6 +111,7 @@ class LabType(str, Enum):
     BLOOD = "blood"
     URINE = "urine"
     SALIVA = "saliva"
+    FECES = "feces"
 
 class LabResult(BaseModel):
     lab_type: LabType = Field(
@@ -126,7 +127,7 @@ class LabResult(BaseModel):
     lab_value: float = Field(
         description="Quantitative result of the laboratory test"
     )
-    lab_unit: str = Field(
+    lab_unit: Optional[str] = Field(
         min_length=1,
         description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL)"
     )
@@ -446,8 +447,11 @@ You are a medical lab report analyzer with the following strict requirements:
         logger.error(f"OpenAI API Error during lab extraction: {e}")
         raise RuntimeError(f"Lab extraction failed due to API error: {str(e)}")
 
+    #print(completion)
     tool_args = completion.choices[0].message.tool_calls[0].function.arguments
+    print("A1")
     tool_result = json.loads(tool_args)
+    print("A2")
     
     lab_results = tool_result.get("lab_results", [])
     for lab_result in lab_results:
@@ -457,8 +461,18 @@ You are a medical lab report analyzer with the following strict requirements:
         if lab_range_max is None: lab_result["lab_range_max"] = 9999
     tool_result["lab_results"] = lab_results
 
-    model = HealthLabReport.model_validate(tool_result)
+    tool_result = json.loads(tool_args)
+
+    try: 
+        model = HealthLabReport.model_validate(tool_result)
+    except Exception as e:
+        logger.error(f"Model validation error: {e}")
+        raise RuntimeError(f"Model validation failed: {str(e)}")
+    
+    print("A4")
     model_dict = model.model_dump()
+    
+    print("A5")
 
     return model_dict
 
@@ -487,14 +501,15 @@ def process_single_pdf(
 
     # 1) Set up subdirectory
     pdf_stem = pdf_path.stem
-    logger.info(f"[{pdf_stem}] - processing: {pdf_path}")
     doc_out_dir = output_dir / pdf_stem
     doc_out_dir.mkdir(exist_ok=True, parents=True)
 
     normalized_csv_path = os.path.join(doc_out_dir, f"{pdf_stem}.csv")
     if os.path.exists(normalized_csv_path):
-        logger.info(f"[{pdf_stem}] - already processed, skipping")
+        logger.info(f"[{pdf_stem}] - skipped")
         return pd.read_csv(normalized_csv_path)
+    
+    logger.info(f"[{pdf_stem}] - processing...")
 
     # 2) Copy PDF to output subdirectory
     copied_pdf_path = doc_out_dir / pdf_path.name

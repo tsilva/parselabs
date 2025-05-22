@@ -32,7 +32,7 @@
 17-OHPRG/4
 1-Hidroxipireno
 21-hidroxilase, Ac.
-25-Hidroxicolecalciferol - Vitamina D3
+Vitamina D3 - 25-Hidroxicolecalciferol
 2-Hidroxiestrogénios
 2-pro PSA
 3 alfa-Diol Gluco.Androstanedi/2
@@ -732,15 +732,15 @@ Articaína, IgE Específica
 Articaína, Teste de Desgranulação de Basófilos
 Árvore que produz goma - Liquidambar styraciflua, IgE Específica
 As - Arsénico
-ASAT / TGO- Aspartato aminotransferase
-ASAT / TGO- Aspartato aminotransferase no derrame de serosa [Pleural, Pericárdico, Ascítico ou Sinovial]
-ASAT / TGO- Aspartato aminotransferase no LCR
+Aspartato aminotransferase - ASAT / TGO
+Aspartato aminotransferase - ASAT / TGO no derrame de serosa [Pleural, Pericárdico, Ascítico ou Sinovial]
+Aspartato aminotransferase - ASAT / TGO no LCR
 Ascaris lumbricoides, Ac. IgG
 Ascaris, IgE Específica
 Asialogangliosidos - GM1, Ac. IgG
 Asialogangliosidos - GM1, Ac.IgM
 ASK, Ac.
-ASLO / TASO - Título de Antiestreptolisina-O
+Título de Antiestreptolisina-O - ASLO / TASO
 Aspartato Aminotransferase - ASAT / TGO
 Aspegic, CAST
 Aspergillus flavus, IgE Específica
@@ -2702,12 +2702,12 @@ Freixo europeu - Fraxinus excelsior, IgE Específica
 Frutos de roseira brava - Rosa spp, IgE Específica
 Frutosamina
 Frutose, IgE Específica
-FSH - Foliculoestimulina
-FSH - Foliculoestimulina/2
-FSH - Foliculoestimulina/3
-FSH - Foliculoestimulina/4
-FSH - Foliculoestimulina/5
-FSH - Foliculoestimulina/6
+Foliculoestimulina - FSH
+Foliculoestimulina - FSH/2
+Foliculoestimulina - FSH/3
+Foliculoestimulina - FSH/4
+Foliculoestimulina - FSH/5
+Foliculoestimulina - FSH/6
 FT
 FT3 -Triiodotironina livre
 FT4 - Tiroxina livre
@@ -4215,7 +4215,7 @@ Nitratos, CAST
 Nitrazepam
 Nitrito de Sódio, CAST
 Nitrito de Sódio, E250, CAST
-Nitritos na Urina, Pesquisa
+Urina, Pesquisa de Nitritos
 Nitrofurantoína , CAST
 Nitrofurantoína , IgE Específica
 NMDA, Ac. IgG
@@ -5677,12 +5677,12 @@ Trypanosoma brucei, ADN
 Trypanosoma cruzi, ADN
 Trypanossoma cruzi, Ac. IgG
 Tsat %
-TSH - Tiroestimulina
-TSH - Tiroestimulina/2
-TSH - Tiroestimulina/3
-TSH - Tiroestimulina/4
-TSH - Tiroestimulina/5
-TSH - Tiroestimulina/6
+Tiroestimulina - TSH
+Tiroestimulina - TSH/2
+Tiroestimulina - TSH/3
+Tiroestimulina - TSH/4
+Tiroestimulina - TSH/5
+Tiroestimulina - TSH/6
 TSHRab - Anticorpos anti-receptores da hTSH
 TT - Tempo de Trombina
 tTG, Ac. IgA
