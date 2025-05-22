@@ -125,11 +125,11 @@ class LabResult(BaseModel):
         description="Standardized code for the laboratory test (e.g., LOINC, CPT), if available"
     )
     lab_value: float = Field(
-        description="Quantitative result of the laboratory test"
+        description="Quantitative result of the laboratory test (positive/negative should be 1/0)"
     )
     lab_unit: Optional[str] = Field(
         min_length=1,
-        description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL)"
+        description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL, boolean)"
     )
     lab_method: Optional[str] = Field(
         description="Analytical method or technique as extracted verbatim (e.g., ELISA, HPLC, Microscopy), if available"
@@ -224,7 +224,7 @@ Specific requirements:
 4. Units must match exactly as shown in the document
 5. Use the most precise schema possible for each field. 
 6. For each result, include the exact source text/line and page number if possible.
-7. If a field is not present in the document, use null or the value `{UNKNOWN_VALUE}` for required fields.
+7. If a field is not present in the document, use null or the value `{UNKNOWN_VALUE}` for required fields; for optional fields, use null.
 8. NEVER skip or omit any non-optional field. Every required field must be present for every lab result, even if the value is unknown.
 """.strip(),
             "parameters": HealthLabReport.model_json_schema()
