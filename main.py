@@ -170,11 +170,11 @@ class LabResult(BaseModel):
 class HealthLabReport(BaseModel):
     report_date: Optional[str] = Field(
         pattern=r"^\d{4}-\d{2}-\d{2}$",
-        description="Date the laboratory report was issued (YYYY-MM-DD)"
+        description="Date the laboratory report was issued (YYYY-MM-DD), if unavailable use 0000-00-00"
     )
     collection_date: Optional[str] = Field(
         pattern=r"^\d{4}-\d{2}-\d{2}$",
-        description="Date the specimen was collected (YYYY-MM-DD), if available (also called subscription date)"
+        description="Date the specimen was collected (YYYY-MM-DD), if available (also called subscription date), if unavailable use 0000-00-00"
     )
     lab_facility: Optional[str] = Field(
         description="Name of the laboratory or facility that performed the tests, if available"
@@ -447,11 +447,8 @@ You are a medical lab report analyzer with the following strict requirements:
         logger.error(f"OpenAI API Error during lab extraction: {e}")
         raise RuntimeError(f"Lab extraction failed due to API error: {str(e)}")
 
-    #print(completion)
     tool_args = completion.choices[0].message.tool_calls[0].function.arguments
-    print("A1")
     tool_result = json.loads(tool_args)
-    print("A2")
     
     lab_results = tool_result.get("lab_results", [])
     for lab_result in lab_results:
@@ -469,11 +466,7 @@ You are a medical lab report analyzer with the following strict requirements:
         logger.error(f"Model validation error: {e}")
         raise RuntimeError(f"Model validation failed: {str(e)}")
     
-    print("A4")
     model_dict = model.model_dump()
-    
-    print("A5")
-
     return model_dict
 
 ########################################
@@ -582,7 +575,6 @@ def process_single_pdf(
 
             # Parse labs with self-consistency
             page_txt = page_txt_path.read_text(encoding='utf-8')
-            print(f"START - {pdf_path}")
             page_json, all_json_versions = self_consistency(
                 lambda **kwargs: extract_labs_from_page_transcription(
                     page_txt,
@@ -590,7 +582,6 @@ def process_single_pdf(
                     **kwargs
                 ), self_consistency_model_id, n_extract
             )
-            print(f"END - {pdf_path}")
 
             # Only save versioned files if n_extract > 1
             if n_extract > 1:
@@ -602,7 +593,24 @@ def process_single_pdf(
             if page_number == 1: 
                 report_date = page_json.get("report_date")
                 collection_date = page_json.get("collection_date")
+                if report_date == "0000-00-00": report_date = None
+                if collection_date == "0000-00-00": collection_date = None
                 document_date = collection_date if collection_date else report_date
+
+                # If document_date is missing, try to extract from pdf_stem
+                if not document_date:
+                    # Try to find a date in the pdf_stem (format: YYYY-MM-DD)
+                    m = re.search(r"\d{4}-\d{2}-\d{2}", pdf_stem)
+                    if m:
+                        document_date = m.group(0)
+                        # Propagate to missing fields
+                        if not collection_date:
+                            collection_date = document_date
+                        if not report_date:
+                            report_date = document_date
+                    else:
+                        raise AssertionError("Document date is missing and not found in filename")
+
                 assert document_date, "Document date is missing"
                 assert document_date in pdf_stem, f"Document date not in filename: {pdf_stem} vs {document_date}"
 
