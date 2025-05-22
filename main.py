@@ -107,8 +107,13 @@ def load_env_config():
 # LLM Tools
 ########################################
 
+class LabType(str, Enum):
+    BLOOD = "blood"
+    URINE = "urine"
+    SALIVA = "saliva"
+
 class LabResult(BaseModel):
-    lab_type: str = Field(description="Type of laboratory test (e.g., blood, urine, etc.)")
+    lab_type: LabType = Field(description="Type of laboratory test (must be one of: blood, urine, saliva)")
     lab_name: str = Field(description="Name of the laboratory test as extracted verbatim from the document")
     lab_value: float = Field(description="Quantitative result of the laboratory test")
     lab_unit: str = Field(description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL).")
