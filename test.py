@@ -62,8 +62,9 @@ def test_lab_unit_percent_vs_lab_name(report):
         for idx in df[mask].index:
             row = df.loc[idx]
             source_file = row.get('source_file', 'unknown')
+            lab_name = row.get('lab_name_enum', '')
             report.setdefault(source_file, []).append(
-                f'Row at index {idx} has lab_unit_enum="%" but lab_name_enum="{row["lab_name_enum"]}"'
+                f'Row at index {idx} (lab_name="{lab_name}") has lab_unit_enum="%" but lab_name_enum="{lab_name}"'
             )
     except Exception as e:
         errors.append(f"Exception: {e}")
@@ -101,6 +102,46 @@ def test_lab_unit_not_empty(report):
     if errors:
         report.setdefault(file, []).extend(errors)
 
+def test_lab_unit_percent_value_range(report):
+    file = "output/all.csv"
+    errors = []
+    try:
+        df = pd.read_csv(file)
+        mask = (df['lab_unit_enum'] == "%") & (
+            (df['lab_value'] < 0) | (df['lab_value'] > 100)
+        )
+        for idx in df[mask].index:
+            row = df.loc[idx]
+            source_file = row.get('source_file', 'unknown')
+            val = row.get('lab_value')
+            lab_name = row.get('lab_name_enum', '')
+            report.setdefault(source_file, []).append(
+                f'Row at index {idx} (lab_name="{lab_name}") has lab_unit_enum="%" but lab_value={val} (should be between 0 and 100)'
+            )
+    except Exception as e:
+        errors.append(f"Exception: {e}")
+    if errors:
+        report.setdefault(file, []).extend(errors)
+
+def test_lab_unit_boolean_value(report):
+    file = "output/all.csv"
+    errors = []
+    try:
+        df = pd.read_csv(file)
+        mask = (df['lab_unit_enum'] == "boolean") & (~df['lab_value'].isin([0, 1]))
+        for idx in df[mask].index:
+            row = df.loc[idx]
+            source_file = row.get('source_file', 'unknown')
+            val = row.get('lab_value')
+            lab_name = row.get('lab_name_enum', '')
+            report.setdefault(source_file, []).append(
+                f'Row at index {idx} (lab_name="{lab_name}") has lab_unit_enum="boolean" but lab_value={val} (should be 0 or 1)'
+            )
+    except Exception as e:
+        errors.append(f"Exception: {e}")
+    if errors:
+        report.setdefault(file, []).extend(errors)
+
 def main():
     report = {}
     test_all_rows_have_dates_and_no_duplicates(report)
@@ -108,6 +149,8 @@ def main():
     test_lab_unit_percent_vs_lab_name(report)
     test_lab_names_mapping_percent_suffix(report)
     test_lab_unit_not_empty(report)
+    test_lab_unit_percent_value_range(report)
+    test_lab_unit_boolean_value(report)
     print("\n=== Integrity Report ===")
     if not report:
         print("All checks passed.")
