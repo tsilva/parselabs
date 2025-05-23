@@ -53,10 +53,61 @@ def test_lab_name_mappings_prefixes(report):
     if errors:
         report.setdefault(file, []).extend(errors)
 
+def test_lab_unit_percent_vs_lab_name(report):
+    file = "output/all.csv"
+    errors = []
+    try:
+        df = pd.read_csv(file)
+        mask = (df['lab_unit_enum'] == "%") & (~df['lab_name_enum'].astype(str).str.endswith("(%)"))
+        for idx in df[mask].index:
+            row = df.loc[idx]
+            source_file = row.get('source_file', 'unknown')
+            report.setdefault(source_file, []).append(
+                f'Row at index {idx} has lab_unit_enum="%" but lab_name_enum="{row["lab_name_enum"]}"'
+            )
+    except Exception as e:
+        errors.append(f"Exception: {e}")
+    if errors:
+        report.setdefault(file, []).extend(errors)
+
+def test_lab_names_mapping_percent_suffix(report):
+    file = "config/lab_names_mappings.json"
+    errors = []
+    try:
+        with open(file, encoding="utf-8") as f:
+            mappings = json.load(f)
+        for k, v in mappings.items():
+            if "percent" in k and not str(v).strip().endswith("(%)"):
+                errors.append(f'Key "{k}" has value "{v}" which does not end with "(%)"')
+    except Exception as e:
+        errors.append(f"Exception: {e}")
+    if errors:
+        report.setdefault(file, []).extend(errors)
+
+def test_lab_unit_not_empty(report):
+    file = "output/all.csv"
+    errors = []
+    try:
+        df = pd.read_csv(file)
+        mask = df['lab_unit'].isnull() | (df['lab_unit'].astype(str).str.strip() == "")
+        for idx in df[mask].index:
+            row = df.loc[idx]
+            source_file = row.get('source_file', 'unknown')
+            report.setdefault(source_file, []).append(
+                f'Row at index {idx} has empty lab_unit'
+            )
+    except Exception as e:
+        errors.append(f"Exception: {e}")
+    if errors:
+        report.setdefault(file, []).extend(errors)
+
 def main():
     report = {}
     test_all_rows_have_dates_and_no_duplicates(report)
     test_lab_name_mappings_prefixes(report)
+    test_lab_unit_percent_vs_lab_name(report)
+    test_lab_names_mapping_percent_suffix(report)
+    test_lab_unit_not_empty(report)
     print("\n=== Integrity Report ===")
     if not report:
         print("All checks passed.")
