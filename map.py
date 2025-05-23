@@ -32,6 +32,8 @@ MAPPING_CONFIGS = [
     }
 ]
 
+LLM_BATCH_SIZE = 50
+
 def slugify(value):
     value = str(value).strip().lower()
     value = value.replace('%', 'percent')  # Replace % with "percent"
@@ -99,8 +101,6 @@ def process_mapping(config):
             for i in range(0, len(lst), n):
                 yield lst[i:i+n]
 
-        BATCH_SIZE = 30
-
         SYSTEM_PROMPT = f"""
 You are an expert at mapping noisy laboratory {config['enum_col']}s to a canonical list for data normalization.
 
@@ -146,7 +146,7 @@ Instructions:
 
         while remaining_keys and progress:
             progress = False
-            for batch_keys in batch(remaining_keys, BATCH_SIZE):
+            for batch_keys in batch(remaining_keys, LLM_BATCH_SIZE):
                 print(f"Mapping batch: {batch_keys[0]} ... ({len(batch_keys)} items)")
                 batch_mapping = map_batch_with_llm(batch_keys)
                 invalid_keys = []
