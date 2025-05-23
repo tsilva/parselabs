@@ -170,3 +170,5 @@ logs/
 
 __pycache__/
 output/
+
+output.zip
