@@ -709,6 +709,15 @@ def process_single_pdf(
     final_df.to_csv(os.path.join(output_dir, "all.final.csv"), index=False)
     final_df.to_excel(os.path.join(output_dir, "all.final.xlsx"), index=False)
 
+    # --------- Export most recent value per blood test ---------
+    if "lab_type" in final_df.columns and "lab_name_enum" in final_df.columns and "date" in final_df.columns:
+        blood_df = final_df[final_df["lab_type"].str.lower() == "blood"].copy()
+        # Sort by date descending, then drop duplicates to keep the most recent per test
+        blood_df = blood_df.sort_values("date", ascending=False)
+        most_recent_blood = blood_df.drop_duplicates(subset=["lab_name_enum"], keep="first")
+        most_recent_blood.to_csv(os.path.join(output_dir, "all.final.blood-most-recent.csv"), index=False)
+        most_recent_blood.to_excel(os.path.join(output_dir, "all.final.blood-most-recent.xlsx"), index=False)
+
     logger.info(f"[{pdf_stem}] - processing finished successfully")
 
 ########################################
@@ -930,6 +939,15 @@ def main():
     final_df = merged_df[[col for col in export_columns_final if col in merged_df.columns]]
     final_df.to_csv(os.path.join(output_dir, "all.final.csv"), index=False)
     final_df.to_excel(os.path.join(output_dir, "all.final.xlsx"), index=False)
+
+    # --------- Export most recent value per blood test ---------
+    if "lab_type" in final_df.columns and "lab_name_enum" in final_df.columns and "date" in final_df.columns:
+        blood_df = final_df[final_df["lab_type"].str.lower() == "blood"].copy()
+        # Sort by date descending, then drop duplicates to keep the most recent per test
+        blood_df = blood_df.sort_values("date", ascending=False)
+        most_recent_blood = blood_df.drop_duplicates(subset=["lab_name_enum"], keep="first")
+        most_recent_blood.to_csv(os.path.join(output_dir, "all.final.blood-most-recent.csv"), index=False)
+        most_recent_blood.to_excel(os.path.join(output_dir, "all.final.blood-most-recent.xlsx"), index=False)
 
     logger.info("All PDFs processed.")
 
