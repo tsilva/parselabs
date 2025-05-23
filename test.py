@@ -148,7 +148,7 @@ def test_lab_name_enum_unit_consistency(report):
     try:
         df = pd.read_csv(file)
         # Group by lab_name_enum and collect unique units
-        grouped = df.groupby('lab_name_enum')['lab_unit_enum'].unique()
+        grouped = df.groupby('lab_name_enum')['lab_unit_final'].unique()
         for lab_name_enum, units in grouped.items():
             units = [u for u in units if pd.notnull(u)]
             if len(units) > 1:

@@ -773,6 +773,60 @@ def main():
     merged_df["lab_name_enum"] = merged_df.apply(map_lab_name_enum, axis=1)
     merged_df["lab_unit_enum"] = merged_df.apply(map_lab_unit_enum, axis=1)
 
+    # --------- Compute lab_value_final, lab_range_min_final, lab_range_max_final, lab_unit_final ---------
+    # Load lab_specs.json for unit mapping
+    with open("config/lab_specs.json", "r", encoding="utf-8") as f:
+        lab_specs = json.load(f)
+
+    def convert_to_primary_unit(row):
+        lab_name_enum = row.get("lab_name_enum", "")
+        lab_unit_enum = row.get("lab_unit_enum", "")
+        value = row.get("lab_value")
+        range_min = row.get("lab_range_min")
+        range_max = row.get("lab_range_max")
+        # Default: just copy values and unit
+        value_final = value
+        range_min_final = range_min
+        range_max_final = range_max
+        unit_final = lab_unit_enum
+
+        if not lab_name_enum or lab_name_enum not in lab_specs:
+            return pd.Series([value, range_min, range_max, lab_unit_enum])
+
+        spec = lab_specs[lab_name_enum]
+        primary_unit = spec.get("primary_unit")
+        if not primary_unit:
+            return pd.Series([value, range_min, range_max, lab_unit_enum])
+
+        # If already in primary unit, just copy
+        if lab_unit_enum == primary_unit:
+            return pd.Series([value, range_min, range_max, primary_unit])
+
+        # Otherwise, look for conversion factor
+        factor = None
+        for alt in spec.get("alternatives", []):
+            if alt.get("unit") == lab_unit_enum:
+                factor = alt.get("factor")
+                break
+        if factor is not None:
+            try:
+                value_final = float(value) * float(factor) if pd.notnull(value) else value
+            except Exception:
+                value_final = value
+            try:
+                range_min_final = float(range_min) * float(factor) if pd.notnull(range_min) else range_min
+            except Exception:
+                range_min_final = range_min
+            try:
+                range_max_final = float(range_max) * float(factor) if pd.notnull(range_max) else range_max
+            except Exception:
+                range_max_final = range_max
+            unit_final = primary_unit
+        # If no conversion found, just copy
+        return pd.Series([value_final, range_min_final, range_max_final, unit_final])
+
+    merged_df[["lab_value_final", "lab_range_min_final", "lab_range_max_final", "lab_unit_final"]] = merged_df.apply(convert_to_primary_unit, axis=1)
+
     # Only keep the specified columns for all.csv
     export_columns = [
         "date",
@@ -785,6 +839,10 @@ def main():
         "lab_unit_enum",
         "lab_range_min",
         "lab_range_max",
+        "lab_value_final",
+        "lab_unit_final",
+        "lab_range_min_final",
+        "lab_range_max_final",
         "is_flagged",
         "confidence",
         "source_file"
@@ -792,7 +850,7 @@ def main():
     
     merged_df = merged_df[[col for col in export_columns if col in merged_df.columns]]
 
-        # Sort by date (recent to oldest)
+    # Sort by date (recent to oldest)
     if "date" in merged_df.columns:
         merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce")
         merged_df = merged_df.sort_values("date", ascending=False)
