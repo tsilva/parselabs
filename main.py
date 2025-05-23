@@ -770,16 +770,17 @@ def main():
         "date",
         "lab_type",
         "lab_name",
+        "lab_name_enum",
         "lab_value",
         "lab_unit",
+        "lab_unit_enum",
         "lab_range_min",
         "lab_range_max",
         "is_flagged",
         "confidence",
-        "source_file",
-        "lab_name_enum",
-        "lab_unit_enum"
+        "source_file"
     ]
+    
     merged_df = merged_df[[col for col in export_columns if col in merged_df.columns]]
 
         # Sort by date (recent to oldest)
