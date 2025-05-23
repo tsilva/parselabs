@@ -672,11 +672,14 @@ def process_single_pdf(
 
     # Loop through files in the directory
     dataframes = []
+    # Only merge per-page CSVs (e.g., .001.csv, .002.csv, etc.)
     for file in os.listdir(doc_out_dir):
-        if not file.endswith('.csv'): continue
+        if not re.match(rf"^{re.escape(pdf_stem)}\.\d{{3}}\.csv$", file):
+            continue
         file_path = os.path.join(doc_out_dir, file)
         contents = open(file_path, 'r', encoding='utf-8').read()
-        if not contents.strip(): continue
+        if not contents.strip():
+            continue
         df = pd.read_csv(file_path)
         dataframes.append(df)
 
