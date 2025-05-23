@@ -778,7 +778,19 @@ def main():
     ]
     merged_df = merged_df[[col for col in export_columns if col in merged_df.columns]]
 
+        # Sort by date (recent to oldest)
+    if "date" in merged_df.columns:
+        merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce")
+        merged_df = merged_df.sort_values("date", ascending=False)
+
     merged_df.to_csv(os.path.join(output_dir, "all.csv"), index=False)
+
+    # --------- Export Excel file for Google Drive, freeze first row ---------
+    excel_path = os.path.join(output_dir, "all.xlsx")
+    with pd.ExcelWriter(excel_path, engine="xlsxwriter") as writer:
+        merged_df.to_excel(writer, index=False)
+        worksheet = writer.sheets[merged_df.columns.name or writer.sheets.keys().__iter__().__next__()]
+        worksheet.freeze_panes(1, 0)
 
     logger.info("All PDFs processed.")
 
