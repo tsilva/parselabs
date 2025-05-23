@@ -752,8 +752,12 @@ def main():
 
     # Map lab_name and lab_unit to enums
     def map_lab_name_enum(row):
-        slug = slugify(row.get("lab_name", ""))
-        return lab_names_mapping.get(slug, "")
+        lab_type = row["lab_type"]
+        lab_name = row["lab_name"]
+        lab_name_slug = f"{lab_type.lower()}-{slugify(lab_name)}"
+        lab_name_enum = lab_names_mapping[lab_name_slug]
+        return lab_name_enum
+    
     def map_lab_unit_enum(row):
         slug = slugify(row.get("lab_unit", ""))
         return lab_units_mapping.get(slug, "")
