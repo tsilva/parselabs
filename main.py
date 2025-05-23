@@ -735,12 +735,11 @@ def plot_lab_enum(args):
     if "date" in merged_df.columns:
         merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce")
     df_lab = merged_df[merged_df["lab_name_enum"] == lab_name_enum].copy()
-    df_lab = df_lab.sort_values("date", ascending=True)
-    if len(df_lab) < 2:
+    if df_lab.empty or df_lab["date"].isnull().all() or len(df_lab) < 2:
         return
+    df_lab = df_lab.sort_values("date", ascending=True)
     # Get unit for this lab_name_enum (use first non-null unit)
-    unit = df_lab["lab_unit_final"].dropna().astype(str).unique()
-    unit_str = unit[0] if len(unit) > 0 and unit[0] != "" else ""
+    unit_str = next((u for u in df_lab["lab_unit_final"].dropna().astype(str).unique() if u), "")
     y_label = f"Value ({unit_str})" if unit_str else "Value"
     title = f"{lab_name_enum} " + (f" [{unit_str}]" if unit_str else "")
     plt.figure(figsize=(10, 5))
