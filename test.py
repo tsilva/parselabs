@@ -142,6 +142,25 @@ def test_lab_unit_boolean_value(report):
     if errors:
         report.setdefault(file, []).extend(errors)
 
+def test_lab_name_enum_unit_consistency(report):
+    file = "output/all.csv"
+    errors = []
+    try:
+        df = pd.read_csv(file)
+        # Group by lab_name_enum and collect unique units
+        grouped = df.groupby('lab_name_enum')['lab_unit_enum'].unique()
+        for lab_name_enum, units in grouped.items():
+            units = [u for u in units if pd.notnull(u)]
+            if len(units) > 1:
+                indices = df[df['lab_name_enum'] == lab_name_enum].index.tolist()
+                report.setdefault(file, []).append(
+                    f'lab_name_enum="{lab_name_enum}" has inconsistent lab_unit_enum values: {units} (rows: {indices})'
+                )
+    except Exception as e:
+        errors.append(f"Exception: {e}")
+    if errors:
+        report.setdefault(file, []).extend(errors)
+
 def main():
     report = {}
     test_all_rows_have_dates_and_no_duplicates(report)
@@ -151,6 +170,7 @@ def main():
     test_lab_unit_not_empty(report)
     test_lab_unit_percent_value_range(report)
     test_lab_unit_boolean_value(report)
+    test_lab_name_enum_unit_consistency(report)
     print("\n=== Integrity Report ===")
     if not report:
         print("All checks passed.")
