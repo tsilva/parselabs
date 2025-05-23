@@ -889,6 +889,31 @@ def main():
 
     merged_df[["lab_value_final", "lab_range_min_final", "lab_range_max_final", "lab_unit_final"]] = merged_df.apply(convert_to_primary_unit, axis=1)
 
+    # --------- Compute is_flagged_final ---------
+    def compute_is_flagged_final(row):
+        value = row.get("lab_value_final")
+        minv = row.get("lab_range_min_final")
+        maxv = row.get("lab_range_max_final")
+        try:
+            value = float(value)
+        except Exception:
+            return None
+        try:
+            minv = float(minv)
+        except Exception:
+            minv = None
+        try:
+            maxv = float(maxv)
+        except Exception:
+            maxv = None
+        if minv is not None and value < minv:
+            return True
+        if maxv is not None and value > maxv:
+            return True
+        return False
+
+    merged_df["is_flagged_final"] = merged_df.apply(compute_is_flagged_final, axis=1)
+
     # Only keep the specified columns for all.csv
     export_columns = [
         "date",
@@ -907,7 +932,8 @@ def main():
         "lab_range_max_final",
         "is_flagged",
         "confidence",
-        "source_file"
+        "source_file",
+        "is_flagged_final"
     ]
     
     merged_df = merged_df[[col for col in export_columns if col in merged_df.columns]]
@@ -934,7 +960,8 @@ def main():
         "lab_value_final",
         "lab_unit_final",
         "lab_range_min_final",
-        "lab_range_max_final"
+        "lab_range_max_final",
+        "is_flagged_final"
     ]
     final_df = merged_df[[col for col in export_columns_final if col in merged_df.columns]]
     final_df.to_csv(os.path.join(output_dir, "all.final.csv"), index=False)
@@ -943,7 +970,6 @@ def main():
     # --------- Export most recent value per blood test ---------
     if "lab_type" in final_df.columns and "lab_name_enum" in final_df.columns and "date" in final_df.columns:
         blood_df = final_df[final_df["lab_type"].str.lower() == "blood"].copy()
-        # Sort by date descending, then drop duplicates to keep the most recent per test
         blood_df = blood_df.sort_values("date", ascending=False)
         most_recent_blood = blood_df.drop_duplicates(subset=["lab_name_enum"], keep="first")
         most_recent_blood.to_csv(os.path.join(output_dir, "all.final.blood-most-recent.csv"), index=False)
