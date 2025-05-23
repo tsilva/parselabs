@@ -694,6 +694,32 @@ def process_single_pdf(
 # The Main Function
 ########################################
 
+def plot_lab_enum(args):
+    lab_name_enum, merged_df_path, plots_dir_str = args
+    import pandas as pd
+    import re
+    import matplotlib.pyplot as plt
+    from pathlib import Path
+
+    merged_df = pd.read_csv(merged_df_path)
+    if "date" in merged_df.columns:
+        merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce")
+    df_lab = merged_df[merged_df["lab_name_enum"] == lab_name_enum].copy()
+    df_lab = df_lab.sort_values("date", ascending=True)
+    if len(df_lab) < 2:
+        return
+    plt.figure(figsize=(10, 5))
+    plt.plot(df_lab["date"], df_lab["lab_value_final"], marker='o', linestyle='-')
+    plt.title(f"{lab_name_enum} over time")
+    plt.xlabel("Date")
+    plt.ylabel("Value")
+    plt.grid(True)
+    plt.tight_layout()
+    safe_lab_name = re.sub(r'[^\w\-_. ]', '_', str(lab_name_enum))
+    plot_path = Path(plots_dir_str) / f"{safe_lab_name}.png"
+    plt.savefig(plot_path)
+    plt.close()
+
 def main():
     config = load_env_config()
     self_consistency_model_id = config["self_consistency_model_id"]
@@ -869,42 +895,25 @@ def main():
 
     # --------- Plotting Section ---------
     import matplotlib.pyplot as plt
-
-    # Load lab_specs.json for unit mapping
-    with open("config/lab_specs.json", "r", encoding="utf-8") as f:
-        lab_names_config = json.load(f)
+    import multiprocessing
 
     # Ensure plots directory exists
     plots_dir = Path("plots")
     plots_dir.mkdir(exist_ok=True)
 
-    # Reload merged_df to ensure correct dtypes
-    merged_df = pd.read_csv(os.path.join(output_dir, "all.csv"))
-
-    # Convert date column to datetime if present
+    merged_df_path = os.path.join(output_dir, "all.csv")
+    merged_df = pd.read_csv(merged_df_path)
     if "date" in merged_df.columns:
         merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce")
 
-    # --------- Plot each lab_name_enum ---------
+    # --------- Parallelized plot for each lab_name_enum ---------
     if "lab_name_enum" in merged_df.columns and "date" in merged_df.columns and "lab_value_final" in merged_df.columns:
-        for lab_name_enum in merged_df["lab_name_enum"].dropna().unique():
-            df_lab = merged_df[merged_df["lab_name_enum"] == lab_name_enum].copy()
-            df_lab = df_lab.sort_values("date", ascending=True)
-            # Only plot if there are at least 2 data points
-            if len(df_lab) < 2:
-                continue
-            plt.figure(figsize=(10, 5))
-            plt.plot(df_lab["date"], df_lab["lab_value_final"], marker='o', linestyle='-')
-            plt.title(f"{lab_name_enum} over time")
-            plt.xlabel("Date")
-            plt.ylabel("Value")
-            plt.grid(True)
-            plt.tight_layout()
-            # Save plot to plots directory
-            safe_lab_name = re.sub(r'[^\w\-_. ]', '_', str(lab_name_enum))
-            plot_path = plots_dir / f"{safe_lab_name}.png"
-            plt.savefig(plot_path)
-            plt.close()
+        unique_lab_enums = merged_df["lab_name_enum"].dropna().unique()
+        n_workers = max(1, multiprocessing.cpu_count() - 1)
+        # Pass merged_df_path and plots_dir as arguments to avoid pickling issues
+        args_list = [(lab_name_enum, merged_df_path, str(plots_dir)) for lab_name_enum in unique_lab_enums]
+        with multiprocessing.Pool(n_workers) as pool:
+            pool.map(plot_lab_enum, args_list)
 
 if __name__ == "__main__":
     main()
