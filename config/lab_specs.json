@@ -8,12 +8,32 @@
       }
     ]
   },
+  "Blood - Total Cholesterol": {
+    "valid" : true,
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
+    ]
+  },
   "Blood - 25-OH Vitamin D": {
     "primary_unit": "nmol/L",
     "alternatives": [
       {
         "unit": "mol/L",
         "factor": 1e-9
+      }
+    ]
+  },
+  "Blood - Glucose (Fasting)": {
+    "valid" : true,
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 18.016
       }
     ]
   },
@@ -63,11 +83,16 @@
     ]
   },
   "Blood - Calcium (total)": {
-    "primary_unit": "mmol/L",
+    "valid" : true,
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor": 1e-3
+        "unit": "mmol/L",
+        "factor": 4.0
+      },
+      {
+        "unit": "mEq/L",
+        "factor": 2.0
       }
     ]
   },
@@ -90,6 +115,7 @@
     ]
   },
   "Blood - DHEA": {
+    "valid" : true,
     "primary_unit": "nmol/L",
     "alternatives": [
       {
@@ -99,20 +125,42 @@
     ]
   },
   "Blood - Free T3": {
-    "primary_unit": "pmol/L",
+    "valid" : true,
+    "primary_unit": "pg/mL",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor": 1e-12
+        "unit": "pmol/L",
+        "factor": 0.651
       }
     ]
   },
   "Blood - Free T4": {
-    "primary_unit": "pmol/L",
+    "valid" : true,
+    "primary_unit": "pg/mL",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor": 1e-12
+        "unit": "pmol/L",
+        "factor": 0.78
+      }
+    ]
+  },
+  "Blood - Sodium": {
+    "valid" : true,
+    "primary_unit": "mEq/L",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 1
+      }
+    ]
+  },
+  "Blood - Potassium": {
+    "valid" : true,
+    "primary_unit": "mEq/L",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 1
       }
     ]
   },
@@ -153,11 +201,12 @@
     ]
   },
   "Blood - Magnesium": {
-    "primary_unit": "mmol/L",
+    "valid" : true,
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor": 1e-3
+        "unit": "mmol/L",
+        "factor": 38.67
       }
     ]
   },
@@ -171,11 +220,12 @@
     ]
   },
   "Blood - Total T3": {
-    "primary_unit": "nmol/L",
+    "valid" : true,
+    "primary_unit": "ng/mL",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor": 1e-9
+        "unit": "nmol/L",
+        "factor": 0.65097
       }
     ]
   },
@@ -207,11 +257,16 @@
     ]
   },
   "Blood - Vitamin B12": {
-    "primary_unit": "pmol/L",
+    "valid" : true,
+    "primary_unit": "pg/mL",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor": 1e-12
+        "unit": "pmol/L",
+        "factor":  1.355
+      },
+      {
+        "unit": "ng/L",
+        "factor": 1
       }
     ]
   },
