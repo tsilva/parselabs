@@ -10,6 +10,7 @@ import shutil
 import base64
 import pandas as pd
 import pdf2image
+import unicodedata
 import re
 import hashlib
 from multiprocessing import Pool
@@ -734,6 +735,32 @@ def main():
     # Concatenate all dataframes and save to a single CSV
     merged_df = pd.concat(dataframes, ignore_index=True)
 
+    # --------- Add lab_value_enum and lab_unit_enum columns ---------
+    # Load mappings
+    with open("config/lab_names_mappings.json", "r", encoding="utf-8") as f:
+        lab_names_mapping = json.load(f)
+    with open("config/lab_units_mappings.json", "r", encoding="utf-8") as f:
+        lab_units_mapping = json.load(f)
+
+    # Slugify function (add if not present)
+    def slugify(value):
+        value = str(value).strip().lower()
+        value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+        value = re.sub(r"[^\w\s-]", "", value)
+        value = re.sub(r"[\s_-]+", "", value)
+        return value
+
+    # Map lab_name and lab_unit to enums
+    def map_lab_name_enum(row):
+        slug = slugify(row.get("lab_name", ""))
+        return lab_names_mapping.get(slug, "")
+    def map_lab_unit_enum(row):
+        slug = slugify(row.get("lab_unit", ""))
+        return lab_units_mapping.get(slug, "")
+
+    merged_df["lab_name_enum"] = merged_df.apply(map_lab_name_enum, axis=1)
+    merged_df["lab_unit_enum"] = merged_df.apply(map_lab_unit_enum, axis=1)
+
     # Only keep the specified columns for all.csv
     export_columns = [
         "date",
@@ -745,7 +772,9 @@ def main():
         "lab_range_max",
         "is_flagged",
         "confidence",
-        "source_file"
+        "source_file",
+        "lab_name_enum",
+        "lab_unit_enum"
     ]
     merged_df = merged_df[[col for col in export_columns if col in merged_df.columns]]
 
