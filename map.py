@@ -159,6 +159,10 @@ Instructions:
                     else:
                         print(f"Warning: LLM mapped '{k}' to unknown enum value: '{v}'")
                         invalid_keys.append(k)
+                # Save after each batch
+                value_map_sorted = dict(sorted(value_map.items(), key=lambda item: item[1]))
+                with open(config["map_path"], "w", encoding="utf-8") as f:
+                    json.dump(value_map_sorted, f, indent=2, ensure_ascii=False)
             remaining_keys = [k for k, v in value_map.items() if v == "$UNKNOWN$"]
 
         if updated:
