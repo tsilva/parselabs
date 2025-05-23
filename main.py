@@ -885,5 +885,26 @@ def main():
     if "date" in merged_df.columns:
         merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce")
 
+    # --------- Plot each lab_name_enum ---------
+    if "lab_name_enum" in merged_df.columns and "date" in merged_df.columns and "lab_value_final" in merged_df.columns:
+        for lab_name_enum in merged_df["lab_name_enum"].dropna().unique():
+            df_lab = merged_df[merged_df["lab_name_enum"] == lab_name_enum].copy()
+            df_lab = df_lab.sort_values("date", ascending=True)
+            # Only plot if there are at least 2 data points
+            if len(df_lab) < 2:
+                continue
+            plt.figure(figsize=(10, 5))
+            plt.plot(df_lab["date"], df_lab["lab_value_final"], marker='o', linestyle='-')
+            plt.title(f"{lab_name_enum} over time")
+            plt.xlabel("Date")
+            plt.ylabel("Value")
+            plt.grid(True)
+            plt.tight_layout()
+            # Save plot to plots directory
+            safe_lab_name = re.sub(r'[^\w\-_. ]', '_', str(lab_name_enum))
+            plot_path = plots_dir / f"{safe_lab_name}.png"
+            plt.savefig(plot_path)
+            plt.close()
+
 if __name__ == "__main__":
     main()
