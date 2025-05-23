@@ -745,6 +745,7 @@ def main():
     # Slugify function (add if not present)
     def slugify(value):
         value = str(value).strip().lower()
+        value = value.replace('%', 'percent')  # Replace % with "percent"
         value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
         value = re.sub(r"[^\w\s-]", "", value)
         value = re.sub(r"[\s_-]+", "", value)
