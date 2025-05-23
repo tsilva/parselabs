@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import unicodedata
 
+MAPPING_MODEL_ID = os.getenv("MAPPING_MODEL_ID")
 OUTPUT_DIR = os.getenv("OUTPUT_PATH")
 OUTPUT_DIR = Path(OUTPUT_DIR)
 
@@ -33,6 +34,7 @@ MAPPING_CONFIGS = [
 
 def slugify(value):
     value = str(value).strip().lower()
+    value = value.replace('%', 'percent')  # Replace % with "percent"
     value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
     value = re.sub(r"[^\w\s-]", "", value)
     value = re.sub(r"[\s_-]+", "", value)
@@ -40,6 +42,9 @@ def slugify(value):
 
 def process_mapping(config):
     # Read mapping file
+    if not config["map_path"].exists():
+        with open(config["map_path"], "w", encoding="utf-8") as f:
+            json.dump({}, f, indent=4, ensure_ascii=False)
     with open(config["map_path"], "r", encoding="utf-8") as f:
         value_map = json.load(f)
 
@@ -89,7 +94,6 @@ def process_mapping(config):
             base_url="https://openrouter.ai/api/v1",
             api_key=os.getenv("OPENROUTER_API_KEY")
         )
-        MODEL_ID = "google/gemini-2.5-flash-preview-05-20"
 
         def batch(lst, n):
             for i in range(0, len(lst), n):
@@ -116,7 +120,7 @@ Instructions:
             )
             print(f"User prompt: {user_prompt}")
             completion = client.chat.completions.create(
-                model=MODEL_ID,
+                model=MAPPING_MODEL_ID,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt}
