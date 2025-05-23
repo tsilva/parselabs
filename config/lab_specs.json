@@ -76,6 +76,26 @@
       }
     ]
   },
+  "Blood - FSH" : {
+    "valid" : true,
+    "primary_unit": "mIU/mL",
+    "alternatives": [
+      {
+        "unit": "IU/L",
+        "factor": 1
+      }
+    ]
+  },
+  "Blood - Ferritin" : {
+    "valid" : true,
+    "primary_unit": "ng/mL",
+    "alternatives": [
+      {
+        "unit": "µg/L",
+        "factor": 1
+      }
+    ]
+  },
   "Blood - Bilirubin Direct": {
     "primary_unit": "mg/dL",
     "alternatives": [
@@ -203,6 +223,16 @@
       }
     ]
   },
+  "Blood - Magnesium (Erythrocytes)": {
+    "valid" : false,
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mEq/L",
+        "factor": 1.215
+      }
+    ]
+  },
   "Blood - Homocysteine": {
     "valid" : true,
     "primary_unit": "µmol/L",
@@ -232,7 +262,7 @@
       }
     ]
   },
-  "Blood - Blood - Triglycerides": {
+  "Blood - Triglycerides": {
     "valid" : true,
     "primary_unit": "mg/dL",
     "alternatives": [
@@ -296,20 +326,26 @@
     ]
   },
   "Blood - Urea": {
-    "primary_unit": "mmol/L",
+    "valid" : true,
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor": 1e-3
+        "unit": "mmol/L",
+        "factor": 6.0
       }
     ]
   },
   "Blood - Uric Acid": {
-    "primary_unit": "mmol/L",
+    "valid" : true,
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor": 1e-3
+        "unit": "µmol/L",
+        "factor": 0.02
+      },
+      {
+        "unit": "mmol/L",
+        "factor": 10
       }
     ]
   },
