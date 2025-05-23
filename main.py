@@ -762,7 +762,7 @@ def main():
 
     def map_lab_name_enum(row):
         lab_name_slug = map_lab_name_slug(row)
-        lab_name_enum = lab_names_mapping[lab_name_slug]
+        lab_name_enum = lab_names_mapping.get(lab_name_slug, "")
         return lab_name_enum
     
     def map_lab_unit_enum(row):
