@@ -734,6 +734,21 @@ def main():
     # Concatenate all dataframes and save to a single CSV
     merged_df = pd.concat(dataframes, ignore_index=True)
 
+    # Only keep the specified columns for all.csv
+    export_columns = [
+        "date",
+        "lab_type",
+        "lab_name",
+        "lab_value",
+        "lab_unit",
+        "lab_range_min",
+        "lab_range_max",
+        "is_flagged",
+        "confidence",
+        "source_file"
+    ]
+    merged_df = merged_df[[col for col in export_columns if col in merged_df.columns]]
+
     merged_df.to_csv(os.path.join(output_dir, "all.csv"), index=False)
 
     logger.info("All PDFs processed.")
