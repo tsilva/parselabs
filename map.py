@@ -56,6 +56,29 @@ def process_mapping(config):
         if not p.name[-7:-4].isdigit()
     ]
 
+    # Collect all current keys from CSVs
+    current_keys = set()
+    for csv_path in csv_files:
+        df = pd.read_csv(csv_path)
+        if config["col_value"] not in df.columns or config["col_type"] not in df.columns:
+            continue
+        for col_type, col_value in zip(df[config["col_type"]], df[config["col_value"]]):
+            if config.get("use_type_prefix", False):
+                key = f"{slugify(col_type)}-{slugify(col_value)}"
+            else:
+                key = slugify(col_value)
+            current_keys.add(key)
+
+    # Remove keys from value_map that are not in current_keys
+    removed = False
+    keys_to_remove = [k for k in value_map if k not in current_keys]
+    for k in keys_to_remove:
+        del value_map[k]
+        removed = True
+    if removed:
+        with open(config["map_path"], "w", encoding="utf-8") as f:
+            json.dump(dict(sorted(value_map.items(), key=lambda item: item[1])), f, indent=4, ensure_ascii=False)
+
     updated = False
 
     for csv_path in csv_files:
