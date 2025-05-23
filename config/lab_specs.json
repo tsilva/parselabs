@@ -18,6 +18,36 @@
       }
     ]
   },
+  "Blood - HDL Cholesterol": {
+    "valid" : true,
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
+    ]
+  },
+  "Blood - LDL Cholesterol": {
+    "valid" : true,
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
+    ]
+  },
+  "Blood - VLDL Cholesterol": {
+    "valid" : true,
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
+    ]
+  },
   "Blood - 25-OH Vitamin D": {
     "primary_unit": "nmol/L",
     "alternatives": [
@@ -174,11 +204,12 @@
     ]
   },
   "Blood - Homocysteine": {
-    "primary_unit": "g/L",
+    "valid" : true,
+    "primary_unit": "µmol/L",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor": 135.15
+        "unit": "µg/mL",
+        "factor": 7.4
       }
     ]
   },
@@ -191,12 +222,37 @@
       }
     ]
   },
+  "Blood - Total Testosterone": {
+    "valid" : true,
+    "primary_unit": "ng/dL",
+    "alternatives": [
+      {
+        "unit": "ng/mL",
+        "factor": 100
+      }
+    ]
+  },
+  "Blood - Blood - Triglycerides": {
+    "valid" : true,
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 88.5
+      }
+    ]
+  },
   "Blood - Lithium": {
+    "valid" : true,
     "primary_unit": "mmol/L",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor": 1e-3
+        "unit": "mEq/L",
+        "factor": 1
+      },
+      {
+        "unit": "mg/dL",
+        "factor": 1.44
       }
     ]
   },
@@ -211,11 +267,12 @@
     ]
   },
   "Blood - Transferrin": {
+    "valid" : true,
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor": 7936.507937
+        "unit": "µmol/L",
+        "factor": 7.9
       }
     ]
   },
@@ -271,11 +328,12 @@
     ]
   },
   "Blood - Vitamin C (Ascorbic Acid)": {
-    "primary_unit": "mg/L",
+    "valid" : false,
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor": 176056.338
+        "unit": "µmol/L",
+        "factor": 0.056
       }
     ]
   }
