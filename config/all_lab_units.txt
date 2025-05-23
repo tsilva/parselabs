@@ -37,7 +37,7 @@ mmol/kg
 IU/L
 mIU/mL
 cells/µL
-x 10^9/L
+10⁹/L
 x 10^12/L
 g/dL
 pH

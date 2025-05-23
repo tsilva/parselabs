@@ -5958,7 +5958,12 @@ W - Tungsténio
 Waaler-Rose, Reacção
 Weil Felix, Reacção
 Weinberg, Reacção
-Widal-Félix, Reacção
+Reacção de Widal para Salmonella Typhi – Antigénio H
+Reacção de Widal para Salmonella Typhi – Antigénio O
+Reacção de Widal para Salmonella Paratyphi A – Antigénio H
+Reacção de Widal para Salmonella Paratyphi A – Antigénio O
+Reacção de Widal para Salmonella Paratyphi B – Antigénio H
+Reacção de Widal para Salmonella Paratyphi B – Antigénio O
 Wilson, Síndrome - Etapa I
 Wilson, Síndrome - Etapa II
 Wright, Reacção
