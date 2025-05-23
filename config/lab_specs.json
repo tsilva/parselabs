@@ -97,29 +97,32 @@
     ]
   },
   "Blood - Bilirubin Direct": {
+    "valid" : true,
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor":  1e-3
+        "unit": "µmol/L",
+        "factor": 0.06
       }
     ]
   },
   "Blood - Bilirubin Indirect": {
+    "valid" : true,
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor":  1e-3
+        "unit": "µmol/L",
+        "factor": 0.06
       }
     ]
   },
   "Blood - Bilirubin Total": {
+    "valid" : true,
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor": 11310.180
+        "unit": "µmol/L",
+        "factor": 0.06
       }
     ]
   },
@@ -156,21 +159,32 @@
     ]
   },
   "Blood - Creatinine": {
+    "valid" : true,
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor": 1e-3
+        "unit": "µmol/L",
+        "factor": 0.0113
+      }
+    ]
+  },
+  "Blood - Cortisol" : {
+    "valid" : true,
+    "primary_unit": "µg/dL",
+    "alternatives": [
+      {
+        "unit": "ng/mL",
+        "factor": 0.1
       }
     ]
   },
   "Blood - DHEA": {
     "valid" : true,
-    "primary_unit": "nmol/L",
+    "primary_unit": "µg/dL",
     "alternatives": [
       {
-        "unit": "mol/L",
-        "factor": 1e-9
+        "unit": "nmol/L",
+        "factor": 0.0288
       }
     ]
   },
