@@ -647,19 +647,15 @@
     ]
   },
   "Blood - 25-OH Vitamin D": {
-    "primary_unit": "nmol/L",
+    "primary_unit": "ng/mL",
     "alternatives": [
       {
         "unit": "µg/L",
-        "factor": 2.5
+        "factor": 1
       },
       {
-        "unit": "ng/mL",
-        "factor": 2.5
-      },
-      {
-        "unit": "g/L",
-        "factor": 2500000.0
+        "unit": "nmol/L",
+        "factor": 0.4
       }
     ]
   },
