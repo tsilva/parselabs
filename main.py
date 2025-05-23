@@ -708,11 +708,16 @@ def plot_lab_enum(args):
     df_lab = df_lab.sort_values("date", ascending=True)
     if len(df_lab) < 2:
         return
+    # Get unit for this lab_name_enum (use first non-null unit)
+    unit = df_lab["lab_unit_final"].dropna().astype(str).unique()
+    unit_str = unit[0] if len(unit) > 0 and unit[0] != "" else ""
+    y_label = f"Value ({unit_str})" if unit_str else "Value"
+    title = f"{lab_name_enum} " + (f" [{unit_str}]" if unit_str else "")
     plt.figure(figsize=(10, 5))
     plt.plot(df_lab["date"], df_lab["lab_value_final"], marker='o', linestyle='-')
-    plt.title(f"{lab_name_enum} over time")
+    plt.title(title)
     plt.xlabel("Date")
-    plt.ylabel("Value")
+    plt.ylabel(y_label)
     plt.grid(True)
     plt.tight_layout()
     safe_lab_name = re.sub(r'[^\w\-_. ]', '_', str(lab_name_enum))
