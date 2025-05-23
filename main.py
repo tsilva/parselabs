@@ -523,9 +523,9 @@ def process_single_pdf(
     doc_out_dir.mkdir(exist_ok=True, parents=True)
 
     normalized_csv_path = os.path.join(doc_out_dir, f"{pdf_stem}.csv")
-    if os.path.exists(normalized_csv_path):
-        logger.info(f"[{pdf_stem}] - skipped")
-        return pd.read_csv(normalized_csv_path)
+    #if os.path.exists(normalized_csv_path):
+    #    logger.info(f"[{pdf_stem}] - skipped")
+    #    return pd.read_csv(normalized_csv_path)
     
     logger.info(f"[{pdf_stem}] - processing...")
 
@@ -655,7 +655,7 @@ def process_single_pdf(
 
         # Export to CSV
         page_csv_path = doc_out_dir / f"{page_file_name}.csv"
-        if not page_csv_path.exists():
+        if True: #not page_csv_path.exists():
             logger.info(f"[{page_file_name}] - converting JSON to CSV")
 
             # Load JSON and convert to DataFrame
@@ -751,11 +751,14 @@ def main():
         value = re.sub(r"[\s_-]+", "", value)
         return value
 
-    # Map lab_name and lab_unit to enums
-    def map_lab_name_enum(row):
+    def map_lab_name_slug(row):
         lab_type = row["lab_type"]
         lab_name = row["lab_name"]
         lab_name_slug = f"{lab_type.lower()}-{slugify(lab_name)}"
+        return lab_name_slug
+
+    def map_lab_name_enum(row):
+        lab_name_slug = map_lab_name_slug(row)
         lab_name_enum = lab_names_mapping[lab_name_slug]
         return lab_name_enum
     
@@ -763,6 +766,7 @@ def main():
         slug = slugify(row.get("lab_unit", ""))
         return lab_units_mapping.get(slug, "")
 
+    merged_df["lab_name_slug"] = merged_df.apply(map_lab_name_slug, axis=1)
     merged_df["lab_name_enum"] = merged_df.apply(map_lab_name_enum, axis=1)
     merged_df["lab_unit_enum"] = merged_df.apply(map_lab_unit_enum, axis=1)
 
@@ -772,6 +776,7 @@ def main():
         "lab_type",
         "lab_name",
         "lab_name_enum",
+        "lab_name_slug",
         "lab_value",
         "lab_unit",
         "lab_unit_enum",
