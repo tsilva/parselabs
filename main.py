@@ -688,6 +688,27 @@ def process_single_pdf(
 
     merged_df.to_csv(normalized_csv_path, index=False)
 
+    # --------- Export Excel file for Google Drive, freeze first row ---------
+    excel_path = os.path.join(output_dir, "all.xlsx")
+    with pd.ExcelWriter(excel_path, engine="xlsxwriter") as writer:
+        merged_df.to_excel(writer, index=False)
+        worksheet = writer.sheets[merged_df.columns.name or writer.sheets.keys().__iter__().__next__()]
+        worksheet.freeze_panes(1, 0)
+
+    # --------- Export final reduced file ---------
+    export_columns_final = [
+        "date",
+        "lab_type",
+        "lab_name_enum",
+        "lab_value_final",
+        "lab_unit_final",
+        "lab_range_min_final",
+        "lab_range_max_final"
+    ]
+    final_df = merged_df[[col for col in export_columns_final if col in merged_df.columns]]
+    final_df.to_csv(os.path.join(output_dir, "all.final.csv"), index=False)
+    final_df.to_excel(os.path.join(output_dir, "all.final.xlsx"), index=False)
+
     logger.info(f"[{pdf_stem}] - processing finished successfully")
 
 ########################################
@@ -895,6 +916,20 @@ def main():
         merged_df.to_excel(writer, index=False)
         worksheet = writer.sheets[merged_df.columns.name or writer.sheets.keys().__iter__().__next__()]
         worksheet.freeze_panes(1, 0)
+
+    # --------- Export final reduced file ---------
+    export_columns_final = [
+        "date",
+        "lab_type",
+        "lab_name_enum",
+        "lab_value_final",
+        "lab_unit_final",
+        "lab_range_min_final",
+        "lab_range_max_final"
+    ]
+    final_df = merged_df[[col for col in export_columns_final if col in merged_df.columns]]
+    final_df.to_csv(os.path.join(output_dir, "all.final.csv"), index=False)
+    final_df.to_excel(os.path.join(output_dir, "all.final.xlsx"), index=False)
 
     logger.info("All PDFs processed.")
 
