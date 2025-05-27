@@ -1,0 +1,1494 @@
+{
+  "Blood - TIBC (Total Iron-Binding Capacity)": {
+    "primary_unit": "µg/dL",
+    "alternatives": [
+      {
+        "unit": "µg/L",
+        "factor": 0.01
+      }
+    ]
+  },
+  "Blood - Iron (serum)": {
+    "primary_unit": "µmol/L",
+    "alternatives": [
+      {
+        "unit": "µg/dL",
+        "factor": 0.179
+      },
+      {
+        "unit": "µg/L",
+        "factor": 0.179
+      }
+    ]
+  },
+  "Blood - LH": {
+    "primary_unit": "mIU/mL",
+    "alternatives": [
+      {
+        "unit": "IU/L",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - Folate (Serum)": {
+    "primary_unit": "nmol/L",
+    "alternatives": [
+      {
+        "unit": "ng/mL",
+        "factor": 2.266
+      }
+    ]
+  },
+  "Blood - Vitamin B12": {
+    "primary_unit": "ng/L",
+    "alternatives": [
+      {
+        "unit": "pmol/L",
+        "factor": 1.355
+      },
+      {
+        "unit": "pg/mL",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - Ferritin": {
+    "primary_unit": "µg/L",
+    "alternatives": [
+      {
+        "unit": "ng/mL",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - Estradiol (E2)": {
+    "primary_unit": "pg/mL",
+    "alternatives": []
+  },
+  "Blood - Transferrin": {
+    "primary_unit": "µmol/L",
+    "alternatives": [
+      {
+        "unit": "mol/L",
+        "factor": 1000000.0
+      },
+      {
+        "unit": "mg/dL",
+        "factor": 0.128
+      }
+    ]
+  },
+  "Blood - Transferrin (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - TSH": {
+    "primary_unit": "mIU/mL",
+    "alternatives": [
+      {
+        "unit": "IU/mL",
+        "factor": 1000.0
+      },
+      {
+        "unit": "µL",
+        "factor": 1000.0
+      },
+      {
+        "unit": "µUI/L",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - Free T4": {
+    "primary_unit": "pmol/L",
+    "alternatives": [
+      {
+        "unit": "ng/dL",
+        "factor": 12.87
+      }
+    ]
+  },
+  "Blood - FSH": {
+    "primary_unit": "mIU/mL",
+    "alternatives": [
+      {
+        "unit": "IU/L",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - WBC Count": {
+    "primary_unit": "µL",
+    "alternatives": [
+      {
+        "unit": "cells/µL",
+        "factor": 1.0
+      },
+      {
+        "unit": "10⁹/L",
+        "factor": 1000.0
+      }
+    ]
+  },
+  "Blood - Sodium": {
+    "primary_unit": "mEq/L",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - Chloride": {
+    "primary_unit": "mEq/L",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - Haemoglobin (Hb)": {
+    "primary_unit": "pg",
+    "alternatives": [
+      {
+        "unit": "g/dL",
+        "factor": 100000.0
+      }
+    ]
+  },
+  "Blood - RBC Count": {
+    "primary_unit": "10⁹/L",
+    "alternatives": [
+      {
+        "unit": "10¹²/L",
+        "factor": 1000.0
+      }
+    ]
+  },
+  "Blood - Haematocrit (HCT) (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - MCV": {
+    "primary_unit": "fL",
+    "alternatives": []
+  },
+  "Blood - MCH": {
+    "primary_unit": "pg",
+    "alternatives": []
+  },
+  "Blood - MCHC": {
+    "primary_unit": "pg",
+    "alternatives": [
+      {
+        "unit": "g/dL",
+        "factor": null
+      }
+    ]
+  },
+  "Blood - RDW-SD (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - Potassium": {
+    "primary_unit": "mEq/L",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - Neutrophils (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - Platelet Count": {
+    "primary_unit": "µL",
+    "alternatives": [
+      {
+        "unit": "L",
+        "factor": 1e-06
+      },
+      {
+        "unit": "10⁹/L",
+        "factor": 1000.0
+      }
+    ]
+  },
+  "Blood - Creatinine": {
+    "primary_unit": "µmol/L",
+    "alternatives": [
+      {
+        "unit": "mol/L",
+        "factor": 1000000.0
+      },
+      {
+        "unit": "mg/dL",
+        "factor": 88.4
+      }
+    ]
+  },
+  "Blood - BUN (Blood Urea Nitrogen)": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 2.801
+      }
+    ]
+  },
+  "Blood - Neutrophils": {
+    "primary_unit": "µL",
+    "alternatives": [
+      {
+        "unit": "L",
+        "factor": 1000000.0
+      },
+      {
+        "unit": "10⁹/L",
+        "factor": 1000.0
+      }
+    ]
+  },
+  "Blood - Urea": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 2.8
+      }
+    ]
+  },
+  "Blood - Glucose (Fasting)": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 18.0
+      }
+    ]
+  },
+  "Blood - aPTT": {
+    "primary_unit": "s",
+    "alternatives": []
+  },
+  "Blood - INR (Prothrombin Time)": {
+    "primary_unit": "ratio",
+    "alternatives": []
+  },
+  "Blood - PT (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - MPV": {
+    "primary_unit": "fL",
+    "alternatives": []
+  },
+  "Blood - PT": {
+    "primary_unit": "s",
+    "alternatives": []
+  },
+  "Blood - Basophils (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - Monocytes": {
+    "primary_unit": "µL",
+    "alternatives": [
+      {
+        "unit": "L",
+        "factor": 1e-06
+      },
+      {
+        "unit": "10⁹/L",
+        "factor": 1000.0
+      }
+    ]
+  },
+  "Blood - Monocytes (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - Lymphocytes": {
+    "primary_unit": "µL",
+    "alternatives": [
+      {
+        "unit": "L",
+        "factor": 1000000.0
+      },
+      {
+        "unit": "10⁹/L",
+        "factor": 1000.0
+      }
+    ]
+  },
+  "Blood - Lymphocytes (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - Basophils": {
+    "primary_unit": "µL",
+    "alternatives": [
+      {
+        "unit": "L",
+        "factor": 1000000.0
+      },
+      {
+        "unit": "10⁹/L",
+        "factor": 1000.0
+      }
+    ]
+  },
+  "Blood - Eosinophils": {
+    "primary_unit": "µL",
+    "alternatives": [
+      {
+        "unit": "L",
+        "factor": 1000000.0
+      },
+      {
+        "unit": "10⁹/L",
+        "factor": 1000.0
+      }
+    ]
+  },
+  "Blood - Eosinophils (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - LDL Cholesterol": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
+    ]
+  },
+  "Urine - WBC": {
+    "primary_unit": "boolean",
+    "alternatives": [
+      {
+        "unit": "fraction of 1",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Urine - Acanthocytes": {
+    "primary_unit": "boolean",
+    "alternatives": [
+      {
+        "unit": "L",
+        "factor": 0.0
+      }
+    ]
+  },
+  "Urine - Leukocyte Esterase": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Urine - Haemoglobin/Blood": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Urine - pH": {
+    "primary_unit": "pH",
+    "alternatives": []
+  },
+  "Urine - Nitrites": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Urine - Bilirubin (Conjugated)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Urine - Urobilinogen": {
+    "primary_unit": "boolean",
+    "alternatives": [
+      {
+        "unit": "mg/dL",
+        "factor": 0.0
+      }
+    ]
+  },
+  "Urine - Ketones": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Urine - Glucose": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Urine - Total Protein": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Urine - Colour": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Urine - Dipstick Summary": {
+    "primary_unit": "boolean",
+    "alternatives": [
+      {
+        "unit": "unitless",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Urine - Appearance": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - CRP": {
+    "primary_unit": "boolean",
+    "alternatives": [
+      {
+        "unit": "mg/dL",
+        "factor": 0.0
+      },
+      {
+        "unit": "mg/L",
+        "factor": 0.0
+      }
+    ]
+  },
+  "Blood - Total Cholesterol": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
+    ]
+  },
+  "Blood - Triglycerides": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 88.5
+      }
+    ]
+  },
+  "Blood - Uric Acid": {
+    "primary_unit": "µmol/L",
+    "alternatives": [
+      {
+        "unit": "mg/dL",
+        "factor": 59.48
+      },
+      {
+        "unit": "mmol/L",
+        "factor": 1000.0
+      }
+    ]
+  },
+  "Blood - HbA1c (IFCC) (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - ESR (1 h)": {
+    "primary_unit": "mm/h",
+    "alternatives": []
+  },
+  "Blood - ALT (Alanine Aminotransferase)": {
+    "primary_unit": "IU/L",
+    "alternatives": [
+      {
+        "unit": "fraction of 1",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - AST (Aspartate Aminotransferase)": {
+    "primary_unit": "IU/L",
+    "alternatives": []
+  },
+  "Blood - Bilirubin Direct": {
+    "primary_unit": "µmol/L",
+    "alternatives": [
+      {
+        "unit": "mg/dL",
+        "factor": 17.1
+      }
+    ]
+  },
+  "Blood - Bilirubin Total": {
+    "primary_unit": "µmol/L",
+    "alternatives": [
+      {
+        "unit": "mg/dL",
+        "factor": 17.1
+      }
+    ]
+  },
+  "Blood - Lipase": {
+    "primary_unit": "IU/L",
+    "alternatives": []
+  },
+  "Blood - 1,25-OH₂ Vitamin D": {
+    "primary_unit": "pmol/L",
+    "alternatives": [
+      {
+        "unit": "pg/mL",
+        "factor": 2.4
+      }
+    ]
+  },
+  "Blood - Magnesium": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mEq/L",
+        "factor": 1.215
+      },
+      {
+        "unit": "mmol/L",
+        "factor": 2.43
+      }
+    ]
+  },
+  "Blood - Calcium (ionized)": {
+    "primary_unit": "mmol/L",
+    "alternatives": []
+  },
+  "Blood - Amylase (α-Amylase)": {
+    "primary_unit": "IU/L",
+    "alternatives": []
+  },
+  "Blood - Albumin": {
+    "primary_unit": "ratio",
+    "alternatives": [
+      {
+        "unit": "g/L",
+        "factor": 0.1
+      },
+      {
+        "unit": "g/dL",
+        "factor": 0.01
+      }
+    ]
+  },
+  "Blood - GGT (Gamma-Glutamyl Transferase)": {
+    "primary_unit": "IU/L",
+    "alternatives": [
+      {
+        "unit": "g/dL",
+        "factor": null
+      }
+    ]
+  },
+  "Blood - ALP (Alkaline Phosphatase)": {
+    "primary_unit": "IU/L",
+    "alternatives": []
+  },
+  "Blood - HDL Cholesterol": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
+    ]
+  },
+  "Blood - ASO (Titre)": {
+    "primary_unit": "IU/mL",
+    "alternatives": []
+  },
+  "Blood - LDL Subfractions (direct)": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Blood - Pancreatic Amylase": {
+    "primary_unit": "IU/L",
+    "alternatives": []
+  },
+  "Urine - Epithelial Cells": {
+    "primary_unit": "boolean",
+    "alternatives": [
+      {
+        "unit": "L",
+        "factor": 0.0
+      }
+    ]
+  },
+  "Blood - HbA1c (IFCC)": {
+    "primary_unit": "mmol/mol creatinine",
+    "alternatives": []
+  },
+  "Blood - Calcium (total)": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mEq/L",
+        "factor": 2.0
+      },
+      {
+        "unit": "mmol/L",
+        "factor": 4.0
+      }
+    ]
+  },
+  "Blood - Phosphate (inorganic)": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Blood - PTH (Intact)": {
+    "primary_unit": "ng/L",
+    "alternatives": [
+      {
+        "unit": "pg/mL",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - 25-OH Vitamin D": {
+    "primary_unit": "ng/mL",
+    "alternatives": [
+      {
+        "unit": "µg/L",
+        "factor": 1
+      },
+      {
+        "unit": "nmol/L",
+        "factor": 0.4
+      }
+    ]
+  },
+  "Blood - Zinc": {
+    "primary_unit": "µg/dL",
+    "alternatives": [
+      {
+        "unit": "µmol/L",
+        "factor": 6.538
+      }
+    ]
+  },
+  "Blood - Anti-Tg Ab": {
+    "primary_unit": "IU/mL",
+    "alternatives": [
+      {
+        "unit": "KU/L",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - Anti-TPO Ab": {
+    "primary_unit": "IU/mL",
+    "alternatives": [
+      {
+        "unit": "KU/L",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - eAG (Estimated Average Glucose)": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Blood - CK (Creatine Kinase)": {
+    "primary_unit": "IU/L",
+    "alternatives": []
+  },
+  "Blood - Rheumatoid Factor (RF)": {
+    "primary_unit": "IU/mL",
+    "alternatives": []
+  },
+  "Blood - Total Protein": {
+    "primary_unit": "g/L",
+    "alternatives": [
+      {
+        "unit": "g/dL",
+        "factor": 10.0
+      }
+    ]
+  },
+  "Saliva - SARS-CoV-2 RNA (RT-PCR)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - LDH": {
+    "primary_unit": "IU/L",
+    "alternatives": []
+  },
+  "Blood - MPV (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - Haematocrit (HCT)": {
+    "primary_unit": "L",
+    "alternatives": []
+  },
+  "Blood - PDW (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - HDW": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Blood - Homocysteine": {
+    "primary_unit": "µmol/L",
+    "alternatives": [
+      {
+        "unit": "µg/mL",
+        "factor": 7.397
+      }
+    ]
+  },
+  "Urine - Sediment (Epithelial Cells)": {
+    "primary_unit": "boolean",
+    "alternatives": [
+      {
+        "unit": "fraction of 1",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Urine - RBC": {
+    "primary_unit": "boolean",
+    "alternatives": [
+      {
+        "unit": "fraction of 1",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - Total T3": {
+    "primary_unit": "nmol/L",
+    "alternatives": [
+      {
+        "unit": "ng/mL",
+        "factor": 1.536
+      }
+    ]
+  },
+  "Blood - Total T4": {
+    "primary_unit": "µg/dL",
+    "alternatives": [
+      {
+        "unit": "µg/100mL",
+        "factor": 1.0
+      },
+      {
+        "unit": "nmol/L",
+        "factor": 0.0779
+      }
+    ]
+  },
+  "Blood - Alpha-2 Globulins": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "g/dL",
+        "factor": 100.0
+      }
+    ]
+  },
+  "Blood - Albumin (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - Alpha-1 Globulins (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - Alpha-1 Globulins": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "g/dL",
+        "factor": 100.0
+      }
+    ]
+  },
+  "Blood - Alpha-2 Globulins (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - Beta Globulins": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Blood - TBG (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - Gamma Globulins": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Blood - Albumin/Globulin Ratio": {
+    "primary_unit": "ratio",
+    "alternatives": [
+      {
+        "unit": "unitless",
+        "factor": 1.0
+      },
+      {
+        "unit": "g/dL",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - Beta-1 Globulins (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - RBC Count (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - Free T3": {
+    "primary_unit": "pmol/L",
+    "alternatives": [
+      {
+        "unit": "pg/mL",
+        "factor": 1.536
+      }
+    ]
+  },
+  "Blood - Progesterone (PRG)": {
+    "primary_unit": "ng/mL",
+    "alternatives": []
+  },
+  "Blood - Total Testosterone": {
+    "primary_unit": "ng/mL",
+    "alternatives": [
+      {
+        "unit": "ng/dL",
+        "factor": 0.01
+      }
+    ]
+  },
+  "Blood - Free Testosterone": {
+    "primary_unit": "pg/mL",
+    "alternatives": []
+  },
+  "Blood - IGF-1": {
+    "primary_unit": "ng/mL",
+    "alternatives": []
+  },
+  "Blood - DHEA": {
+    "primary_unit": "nmol/L",
+    "alternatives": [
+      {
+        "unit": "ng/mL",
+        "factor": 3.472
+      }
+    ]
+  },
+  "Blood - Cortisol": {
+    "primary_unit": "µg/dL",
+    "alternatives": [
+      {
+        "unit": "ng/mL",
+        "factor": 0.1
+      }
+    ]
+  },
+  "Blood - SHBG": {
+    "primary_unit": "nmol/L",
+    "alternatives": []
+  },
+  "Blood - Estriol (E3)": {
+    "primary_unit": "ng/mL",
+    "alternatives": []
+  },
+  "Urine - Colony Count": {
+    "primary_unit": "IU/mL",
+    "alternatives": [
+      {
+        "unit": "IU/L",
+        "factor": 0.001
+      }
+    ]
+  },
+  "Urine - Polymicrobial Culture": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Vitamin C (Ascorbic Acid)": {
+    "primary_unit": "µmol/L",
+    "alternatives": [
+      {
+        "unit": "mol/L",
+        "factor": 1000000.0
+      },
+      {
+        "unit": "mg/L",
+        "factor": 5.68
+      }
+    ]
+  },
+  "Blood - Magnesium (Erythrocytes)": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mEq/L",
+        "factor": 1.215
+      }
+    ]
+  },
+  "Blood - Prolactin": {
+    "primary_unit": "ng/mL",
+    "alternatives": []
+  },
+  "Blood - DHT": {
+    "primary_unit": "ng/dL",
+    "alternatives": []
+  },
+  "Blood - Vitamin B6 (PLP)": {
+    "primary_unit": "µg/L",
+    "alternatives": [
+      {
+        "unit": "ng/mL",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - Insulin": {
+    "primary_unit": "IU/mL",
+    "alternatives": [
+      {
+        "unit": "pmol/L",
+        "factor": 0.000138
+      }
+    ]
+  },
+  "Blood - 17-OH Progesterone": {
+    "primary_unit": "ng/mL",
+    "alternatives": []
+  },
+  "Blood - DHEA-S": {
+    "primary_unit": "µg/mL",
+    "alternatives": []
+  },
+  "Blood - 4-Androstenedione": {
+    "primary_unit": "ng/mL",
+    "alternatives": []
+  },
+  "Blood - Calcitonin": {
+    "primary_unit": "pg/mL",
+    "alternatives": []
+  },
+  "Blood - Osteocalcin": {
+    "primary_unit": "ng/mL",
+    "alternatives": []
+  },
+  "Blood - Copper": {
+    "primary_unit": "µg/dL",
+    "alternatives": []
+  },
+  "Blood - Reverse T3": {
+    "primary_unit": "ng/mL",
+    "alternatives": []
+  },
+  "Blood - Intrinsic Factor Ab (IgG)": {
+    "primary_unit": "IU/L",
+    "alternatives": []
+  },
+  "Blood - RDW-SD": {
+    "primary_unit": "fL",
+    "alternatives": []
+  },
+  "Blood - Anti-tTG IgA": {
+    "primary_unit": "IU/mL",
+    "alternatives": [
+      {
+        "unit": "IU/L",
+        "factor": 1
+      }
+    ]
+  },
+  "Blood - IG (Immature Granulocytes %) (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - PDW": {
+    "primary_unit": "fL",
+    "alternatives": []
+  },
+  "Blood - IgG": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Blood - IgA": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Blood - IgM": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Urine - Casts": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Platelet Count (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - Beta-1 Globulins": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Urine - Specific Gravity": {
+    "primary_unit": "unitless",
+    "alternatives": []
+  },
+  "Blood - Reticulocyte Count (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - CHr": {
+    "primary_unit": "pg",
+    "alternatives": []
+  },
+  "Urine - Free Cortisol": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Urine - Volume (24 h)": {
+    "primary_unit": "mL",
+    "alternatives": []
+  },
+  "Blood - Anti-Gliadin IgG": {
+    "primary_unit": "IU/mL",
+    "alternatives": []
+  },
+  "Blood - Anti-Gliadin IgA": {
+    "primary_unit": "IU/mL",
+    "alternatives": []
+  },
+  "Feces - Fecal Occult Blood (FOBT)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Lithium": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mEq/L",
+        "factor": 0.0069
+      },
+      {
+        "unit": "mmol/L",
+        "factor": 6.94
+      }
+    ]
+  },
+  "Blood - Reticulocyte Count": {
+    "primary_unit": "cells/µL",
+    "alternatives": [
+      {
+        "unit": "10⁹/L",
+        "factor": 1000.0
+      }
+    ]
+  },
+  "Blood - LDL/HDL Ratio": {
+    "primary_unit": "unitless",
+    "alternatives": [
+      {
+        "unit": "ratio",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - Beta-2 Globulins": {
+    "primary_unit": "g/dL",
+    "alternatives": []
+  },
+  "Blood - Beta-2 Globulins (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - Gamma Globulins (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - MCHC (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - Erythropoietin (EPO)": {
+    "primary_unit": "IU/L",
+    "alternatives": []
+  },
+  "Blood - Copper (Erythrocytes)": {
+    "primary_unit": "µg/dL",
+    "alternatives": []
+  },
+  "Blood - Ceruloplasmin": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Blood - MCV (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - Vitamin A (Retinol)": {
+    "primary_unit": "µg/dL",
+    "alternatives": []
+  },
+  "Blood - Vitamin E (Alpha-Tocopherol)": {
+    "primary_unit": "mg/L",
+    "alternatives": []
+  },
+  "Blood - Selenium": {
+    "primary_unit": "µg/L",
+    "alternatives": []
+  },
+  "Blood - Chromium": {
+    "primary_unit": "µg/L",
+    "alternatives": []
+  },
+  "Saliva - Secretory IgA": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Feces - Helicobacter pylori Ag": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Feces - Calprotectin": {
+    "primary_unit": "mg/L",
+    "alternatives": []
+  },
+  "Feces - Chymotrypsin": {
+    "primary_unit": "µg",
+    "alternatives": []
+  },
+  "Feces - Pancreatic Elastase": {
+    "primary_unit": "g",
+    "alternatives": []
+  },
+  "Blood - Ammonia": {
+    "primary_unit": "µmol/L",
+    "alternatives": []
+  },
+  "Blood - Anisocytosis": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Anti-tTG IgG": {
+    "primary_unit": "IU/mL",
+    "alternatives": []
+  },
+  "Blood - Anti-CCP Ab": {
+    "primary_unit": "IU/mL",
+    "alternatives": []
+  },
+  "Blood - Alpha-1-Antitrypsin (AAT)": {
+    "primary_unit": "IU/mL",
+    "alternatives": []
+  },
+  "Blood - hs-CRP": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Urine - Sediment (Cells)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Bilirubin Indirect": {
+    "primary_unit": "µmol/L",
+    "alternatives": [
+      {
+        "unit": "mg/dL",
+        "factor": 17.1
+      }
+    ]
+  },
+  "Urine - Albumin (low conc.)": {
+    "primary_unit": "boolean",
+    "alternatives": [
+      {
+        "unit": "mg/dL",
+        "factor": 0.0
+      }
+    ]
+  },
+  "Urine - Biliary Pigments (Total/Direct/Indirect)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Quick Time": {
+    "primary_unit": "s",
+    "alternatives": []
+  },
+  "Urine - Contaminating Flora": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Urine - Sediment (Crystals)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - VLDL Cholesterol": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
+    ]
+  },
+  "Blood - Haptoglobin": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Blood - Complement C3": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "U/L",
+        "factor": 0.0029
+      }
+    ]
+  },
+  "Blood - Complement C4": {
+    "primary_unit": "mg/dL",
+    "alternatives": []
+  },
+  "Feces - Ova & Parasites": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - ANA": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Waaler-Rose Test": {
+    "primary_unit": "IU/mL",
+    "alternatives": [
+      {
+        "unit": "boolean",
+        "factor": 0.0
+      }
+    ]
+  },
+  "Blood - LE Cells (screen)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Differential Leukogram": {
+    "primary_unit": "mEq/L",
+    "alternatives": []
+  },
+  "Blood - ACTH": {
+    "primary_unit": "pg/mL",
+    "alternatives": []
+  },
+  "Feces - Starch Granules": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Feces - Neutral Fats": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Feces - Muscle Fibres (partial digestion)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - CEA (Carcino-Embryonic Ag)": {
+    "primary_unit": "ng/mL",
+    "alternatives": []
+  },
+  "Blood - VDRL": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - ESR (2 h)": {
+    "primary_unit": "mm/h",
+    "alternatives": []
+  },
+  "Blood - CA 19-9": {
+    "primary_unit": "IU/mL",
+    "alternatives": []
+  },
+  "Blood - ABO/Rh Grouping": {
+    "primary_unit": "boolean",
+    "alternatives": [
+      {
+        "unit": "unitless",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Urine - Crystals": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Wright Reaction": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Widal (S. Paratyphi B H)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Widal (S. Paratyphi A O)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Widal (S. Paratyphi A H)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Widal (S. Typhi O)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Widal (S. Typhi H)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Widal (S. Paratyphi B O)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Beta Globulins (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - 5′-Nucleotidase (5′-NT)": {
+    "primary_unit": "IU/L",
+    "alternatives": []
+  },
+  "Blood - Alpha-Fetoprotein (AFP)": {
+    "primary_unit": "ng/mL",
+    "alternatives": []
+  },
+  "Blood - Anti-Smooth Muscle Antibody (ASMA), IgG": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Circulating Immune Complexes": {
+    "primary_unit": "µg/mL",
+    "alternatives": []
+  },
+  "Feces - Stool Culture (Salmonella/Shigella/Campylobacter)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Anti-SSB (La) Ab": {
+    "primary_unit": "IU/mL",
+    "alternatives": []
+  },
+  "Blood - Anti-SSA (Ro) Ab": {
+    "primary_unit": "IU/mL",
+    "alternatives": [
+      {
+        "unit": "unitless",
+        "factor": 1.0
+      }
+    ]
+  },
+  "Blood - Anti-dsDNA IgG": {
+    "primary_unit": "IU/mL",
+    "alternatives": []
+  },
+  "Blood - Anti-HCV Total": {
+    "primary_unit": "unitless",
+    "alternatives": []
+  },
+  "Blood - Anti-HBc (IgG + IgM)": {
+    "primary_unit": "unitless",
+    "alternatives": []
+  },
+  "Blood - Anti-HBs Antibody": {
+    "primary_unit": "mIU/mL",
+    "alternatives": []
+  },
+  "Blood - HBsAg": {
+    "primary_unit": "unitless",
+    "alternatives": []
+  },
+  "Blood - HLA-B27 Genotyping": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Feces - Salmonella (spp. screen)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Feces - Shigella DNA": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Feces - Yersinia (spp. screen)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Anti-PR3 Ab (IgG)": {
+    "primary_unit": "unitless",
+    "alternatives": []
+  },
+  "Blood - Anti-MPO Ab": {
+    "primary_unit": "unitless",
+    "alternatives": []
+  },
+  "Blood - ANCA IgG": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Anti-Cardiolipin IgG": {
+    "primary_unit": "pg",
+    "alternatives": []
+  },
+  "Blood - Anti-Cardiolipin IgM": {
+    "primary_unit": "pg",
+    "alternatives": []
+  },
+  "Blood - Cryoglobulins, Qualitative": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - HIV-2 Proviral DNA": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - HIV-1 Proviral DNA": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Anti-Mitochondrial Antibody (AMA), IgG": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Anti-Scl-70 Ab": {
+    "primary_unit": "U/L",
+    "alternatives": []
+  },
+  "Blood - Waaler-Rose Test (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
+  "Blood - RA Test": {
+    "primary_unit": "IU/mL",
+    "alternatives": []
+  },
+  "Urine - Acid-Fast Bacilli (Direct smear)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Urine - Mycobacteria Culture": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Urine - Sediment Deposit": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  },
+  "Blood - Rh Factor (Anti-D)": {
+    "primary_unit": "boolean",
+    "alternatives": []
+  }
+}
