@@ -172,3 +172,5 @@ __pycache__/
 output/
 
 output.zip
+
+user_stats.json
