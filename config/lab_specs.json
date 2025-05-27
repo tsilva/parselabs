@@ -80,10 +80,10 @@
     }
   },
   "Blood - Ferritin": {
-    "primary_unit": "µg/L",
+    "primary_unit": "ng/mL",
     "alternatives": [
       {
-        "unit": "ng/mL",
+        "unit": "µg/L",
         "factor": 1.0
       }
     ],
