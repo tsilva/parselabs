@@ -913,6 +913,44 @@ def main():
 
     merged_df["is_flagged_final"] = merged_df.apply(compute_is_flagged_final, axis=1)
 
+    # --------- Compute healthy_range_min, healthy_range_max, is_in_healthy_range ---------
+    def get_healthy_range(row):
+        lab_name_enum = row.get("lab_name_enum", "")
+        if not lab_name_enum or lab_name_enum not in lab_specs:
+            return pd.Series([None, None])
+        healthy = lab_specs[lab_name_enum].get("ranges", {}).get("healthy", None)
+        if healthy and isinstance(healthy, dict):
+            return pd.Series([healthy.get("min"), healthy.get("max")])
+        return pd.Series([None, None])
+
+    merged_df[["healthy_range_min", "healthy_range_max"]] = merged_df.apply(get_healthy_range, axis=1)
+
+    def compute_is_in_healthy_range(row):
+        value = row.get("lab_value_final")
+        minv = row.get("healthy_range_min")
+        maxv = row.get("healthy_range_max")
+        try:
+            value = float(value)
+        except Exception:
+            return None
+        try:
+            minv = float(minv)
+        except Exception:
+            minv = None
+        try:
+            maxv = float(maxv)
+        except Exception:
+            maxv = None
+        if minv is not None and value < minv:
+            return False
+        if maxv is not None and value > maxv:
+            return False
+        if minv is not None or maxv is not None:
+            return True
+        return None
+
+    merged_df["is_in_healthy_range"] = merged_df.apply(compute_is_in_healthy_range, axis=1)
+
     # Only keep the specified columns for all.csv
     export_columns = [
         "date",
@@ -932,7 +970,10 @@ def main():
         "is_flagged",
         "confidence",
         "source_file",
-        "is_flagged_final"
+        "is_flagged_final",
+        "healthy_range_min",
+        "healthy_range_max",
+        "is_in_healthy_range"
     ]
     
     merged_df = merged_df[[col for col in export_columns if col in merged_df.columns]]
@@ -960,7 +1001,10 @@ def main():
         "lab_unit_final",
         "lab_range_min_final",
         "lab_range_max_final",
-        "is_flagged_final"
+        "is_flagged_final",
+        "healthy_range_min",
+        "healthy_range_max",
+        "is_in_healthy_range"
     ]
     final_df = merged_df[[col for col in export_columns_final if col in merged_df.columns]]
     final_df.to_csv(os.path.join(output_dir, "all.final.csv"), index=False)
