@@ -1,3 +1,6 @@
+- add gdrive workflow support
+- last should have last values and if it was ever outside range
+- remove date source file page number
 - make last csv not have the text
 - make last csv have source file
 - make last csv have enums
