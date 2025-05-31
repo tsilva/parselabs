@@ -1,3 +1,4 @@
+- try mounting gdrive with rclone
 - add gdrive workflow support
 - last should have last values and if it was ever outside range
 - remove date source file page number
