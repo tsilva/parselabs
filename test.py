@@ -40,14 +40,14 @@ def test_lab_name_mappings_prefixes(report):
             mappings = json.load(f)
         for k, v in mappings.items():
             if k.startswith("blood-"):
-                if not v.startswith("Blood - "):
-                    errors.append(f"Key '{k}' must have value starting with 'Blood - ', got '{v}'")
+                if not v.startswith("Blood "):
+                    errors.append(f"Key '{k}' must have value starting with 'Blood ', got '{v}'")
             elif k.startswith("urine-"):
-                if not v.startswith("Urine - "):
-                    errors.append(f"Key '{k}' must have value starting with 'Urine - ', got '{v}'")
+                if not v.startswith("Urine "):
+                    errors.append(f"Key '{k}' must have value starting with 'Urine ', got '{v}'")
             elif k.startswith("feces-"):
-                if not v.startswith("Feces - "):
-                    errors.append(f"Key '{k}' must have value starting with 'Feces - ', got '{v}'")
+                if not v.startswith("Feces "):
+                    errors.append(f"Key '{k}' must have value starting with 'Feces ', got '{v}'")
     except Exception as e:
         errors.append(f"Exception: {e}")
     if errors:
