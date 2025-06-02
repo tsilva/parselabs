@@ -1,5 +1,7 @@
 - try mounting gdrive with rclone
 - add gdrive workflow support
+- Check for outliers in lab results
+- Ask GPT to find outliers in lab results
 - last should have last values and if it was ever outside range
 - remove date source file page number
 - make last csv not have the text
