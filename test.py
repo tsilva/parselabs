@@ -3,7 +3,7 @@ import hashlib
 import json
 
 def test_all_rows_have_dates_and_no_duplicates(report):
-    file = "output/all.csv"
+    file = "output/all.final.csv"
     errors = []
     try:
         df = pd.read_csv(file)
@@ -54,7 +54,7 @@ def test_lab_name_mappings_prefixes(report):
         report.setdefault(file, []).extend(errors)
 
 def test_lab_unit_percent_vs_lab_name(report):
-    file = "output/all.csv"
+    file = "output/all.final.csv"
     errors = []
     try:
         df = pd.read_csv(file)
@@ -86,7 +86,7 @@ def test_lab_names_mapping_percent_suffix(report):
         report.setdefault(file, []).extend(errors)
 
 def test_lab_unit_not_empty(report):
-    file = "output/all.csv"
+    file = "output/all.final.csv"
     errors = []
     try:
         df = pd.read_csv(file)
@@ -103,20 +103,20 @@ def test_lab_unit_not_empty(report):
         report.setdefault(file, []).extend(errors)
 
 def test_lab_unit_percent_value_range(report):
-    file = "output/all.csv"
+    file = "output/all.final.csv"
     errors = []
     try:
         df = pd.read_csv(file)
         mask = (df['lab_unit_enum'] == "%") & (
-            (df['lab_value'] < 0) | (df['lab_value'] > 100)
+            (df['lab_value_final'] < 0) | (df['lab_value_final'] > 100)
         )
         for idx in df[mask].index:
             row = df.loc[idx]
             source_file = row.get('source_file', 'unknown')
-            val = row.get('lab_value')
+            val = row.get('lab_value_final')
             lab_name = row.get('lab_name_enum', '')
             report.setdefault(source_file, []).append(
-                f'Row at index {idx} (lab_name="{lab_name}") has lab_unit_enum="%" but lab_value={val} (should be between 0 and 100)'
+                f'Row at index {idx} (lab_name="{lab_name}") has lab_unit_enum="%" but lab_value_final={val} (should be between 0 and 100)'
             )
     except Exception as e:
         errors.append(f"Exception: {e}")
@@ -124,18 +124,18 @@ def test_lab_unit_percent_value_range(report):
         report.setdefault(file, []).extend(errors)
 
 def test_lab_unit_boolean_value(report):
-    file = "output/all.csv"
+    file = "output/all.final.csv"
     errors = []
     try:
         df = pd.read_csv(file)
-        mask = (df['lab_unit_enum'] == "boolean") & (~df['lab_value'].isin([0, 1]))
+        mask = (df['lab_unit_enum'] == "boolean") & (~df['lab_value_final'].isin([0, 1]))
         for idx in df[mask].index:
             row = df.loc[idx]
             source_file = row.get('source_file', 'unknown')
-            val = row.get('lab_value')
+            val = row.get('lab_value_final')
             lab_name = row.get('lab_name_enum', '')
             report.setdefault(source_file, []).append(
-                f'Row at index {idx} (lab_name="{lab_name}") has lab_unit_enum="boolean" but lab_value={val} (should be 0 or 1)'
+                f'Row at index {idx} (lab_name="{lab_name}") has lab_unit_enum="boolean" but lab_value_final={val} (should be 0 or 1)'
             )
     except Exception as e:
         errors.append(f"Exception: {e}")
@@ -143,7 +143,7 @@ def test_lab_unit_boolean_value(report):
         report.setdefault(file, []).extend(errors)
 
 def test_lab_name_enum_unit_consistency(report):
-    file = "output/all.csv"
+    file = "output/all.final.csv"
     errors = []
     try:
         df = pd.read_csv(file)
@@ -161,6 +161,46 @@ def test_lab_name_enum_unit_consistency(report):
     if errors:
         report.setdefault(file, []).extend(errors)
 
+def test_lab_value_outliers_by_lab_name_enum(report):
+    file = "output/all.final.csv"
+    errors = []
+    try:
+        df = pd.read_csv(file)
+        # Only consider rows with non-null lab_value_final
+        df = df[pd.notnull(df['lab_value_final'])]
+        for lab_name_enum, group in df.groupby('lab_name_enum'):
+            # Find the most frequent lab_unit_final
+            unit_counts = group['lab_unit_final'].value_counts()
+            if unit_counts.empty:
+                continue
+            most_freq_unit = unit_counts.idxmax()
+            values = group[group['lab_unit_final'] == most_freq_unit]['lab_value_final']
+            # Only consider numeric values
+            values = pd.to_numeric(values, errors='coerce').dropna()
+            if len(values) < 5:
+                continue  # skip small groups
+            mean = values.mean()
+            std = values.std()
+            if std == 0 or pd.isnull(std):
+                continue
+            outliers = group[
+                (group['lab_unit_final'] == most_freq_unit) &
+                (
+                    (group['lab_value_final'] > mean + 2 * std) |
+                    (group['lab_value_final'] < mean - 2 * std)
+                )
+            ]
+            if not outliers.empty:
+                # Fix: get all unique source_file values, not characters
+                source_files = set(outliers['source_file'].dropna().astype(str))
+                report.setdefault(file, []).append(
+                    f'lab_name_enum="{lab_name_enum}", lab_unit_final="{most_freq_unit}" has outlier lab_value_final (>2 std from mean {mean:.2f}±{std:.2f}) in files: {list(sorted(source_files))}'
+                )
+    except Exception as e:
+        errors.append(f"Exception: {e}")
+    if errors:
+        report.setdefault(file, []).extend(errors)
+
 def main():
     report = {}
     test_all_rows_have_dates_and_no_duplicates(report)
@@ -171,6 +211,7 @@ def main():
     #test_lab_unit_percent_value_range(report)
     test_lab_unit_boolean_value(report)
     test_lab_name_enum_unit_consistency(report)
+    test_lab_value_outliers_by_lab_name_enum(report)
     print("\n=== Integrity Report ===")
     if not report:
         print("All checks passed.")

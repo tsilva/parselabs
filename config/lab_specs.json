@@ -655,7 +655,17 @@
       }
     }
   },
-  "Urine - Haemoglobin/Blood": {
+  "Urine - Haemoglobin": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine - Blood": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -744,17 +754,77 @@
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
-      "healthy": null
+      "healthy": {
+        "min": 0.0,
+        "max": 0.0
+      }
     }
   },
-  "Urine - Dipstick Summary": {
-    "primary_unit": "unitless",
-    "alternatives": [
-      {
-        "unit": "boolean",
-        "factor": 1.0
+  "Urine - Turbidity": {
+    "primary_unit": "boolean",
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 0.0
       }
-    ],
+    }
+  },
+  "Urine - Gram Bacteria": {
+    "primary_unit": "boolean",
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  },
+  "Urine - Culture": {
+    "primary_unit": "boolean",
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  },
+  "Urine - Gram Negative Bacteria": {
+    "primary_unit": "boolean",
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  },
+  "Urine - Gram Positive Bacteria": {
+    "primary_unit": "boolean",
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  },
+  "Urine - Urinary Tract Cells": {
+    "primary_unit": "boolean",
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  },
+  "Urine - Small Round Cells": {
+    "primary_unit": "boolean",
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  },
+  "Urine - Cytology": {
+    "primary_unit": "boolean",
     "ranges": {
       "healthy": {
         "min": 0.0,
@@ -1460,10 +1530,6 @@
   "Blood - Albumin/Globulin Ratio": {
     "primary_unit": "g/dL",
     "alternatives": [
-      {
-        "unit": "unitless",
-        "factor": 1.0
-      },
       {
         "unit": "ratio",
         "factor": null
@@ -2294,7 +2360,7 @@
       }
     }
   },
-  "Urine - Contaminating Flora": {
+  "Urine - Urine Type II - Biochemistry - Leukocytes" : {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2304,13 +2370,133 @@
       }
     }
   },
-  "Urine - Sediment (Crystals)": {
+  "Urine - Urine Type II - Biochemistry - Nitrites" : {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
       "healthy": {
         "min": 0,
         "max": 0
+      }
+    }
+  },
+  "Urine - Urine Type II - Biochemistry - Proteins" : {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine - Urine Type II - Biochemistry - Glucose" : {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine - Urine Type II - Biochemistry - Ketone Bodies" : {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine - Urine Type II - Biochemistry - Urobilinogen" : {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine - Urine Type II - Biochemistry - Bilirubin" : {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine - Urine Type II - Biochemistry - Blood" : {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine - Urine Type II - Biochemistry - Turbidity" : {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine - Urine Type II - Sediment - Squamous epithelial cells" : {
+    "primary_unit": "/field",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 5
+      }
+    }
+  },
+  "Urine - Urine Type II - Sediment - Transitional epithelial cells" : {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine - Urine Type II - Sediment - Tubular epithelial cells" : {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine - Urine Type II - Sediment - Leukocytes" : {
+    "primary_unit": "/field",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 2
+      }
+    }
+  },
+  "Urine - Urine Type II - Sediment - Erythrocytes" : {
+    "primary_unit": "/field",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 2
       }
     }
   },
