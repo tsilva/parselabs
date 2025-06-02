@@ -2456,6 +2456,16 @@
       }
     }
   },
+  "Feces - Gram Bacteria": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
   "Feces - Helicobacter pylori Ag": {
     "primary_unit": "boolean",
     "alternatives": [],
@@ -2543,16 +2553,6 @@
       }
     }
   },
-  "Feces - Gram Bacteria": {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  },
   "Saliva - SARS-CoV-2 RNA (RT-PCR)": {
     "primary_unit": "boolean",
     "alternatives": [],
@@ -2570,6 +2570,76 @@
       "healthy": {
         "min": 10.0,
         "max": 27.0
+      }
+    }
+  },
+  "Urine - Bacteriological - Acid-Fast Bacilli": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine - Bacteriological - Colony Count": {
+    "primary_unit": "UFC/mL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 100000
+      }
+    }
+  },
+  "Urine - Bacteriological - Culture": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine - Bacteriological - Cytology": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine - Bacteriological - Gram Bacteria": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine - Bacteriological - Gram Negative Bacteria": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine - Bacteriological - Gram Positive Bacteria": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
       }
     }
   },
@@ -2593,106 +2663,6 @@
       }
     }
   },
-  "Urine - Bacteriological - Acid-Fast Bacilli" : {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  },
-  "Urine - Bacteriological - Cytology" : {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  },
-  "Urine - Bacteriological - Culture" : {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  },
-  "Urine - Bacteriological - Colony Count" : {
-    "primary_unit": "UFC/mL",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 100000
-      }
-    }
-  }, 
-  "Urine - Bacteriological - Gram Bacteria" : {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  }, 
-  "Urine - Bacteriological - Gram Positive Bacteria" : {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  }, 
-  "Urine - Bacteriological - Gram Negative Bacteria" : {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  }, 
-  "Urine Type II - Biochemistry - pH": {
-    "primary_unit": "pH",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 5,
-        "max": 8
-      }
-    }
-  },
-  "Urine Type II - Biochemistry - Appearance": {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  },
-  "Urine Type II - Biochemistry - Haemoglobin": {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  },
   "Urine Type II - Biochemistry - Albumin": {
     "primary_unit": "boolean",
     "alternatives": [],
@@ -2703,37 +2673,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Erythrocytes": {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  },
-  "Urine Type II - Biochemistry - Colour": {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  },
-  "Urine Type II - Biochemistry - Deposit": {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  },
-  "Urine Type II - Biochemistry - Density": {
+  "Urine Type II - Biochemistry - Appearance": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2763,7 +2703,57 @@
       }
     }
   },
+  "Urine Type II - Biochemistry - Colour": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine Type II - Biochemistry - Density": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine Type II - Biochemistry - Deposit": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine Type II - Biochemistry - Erythrocytes": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
   "Urine Type II - Biochemistry - Glucose": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine Type II - Biochemistry - Haemoglobin": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2833,13 +2823,13 @@
       }
     }
   },
-  "Urine Type II - Sediment - Total Casts": {
-    "primary_unit": "/ul",
+  "Urine Type II - Biochemistry - pH": {
+    "primary_unit": "pH",
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 0,
-        "max": 2.5
+        "min": 5,
+        "max": 8
       }
     }
   },
@@ -2863,7 +2853,7 @@
       }
     }
   },
-  "Urine Type II - Sediment - Small Round Cells": {
+  "Urine Type II - Sediment - Epithelial cells": {
     "primary_unit": "/field",
     "alternatives": [],
     "ranges": {
@@ -2893,17 +2883,7 @@
       }
     }
   },
-  "Urine Type II - Sediment - Upper tract cells": {
-    "primary_unit": "/ul",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 10
-      }
-    }
-  },
-  "Urine Type II - Sediment - Epithelial cells": {
+  "Urine Type II - Sediment - Small Round Cells": {
     "primary_unit": "/field",
     "alternatives": [],
     "ranges": {
@@ -2920,6 +2900,16 @@
       "healthy": {
         "min": 0,
         "max": 5
+      }
+    }
+  },
+  "Urine Type II - Sediment - Total Casts": {
+    "primary_unit": "/ul",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 2.5
       }
     }
   },
@@ -2940,6 +2930,16 @@
       "healthy": {
         "min": 0,
         "max": 0
+      }
+    }
+  },
+  "Urine Type II - Sediment - Upper tract cells": {
+    "primary_unit": "/ul",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 10
       }
     }
   }
