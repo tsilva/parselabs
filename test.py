@@ -201,6 +201,42 @@ def test_lab_value_outliers_by_lab_name_enum(report):
     if errors:
         report.setdefault(file, []).extend(errors)
 
+def test_lab_specs_keys_exist_in_lab_name_mappings(report):
+    specs_file = "config/lab_specs.json"
+    mappings_file = "config/lab_names_mappings.json"
+    errors = []
+    try:
+        with open(specs_file, encoding="utf-8") as f:
+            specs = json.load(f)
+        with open(mappings_file, encoding="utf-8") as f:
+            mappings = json.load(f)
+        mapping_values = set(mappings.values())
+        for key in specs.keys():
+            if key not in mapping_values:
+                errors.append(f'lab_specs.json key "{key}" does not exist as a value in lab_names_mappings.json')
+    except Exception as e:
+        errors.append(f"Exception: {e}")
+    if errors:
+        report.setdefault(specs_file, []).extend(errors)
+
+def test_lab_name_mappings_values_exist_in_lab_specs(report):
+    specs_file = "config/lab_specs.json"
+    mappings_file = "config/lab_names_mappings.json"
+    errors = []
+    try:
+        with open(specs_file, encoding="utf-8") as f:
+            specs = json.load(f)
+        with open(mappings_file, encoding="utf-8") as f:
+            mappings = json.load(f)
+        specs_keys = set(specs.keys())
+        for k, v in mappings.items():
+            if v not in specs_keys:
+                errors.append(f'lab_names_mappings.json value "{v}" (for key "{k}") does not exist as a key in lab_specs.json')
+    except Exception as e:
+        errors.append(f"Exception: {e}")
+    if errors:
+        report.setdefault(mappings_file, []).extend(errors)
+
 def main():
     report = {}
     test_all_rows_have_dates_and_no_duplicates(report)
@@ -212,6 +248,8 @@ def main():
     test_lab_unit_boolean_value(report)
     test_lab_name_enum_unit_consistency(report)
     test_lab_value_outliers_by_lab_name_enum(report)
+    test_lab_specs_keys_exist_in_lab_name_mappings(report)
+    test_lab_name_mappings_values_exist_in_lab_specs(report)
     print("\n=== Integrity Report ===")
     if not report:
         print("All checks passed.")
