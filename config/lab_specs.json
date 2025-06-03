@@ -509,11 +509,11 @@
     }
   },
   "Blood - BUN (Blood Urea Nitrogen)": {
-    "primary_unit": "mmol/L",
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mg/dL",
-        "factor": 0.357
+        "unit": "mmol/L",
+        "factor": 2.80
       }
     ],
     "ranges": {
@@ -734,11 +734,11 @@
     }
   },
   "Blood - Calcium (total)": {
-    "primary_unit": "mmol/L",
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mg/dL",
-        "factor": 0.25
+        "unit": "mmol/L",
+        "factor": 4
       },
       {
         "unit": "mEq/L",
@@ -1030,7 +1030,7 @@
       }
     }
   },
-  "Blood - Folate (Serum)": {
+  "Blood - Folate": {
     "primary_unit": "nmol/L",
     "alternatives": [
       {
@@ -1116,11 +1116,11 @@
     }
   },
   "Blood - Glucose (Fasting)": {
-    "primary_unit": "mmol/L",
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mg/dL",
-        "factor": 0.0555
+        "unit": "mmol/L",
+        "factor": 18.02
       }
     ],
     "ranges": {
@@ -1141,11 +1141,11 @@
     }
   },
   "Blood - HDL Cholesterol": {
-    "primary_unit": "mmol/L",
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mg/dL",
-        "factor": 0.0259
+        "unit": "mmol/L",
+        "factor": 38.67
       }
     ],
     "ranges": {
@@ -1360,20 +1360,33 @@
       }
     }
   },
-  "Blood - Iron (serum)": {
-    "primary_unit": "µg/L",
+  "Blood - Iron": {
+    "primary_unit": "µg/dL",
     "alternatives": [
       {
         "unit": "µmol/L",
         "factor": 55.85
       },
       {
-        "unit": "µg/dL",
+        "unit": "µg/L",
         "factor": 10.0
       }
     ],
     "ranges": {
-      "healthy": null
+      "healthy": {
+        "min": 50,
+        "max": 170
+      }
+    }
+  },
+  "Blood - Amilase": {
+    "primary_unit": "U/L",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 25,
+        "max": 115
+      }
     }
   },
   "Blood - LDH": {
@@ -1387,11 +1400,11 @@
     }
   },
   "Blood - LDL Cholesterol": {
-    "primary_unit": "mmol/L",
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mg/dL",
-        "factor": 0.0259
+        "unit": "mmol/L",
+        "factor": 38.67
       }
     ],
     "ranges": {
@@ -1580,11 +1593,11 @@
     }
   },
   "Blood - Magnesium": {
-    "primary_unit": "mmol/L",
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mg/dL",
-        "factor": 0.4114
+        "unit": "mmol/L",
+        "factor": 2.43
       },
       {
         "unit": "mEq/L",
@@ -1865,6 +1878,16 @@
       }
     }
   },
+  "Blood - RDW (%)": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 11.6,
+        "max": 14.0
+      }
+    }
+  },
   "Blood - RDW-SD": {
     "primary_unit": "fL",
     "alternatives": [],
@@ -2024,11 +2047,11 @@
     }
   },
   "Blood - Total Cholesterol": {
-    "primary_unit": "mmol/L",
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mg/dL",
-        "factor": 0.0259
+        "unit": "mmol/L",
+        "factor": 38.67
       }
     ],
     "ranges": {
@@ -2128,11 +2151,11 @@
     }
   },
   "Blood - Triglycerides": {
-    "primary_unit": "mmol/L",
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mg/dL",
-        "factor": 0.0113
+        "unit": "mmol/L",
+        "factor": 88.57
       }
     ],
     "ranges": {
@@ -2143,11 +2166,11 @@
     }
   },
   "Blood - Urea": {
-    "primary_unit": "mmol/L",
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mg/dL",
-        "factor": 0.357
+        "unit": "mmol/L",
+        "factor": 6.00
       }
     ],
     "ranges": {
@@ -2158,15 +2181,11 @@
     }
   },
   "Blood - Uric Acid": {
-    "primary_unit": "mmol/L",
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mg/dL",
-        "factor": 0.0595
-      },
-      {
-        "unit": "µmol/L",
-        "factor": 0.001
+        "unit": "mmol/L",
+        "factor": 16.81
       }
     ],
     "ranges": {
@@ -2187,11 +2206,11 @@
     }
   },
   "Blood - VLDL Cholesterol": {
-    "primary_unit": "mmol/L",
+    "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "mg/dL",
-        "factor": 0.0259
+        "unit": "mmol/L",
+        "factor": 38.67
       }
     ],
     "ranges": {
