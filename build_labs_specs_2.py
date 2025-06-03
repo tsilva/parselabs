@@ -123,70 +123,23 @@ def parse_range_string(range_str, primary_unit=None):
         return None
 
 def main():
-    input_csv = "output/all.csv"
-    output_json = "temp_labs_specs.json"
-    lab_units = defaultdict(set)
+    labs_specs_path = "temp_lab_specs.json"
 
-    # Step 1: Read CSV and collect unique lab_name_enum and lab_unit_enum
-    with open(input_csv, newline='', encoding='utf-8') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            lab_name = row["lab_name_enum"]
-            lab_unit = row["lab_unit_enum"]
-            lab_units[lab_name].add(lab_unit)
+    # Load existing labs_specs
+    with open("config/lab_specs.json", "r", encoding="utf-8") as f:
+        labs_specs = json.load(f)
 
     # Example user stats (replace with dynamic input as needed)
     with open("user_stats.json", "r", encoding="utf-8") as f:
         user_stats = json.load(f)
 
-    # Step 2: Prepare all conversion tasks
-    labs_specs = {}
-    conversion_tasks = []
+    # Prepare health range update tasks
     health_range_tasks = []
-    task_map = {}  # (lab_name, unit, primary_unit) -> index in alternatives
-
-    for lab_name, units in lab_units.items():
-        units = list(units)
-        primary_unit = units[0]
-        alternatives = []
-        for unit in units:
-            if unit == primary_unit:
-                continue
-            conversion_tasks.append((lab_name, unit, primary_unit))
-            task_map[(lab_name, unit, primary_unit)] = (lab_name, unit, primary_unit)
-            alternatives.append({
-                "unit": unit,
-                "factor": None  # Placeholder to be filled later
-            })
-        # Add health range task for each lab_name
+    for lab_name, spec in labs_specs.items():
+        primary_unit = spec["primary_unit"]
         health_range_tasks.append((lab_name, primary_unit))
-        labs_specs[lab_name] = {
-            "primary_unit": primary_unit,
-            "alternatives": alternatives,
-            "ranges": {
-                "healthy": None  # Placeholder to be filled later
-            }
-        }
 
-    # Step 3: Run conversion tasks in parallel
-    def task_fn(args):
-        lab_name, unit, primary_unit = args
-        factor = get_conversion_factor(lab_name, unit, primary_unit)
-        print(f"Conversion factor for {lab_name} from {unit} to {primary_unit}: {factor}")
-        return (lab_name, unit, primary_unit, factor)
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-        futures = [executor.submit(task_fn, args) for args in conversion_tasks]
-        for future in concurrent.futures.as_completed(futures):
-            lab_name, unit, primary_unit, factor = future.result()
-            # Find the correct alternative entry and fill in the factor
-            alternatives = labs_specs[lab_name]["alternatives"]
-            for alt in alternatives:
-                if alt["unit"] == unit:
-                    alt["factor"] = factor
-                    break
-
-    # Step 3b: Run health range tasks in parallel
+    # Update healthy ranges in parallel
     def health_range_task_fn(args):
         lab_name, primary_unit = args
         health_range = get_health_range(lab_name, primary_unit, user_stats)
@@ -200,8 +153,8 @@ def main():
             lab_name, parsed_range = future.result()
             labs_specs[lab_name]["ranges"]["healthy"] = parsed_range
 
-    # Step 4: Save as JSON
-    with open(output_json, "w", encoding="utf-8") as f:
+    # Save updated labs_specs
+    with open(labs_specs_path, "w", encoding="utf-8") as f:
         json.dump(labs_specs, f, indent=2, ensure_ascii=False)
 
 if __name__ == "__main__":
