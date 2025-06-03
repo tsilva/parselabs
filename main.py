@@ -690,7 +690,7 @@ def process_single_pdf(
 
     # --------- Export Excel file for Google Drive, freeze first row ---------
     excel_path = os.path.join(output_dir, "all.xlsx")
-    with pd.ExcelWriter(excel_path, engine="xlsxwriter") as writer:
+    with pd.ExcelWriter(excel_path, engine="xlsxwriter", datetime_format='yyyy-mm-dd') as writer:
         merged_df.to_excel(writer, index=False)
         worksheet = writer.sheets[merged_df.columns.name or writer.sheets.keys().__iter__().__next__()]
         worksheet.freeze_panes(1, 0)
@@ -983,11 +983,39 @@ def main():
         merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce")
         merged_df = merged_df.sort_values("date", ascending=False)
 
+    # --------- Assign data types before export ---------
+    dtype_map = {
+        "date": "datetime64[ns]",
+        "lab_value": "float64",
+        "lab_range_min": "float64",
+        "lab_range_max": "float64",
+        "lab_value_final": "float64",
+        "lab_range_min_final": "float64",
+        "lab_range_max_final": "float64",
+        "healthy_range_min": "float64",
+        "healthy_range_max": "float64",
+        "is_flagged": "boolean",
+        "is_flagged_final": "boolean",
+        "is_in_healthy_range": "boolean",
+        "confidence": "float64"
+    }
+    for col, dtype in dtype_map.items():
+        if col in merged_df.columns:
+            try:
+                if dtype == "datetime64[ns]":
+                    merged_df[col] = pd.to_datetime(merged_df[col], errors="coerce")
+                elif dtype == "boolean":
+                    merged_df[col] = merged_df[col].astype("boolean")
+                else:
+                    merged_df[col] = pd.to_numeric(merged_df[col], errors="coerce")
+            except Exception:
+                pass
+
     merged_df.to_csv(os.path.join(output_dir, "all.csv"), index=False)
 
     # --------- Export Excel file for Google Drive, freeze first row ---------
     excel_path = os.path.join(output_dir, "all.xlsx")
-    with pd.ExcelWriter(excel_path, engine="xlsxwriter") as writer:
+    with pd.ExcelWriter(excel_path, engine="xlsxwriter", datetime_format='yyyy-mm-dd') as writer:
         merged_df.to_excel(writer, index=False)
         worksheet = writer.sheets[merged_df.columns.name or writer.sheets.keys().__iter__().__next__()]
         worksheet.freeze_panes(1, 0)
@@ -1007,6 +1035,20 @@ def main():
         "is_in_healthy_range"
     ]
     final_df = merged_df[[col for col in export_columns_final if col in merged_df.columns]]
+
+    # Assign data types for final_df as well (avoid SettingWithCopyWarning)
+    for col, dtype in dtype_map.items():
+        if col in final_df.columns:
+            try:
+                if dtype == "datetime64[ns]":
+                    final_df.loc[:, col] = pd.to_datetime(final_df[col], errors="coerce")
+                elif dtype == "boolean":
+                    final_df.loc[:, col] = final_df[col].astype("boolean")
+                else:
+                    final_df.loc[:, col] = pd.to_numeric(final_df[col], errors="coerce")
+            except Exception:
+                pass
+
     final_df.to_csv(os.path.join(output_dir, "all.final.csv"), index=False)
     final_df.to_excel(os.path.join(output_dir, "all.final.xlsx"), index=False)
 
