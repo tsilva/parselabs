@@ -57,18 +57,6 @@
       }
     }
   },
-  "Blood - ABO/Rh Grouping": {
-    "primary_unit": "unitless",
-    "alternatives": [
-      {
-        "unit": "boolean",
-        "factor": 1.0
-      }
-    ],
-    "ranges": {
-      "healthy": null
-    }
-  },
   "Blood - ACTH": {
     "primary_unit": "pg/mL",
     "alternatives": [],
@@ -465,10 +453,7 @@
         "unit": "KU/L",
         "factor": 1.0
       }
-    ],
-    "ranges": {
-      "healthy": null
-    }
+    ]
   },
   "Blood - Anti-dsDNA IgG": {
     "primary_unit": "IU/mL",
@@ -914,10 +899,7 @@
   },
   "Blood - Differential Leukogram": {
     "primary_unit": "mEq/L",
-    "alternatives": [],
-    "ranges": {
-      "healthy": null
-    }
+    "alternatives": []
   },
   "Blood - ESR (1 h)": {
     "primary_unit": "mm/h",
@@ -1938,18 +1920,15 @@
   },
   "Blood - Reticulocytes - Low RNA (%)": {
     "primary_unit": "%",
-    "alternatives": [],
-    "ranges": null
+    "alternatives": []
   },
   "Blood - Reticulocytes - Medium RNA (%)": {
     "primary_unit": "%",
-    "alternatives": [],
-    "ranges": null
+    "alternatives": []
   },
   "Blood - Reticulocytes - High RNA (%)": {
     "primary_unit": "%",
-    "alternatives": [],
-    "ranges": null
+    "alternatives": []
   },
   "Blood - Reverse T3": {
     "primary_unit": "ng/mL",
@@ -1959,13 +1938,6 @@
         "min": 0.09,
         "max": 0.35
       }
-    }
-  },
-  "Blood - Rh Factor (Anti-D)": {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": null
     }
   },
   "Blood - Rheumatoid Factor (RF)": {
@@ -2172,10 +2144,7 @@
         "unit": "mmol/L",
         "factor": 88.57
       }
-    ],
-    "ranges": {
-      "healthy": null
-    }
+    ]
   },
   "Blood - Urea": {
     "primary_unit": "mg/dL",
@@ -2617,10 +2586,7 @@
   },
   "Urine - Bacteriological - Colony Count": {
     "primary_unit": "UFC/mL",
-    "alternatives": [],
-    "ranges": {
-      "healthy": null
-    }
+    "alternatives": []
   },
   "Urine - Bacteriological - Culture": {
     "primary_unit": "boolean",
