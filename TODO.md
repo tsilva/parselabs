@@ -1,3 +1,9 @@
+- review code
+- log error when renaming is not found
+- review acccuracy of extraction for early reports
+- test that dates match
+- split ranges to different file
+- add support for time left to next test recommendation, recommend test if out of range or time elapsed
 - try mounting gdrive with rclone
 - add gdrive workflow support
 - Check for outliers in lab results
