@@ -700,15 +700,39 @@ def process_single_pdf(
         "confidence",
         "is_flagged"
     ]
+    # Sensible default widths for columns (column_name: width)
+    default_widths = {
+        "date": 13,
+        "lab_type": 10,
+        "lab_name": 28,
+        "lab_name_enum": 22,
+        "lab_name_slug": 22,
+        "lab_value": 12,
+        "lab_unit": 12,
+        "lab_unit_enum": 14,
+        "lab_range_min": 12,
+        "lab_range_max": 12,
+        "lab_value_final": 14,
+        "lab_unit_final": 14,
+        "lab_range_min_final": 14,
+        "lab_range_max_final": 14,
+        "is_flagged": 10,
+        "confidence": 10,
+        "source_file": 18,
+        "is_flagged_final": 14,
+        "healthy_range_min": 14,
+        "healthy_range_max": 14,
+        "is_in_healthy_range": 16,
+    }
     with pd.ExcelWriter(excel_path, engine="xlsxwriter", datetime_format='yyyy-mm-dd') as writer:
         merged_df.to_excel(writer, index=False)
         worksheet = writer.sheets[merged_df.columns.name or next(iter(writer.sheets))]
         worksheet.freeze_panes(1, 0)
-        # Hide specified columns
-        for col in hidden_columns:
-            if col in merged_df.columns:
-                idx = merged_df.columns.get_loc(col)
-                worksheet.set_column(idx, idx, None, None, {'hidden': True})
+        # Set column widths and hide specified columns
+        for idx, col in enumerate(merged_df.columns):
+            width = default_widths.get(col, 12)
+            options = {'hidden': True} if col in hidden_columns else {}
+            worksheet.set_column(idx, idx, width, None, options)
 
     # --------- Export final reduced file ---------
     export_columns_final = [
