@@ -24,6 +24,103 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from openai import OpenAI, APIError
 
 ########################################
+# Centralized Column Schema
+########################################
+
+COLUMN_SCHEMA = {
+    # Fields from LabResult, potentially modified or used directly
+    # 'dtype' specifies the target pandas dtype.
+    # 'excel_width' is the default column width in Excel.
+    # 'excel_hidden' flags if the column should be hidden in the main Excel export.
+    # 'final_export' flags if the column is part of the "final" summarized export.
+    # 'plotting_role' identifies columns for specific roles in plotting (date, value, group, unit).
+
+    "date": {"dtype": "datetime64[ns]", "excel_width": 13, "final_export": True, "plotting_role": "date"},
+    "lab_type": {"dtype": "str", "excel_width": 10, "final_export": True},
+    "lab_name": {"dtype": "str", "excel_width": 35, "excel_hidden": True}, # Increased width
+    "lab_code": {"dtype": "str", "excel_width": 15},
+    "lab_value": {"dtype": "float64", "excel_width": 12, "excel_hidden": True},
+    "lab_unit": {"dtype": "str", "excel_width": 15, "excel_hidden": True}, # Increased width
+    "lab_method": {"dtype": "str", "excel_width": 20},
+    "lab_range_min": {"dtype": "float64", "excel_width": 12, "excel_hidden": True},
+    "lab_range_max": {"dtype": "float64", "excel_width": 12, "excel_hidden": True},
+    "reference_range_text": {"dtype": "str", "excel_width": 25},
+    "is_flagged": {"dtype": "boolean", "excel_width": 10, "excel_hidden": True},
+    "lab_comments": {"dtype": "str", "excel_width": 40},
+    "confidence": {"dtype": "float64", "excel_width": 10, "excel_hidden": True},
+    "lack_of_confidence_reason": {"dtype": "str", "excel_width": 30},
+    "source_text": {"dtype": "str", "excel_width": 50}, # Increased width
+    "page_number": {"dtype": "Int64", "excel_width": 8}, # Pandas nullable integer
+    "source_file": {"dtype": "str", "excel_width": 25}, # Increased width, refers to per-PDF CSV name in merged DF
+
+    # Derived columns in main()
+    "lab_name_slug": {"dtype": "str", "excel_width": 30, "excel_hidden": True, "derivation_logic": "map_lab_name_slug"},
+    "lab_name_enum": {"dtype": "str", "excel_width": 30, "final_export": True, "derivation_logic": "map_lab_name_enum", "plotting_role": "group"},
+    "lab_unit_enum": {"dtype": "str", "excel_width": 15, "derivation_logic": "map_lab_unit_enum"},
+
+    "lab_value_final": {"dtype": "float64", "excel_width": 14, "final_export": True, "derivation_logic": "convert_to_primary_unit", "plotting_role": "value"},
+    "lab_unit_final": {"dtype": "str", "excel_width": 14, "final_export": True, "derivation_logic": "convert_to_primary_unit", "plotting_role": "unit"},
+    "lab_range_min_final": {"dtype": "float64", "excel_width": 14, "final_export": True, "derivation_logic": "convert_to_primary_unit"},
+    "lab_range_max_final": {"dtype": "float64", "excel_width": 14, "final_export": True, "derivation_logic": "convert_to_primary_unit"},
+
+    "is_flagged_final": {"dtype": "boolean", "excel_width": 14, "derivation_logic": "compute_is_flagged_final"},
+    "healthy_range_min": {"dtype": "float64", "excel_width": 16, "derivation_logic": "get_healthy_range"}, # Increased width
+    "healthy_range_max": {"dtype": "float64", "excel_width": 16, "derivation_logic": "get_healthy_range"}, # Increased width
+    "is_in_healthy_range": {"dtype": "boolean", "excel_width": 18, "derivation_logic": "compute_is_in_healthy_range"}, # Increased width
+}
+
+# Helper functions to derive lists/dicts from COLUMN_SCHEMA
+def get_export_columns_from_schema(schema: dict) -> list:
+    """Returns an ordered list of columns for the main export."""
+    # Define the comprehensive order for all.csv and all.xlsx
+    ordered_keys = [
+        "date", "lab_type", "lab_name", "lab_name_enum", "lab_name_slug",
+        "lab_value", "lab_unit", "lab_unit_enum",
+        "lab_range_min", "lab_range_max", "reference_range_text",
+        "lab_value_final", "lab_unit_final",
+        "lab_range_min_final", "lab_range_max_final",
+        "is_flagged", "is_flagged_final",
+        "healthy_range_min", "healthy_range_max", "is_in_healthy_range",
+        "confidence", "lab_code", "lab_method", "lab_comments",
+        "lack_of_confidence_reason", "source_text", "page_number", "source_file"
+    ]
+    return [key for key in ordered_keys if key in schema]
+
+def get_final_export_columns_ordered(schema: dict) -> list:
+    """Returns an ordered list of columns for the final summarized export."""
+    ordered_final_keys = [
+        "date", "lab_type", "lab_name_enum", "lab_value_final",
+        "lab_unit_final", "lab_range_min_final", "lab_range_max_final"
+    ]
+    return [
+        key for key in ordered_final_keys
+        if key in schema and schema[key].get("final_export")
+    ]
+
+def get_hidden_excel_columns_from_schema(schema: dict) -> list:
+    """Returns a list of columns to be hidden in the main Excel export."""
+    return [col for col, props in schema.items() if props.get("excel_hidden")]
+
+def get_excel_widths_from_schema(schema: dict) -> dict:
+    """Returns a dictionary of {column_name: width} for Excel."""
+    return {col: props["excel_width"] for col, props in schema.items() if "excel_width" in props}
+
+def get_dtype_map_from_schema(schema: dict) -> dict:
+    """Returns a dictionary of {column_name: dtype_string} for pandas type conversion."""
+    dtype_map = {}
+    for col, props in schema.items():
+        if "dtype" in props:
+            dtype_map[col] = props["dtype"]
+    return dtype_map
+
+# Constants for plotting roles, derived from the schema
+PLOTTING_DATE_COL = next((col for col, props in COLUMN_SCHEMA.items() if props.get("plotting_role") == "date"), "date")
+PLOTTING_VALUE_COL = next((col for col, props in COLUMN_SCHEMA.items() if props.get("plotting_role") == "value"), "lab_value_final")
+PLOTTING_GROUP_COL = next((col for col, props in COLUMN_SCHEMA.items() if props.get("plotting_role") == "group"), "lab_name_enum")
+PLOTTING_UNIT_COL = next((col for col, props in COLUMN_SCHEMA.items() if props.get("plotting_role") == "unit"), "lab_unit_final")
+
+
+########################################
 # Config / Logging
 ########################################
 
@@ -43,8 +140,8 @@ logging.basicConfig(
 INFO_LOG_PATH = LOG_DIR / "info.log"
 ERROR_LOG_PATH = LOG_DIR / "error.log"
 for log_file in [INFO_LOG_PATH, ERROR_LOG_PATH]:
-    if log_file.exists(): log_file.write_text("", encoding='utf-8')  # Clears the file by overwriting with an empty string
-        
+    if log_file.exists(): log_file.write_text("", encoding='utf-8')
+
 # Create file handlers with UTF-8 encoding
 info_handler = logging.FileHandler(INFO_LOG_PATH, encoding='utf-8')
 info_handler.setLevel(logging.INFO)
@@ -88,13 +185,18 @@ def load_env_config():
     if not extract_model_id: raise ValueError("EXTRACT_MODEL_ID not set")
     if not input_path or not Path(input_path).exists(): raise ValueError(f"INPUT_PATH not set or does not exist: {input_path}")
     if not input_file_regex: raise ValueError("INPUT_FILE_REGEX not set")
-    if not output_path or not Path(output_path).exists(): raise ValueError("OUTPUT_PATH not set")
+    if not output_path or not Path(output_path).exists(): raise ValueError(f"OUTPUT_PATH not set or does not exist: {output_path}") # Check existence
     if not openrouter_api_key: raise ValueError("OPENROUTER_API_KEY not set")
+
+    # Ensure output_path is a directory
+    output_path_obj = Path(output_path)
+    output_path_obj.mkdir(parents=True, exist_ok=True)
+
 
     return {
         "input_path" : Path(input_path),
         "input_file_regex" : input_file_regex,
-        "output_path" : Path(output_path),
+        "output_path" : output_path_obj, # Use Path object
         "self_consistency_model_id" : self_consistency_model_id,
         "transcribe_model_id" : transcribe_model_id,
         "n_transcriptions": n_transcriptions,
@@ -105,131 +207,132 @@ def load_env_config():
     }
 
 ########################################
-# LLM Tools
+# LLM Tools / Pydantic Models
 ########################################
 
 class LabType(str, Enum):
     BLOOD = "blood"
     URINE = "urine"
     SALIVA = "saliva"
-    FECES = "feces"
+    FECES = "feces" # Added 'feces' as it was in description but not enum
+    UNKNOWN = "unknown" # Added for cases where type isn't clear
 
 class LabResult(BaseModel):
     lab_type: LabType = Field(
-        description="Type of laboratory test (must be one of: blood, urine, saliva)"
+        default=LabType.UNKNOWN, # Default to unknown
+        description="Type of laboratory test (must be one of: blood, urine, saliva, feces, unknown)"
     )
     lab_name: str = Field(
         min_length=1,
         description="Name of the laboratory test as extracted verbatim from the document"
     )
     lab_code: Optional[str] = Field(
+        default=None,
         description="Standardized code for the laboratory test (e.g., LOINC, CPT), if available"
     )
-    lab_value: float = Field(
-        description="Quantitative result of the laboratory test (positive/negative should be 1/0)"
+    lab_value: Optional[float] = Field( # Made Optional to handle non-numeric/missing cleanly
+        default=None,
+        description="Quantitative result of the laboratory test (positive/negative should be 1/0 if possible, otherwise text)"
     )
     lab_unit: Optional[str] = Field(
+        default=None,
         min_length=1,
         description="Unit of measurement as extracted verbatim (e.g., mg/dL, mmol/L, IU/mL, boolean)"
     )
     lab_method: Optional[str] = Field(
+        default=None,
         description="Analytical method or technique as extracted verbatim (e.g., ELISA, HPLC, Microscopy), if available"
     )
     lab_range_min: Optional[float] = Field(
+        default=None,
         description="Lower bound of the reference range, if available"
     )
     lab_range_max: Optional[float] = Field(
+        default=None,
         description="Upper bound of the reference range, if available"
     )
     reference_range_text: Optional[str] = Field(
+        default=None,
         description="Reference range as shown in the document, verbatim (e.g., '4.0-10.0', 'Normal: <5')"
     )
     is_flagged: Optional[bool] = Field(
-        description="True if the result is flagged as abnormal/high/low in the document, else False"
+        default=None,
+        description="True if the result is flagged as abnormal/high/low in the document, else False or None if not specified"
     )
     lab_comments: Optional[str] = Field(
+        default=None,
         description="Additional notes or observations about this result, if available"
     )
     confidence: float = Field(
+        default=0.5, # Provide a default
         ge=0.0, le=1.0,
         description="Confidence score of the extraction process, ranging from 0 to 1"
     )
     lack_of_confidence_reason: Optional[str] = Field(
+        default=None,
         description="Reason for low extraction confidence"
     )
     source_text: Optional[str] = Field(
+        default=None,
         description="The exact line or snippet from the document where this result was extracted"
     )
     page_number: Optional[int] = Field(
+        default=None,
         ge=1,
         description="Page number in the PDF where this result was found, if available"
     )
-    source_file: Optional[str] = Field(
+    source_file: Optional[str] = Field( # e.g. page filename
+        default=None,
         description="The filename or identifier of the source file/page"
     )
 
 class HealthLabReport(BaseModel):
     report_date: Optional[str] = Field(
+        default=None, # Use None as default for optional fields
         pattern=r"^\d{4}-\d{2}-\d{2}$",
-        description="Date the laboratory report was issued (YYYY-MM-DD), if unavailable use 0000-00-00"
+        description="Date the laboratory report was issued (YYYY-MM-DD), if unavailable use null"
     )
     collection_date: Optional[str] = Field(
+        default=None,
         pattern=r"^\d{4}-\d{2}-\d{2}$",
-        description="Date the specimen was collected (YYYY-MM-DD), if available (also called subscription date), if unavailable use 0000-00-00"
+        description="Date the specimen was collected (YYYY-MM-DD), if available (also called subscription date), if unavailable use null"
     )
-    lab_facility: Optional[str] = Field(
-        description="Name of the laboratory or facility that performed the tests, if available"
-    )
-    lab_facility_address: Optional[str] = Field(
-        description="Address of the laboratory or facility, if available"
-    )
-    patient_name: Optional[str] = Field(
-        description="Full name of the patient"
-    )
-    patient_id: Optional[str] = Field(
-        description="Patient identifier or medical record number, if available"
-    )
+    lab_facility: Optional[str] = Field(default=None, description="Name of the laboratory or facility that performed the tests, if available")
+    lab_facility_address: Optional[str] = Field(default=None, description="Address of the laboratory or facility, if available")
+    patient_name: Optional[str] = Field(default=None, description="Full name of the patient")
+    patient_id: Optional[str] = Field(default=None, description="Patient identifier or medical record number, if available")
     patient_birthdate: Optional[str] = Field(
+        default=None,
         pattern=r"^\d{4}-\d{2}-\d{2}$",
         description="Birthdate of the patient (YYYY-MM-DD), if available"
     )
-    physician_name: Optional[str] = Field(
-        description="Name of the requesting or reviewing physician, if available"
-    )
-    physician_id: Optional[str] = Field(
-        description="Identifier for the physician, if available"
-    )
-    page_count: Optional[int] = Field(
-        ge=1,
-        description="Total number of pages in the report, if available"
-    )
-    lab_results: List[LabResult] = Field(
-        description="List of individual laboratory test results in this report"
-    )
-    source_file: Optional[str] = Field(
-        description="The filename or identifier of the source file"
-    )
+    physician_name: Optional[str] = Field(default=None, description="Name of the requesting or reviewing physician, if available")
+    physician_id: Optional[str] = Field(default=None, description="Identifier for the physician, if available")
+    page_count: Optional[int] = Field(default=None, ge=1, description="Total number of pages in the report, if available")
+    lab_results: List[LabResult] = Field(default_factory=list, description="List of individual laboratory test results in this report")
+    source_file: Optional[str] = Field(default=None, description="The filename or identifier of the source PDF file") # e.g. original PDF filename
 
     def normalize_empty_optionals(self):
         """
         For all optional fields in this report and its LabResult entries,
         replace empty string values ("") with None.
+        Pydantic v2 usually handles this well, but explicit conversion can be safer with LLM outputs.
         """
-        # Normalize HealthLabReport fields
-        for field, field_info in self.model_fields.items():
-            if field_info.is_required() or field == "lab_results":
-                continue
-            value = getattr(self, field)
-            if value == "":
-                setattr(self, field, None)
-        # Normalize LabResult fields
-        for lab in self.lab_results:
-            for field, field_info in lab.model_fields.items():
-                if field_info.is_required():
-                    continue
-                value = getattr(lab, field)
-                if value == "":
-                    setattr(lab, field, None)
+        for field_name in self.model_fields:
+            value = getattr(self, field_name)
+            if value == "" and not self.model_fields[field_name].is_required():
+                 # Check if field is Optional (or Union with None)
+                if self.model_fields[field_name].outer_type_ is Optional[self.model_fields[field_name].annotation] or \
+                   str(self.model_fields[field_name].outer_type_).startswith("typing.Union") and type(None) in self.model_fields[field_name].outer_type_.__args__:
+                    setattr(self, field_name, None)
+        
+        for lab_result in self.lab_results:
+            for field_name in lab_result.model_fields:
+                value = getattr(lab_result, field_name)
+                if value == "" and not lab_result.model_fields[field_name].is_required():
+                    if lab_result.model_fields[field_name].outer_type_ is Optional[lab_result.model_fields[field_name].annotation] or \
+                       str(lab_result.model_fields[field_name].outer_type_).startswith("typing.Union") and type(None) in lab_result.model_fields[field_name].outer_type_.__args__:
+                        setattr(lab_result, field_name, None)
 
 TOOLS = [
     {
@@ -240,14 +343,16 @@ TOOLS = [
 Extract structured laboratory test results from medical documents with high precision.
 
 Specific requirements:
-1. Extract EVERY test result visible in the image, including variants with different units
-2. Booleans should be converted to 0/1, where 0 = false/negative and 1 = true/positive
-3. Dates must be in ISO 8601 format (YYYY-MM-DD)
-4. Units must match exactly as shown in the document
-5. Use the most precise schema possible for each field. 
+1. Extract EVERY test result visible in the image, including variants with different units.
+2. For boolean-like results (e.g., Positive/Negative, Detected/Not Detected), use 1 for true/positive/detected and 0 for false/negative/not detected for the 'lab_value' field if possible. If the result is textual and cannot be converted to 1/0, use the text itself and ensure 'lab_unit' reflects this (e.g., 'text' or 'qualitative').
+3. Dates must be in ISO 8601 format (YYYY-MM-DD). If a date is truly unavailable, use null.
+4. Units must match exactly as shown in the document.
+5. Use the most precise schema possible for each field.
 6. For each result, include the exact source text/line and page number if possible.
-7. If a field is not present in the document, use null or the value `{UNKNOWN_VALUE}` for required fields; for optional fields, use null.
-8. NEVER skip or omit any non-optional field. Every required field must be present for every lab result, even if the value is unknown.
+7. If a field is not present or its value is unknown in the document, use null (None). Do not use placeholder strings like '{UNKNOWN_VALUE}' for optional fields. For required fields that are missing, use a sensible default if specified in the schema, otherwise this indicates an issue with the source or extraction.
+8. Populate all fields of the 'LabResult' and 'HealthLabReport' models as accurately as possible.
+9. If 'report_date' or 'collection_date' is not found, it should be null.
+10. 'lab_type' should be one of: blood, urine, saliva, feces, unknown.
 """.strip(),
             "parameters": HealthLabReport.model_json_schema()
         }
@@ -275,25 +380,16 @@ def preprocess_page_image(image: Image.Image) -> Image.Image:
     """
     from PIL import Image, ImageEnhance
 
-    # Convert to grayscale
     gray_image = image.convert('L')
-
-    # Set a higher maximum width to preserve detail (only resize if necessary)
-    MAX_WIDTH = 1200  # Increased from 800 to retain more detail
+    MAX_WIDTH = 1200
     if gray_image.width > MAX_WIDTH:
         ratio = MAX_WIDTH / gray_image.width
         new_height = int(gray_image.height * ratio)
         gray_image = gray_image.resize((MAX_WIDTH, new_height), Image.Resampling.LANCZOS)
 
-    # Enhance contrast to make text stand out
-    enhanced_image = ImageEnhance.Contrast(gray_image).enhance(2.0)  # Adjust contrast by 2x
-
-    # Optional: Quantize to reduce noise while preserving readability (128 colors)
-    # Comment this out if you want maximum fidelity without quantization
-    normalized_image = enhanced_image.quantize(colors=128).convert('L')
-
-    # Return the processed image (to be saved as PNG later for lossless quality)
-    return normalized_image
+    enhanced_image = ImageEnhance.Contrast(gray_image).enhance(2.0)
+    # normalized_image = enhanced_image.quantize(colors=128).convert('L') # Optional
+    return enhanced_image # Return enhanced, not quantized by default
 
 def self_consistency(fn, model_id, n, *args, **kwargs):
     """
@@ -309,7 +405,12 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
         return result, [result]
 
     def call_with_temp():
-        return fn(*args, **kwargs, temperature=0.5)
+        # Only add temperature if it's not already a kwarg for the function
+        # Some functions like transcription_from_page_image define their own default temp
+        if 'temperature' in fn.__code__.co_varnames:
+             return fn(*args, **kwargs, temperature=0.5)
+        return fn(*args, **kwargs)
+
 
     results = []
     with ThreadPoolExecutor(max_workers=n) as executor:
@@ -321,14 +422,16 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
             except APIError as oe:
                 logger.error(f"OpenAI API Error during self-consistency task: {oe}")
                 for f_cancel in futures:
-                    if not f_cancel.done():
-                        f_cancel.cancel()
+                    if not f_cancel.done(): f_cancel.cancel()
                 raise RuntimeError(f"OpenAI API Error in self-consistency task: {str(oe)}")
             except Exception as e:
+                logger.error(f"Error during self-consistency task: {e}")
                 for f_cancel in futures:
-                    if not f_cancel.done():
-                        f_cancel.cancel()
+                    if not f_cancel.done(): f_cancel.cancel()
                 raise
+
+    if not results: # Handle case where all calls fail before this point
+        raise RuntimeError("All self-consistency calls failed.")
 
     if all(r == results[0] for r in results):
         return results[0], results
@@ -338,15 +441,16 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
         "We have extracted several samples from the same prompt in order to average out any errors or inconsistencies that may appear in individual outputs. "
         "Your job is to select the output that is most consistent with the majority of the provided samples—"
         "in other words, the output that best represents the 'average' or consensus among all outputs. "
-        "Prioritize agreement on extracted content (test names, values, units, reference ranges, etc). "
+        "Prioritize agreement on extracted content (test names, values, units, reference ranges, etc.). "
         "Ignore formatting, whitespace, and layout differences. "
         "Return ONLY the best output, verbatim, with no extra commentary. "
         "Do NOT include any delimiters, output numbers, or extra labels in your response—return only the raw content of the best output."
     )
     prompt = ""
-    prompt += "".join(f"--- Output {i+1} ---\n{json.dumps(v) if type(v) in [list, dict] else v}\n\n" for i, v in enumerate(results))
-    prompt += "Best output:"
+    prompt += "".join(f"--- Output {i+1} ---\n{json.dumps(v, ensure_ascii=False) if type(v) in [list, dict] else v}\n\n" for i, v in enumerate(results))
+    prompt += "Based on the outputs above, provide the most consistent and complete JSON output. Ensure all fields are correctly populated according to the descriptions and requirements given in the function schema if this were a function call. Return only the JSON object."
     
+    voted_raw = None # Initialize for potential error logging
     try:
         completion = client.chat.completions.create(
             model=model_id,
@@ -356,29 +460,49 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
             ]
         )
         voted_raw = completion.choices[0].message.content.strip()
-        if type(results[0]) != str:
-            voted = json.loads(voted_raw)
-        else:
+        
+        # Attempt to parse if the first result was a dict (implies JSON expected)
+        if isinstance(results[0], dict):
+            try:
+                # Clean potential markdown code block fences
+                if voted_raw.startswith("```json"):
+                    voted_raw = voted_raw[7:]
+                if voted_raw.endswith("```"):
+                    voted_raw = voted_raw[:-3]
+                voted_raw = voted_raw.strip()
+                voted = json.loads(voted_raw)
+            except json.JSONDecodeError as e_json_parse:
+                logger.error(f"Self-consistency voting returned non-JSON or malformed JSON when JSON was expected. Raw: '{voted_raw}'. Error: {e_json_parse}. Falling back to first result.")
+                voted = results[0] # Fallback to the first result if parsing fails
+        else: # Assumed to be string
             voted = voted_raw
+            
         return voted, results
     except APIError as e:
         logger.error(f"OpenAI API Error during self-consistency voting: {e}")
         raise RuntimeError(f"Self-consistency voting failed due to API error: {str(e)}")
-    except json.JSONDecodeError as e:
+    except json.JSONDecodeError as e: # Should be caught by inner try-except if results[0] is dict
         logger.error(f"JSON decode error during self-consistency voting. Raw content: '{voted_raw}'")
         raise RuntimeError(f"Self-consistency voting failed due to JSON decode error: {str(e)}. Raw content: '{voted_raw}'")
+    except Exception as e: # Catch any other unexpected errors
+        logger.error(f"Unexpected error during self-consistency voting. Raw content: '{voted_raw}'. Error: {e}")
+        # Fallback to the first result in case of unexpected error during voting
+        if results:
+            logger.warning("Falling back to the first result due to an unexpected error in self-consistency voting.")
+            return results[0], results
+        else:
+            raise RuntimeError(f"Self-consistency voting failed with an unexpected error and no results to fallback on: {str(e)}")
+
 
 def transcription_from_page_image(
     image_path: Path, 
     model_id: str,
-    temperature: float = 0.0
+    temperature: float = 0.0 # Model-specific temperature
 ) -> str:
     """
     1) Read the image as base64
     2) Send to OpenRouter to transcribe exactly
     """
-
-    # Define system prompt
     system_prompt = """
 You are a precise document transcriber for medical lab reports. Your task is to:
 1. Write out ALL text visible in the image exactly as it appears
@@ -388,40 +512,29 @@ You are a precise document transcriber for medical lab reports. Your task is to:
 5. Do not interpret, summarize, or structure the content - just transcribe it
 """.strip()
     
-    # Define user prompt
     user_prompt = """
 Please transcribe this lab report exactly as it appears, preserving layout and all details. 
 Pay special attention to numbers, units (e.g., mg/dL), and reference ranges.
 """.strip()
     
-    # Encode image as base64
     with open(image_path, "rb") as img_file:
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
 
-    # Prompt for image transcription
     try:
         completion = client.chat.completions.create(
             model=model_id,
             messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
+                {"role": "system", "content": system_prompt},
                 {
                     "role": "user",
                     "content": [
                         {"type": "text", "text": user_prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{img_data}"
-                            }
-                        }
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_data}"}}
                     ]
                 }
             ],
             temperature=temperature,
-            max_tokens=8192
+            max_tokens=4096 # Max tokens for transcription, was 8192, Llama3.1-405b context is 8192, models like Haiku have less
         )
     except APIError as e:
         logger.error(f"OpenAI API Error during transcription for {image_path.name}: {e}")
@@ -432,67 +545,103 @@ Pay special attention to numbers, units (e.g., mg/dL), and reference ranges.
 def extract_labs_from_page_transcription(
     transcription: str, 
     model_id: str,
-    temperature: float = 0.0
-) -> pd.DataFrame:
+    temperature: float = 0.0 # Model-specific temperature
+) -> dict: # Returns a dict matching HealthLabReport structure
     """
     1) Ask OpenRouter to parse out labs from the transcription
-    2) Return them as a DataFrame
+    2) Return them as a dict.
     """
-
     system_prompt = """
-You are a medical lab report analyzer with the following strict requirements:
-1. COMPLETENESS: Extract ALL test results from the provided transcription
-2. ACCURACY: Values and units must match exactly
-3. VALIDATION: Verify each extraction matches the source text exactly
-4. THOROUGHNESS: Process the text line by line to ensure nothing is missed
+You are a medical lab report analyzer. Your task is to extract information from the provided transcription and structure it according to the 'extract_lab_results' tool schema.
+Follow these strict requirements:
+1. COMPLETENESS: Extract ALL test results from the provided transcription.
+2. ACCURACY: Values and units must match exactly as they appear in the transcription.
+3. SCHEMA ADHERENCE: Populate ALL fields of the `HealthLabReport` and nested `LabResult` models. If information for an optional field is not present, use `null`.
+4. DATES: Ensure `report_date` and `collection_date` are in YYYY-MM-DD format or `null`.
+5. LAB VALUES: If a lab value is clearly boolean (e.g., "Positive", "Negative"), convert `lab_value` to 1 or 0 respectively. Otherwise, use the numerical value. If it's purely textual (e.g., "See comments"), `lab_value` should be null and the text captured in `lab_comments` or `source_text`.
+6. THOROUGHNESS: Process the text line by line to ensure nothing is missed.
+7. UNKNOWN VALUES: For `lab_type`, if not clearly blood, urine, saliva, or feces, use 'unknown'.
 """.strip()
 
-    # Extract structured data from transcription
     try:
         completion = client.chat.completions.create(
             model=model_id,
             messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
-                {
-                    "role": "user",
-                    "content": transcription
-                }
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": transcription}
             ],
             temperature=temperature,
-            max_tokens=20000,
-            tools=TOOLS
+            max_tokens=4000, # Adjusted from 20000, as output is structured JSON
+            tools=TOOLS,
+            tool_choice={"type": "function", "function": {"name": "extract_lab_results"}}
         )
     except APIError as e:
         logger.error(f"OpenAI API Error during lab extraction: {e}")
         raise RuntimeError(f"Lab extraction failed due to API error: {str(e)}")
 
-    tool_args = completion.choices[0].message.tool_calls[0].function.arguments
-    tool_result = json.loads(tool_args)
-    
-    lab_results = tool_result.get("lab_results", [])
-    for lab_result in lab_results:
-        lab_range_min = lab_result.get("lab_range_min")
-        lab_range_max = lab_result.get("lab_range_max")
-        if lab_range_min is None: lab_result["lab_range_min"] = 0
-        if lab_range_max is None: lab_result["lab_range_max"] = 9999
-    tool_result["lab_results"] = lab_results
+    if not completion.choices[0].message.tool_calls:
+        logger.error(f"No tool call was made by the model for lab extraction. Transcription: {transcription[:500]}")
+        # Return a minimal valid HealthLabReport structure to avoid downstream errors
+        # or re-raise an error indicating extraction failure.
+        # For now, let's try to return a default structure.
+        empty_report = HealthLabReport(lab_results=[]).model_dump()
+        logger.warning("Returning an empty HealthLabReport due to no tool call from the LLM.")
+        return empty_report
+        # raise RuntimeError("Lab extraction failed: Model did not make the expected tool call.")
 
-    tool_result = json.loads(tool_args)
+
+    tool_args_raw = completion.choices[0].message.tool_calls[0].function.arguments
+    
+    try:
+        tool_result = json.loads(tool_args_raw)
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error for tool arguments: {e}. Raw arguments: '{tool_args_raw}'")
+        raise RuntimeError(f"Lab extraction failed due to JSON decode error in tool arguments: {str(e)}")
+
+    # Removed the block that defaulted lab_range_min/max to 0/9999.
+    # Let Pydantic handle Optional[float] as None if missing.
 
     try: 
-        # Normalize empty strings before validation
         temp_model = HealthLabReport(**tool_result)
-        temp_model.normalize_empty_optionals()
-        model = HealthLabReport.model_validate(temp_model.model_dump())
+        temp_model.normalize_empty_optionals() # Normalize "" to None for optional fields
+        # Re-validate after normalization to ensure type correctness if "" was problematic
+        validated_model_dict = HealthLabReport.model_validate(temp_model.model_dump()).model_dump()
     except Exception as e:
-        logger.error(f"Model validation error: {e}")
-        raise RuntimeError(f"Model validation failed: {str(e)}")
-    
-    model_dict = model.model_dump()
-    return model_dict
+        logger.error(f"Pydantic model validation error after extraction and normalization: {e}. Data: {tool_result}")
+        # Attempt to salvage lab_results if the main report fails validation
+        if "lab_results" in tool_result and isinstance(tool_result["lab_results"], list):
+            salvaged_results = []
+            for lr_data in tool_result["lab_results"]:
+                try:
+                    lr_model = LabResult(**lr_data)
+                    lr_model.normalize_empty_optionals() # Assuming LabResult also has this method or adapt
+                    salvaged_results.append(lr_model.model_dump())
+                except Exception as lr_e:
+                    logger.warning(f"Could not validate individual lab result: {lr_data}. Error: {lr_e}")
+            if salvaged_results:
+                logger.warning("Salvaged some lab results despite overall HealthLabReport validation failure.")
+                # Create a minimal valid HealthLabReport with salvaged results
+                # and default/None for other fields.
+                minimal_report = HealthLabReport(lab_results=salvaged_results).model_dump()
+                # Log which fields might have caused the main validation error by comparing keys
+                expected_report_keys = set(HealthLabReport.model_fields.keys())
+                provided_report_keys = set(tool_result.keys())
+                missing_keys = expected_report_keys - provided_report_keys
+                extra_keys = provided_report_keys - expected_report_keys
+                if missing_keys: logger.error(f"Missing keys in HealthLabReport: {missing_keys}")
+                if extra_keys: logger.error(f"Extra keys in HealthLabReport: {extra_keys}")
+                return minimal_report
+
+
+        logger.error(f"Model validation failed: {str(e)}. Raw tool result: {tool_result}")
+        # Fallback to a minimal valid structure if validation fails catastrophically
+        # This helps prevent the entire pipeline from crashing for one bad extraction.
+        # However, this might hide issues, so logging is crucial.
+        # Consider if raising RuntimeError is better in some scenarios.
+        return HealthLabReport(lab_results=[]).model_dump()
+
+    return validated_model_dict
+
 
 ########################################
 # The Single-PDF Processor
@@ -500,13 +649,13 @@ You are a medical lab report analyzer with the following strict requirements:
 
 def process_single_pdf(
     pdf_path: Path,
-    output_dir: Path,
+    output_dir: Path, # This is the global output_dir, doc_out_dir is derived inside
     self_consistency_model_id: str,
     transcribe_model_id: str,
     n_transcribe: int,
     extract_model_id: str,
     n_extract: int
-) -> pd.DataFrame:
+) -> Optional[Path]: # Returns path to the generated PDF-level CSV
     """
     High-level function that:
       1) Copies `pdf_path` to `output_dir/<stem>/`.
@@ -514,286 +663,299 @@ def process_single_pdf(
       3) Transcribes each page & extracts labs.
       4) Combines them into a single DataFrame for this PDF.
       5) Saves the PDF-level CSV inside that directory.
-    Returns a single merged DataFrame for the entire PDF.
+    Returns the path to the generated PDF-level CSV file, or None if processing fails.
     """
-
-    # 1) Set up subdirectory
     pdf_stem = pdf_path.stem
-    doc_out_dir = output_dir / pdf_stem
+    # doc_out_dir is specific to this PDF, inside the global output_dir
+    doc_out_dir = output_dir / pdf_stem 
     doc_out_dir.mkdir(exist_ok=True, parents=True)
 
-    normalized_csv_path = os.path.join(doc_out_dir, f"{pdf_stem}.csv")
-    #if os.path.exists(normalized_csv_path):
-    #    logger.info(f"[{pdf_stem}] - skipped")
-    #    return pd.read_csv(normalized_csv_path)
+    pdf_level_csv_path = doc_out_dir / f"{pdf_stem}.csv"
+    # Basic skip logic: if the final per-PDF CSV exists, skip.
+    # More robust skipping might check for all intermediate files.
+    # if pdf_level_csv_path.exists():
+    #     logger.info(f"[{pdf_stem}] - skipped, CSV already exists: {pdf_level_csv_path}")
+    #     return pdf_level_csv_path
     
     logger.info(f"[{pdf_stem}] - processing...")
 
-    # 2) Copy PDF to output subdirectory
     copied_pdf_path = doc_out_dir / pdf_path.name
-    if not copied_pdf_path.exists(): 
-        logger.info(f"[{pdf_stem}] - copying: {copied_pdf_path}")
+    if not copied_pdf_path.exists() or copied_pdf_path.stat().st_size != pdf_path.stat().st_size : # Ensure it's a full copy
+        logger.info(f"[{pdf_stem}] - copying to: {copied_pdf_path}")
         shutil.copy2(pdf_path, copied_pdf_path)
 
-    # 3) Check if all expected page JPGs exist, else extract PDF pages
-    # Try to find the number of pages by looking for existing JPGs
-    existing_jpgs = sorted(doc_out_dir.glob(f"{pdf_stem}.*.jpg"))
-    if existing_jpgs:
-        # If any JPGs exist, assume all pages are already extracted
-        pages = [Image.open(jpg_path) for jpg_path in existing_jpgs]
-    else:
-        # No JPGs found, extract pages from PDF and save images immediately
-        pages = []
+    try:
         pil_pages = pdf2image.convert_from_path(str(copied_pdf_path))
-        for idx, page_image in enumerate(pil_pages, start=1):
-            page_file_name = f"{pdf_stem}.{idx:03d}"
-            page_jpg_path = doc_out_dir / f"{page_file_name}.jpg"
-            page_image.save(page_jpg_path, "JPEG", quality=95)
-            pages.append(page_image)
-        logger.info(f"[{pdf_stem}] - extracted {len(pages)} page(s) from PDF")
+    except Exception as e:
+        logger.error(f"[{pdf_stem}] - Failed to convert PDF to images: {e}")
+        return None
     
-    # 4) For each page: preprocess, transcribe, parse labs
-    document_date = None
-    report_date = None
-    collection_date = None
-    for page_number, page_image in enumerate(pages, start=1):
-        page_file_name = f"{pdf_stem}.{page_number:03d}"
+    pages_data = [] # To store (page_image, page_file_name, page_jpg_path)
 
-        # Preprocess
+    for idx, page_image in enumerate(pil_pages, start=1):
+        page_file_name = f"{pdf_stem}.{idx:03d}"
         page_jpg_path = doc_out_dir / f"{page_file_name}.jpg"
-        if not page_jpg_path.exists():
-            logger.info(f"[{page_file_name}] - preprocessing page JPG")
+        pages_data.append({"image": page_image, "name": page_file_name, "path": page_jpg_path})
 
-            # Preprocess the page image
+        if not page_jpg_path.exists(): # Preprocess and save if not exists
+            logger.info(f"[{page_file_name}] - preprocessing and saving page JPG")
             processed_image = preprocess_page_image(page_image)
-
-            # Save the processed image as JPEG
             processed_image.save(page_jpg_path, "JPEG", quality=95)
+        else:
+            logger.info(f"[{page_file_name}] - JPG already exists, skipping preprocessing.")
+    
+    logger.info(f"[{pdf_stem}] - extracted and preprocessed {len(pages_data)} page(s).")
+    
+    all_page_lab_results = [] # List to hold all LabResult objects from all pages
+    first_page_report_data = {} # To store report-level data from the first page
 
-        # Transcribe
+    for page_idx, page_info in enumerate(pages_data):
+        page_file_name = page_info["name"]
+        page_jpg_path = page_info["path"]
+
         page_txt_path = doc_out_dir / f"{page_file_name}.txt"
         if not page_txt_path.exists():
-            logger.info(f"[{page_file_name}] - extracting TXT from page JPG")
+            logger.info(f"[{page_file_name}] - transcribing page JPG")
+            try:
+                voted_txt, all_txt_versions = self_consistency(
+                    lambda **sc_kwargs: transcription_from_page_image(page_jpg_path, transcribe_model_id, **sc_kwargs),
+                    self_consistency_model_id, n_transcribe
+                )
+                if n_transcribe > 1:
+                    for i, txt in enumerate(all_txt_versions, 1):
+                        (doc_out_dir / f"{page_file_name}.v{i}.txt").write_text(txt, encoding='utf-8')
+                page_txt_path.write_text(voted_txt, encoding='utf-8')
+                page_txt = voted_txt
+            except Exception as e:
+                logger.error(f"[{page_file_name}] - transcription failed: {e}")
+                continue # Skip to next page or handle error appropriately
+        else:
+            logger.info(f"[{page_file_name}] - TXT already exists, loading.")
+            page_txt = page_txt_path.read_text(encoding='utf-8')
 
-            # Transcribe the page image with self-consistency
-            voted_txt, all_txt_versions = self_consistency(
-                lambda **kwargs: transcription_from_page_image(
-                    page_jpg_path,
-                    transcribe_model_id,
-                    **kwargs
-                ), self_consistency_model_id, n_transcribe
-            )
-
-            # Only save versioned files if n_transcribe > 1
-            if n_transcribe > 1:
-                for idx, txt in enumerate(all_txt_versions, 1):
-                    versioned_txt_path = doc_out_dir / f"{page_file_name}.v{idx}.txt"
-                    versioned_txt_path.write_text(txt, encoding='utf-8')
-
-            # Save the voted transcription as the main .txt
-            page_txt_path.write_text(voted_txt, encoding='utf-8')
-        
-        # Extract labs
         page_json_path = doc_out_dir / f"{page_file_name}.json"
+        current_page_json_data = None
         if not page_json_path.exists():
             logger.info(f"[{page_file_name}] - extracting JSON from page TXT")
+            try:
+                page_json_dict, all_json_versions = self_consistency(
+                    lambda **sc_kwargs: extract_labs_from_page_transcription(page_txt, extract_model_id, **sc_kwargs),
+                    self_consistency_model_id, n_extract
+                )
+                if n_extract > 1:
+                    for i, j_data in enumerate(all_json_versions, 1):
+                        (doc_out_dir / f"{page_file_name}.v{i}.json").write_text(json.dumps(j_data, indent=2, ensure_ascii=False), encoding='utf-8')
+                
+                # Ensure the result is a HealthLabReport model dict for consistency
+                if not isinstance(page_json_dict, dict) or "lab_results" not in page_json_dict:
+                    logger.error(f"[{page_file_name}] - Extraction did not return a valid HealthLabReport structure. Got: {type(page_json_dict)}")
+                    page_json_model = HealthLabReport(lab_results=[]) # Create a default empty one
+                else:
+                     page_json_model = HealthLabReport(**page_json_dict)
+                
+                page_json_model.normalize_empty_optionals()
+                current_page_json_data = page_json_model.model_dump()
+                page_json_path.write_text(json.dumps(current_page_json_data, indent=2, ensure_ascii=False), encoding='utf-8')
 
-            # Parse labs with self-consistency
-            page_txt = page_txt_path.read_text(encoding='utf-8')
-            page_json, all_json_versions = self_consistency(
-                lambda **kwargs: extract_labs_from_page_transcription(
-                    page_txt,
-                    extract_model_id,
-                    **kwargs
-                ), self_consistency_model_id, n_extract
-            )
-
-            # Only save versioned files if n_extract > 1
-            if n_extract > 1:
-                for idx, j in enumerate(all_json_versions, 1):
-                    versioned_json_path = doc_out_dir / f"{page_file_name}.v{idx}.json"
-                    versioned_json_path.write_text(json.dumps(j, indent=2, ensure_ascii=False), encoding='utf-8')
-
-            # If this is the first page, save the report date
-            if page_number == 1: 
-                report_date = page_json.get("report_date")
-                collection_date = page_json.get("collection_date")
-                if report_date == "0000-00-00": report_date = None
-                if collection_date == "0000-00-00": collection_date = None
-                document_date = collection_date if collection_date else report_date
-
-                # If document_date is missing, try to extract from pdf_stem
-                if not document_date:
-                    # Try to find a date in the pdf_stem (format: YYYY-MM-DD)
-                    m = re.search(r"\d{4}-\d{2}-\d{2}", pdf_stem)
-                    if m:
-                        document_date = m.group(0)
-                        # Propagate to missing fields
-                        if not collection_date:
-                            collection_date = document_date
-                        if not report_date:
-                            report_date = document_date
-                    else:
-                        raise AssertionError("Document date is missing and not found in filename")
-
-                assert document_date, "Document date is missing"
-                assert document_date in pdf_stem, f"Document date not in filename: {pdf_stem} vs {document_date}"
-
-            page_json["report_date"] = report_date
-            page_json["collection_date"] = collection_date
-            page_json["source_file"] = page_file_name
-            lab_results = page_json.get("lab_results", [])
-            for lab_result in lab_results: 
-                lab_result["date"] = document_date
-            page_json["lab_results"] = lab_results
-
-            # Save parsed labs
-            page_json_path.write_text(json.dumps(page_json, indent=2, ensure_ascii=False), encoding='utf-8')
+            except Exception as e:
+                logger.error(f"[{page_file_name}] - JSON extraction failed: {e}")
+                # Create a minimal JSON structure to avoid crashing, or skip
+                current_page_json_data = HealthLabReport(source_file=page_file_name, lab_results=[]).model_dump()
+                page_json_path.write_text(json.dumps(current_page_json_data, indent=2, ensure_ascii=False), encoding='utf-8') # Save minimal
         else:
-            # If JSON already exists, just load it
-            page_json = json.loads(page_json_path.read_text(encoding='utf-8'))
+            logger.info(f"[{page_file_name}] - JSON already exists, loading.")
+            try:
+                current_page_json_data = json.loads(page_json_path.read_text(encoding='utf-8'))
+                # Validate loaded JSON against Pydantic model
+                page_json_model = HealthLabReport(**current_page_json_data)
+                page_json_model.normalize_empty_optionals()
+                current_page_json_data = page_json_model.model_dump()
 
-        # Export to CSV
-        page_csv_path = doc_out_dir / f"{page_file_name}.csv"
-        if True: #not page_csv_path.exists():
-            logger.info(f"[{page_file_name}] - converting JSON to CSV")
+            except json.JSONDecodeError as e:
+                logger.error(f"[{page_file_name}] - Failed to decode existing JSON: {e}")
+                current_page_json_data = HealthLabReport(source_file=page_file_name, lab_results=[]).model_dump() # Fallback
+            except Exception as e: # Pydantic validation error
+                logger.error(f"[{page_file_name}] - Failed to validate existing JSON: {e}")
+                current_page_json_data = HealthLabReport(source_file=page_file_name, lab_results=[]).model_dump() # Fallback
 
-            # Load JSON and convert to DataFrame
-            page_json = json.loads(page_json_path.read_text(encoding='utf-8'))
-            df = pd.json_normalize(page_json["lab_results"])
 
-            # Ensure 'date' is the first column if it exists
-            if 'date' in df.columns:
-                cols = ['date'] + [col for col in df.columns if col != 'date']
-                df = df[cols]
+        # Process extracted data for the current page
+        if current_page_json_data:
+            if page_idx == 0: # First page
+                first_page_report_data = {
+                    k: v for k, v in current_page_json_data.items() if k != "lab_results"
+                }
+                # Try to get a document date (collection or report)
+                doc_date_str = current_page_json_data.get("collection_date") or current_page_json_data.get("report_date")
+                if doc_date_str == "0000-00-00": doc_date_str = None
+
+                # Fallback to filename if date is missing
+                if not doc_date_str:
+                    match = re.search(r"(\d{4}-\d{2}-\d{2})", pdf_stem)
+                    if match:
+                        doc_date_str = match.group(1)
+                        logger.info(f"[{pdf_stem}] - Using date from filename: {doc_date_str}")
+                        # Populate report_date/collection_date if they were missing and filename provided one
+                        if not first_page_report_data.get("collection_date") and doc_date_str : first_page_report_data["collection_date"] = doc_date_str
+                        if not first_page_report_data.get("report_date") and doc_date_str: first_page_report_data["report_date"] = doc_date_str
+                
+                first_page_report_data["_document_date_for_results"] = doc_date_str # Store resolved date
+                if not doc_date_str:
+                     logger.warning(f"[{pdf_stem}] - Document date is missing from page 1 and not found in filename. Results from this PDF might lack a date.")
+                else:
+                    # Basic check: if a date was found, it should ideally be in the filename or match it
+                    if doc_date_str not in pdf_stem:
+                         logger.warning(f"[{pdf_stem}] - Extracted document date {doc_date_str} is not in filename {pdf_stem}.")
+
+
+            page_lab_results = current_page_json_data.get("lab_results", [])
+            for lab_result_dict in page_lab_results:
+                # Add page-specific info to each lab result
+                lab_result_dict["page_number"] = page_idx + 1
+                lab_result_dict["source_file"] = page_file_name # Page specific source (e.g. pdf_stem.001)
+                all_page_lab_results.append(lab_result_dict)
+
+    if not all_page_lab_results:
+        logger.warning(f"[{pdf_stem}] - No lab results extracted from any page.")
+        # Create an empty CSV to signify processing attempt but no data
+        pd.DataFrame().to_csv(pdf_level_csv_path, index=False)
+        return pdf_level_csv_path # Return path to empty CSV
+
+    # Create DataFrame from all collected LabResult dicts
+    pdf_df = pd.DataFrame(all_page_lab_results)
+
+    # Add report-level information to each row of the DataFrame
+    # This is less ideal than storing report-level info once, but matches one interpretation of merging
+    # A better approach might be to have a separate report-level table.
+    # For now, we add the resolved document date to each lab result row.
+    resolved_doc_date = first_page_report_data.get("_document_date_for_results")
+    if resolved_doc_date:
+        pdf_df["date"] = resolved_doc_date # This adds the 'date' column expected by downstream processing
+    else:
+        pdf_df["date"] = None # Ensure column exists even if no date found
+        logger.warning(f"[{pdf_stem}] - Final PDF DataFrame is missing 'date' for its lab results.")
+
+
+    # Fill in other report-level data if needed, though 'date' is primary for lab results context
+    # Example: pdf_df['report_date_meta'] = first_page_report_data.get("report_date")
+    # pdf_df['collection_date_meta'] = first_page_report_data.get("collection_date")
+    # pdf_df['patient_name_meta'] = first_page_report_data.get("patient_name")
+    # etc. These would be new columns. The current structure expects 'date' directly on lab results.
+
+    # Ensure all columns from LabResult model are present, filling with None if missing
+    # This is important if some pages had partial extractions
+    for col_name in LabResult.model_fields.keys():
+        if col_name not in pdf_df.columns:
+            pdf_df[col_name] = None
+    
+    # Select and order columns for the per-PDF CSV based on a subset of COLUMN_SCHEMA
+    # Prioritize core lab data for these intermediate CSVs.
+    # 'date' is critical.
+    desired_cols_for_pdf_csv = [
+        "date", "lab_type", "lab_name", "lab_value", "lab_unit",
+        "lab_range_min", "lab_range_max", "reference_range_text", "is_flagged",
+        "lab_comments", "confidence", "page_number", "source_file", "source_text" # source_file here is page specific
+    ]
+    
+    # Filter for columns that actually exist in pdf_df after processing
+    cols_to_save = [col for col in desired_cols_for_pdf_csv if col in pdf_df.columns]
+    # Add any other columns that might have been generated if not in the desired list,
+    # to avoid data loss at this stage.
+    for col in pdf_df.columns:
+        if col not in cols_to_save:
+            cols_to_save.append(col)
             
-            # Save DataFrame to CSV
-            df.to_csv(page_csv_path, index=False)
+    pdf_df = pdf_df[cols_to_save]
 
-    # Loop through files in the directory
-    dataframes = []
-    # Only merge per-page CSVs (e.g., .001.csv, .002.csv, etc.)
-    for file in os.listdir(doc_out_dir):
-        if not re.match(rf"^{re.escape(pdf_stem)}\.\d{{3}}\.csv$", file):
-            continue
-        file_path = os.path.join(doc_out_dir, file)
-        contents = open(file_path, 'r', encoding='utf-8').read()
-        if not contents.strip():
-            continue
-        df = pd.read_csv(file_path)
-        dataframes.append(df)
 
-    # Concatenate all dataframes and save to a single CSV
-    merged_df = pd.concat(dataframes, ignore_index=True)
+    pdf_df.to_csv(pdf_level_csv_path, index=False, encoding='utf-8')
+    logger.info(f"[{pdf_stem}] - processing finished. CSV saved to {pdf_level_csv_path}")
+    return pdf_level_csv_path
 
-    merged_df.to_csv(normalized_csv_path, index=False)
-
-    # --------- Export Excel file for Google Drive, freeze first row ---------
-    excel_path = os.path.join(output_dir, "all.xlsx")
-    hidden_columns = [
-        "lab_name",
-        "lab_name_slug",
-        "lab_value",
-        "lab_unit",
-        "lab_range_min",
-        "lab_range_max",
-        "confidence",
-        "is_flagged"
-    ]
-    # Sensible default widths for columns (column_name: width)
-    default_widths = {
-        "date": 13,
-        "lab_type": 10,
-        "lab_name": 28,
-        "lab_name_enum": 22,
-        "lab_name_slug": 22,
-        "lab_value": 12,
-        "lab_unit": 12,
-        "lab_unit_enum": 14,
-        "lab_range_min": 12,
-        "lab_range_max": 12,
-        "lab_value_final": 14,
-        "lab_unit_final": 14,
-        "lab_range_min_final": 14,
-        "lab_range_max_final": 14,
-        "is_flagged": 10,
-        "confidence": 10,
-        "source_file": 18,
-        "is_flagged_final": 14,
-        "healthy_range_min": 14,
-        "healthy_range_max": 14,
-        "is_in_healthy_range": 16,
-    }
-    with pd.ExcelWriter(excel_path, engine="xlsxwriter", datetime_format='yyyy-mm-dd') as writer:
-        merged_df.to_excel(writer, index=False)
-        worksheet = writer.sheets[merged_df.columns.name or next(iter(writer.sheets))]
-        worksheet.freeze_panes(1, 0)
-        # Set column widths and hide specified columns
-        for idx, col in enumerate(merged_df.columns):
-            width = default_widths.get(col, 12)
-            options = {'hidden': True} if col in hidden_columns else {}
-            worksheet.set_column(idx, idx, width, None, options)
-
-    # --------- Export final reduced file ---------
-    export_columns_final = [
-        "date",
-        "lab_type",
-        "lab_name_enum",
-        "lab_value_final",
-        "lab_unit_final",
-        "lab_range_min_final",
-        "lab_range_max_final"
-    ]
-    final_df = merged_df[[col for col in export_columns_final if col in merged_df.columns]]
-    final_df.to_csv(os.path.join(output_dir, "all.final.csv"), index=False)
-    final_df.to_excel(os.path.join(output_dir, "all.final.xlsx"), index=False)
-
-    # --------- Export most recent value per blood test ---------
-    if "lab_type" in final_df.columns and "lab_name_enum" in final_df.columns and "date" in final_df.columns:
-        blood_df = final_df[final_df["lab_type"].str.lower() == "blood"].copy()
-        # Sort by date descending, then drop duplicates to keep the most recent per test
-        blood_df = blood_df.sort_values("date", ascending=False)
-        most_recent_blood = blood_df.drop_duplicates(subset=["lab_name_enum"], keep="first")
-        most_recent_blood.to_csv(os.path.join(output_dir, "all.final.blood-most-recent.csv"), index=False)
-        most_recent_blood.to_excel(os.path.join(output_dir, "all.final.blood-most-recent.xlsx"), index=False)
-
-    logger.info(f"[{pdf_stem}] - processing finished successfully")
 
 ########################################
 # The Main Function
 ########################################
 
 def plot_lab_enum(args):
-    lab_name_enum, merged_df_path, plots_dir_str, output_plots_dir_str = args
-    import pandas as pd
-    import re
+    lab_name_enum_val, merged_df_path_str, plots_dir_str, output_plots_dir_str = args
+    import pandas as pd # Keep imports inside for multiprocessing safety
     import matplotlib.pyplot as plt
+    import re
     from pathlib import Path
 
-    merged_df = pd.read_csv(merged_df_path)
-    if "date" in merged_df.columns:
-        merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce")
-    df_lab = merged_df[merged_df["lab_name_enum"] == lab_name_enum].copy()
-    if df_lab.empty or df_lab["date"].isnull().all() or len(df_lab) < 2:
-        return
-    df_lab = df_lab.sort_values("date", ascending=True)
-    # Get unit for this lab_name_enum (use first non-null unit)
-    unit_str = next((u for u in df_lab["lab_unit_final"].dropna().astype(str).unique() if u), "")
-    y_label = f"Value ({unit_str})" if unit_str else "Value"
-    title = f"{lab_name_enum} " + (f" [{unit_str}]" if unit_str else "")
-    plt.figure(figsize=(10, 5))
-    plt.plot(df_lab["date"], df_lab["lab_value_final"], marker='o', linestyle='-')
-    plt.title(title)
-    plt.xlabel("Date")
-    plt.ylabel(y_label)
-    plt.grid(True)
-    plt.tight_layout()
-    safe_lab_name = re.sub(r'[^\w\-_. ]', '_', str(lab_name_enum))
-    plot_path = Path(plots_dir_str) / f"{safe_lab_name}.png"
-    output_plot_path = Path(output_plots_dir_str) / f"{safe_lab_name}.png"
-    plt.savefig(plot_path)
-    plt.savefig(output_plot_path)
-    plt.close()
+    # Use constants derived from COLUMN_SCHEMA
+    date_col = PLOTTING_DATE_COL
+    value_col = PLOTTING_VALUE_COL
+    group_col = PLOTTING_GROUP_COL
+    unit_col = PLOTTING_UNIT_COL
+
+    try:
+        merged_df = pd.read_csv(Path(merged_df_path_str))
+        if date_col in merged_df.columns:
+            merged_df[date_col] = pd.to_datetime(merged_df[date_col], errors="coerce")
+        else:
+            # logger.warning(f"Plotting: Date column '{date_col}' not found in {merged_df_path_str}.") # Needs logger config for multiproc
+            print(f"Plotting Warning: Date column '{date_col}' not found in {merged_df_path_str}.")
+            return
+
+        if group_col not in merged_df.columns or value_col not in merged_df.columns:
+            # logger.warning(f"Plotting: Group ('{group_col}') or Value ('{value_col}') column not found.")
+            print(f"Plotting Warning: Group ('{group_col}') or Value ('{value_col}') column not found.")
+            return
+
+        df_lab = merged_df[merged_df[group_col] == lab_name_enum_val].copy()
+        
+        if df_lab.empty or df_lab[date_col].isnull().all() or len(df_lab) < 2:
+            # print(f"Plotting Info: Not enough data to plot for {lab_name_enum_val}.")
+            return
+        
+        df_lab = df_lab.sort_values(date_col, ascending=True)
+        
+        unit_str = ""
+        if unit_col in df_lab.columns:
+            unit_str = next((u for u in df_lab[unit_col].dropna().astype(str).unique() if u), "")
+        
+        y_label = f"Value ({unit_str})" if unit_str else "Value"
+        title = f"{lab_name_enum_val} " + (f" [{unit_str}]" if unit_str else "")
+        
+        plt.figure(figsize=(12, 6)) # Increased figure size
+        plt.plot(df_lab[date_col], df_lab[value_col], marker='o', linestyle='-')
+        
+        # Add reference ranges if available and make sense for the plot
+        # This requires lab_range_min_final and lab_range_max_final to be present and consistent for the enum
+        if "lab_range_min_final" in df_lab.columns and "lab_range_max_final" in df_lab.columns:
+            # Use a typical or median range if multiple exist for the same enum (though ideally they are harmonized)
+            # For simplicity, just pick the first valid one. More robust would be to check consistency.
+            min_range = df_lab["lab_range_min_final"].dropna().unique()
+            max_range = df_lab["lab_range_max_final"].dropna().unique()
+            if len(min_range) > 0 and pd.notna(min_range[0]):
+                 plt.axhline(y=float(min_range[0]), color='gray', linestyle='--', label=f'Ref Min: {min_range[0]}')
+            if len(max_range) > 0 and pd.notna(max_range[0]):
+                 plt.axhline(y=float(max_range[0]), color='gray', linestyle='--', label=f'Ref Max: {max_range[0]}')
+            if (len(min_range) > 0 and pd.notna(min_range[0])) or \
+               (len(max_range) > 0 and pd.notna(max_range[0])):
+                plt.legend(loc='best')
+
+
+        plt.title(title, fontsize=16)
+        plt.xlabel("Date", fontsize=12)
+        plt.ylabel(y_label, fontsize=12)
+        plt.grid(True, which='both', linestyle='--', linewidth=0.5)
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        
+        safe_lab_name = re.sub(r'[^\w\-_. ]', '_', str(lab_name_enum_val))
+        plot_path = Path(plots_dir_str) / f"{safe_lab_name}.png"
+        output_plot_path = Path(output_plots_dir_str) / f"{safe_lab_name}.png"
+        
+        plt.savefig(plot_path)
+        plt.savefig(output_plot_path)
+        plt.close()
+    except Exception as e:
+        # logger.error(f"Failed to plot {lab_name_enum_val}: {e}") # Needs logger config for multiproc
+        print(f"Plotting Error for {lab_name_enum_val}: {e}")
+
 
 def main():
     config = load_env_config()
@@ -801,343 +963,411 @@ def main():
     transcribe_model_id = config["transcribe_model_id"]
     extract_model_id = config["extract_model_id"]
     input_dir = config["input_path"]
-    output_dir = config["output_path"]
+    output_dir = config["output_path"] # This is the global output directory
     pattern = config["input_file_regex"]
     n_transcriptions = config["n_transcriptions"]
     n_extractions = config["n_extractions"]
-    max_workers = config.get("max_workers", 1)
+    max_workers = config.get("max_workers", os.cpu_count() or 1)
 
-    # Gather PDFs
+
     pdf_files = sorted(list(input_dir.glob(pattern)))
-    logger.info(f"Found {len(pdf_files)} PDF(s) matching pattern {pattern}")
+    logger.info(f"Found {len(pdf_files)} PDF(s) matching pattern '{pattern}' in '{input_dir}'")
+    if not pdf_files:
+        logger.warning("No PDF files found. Exiting.")
+        return
 
-    # Parallel process each PDF
     n_workers = min(max_workers, len(pdf_files))
-    logger.info(f"Using up to {n_workers} worker(s)")
+    logger.info(f"Using up to {n_workers} worker(s) for PDF processing.")
 
-    # Prepare argument tuples for each PDF
     tasks = [(
         pdf_path, output_dir, self_consistency_model_id, transcribe_model_id, n_transcriptions, extract_model_id, n_extractions
     ) for pdf_path in pdf_files]
 
-    # We’ll combine all results into a single DataFrame afterward
+    processed_pdf_csv_paths = []
+    # Use multiprocessing.Pool for parallel PDF processing
+    # Consider ProcessPoolExecutor if GIL is an issue with ThreadPool for CPU-bound tasks in self-consistency's threads
     with Pool(n_workers) as pool:
-        for _ in pool.starmap(process_single_pdf, tasks): pass
+        results = pool.starmap(process_single_pdf, tasks)
+        for result_path in results:
+            if result_path and result_path.exists(): # process_single_pdf returns path or None
+                processed_pdf_csv_paths.append(result_path)
+            else:
+                logger.warning(f"A PDF processing task did not return a valid CSV path or the file does not exist.")
+    
+    if not processed_pdf_csv_paths:
+        logger.error("No PDFs were successfully processed to CSV. Cannot proceed with merging and further analysis.")
+        return
 
-    # Find all PDFs in the output directory (recursively)
+    logger.info(f"Successfully processed {len(processed_pdf_csv_paths)} PDFs to individual CSVs.")
+
     dataframes = []
-    pdf_paths = glob.glob(os.path.join(output_dir, '**', '*.pdf'), recursive=True)
-    for pdf_path in pdf_paths:
-        pdf_dir = os.path.dirname(pdf_path)
-        pdf_stem = Path(pdf_path).stem
-        csv_path = os.path.join(pdf_dir, f"{pdf_stem}.csv")
-        if not os.path.exists(csv_path): continue
-        df = pd.read_csv(csv_path)
-        df['source_file'] = os.path.basename(csv_path)
-        dataframes.append(df)
+    for csv_path in processed_pdf_csv_paths: # Use the list of paths returned by workers
+        try:
+            if csv_path.stat().st_size > 0: # Check if CSV is not empty
+                df = pd.read_csv(csv_path, encoding='utf-8')
+                # The 'source_file' column in per-PDF CSVs (e.g., 'doc_stem.001.csv')
+                # should be the per-PDF CSV name (e.g., 'doc_stem.csv') for the merged DF.
+                df['source_file'] = csv_path.name # This is the 'pdf_stem.csv'
+                dataframes.append(df)
+            else:
+                logger.warning(f"Skipping empty CSV: {csv_path}")
+        except pd.errors.EmptyDataError:
+            logger.warning(f"Skipping empty or malformed CSV (EmptyDataError): {csv_path}")
+        except Exception as e:
+            logger.error(f"Failed to read or process CSV {csv_path}: {e}")
 
-    # Concatenate all dataframes and save to a single CSV
-    merged_df = pd.concat(dataframes, ignore_index=True)
 
-    # --------- Add lab_value_enum and lab_unit_enum columns ---------
+    if not dataframes:
+        logger.error("No data loaded from individual PDF CSVs. Final merged file will be empty or not created.")
+        # Create empty files to signify completion if that's desired, or just exit
+        # For now, we'll proceed, and empty files will be created if merged_df is empty.
+        merged_df = pd.DataFrame()
+    else:
+        merged_df = pd.concat(dataframes, ignore_index=True)
+
+    logger.info(f"Merged data from {len(dataframes)} CSVs into a single DataFrame with {len(merged_df)} rows.")
+
+    # --------- Add derived columns (slugs, enums, final values) ---------
     # Load mappings
-    with open("config/lab_names_mappings.json", "r", encoding="utf-8") as f:
-        lab_names_mapping = json.load(f)
-    with open("config/lab_units_mappings.json", "r", encoding="utf-8") as f:
-        lab_units_mapping = json.load(f)
+    # Ensure config directory and files exist
+    config_path = Path("config")
+    lab_names_mapping_path = config_path / "lab_names_mappings.json"
+    lab_units_mapping_path = config_path / "lab_units_mappings.json"
+    lab_specs_path = config_path / "lab_specs.json"
 
-    # Slugify function (add if not present)
-    def slugify(value):
-        value = str(value).strip().lower()
-        value = value.replace('µ', 'micro')
-        value = value.replace('%', 'percent')  # Replace % with "percent"
-        value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
-        value = re.sub(r"[^\w\s-]", "", value)
-        value = re.sub(r"[\s_-]+", "", value)
-        return value
+    if not lab_names_mapping_path.exists() or \
+       not lab_units_mapping_path.exists() or \
+       not lab_specs_path.exists():
+        logger.error(f"One or more configuration files are missing from '{config_path}'. "
+                     "Cannot proceed with deriving columns (enums, final values).")
+        # Depending on strictness, either return or proceed with only raw extracted data.
+        # For now, let's log and proceed, derived columns will be mostly empty/None.
+        # Add empty columns to prevent KeyErrors later if strict schema adherence is expected for export
+        for col_key in ["lab_name_slug", "lab_name_enum", "lab_unit_enum", 
+                        "lab_value_final", "lab_unit_final", "lab_range_min_final", "lab_range_max_final",
+                        "is_flagged_final", "healthy_range_min", "healthy_range_max", "is_in_healthy_range"]:
+            if col_key not in merged_df.columns: merged_df[col_key] = None # or appropriate default based on type
+    else:
+        with open(lab_names_mapping_path, "r", encoding="utf-8") as f:
+            lab_names_mapping = json.load(f)
+        with open(lab_units_mapping_path, "r", encoding="utf-8") as f:
+            lab_units_mapping = json.load(f)
+        with open(lab_specs_path, "r", encoding="utf-8") as f:
+            lab_specs = json.load(f)
 
-    def map_lab_name_slug(row):
-        lab_type = row["lab_type"]
-        lab_name = row["lab_name"]
-        lab_name_slug = f"{lab_type.lower()}-{slugify(lab_name)}"
-        return lab_name_slug
+        def slugify(value):
+            if pd.isna(value): return ""
+            value = str(value).strip().lower()
+            value = value.replace('µ', 'micro')
+            value = value.replace('%', 'percent')
+            value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+            value = re.sub(r"[^\w\s-]", "", value) # Keep hyphens
+            value = re.sub(r"[\s_]+", "-", value) # Replace spaces/underscores with single hyphen
+            value = value.strip('-')
+            return value
 
-    def map_lab_name_enum(row):
-        lab_name_slug = map_lab_name_slug(row)
-        lab_name_enum = lab_names_mapping.get(lab_name_slug, "")
-        return lab_name_enum
-    
-    def map_lab_unit_enum(row):
-        slug = slugify(row.get("lab_unit", ""))
-        return lab_units_mapping.get(slug, "")
+        def map_lab_name_slug(row):
+            lab_type = row.get("lab_type", "")
+            lab_name = row.get("lab_name", "")
+            if pd.isna(lab_type) or pd.isna(lab_name): return ""
+            return f"{str(lab_type).lower()}-{slugify(lab_name)}"
 
-    merged_df["lab_name_slug"] = merged_df.apply(map_lab_name_slug, axis=1)
-    merged_df["lab_name_enum"] = merged_df.apply(map_lab_name_enum, axis=1)
-    merged_df["lab_unit_enum"] = merged_df.apply(map_lab_unit_enum, axis=1)
+        merged_df["lab_name_slug"] = merged_df.apply(map_lab_name_slug, axis=1)
+        merged_df["lab_name_enum"] = merged_df["lab_name_slug"].apply(lambda x: lab_names_mapping.get(x, ""))
+        merged_df["lab_unit_enum"] = merged_df.get("lab_unit", pd.Series(dtype='str')).apply(lambda x: lab_units_mapping.get(slugify(x), ""))
 
-    # --------- Compute lab_value_final, lab_range_min_final, lab_range_max_final, lab_unit_final ---------
-    # Load lab_specs.json for unit mapping
-    with open("config/lab_specs.json", "r", encoding="utf-8") as f:
-        lab_specs = json.load(f)
 
-    def convert_to_primary_unit(row):
-        lab_name_enum = row.get("lab_name_enum", "")
-        lab_unit_enum = row.get("lab_unit_enum", "")
-        value = row.get("lab_value")
-        range_min = row.get("lab_range_min")
-        range_max = row.get("lab_range_max")
-        # Default: just copy values and unit
-        value_final = value
-        range_min_final = range_min
-        range_max_final = range_max
-        unit_final = lab_unit_enum
+        def convert_to_primary_unit(row):
+            lab_name_enum = row.get("lab_name_enum", "")
+            lab_unit_enum = row.get("lab_unit_enum", "") # This is already slugified and mapped
+            value = row.get("lab_value")
+            range_min = row.get("lab_range_min")
+            range_max = row.get("lab_range_max")
+            
+            # Default: return original values and the mapped unit enum
+            value_final, range_min_final, range_max_final = value, range_min, range_max
+            unit_final = lab_unit_enum # Default to the mapped enum unit
 
-        if not lab_name_enum or lab_name_enum not in lab_specs:
-            return pd.Series([value, range_min, range_max, lab_unit_enum])
+            if not lab_name_enum or lab_name_enum not in lab_specs or pd.isna(lab_name_enum):
+                return pd.Series([value, range_min, range_max, lab_unit_enum if pd.notna(lab_unit_enum) else None])
 
-        spec = lab_specs[lab_name_enum]
-        primary_unit = spec.get("primary_unit")
-        if not primary_unit:
-            return pd.Series([value, range_min, range_max, lab_unit_enum])
+            spec = lab_specs[lab_name_enum]
+            primary_unit_enum = spec.get("primary_unit") # This should be an enum key from lab_units_mappings.json
+            
+            if not primary_unit_enum: # No primary unit defined for this lab
+                return pd.Series([value, range_min, range_max, unit_final])
 
-        # If already in primary unit, just copy
-        if lab_unit_enum == primary_unit:
-            return pd.Series([value, range_min, range_max, primary_unit])
+            unit_final = primary_unit_enum # Target unit is the primary unit
 
-        # Otherwise, look for conversion factor
-        factor = None
-        for alt in spec.get("alternatives", []):
-            if alt.get("unit") == lab_unit_enum:
-                factor = alt.get("factor")
-                break
-        if factor is not None:
-            try:
-                value_final = float(value) * float(factor) if pd.notnull(value) else value
-            except Exception:
-                value_final = value
-            try:
-                range_min_final = float(range_min) * float(factor) if pd.notnull(range_min) else range_min
-            except Exception:
-                range_min_final = range_min
-            try:
-                range_max_final = float(range_max) * float(factor) if pd.notnull(range_max) else range_max
-            except Exception:
-                range_max_final = range_max
-            unit_final = primary_unit
-        # If no conversion found, just copy
-        return pd.Series([value_final, range_min_final, range_max_final, unit_final])
+            if lab_unit_enum == primary_unit_enum: # Already in primary unit
+                return pd.Series([value, range_min, range_max, primary_unit_enum])
 
-    merged_df[["lab_value_final", "lab_range_min_final", "lab_range_max_final", "lab_unit_final"]] = merged_df.apply(convert_to_primary_unit, axis=1)
+            # Look for conversion factor
+            factor = None
+            for alt_spec in spec.get("alternatives", []):
+                if alt_spec.get("unit") == lab_unit_enum: # Comparing mapped unit with mapped unit in spec
+                    factor = alt_spec.get("factor")
+                    break
+            
+            if factor is not None:
+                try: value_final = float(value) * float(factor) if pd.notnull(value) else value
+                except (ValueError, TypeError): pass # Keep original if conversion fails
+                try: range_min_final = float(range_min) * float(factor) if pd.notnull(range_min) else range_min
+                except (ValueError, TypeError): pass
+                try: range_max_final = float(range_max) * float(factor) if pd.notnull(range_max) else range_max
+                except (ValueError, TypeError): pass
+            
+            return pd.Series([value_final, range_min_final, range_max_final, unit_final])
 
-    # --------- Compute is_flagged_final ---------
-    def compute_is_flagged_final(row):
-        value = row.get("lab_value_final")
-        minv = row.get("lab_range_min_final")
-        maxv = row.get("lab_range_max_final")
-        try:
-            value = float(value)
-        except Exception:
-            return None
-        try:
-            minv = float(minv)
-        except Exception:
-            minv = None
-        try:
-            maxv = float(maxv)
-        except Exception:
-            maxv = None
-        if minv is not None and value < minv:
-            return True
-        if maxv is not None and value > maxv:
-            return True
-        return False
+        if all(c in merged_df.columns for c in ["lab_name_enum", "lab_unit_enum", "lab_value", "lab_range_min", "lab_range_max"]):
+            final_cols_df = merged_df.apply(convert_to_primary_unit, axis=1)
+            final_cols_df.columns = ["lab_value_final", "lab_range_min_final", "lab_range_max_final", "lab_unit_final"]
+            merged_df = pd.concat([merged_df, final_cols_df], axis=1)
+        else:
+            logger.warning("One or more source columns for unit conversion are missing. Skipping 'final' value calculations.")
+            for col in ["lab_value_final", "lab_range_min_final", "lab_range_max_final", "lab_unit_final"]:
+                 if col not in merged_df.columns: merged_df[col] = None
 
-    merged_df["is_flagged_final"] = merged_df.apply(compute_is_flagged_final, axis=1)
 
-    # --------- Compute healthy_range_min, healthy_range_max, is_in_healthy_range ---------
-    def get_healthy_range(row):
-        lab_name_enum = row.get("lab_name_enum", "")
-        if not lab_name_enum or lab_name_enum not in lab_specs:
-            return pd.Series([None, None])
-        healthy = lab_specs[lab_name_enum].get("ranges", {}).get("healthy", None)
-        if healthy and isinstance(healthy, dict):
-            return pd.Series([healthy.get("min"), healthy.get("max")])
-        return pd.Series([None, None])
+        def compute_is_flagged_final(row):
+            value = row.get("lab_value_final")
+            minv = row.get("lab_range_min_final")
+            maxv = row.get("lab_range_max_final")
+            if pd.isna(value): return None # Cannot determine if value is missing
+            try: value_f = float(value)
+            except (ValueError, TypeError): return None # Value not numeric
 
-    merged_df[["healthy_range_min", "healthy_range_max"]] = merged_df.apply(get_healthy_range, axis=1)
+            is_low = False
+            if pd.notna(minv):
+                try: minv_f = float(minv)
+                except (ValueError, TypeError): minv_f = None
+                if minv_f is not None and value_f < minv_f: is_low = True
+            
+            is_high = False
+            if pd.notna(maxv):
+                try: maxv_f = float(maxv)
+                except (ValueError, TypeError): maxv_f = None
+                if maxv_f is not None and value_f > maxv_f: is_high = True
+            
+            return is_low or is_high if (pd.notna(minv) or pd.notna(maxv)) else None
 
-    def compute_is_in_healthy_range(row):
-        value = row.get("lab_value_final")
-        minv = row.get("healthy_range_min")
-        maxv = row.get("healthy_range_max")
-        try:
-            value = float(value)
-        except Exception:
-            return None
-        try:
-            minv = float(minv)
-        except Exception:
-            minv = None
-        try:
-            maxv = float(maxv)
-        except Exception:
-            maxv = None
-        if minv is not None and value < minv:
-            return False
-        if maxv is not None and value > maxv:
-            return False
-        if minv is not None or maxv is not None:
-            return True
-        return None
 
-    merged_df["is_in_healthy_range"] = merged_df.apply(compute_is_in_healthy_range, axis=1)
+        if all(c in merged_df.columns for c in ["lab_value_final", "lab_range_min_final", "lab_range_max_final"]):
+            merged_df["is_flagged_final"] = merged_df.apply(compute_is_flagged_final, axis=1)
+        else:
+             if "is_flagged_final" not in merged_df.columns: merged_df["is_flagged_final"] = None
 
-    # Only keep the specified columns for all.csv
-    export_columns = [
-        "date",
-        "lab_type",
-        "lab_name",
-        "lab_name_enum",
-        "lab_name_slug",
-        "lab_value",
-        "lab_unit",
-        "lab_unit_enum",
-        "lab_range_min",
-        "lab_range_max",
-        "lab_value_final",
-        "lab_unit_final",
-        "lab_range_min_final",
-        "lab_range_max_final",
-        "is_flagged",
-        "confidence",
-        "source_file",
-        "is_flagged_final",
-        "healthy_range_min",
-        "healthy_range_max",
-        "is_in_healthy_range"
-    ]
-    
-    merged_df = merged_df[[col for col in export_columns if col in merged_df.columns]]
 
-    # Sort by date (recent to oldest)
+        def get_healthy_range(row):
+            lab_name_enum = row.get("lab_name_enum", "")
+            if not lab_name_enum or pd.isna(lab_name_enum) or lab_name_enum not in lab_specs:
+                return pd.Series([None, None], index=["healthy_range_min", "healthy_range_max"])
+            
+            healthy_spec = lab_specs[lab_name_enum].get("ranges", {}).get("healthy")
+            if healthy_spec and isinstance(healthy_spec, dict):
+                return pd.Series([healthy_spec.get("min"), healthy_spec.get("max")], index=["healthy_range_min", "healthy_range_max"])
+            return pd.Series([None, None], index=["healthy_range_min", "healthy_range_max"])
+
+        if "lab_name_enum" in merged_df.columns:
+            healthy_range_df = merged_df.apply(get_healthy_range, axis=1)
+            merged_df[["healthy_range_min", "healthy_range_max"]] = healthy_range_df
+        else:
+            if "healthy_range_min" not in merged_df.columns: merged_df["healthy_range_min"] = None
+            if "healthy_range_max" not in merged_df.columns: merged_df["healthy_range_max"] = None
+
+
+        def compute_is_in_healthy_range(row):
+            value = row.get("lab_value_final")
+            minv = row.get("healthy_range_min")
+            maxv = row.get("healthy_range_max")
+
+            if pd.isna(value): return None
+            try: value_f = float(value)
+            except (ValueError, TypeError): return None
+
+            # If neither min nor max healthy range is defined, cannot determine status
+            if pd.isna(minv) and pd.isna(maxv): return None
+
+            is_too_low = False
+            if pd.notna(minv):
+                try: minv_f = float(minv)
+                except (ValueError, TypeError): minv_f = None # Treat unparsable range as undefined for this check
+                if minv_f is not None and value_f < minv_f: is_too_low = True
+            
+            is_too_high = False
+            if pd.notna(maxv):
+                try: maxv_f = float(maxv)
+                except (ValueError, TypeError): maxv_f = None # Treat unparsable range as undefined for this check
+                if maxv_f is not None and value_f > maxv_f: is_too_high = True
+
+            return not (is_too_low or is_too_high)
+
+        if all(c in merged_df.columns for c in ["lab_value_final", "healthy_range_min", "healthy_range_max"]):
+            merged_df["is_in_healthy_range"] = merged_df.apply(compute_is_in_healthy_range, axis=1)
+        else:
+            if "is_in_healthy_range" not in merged_df.columns: merged_df["is_in_healthy_range"] = None
+
+    # --------- Filter and Sort Merged DataFrame ---------
+    export_cols_ordered = get_export_columns_from_schema(COLUMN_SCHEMA)
+    # Ensure only columns present in merged_df are selected, and all columns in merged_df are kept if not in schema.
+    final_select_cols = [col for col in export_cols_ordered if col in merged_df.columns]
+    for col in merged_df.columns: # Add any extra columns not in schema, to avoid data loss
+        if col not in final_select_cols:
+            final_select_cols.append(col)
+    merged_df = merged_df[final_select_cols]
+
+
     if "date" in merged_df.columns:
         merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce")
         merged_df = merged_df.sort_values("date", ascending=False)
 
-    # --------- Assign data types before export ---------
-    dtype_map = {
-        "date": "datetime64[ns]",
-        "lab_value": "float64",
-        "lab_range_min": "float64",
-        "lab_range_max": "float64",
-        "lab_value_final": "float64",
-        "lab_range_min_final": "float64",
-        "lab_range_max_final": "float64",
-        "healthy_range_min": "float64",
-        "healthy_range_max": "float64",
-        "is_flagged": "boolean",
-        "is_flagged_final": "boolean",
-        "is_in_healthy_range": "boolean",
-        "confidence": "float64"
-    }
-    for col, dtype in dtype_map.items():
+    # --------- Assign Data Types Before Export ---------
+    dtype_map_from_schema = get_dtype_map_from_schema(COLUMN_SCHEMA)
+    for col, target_dtype_str in dtype_map_from_schema.items():
         if col in merged_df.columns:
             try:
-                if dtype == "datetime64[ns]":
-                    merged_df[col] = pd.to_datetime(merged_df[col], errors="coerce")
-                elif dtype == "boolean":
-                    merged_df[col] = merged_df[col].astype("boolean")
-                else:
-                    merged_df[col] = pd.to_numeric(merged_df[col], errors="coerce")
-            except Exception:
-                pass
+                current_dtype = merged_df[col].dtype
+                if target_dtype_str == "datetime64[ns]":
+                    if not pd.api.types.is_datetime64_any_dtype(current_dtype):
+                        merged_df[col] = pd.to_datetime(merged_df[col], errors="coerce")
+                elif target_dtype_str == "boolean": # Pandas nullable boolean
+                    if str(current_dtype).lower() != "boolean": # Check before converting
+                         merged_df[col] = merged_df[col].astype("boolean") # Handles NA
+                elif target_dtype_str == "Int64": # Pandas nullable integer
+                     if str(current_dtype).lower() != "int64":
+                        merged_df[col] = pd.to_numeric(merged_df[col], errors="coerce").astype("Int64")
+                elif "float" in target_dtype_str:
+                    if not pd.api.types.is_float_dtype(current_dtype):
+                        merged_df[col] = pd.to_numeric(merged_df[col], errors="coerce")
+                elif "int" in target_dtype_str and target_dtype_str != "Int64": # Standard int, careful with NaNs
+                    if not pd.api.types.is_integer_dtype(current_dtype):
+                        # Coercing to numeric first, then int, can raise error if NaNs exist and not Int64
+                        merged_df[col] = pd.to_numeric(merged_df[col], errors="coerce")
+                        if merged_df[col].isnull().any():
+                            logger.warning(f"Column {col} has NaNs, cannot convert to standard int, using float or Int64 instead.")
+                            if merged_df[col].dtype != "Int64": merged_df[col] = merged_df[col].astype("float64") # or Int64
+                        else:
+                             merged_df[col] = merged_df[col].astype(target_dtype_str)
+                # String types generally don't need explicit conversion if already object/string
+                # else: # For other types like string, ensure it's not something weird
+                #    if not pd.api.types.is_string_dtype(current_dtype) and not pd.api.types.is_object_dtype(current_dtype):
+                #        merged_df[col] = merged_df[col].astype(str)
+            except Exception as e:
+                logger.error(f"Failed to convert column '{col}' to dtype '{target_dtype_str}': {e}")
+    
+    # Save merged CSV
+    merged_csv_path = output_dir / "all.csv"
+    merged_df.to_csv(merged_csv_path, index=False, encoding='utf-8')
+    logger.info(f"Saved main merged CSV to: {merged_csv_path}")
 
-    merged_df.to_csv(os.path.join(output_dir, "all.csv"), index=False)
+    # --------- Export Excel file (all.xlsx) ---------
+    excel_path = output_dir / "all.xlsx"
+    excel_hidden_cols = get_hidden_excel_columns_from_schema(COLUMN_SCHEMA)
+    excel_col_widths = get_excel_widths_from_schema(COLUMN_SCHEMA)
 
-    # --------- Export Excel file for Google Drive, freeze first row ---------
-    excel_path = os.path.join(output_dir, "all.xlsx")
-    hidden_columns = [
-        "lab_name",
-        "lab_name_slug",
-        "lab_value",
-        "lab_unit",
-        "lab_range_min",
-        "lab_range_max",
-        "confidence",
-        "is_flagged"
-    ]
-    with pd.ExcelWriter(excel_path, engine="xlsxwriter", datetime_format='yyyy-mm-dd') as writer:
-        merged_df.to_excel(writer, index=False)
-        worksheet = writer.sheets[merged_df.columns.name or next(iter(writer.sheets))]
+    with pd.ExcelWriter(excel_path, engine="xlsxwriter", datetime_format='yyyy-mm-dd', date_format='yyyy-mm-dd') as writer:
+        merged_df.to_excel(writer, sheet_name="AllData", index=False)
+        worksheet = writer.sheets["AllData"]
         worksheet.freeze_panes(1, 0)
-        # Hide specified columns
-        for col in hidden_columns:
-            if col in merged_df.columns:
-                idx = merged_df.columns.get_loc(col)
-                worksheet.set_column(idx, idx, None, None, {'hidden': True})
+        for idx, col_name in enumerate(merged_df.columns):
+            width = excel_col_widths.get(col_name, 12) # Default width 12 if not in schema
+            options = {'hidden': True} if col_name in excel_hidden_cols else {}
+            worksheet.set_column(idx, idx, width, None, options)
+    logger.info(f"Saved main merged Excel to: {excel_path}")
 
-    # --------- Export final reduced file ---------
-    export_columns_final = [
-        "date",
-        "lab_type",
-        "lab_name_enum",
-        "lab_value_final",
-        "lab_unit_final",
-        "lab_range_min_final",
-        "lab_range_max_final"
-    ]
-    final_df = merged_df[[col for col in export_columns_final if col in merged_df.columns]]
+    # --------- Export final reduced file (all.final.csv/xlsx) ---------
+    final_export_cols_ordered = get_final_export_columns_ordered(COLUMN_SCHEMA)
+    # Ensure only columns present in merged_df are selected for final_df
+    final_df_cols = [col for col in final_export_cols_ordered if col in merged_df.columns]
+    if not all(col in merged_df.columns for col in final_df_cols):
+        logger.warning(f"Not all expected columns for final_df found in merged_df. Required: {final_df_cols}. Found: {list(merged_df.columns)}")
+    
+    final_df = merged_df[final_df_cols].copy() # Use .copy() to avoid SettingWithCopyWarning
 
-    # Assign data types for final_df as well (avoid SettingWithCopyWarning)
-    for col, dtype in dtype_map.items():
+    # Re-apply dtypes for final_df just to be safe, especially if columns were missing or added
+    for col, target_dtype_str in dtype_map_from_schema.items():
         if col in final_df.columns:
             try:
-                if dtype == "datetime64[ns]":
+                if target_dtype_str == "datetime64[ns]":
                     final_df.loc[:, col] = pd.to_datetime(final_df[col], errors="coerce")
-                elif dtype == "boolean":
+                elif target_dtype_str == "boolean":
                     final_df.loc[:, col] = final_df[col].astype("boolean")
-                else:
+                elif target_dtype_str == "Int64":
+                     final_df.loc[:, col] = pd.to_numeric(final_df[col], errors="coerce").astype("Int64")
+                elif "float" in target_dtype_str : # Includes float64
                     final_df.loc[:, col] = pd.to_numeric(final_df[col], errors="coerce")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not convert column {col} in final_df to {target_dtype_str}: {e}")
 
-    final_df.to_csv(os.path.join(output_dir, "all.final.csv"), index=False)
-    final_df.to_excel(os.path.join(output_dir, "all.final.xlsx"), index=False)
+
+    final_df.to_csv(output_dir / "all.final.csv", index=False, encoding='utf-8')
+    final_df.to_excel(output_dir / "all.final.xlsx", sheet_name="FinalData", index=False)
+    logger.info("Saved final reduced CSV and Excel files.")
 
     # --------- Export most recent value per blood test ---------
-    if "lab_type" in final_df.columns and "lab_name_enum" in final_df.columns and "date" in final_df.columns:
-        blood_df = final_df[final_df["lab_type"].str.lower() == "blood"].copy()
-        blood_df = blood_df.sort_values("date", ascending=False)
-        most_recent_blood = blood_df.drop_duplicates(subset=["lab_name_enum"], keep="first")
-        most_recent_blood.to_csv(os.path.join(output_dir, "all.final.blood-most-recent.csv"), index=False)
-        most_recent_blood.to_excel(os.path.join(output_dir, "all.final.blood-most-recent.xlsx"), index=False)
-
-    logger.info("All PDFs processed.")
+    if "lab_type" in final_df.columns and PLOTTING_GROUP_COL in final_df.columns and PLOTTING_DATE_COL in final_df.columns:
+        # Ensure 'lab_type' is string for comparison
+        final_df_lt_str = final_df["lab_type"].astype(str).str.lower()
+        blood_df = final_df[final_df_lt_str == "blood"].copy()
+        if not blood_df.empty:
+            blood_df = blood_df.sort_values(PLOTTING_DATE_COL, ascending=False)
+            most_recent_blood = blood_df.drop_duplicates(subset=[PLOTTING_GROUP_COL], keep="first")
+            most_recent_blood.to_csv(output_dir / "all.final.blood-most-recent.csv", index=False, encoding='utf-8')
+            most_recent_blood.to_excel(output_dir / "all.final.blood-most-recent.xlsx", sheet_name="RecentBlood", index=False)
+            logger.info("Saved most recent blood test values.")
+        else:
+            logger.info("No blood type tests found in final_df, skipping 'most-recent blood' export.")
+    else:
+        logger.warning("Required columns for 'most-recent blood' export not found. Skipping.")
+    
+    logger.info("All data processing and file exports finished.")
 
     # --------- Plotting Section ---------
-    import matplotlib.pyplot as plt
-    import multiprocessing
+    if PLOTTING_GROUP_COL in merged_df.columns and \
+       PLOTTING_DATE_COL in merged_df.columns and \
+       PLOTTING_VALUE_COL in merged_df.columns:
+        
+        plots_base_dir = Path("plots") # Local plots directory
+        plots_base_dir.mkdir(exist_ok=True)
+        output_plots_dir = output_dir / "plots" # Plots in output directory
+        output_plots_dir.mkdir(exist_ok=True)
 
-    # Ensure plots directory exists
-    plots_dir = Path("plots")
-    plots_dir.mkdir(exist_ok=True)
-    output_plots_dir = Path(output_dir) / "plots"
-    output_plots_dir.mkdir(exist_ok=True)
+        logger.info(f"Starting plot generation. Plots will be saved in '{plots_base_dir}' and '{output_plots_dir}'.")
+        
+        # Ensure merged_df for plotting has datetime properly converted if not already
+        if not pd.api.types.is_datetime64_any_dtype(merged_df[PLOTTING_DATE_COL]):
+            merged_df[PLOTTING_DATE_COL] = pd.to_datetime(merged_df[PLOTTING_DATE_COL], errors="coerce")
 
-    merged_df_path = os.path.join(output_dir, "all.csv")
-    merged_df = pd.read_csv(merged_df_path)
-    if "date" in merged_df.columns:
-        merged_df["date"] = pd.to_datetime(merged_df["date"], errors="coerce")
+        unique_lab_enums = merged_df[PLOTTING_GROUP_COL].dropna().unique()
+        
+        # Filter out enums where there isn't enough data to plot
+        plot_args_list = []
+        for lab_enum in unique_lab_enums:
+            df_enum_check = merged_df[
+                (merged_df[PLOTTING_GROUP_COL] == lab_enum) &
+                (merged_df[PLOTTING_DATE_COL].notna()) &
+                (merged_df[PLOTTING_VALUE_COL].notna())
+            ]
+            if len(df_enum_check) >= 2:
+                 plot_args_list.append((lab_enum, str(merged_csv_path), str(plots_base_dir), str(output_plots_dir)))
+            # else:
+            #    logger.debug(f"Skipping plot for {lab_enum} due to insufficient data points (<2).")
 
-    # --------- Parallelized plot for each lab_name_enum ---------
-    if "lab_name_enum" in merged_df.columns and "date" in merged_df.columns and "lab_value_final" in merged_df.columns:
-        unique_lab_enums = merged_df["lab_name_enum"].dropna().unique()
-        import multiprocessing
-        n_workers = max(1, multiprocessing.cpu_count() - 1)
-        # Pass merged_df_path, plots_dir, and output_plots_dir as arguments
-        args_list = [(lab_name_enum, merged_df_path, str(plots_dir), str(output_plots_dir)) for lab_name_enum in unique_lab_enums]
-        with multiprocessing.Pool(n_workers) as pool:
-            pool.map(plot_lab_enum, args_list)
+
+        if plot_args_list:
+            # Determine number of workers for plotting, can be different from PDF processing
+            plot_workers = min(max(1, (os.cpu_count() or 1) -1 ), len(plot_args_list)) 
+            logger.info(f"Plotting for {len(plot_args_list)} lab enums using {plot_workers} worker(s).")
+            
+            # Use multiprocessing for plotting
+            # Ensure plot_lab_enum is self-contained or pickles correctly
+            with Pool(processes=plot_workers) as plot_pool:
+                plot_pool.map(plot_lab_enum, plot_args_list)
+            logger.info("Plotting finished.")
+        else:
+            logger.info("No lab enums with sufficient data for plotting.")
+    else:
+        logger.warning(f"One or more essential columns for plotting ({PLOTTING_GROUP_COL}, {PLOTTING_DATE_COL}, {PLOTTING_VALUE_COL}) are missing. Skipping plotting.")
 
 if __name__ == "__main__":
     main()
