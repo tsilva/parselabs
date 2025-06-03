@@ -764,7 +764,7 @@ def process_single_pdf(
 ########################################
 
 def plot_lab_enum(args):
-    lab_name_enum, merged_df_path, plots_dir_str = args
+    lab_name_enum, merged_df_path, plots_dir_str, output_plots_dir_str = args
     import pandas as pd
     import re
     import matplotlib.pyplot as plt
@@ -790,7 +790,9 @@ def plot_lab_enum(args):
     plt.tight_layout()
     safe_lab_name = re.sub(r'[^\w\-_. ]', '_', str(lab_name_enum))
     plot_path = Path(plots_dir_str) / f"{safe_lab_name}.png"
+    output_plot_path = Path(output_plots_dir_str) / f"{safe_lab_name}.png"
     plt.savefig(plot_path)
+    plt.savefig(output_plot_path)
     plt.close()
 
 def main():
@@ -1119,6 +1121,8 @@ def main():
     # Ensure plots directory exists
     plots_dir = Path("plots")
     plots_dir.mkdir(exist_ok=True)
+    output_plots_dir = Path(output_dir) / "plots"
+    output_plots_dir.mkdir(exist_ok=True)
 
     merged_df_path = os.path.join(output_dir, "all.csv")
     merged_df = pd.read_csv(merged_df_path)
@@ -1128,9 +1132,10 @@ def main():
     # --------- Parallelized plot for each lab_name_enum ---------
     if "lab_name_enum" in merged_df.columns and "date" in merged_df.columns and "lab_value_final" in merged_df.columns:
         unique_lab_enums = merged_df["lab_name_enum"].dropna().unique()
+        import multiprocessing
         n_workers = max(1, multiprocessing.cpu_count() - 1)
-        # Pass merged_df_path and plots_dir as arguments to avoid pickling issues
-        args_list = [(lab_name_enum, merged_df_path, str(plots_dir)) for lab_name_enum in unique_lab_enums]
+        # Pass merged_df_path, plots_dir, and output_plots_dir as arguments
+        args_list = [(lab_name_enum, merged_df_path, str(plots_dir), str(output_plots_dir)) for lab_name_enum in unique_lab_enums]
         with multiprocessing.Pool(n_workers) as pool:
             pool.map(plot_lab_enum, args_list)
 
