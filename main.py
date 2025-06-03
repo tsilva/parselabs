@@ -690,10 +690,25 @@ def process_single_pdf(
 
     # --------- Export Excel file for Google Drive, freeze first row ---------
     excel_path = os.path.join(output_dir, "all.xlsx")
+    hidden_columns = [
+        "lab_name",
+        "lab_name_slug",
+        "lab_value",
+        "lab_unit",
+        "lab_range_min",
+        "lab_range_max",
+        "confidence",
+        "is_flagged"
+    ]
     with pd.ExcelWriter(excel_path, engine="xlsxwriter", datetime_format='yyyy-mm-dd') as writer:
         merged_df.to_excel(writer, index=False)
-        worksheet = writer.sheets[merged_df.columns.name or writer.sheets.keys().__iter__().__next__()]
+        worksheet = writer.sheets[merged_df.columns.name or next(iter(writer.sheets))]
         worksheet.freeze_panes(1, 0)
+        # Hide specified columns
+        for col in hidden_columns:
+            if col in merged_df.columns:
+                idx = merged_df.columns.get_loc(col)
+                worksheet.set_column(idx, idx, None, None, {'hidden': True})
 
     # --------- Export final reduced file ---------
     export_columns_final = [
@@ -1015,10 +1030,25 @@ def main():
 
     # --------- Export Excel file for Google Drive, freeze first row ---------
     excel_path = os.path.join(output_dir, "all.xlsx")
+    hidden_columns = [
+        "lab_name",
+        "lab_name_slug",
+        "lab_value",
+        "lab_unit",
+        "lab_range_min",
+        "lab_range_max",
+        "confidence",
+        "is_flagged"
+    ]
     with pd.ExcelWriter(excel_path, engine="xlsxwriter", datetime_format='yyyy-mm-dd') as writer:
         merged_df.to_excel(writer, index=False)
-        worksheet = writer.sheets[merged_df.columns.name or writer.sheets.keys().__iter__().__next__()]
+        worksheet = writer.sheets[merged_df.columns.name or next(iter(writer.sheets))]
         worksheet.freeze_panes(1, 0)
+        # Hide specified columns
+        for col in hidden_columns:
+            if col in merged_df.columns:
+                idx = merged_df.columns.get_loc(col)
+                worksheet.set_column(idx, idx, None, None, {'hidden': True})
 
     # --------- Export final reduced file ---------
     export_columns_final = [
@@ -1028,11 +1058,7 @@ def main():
         "lab_value_final",
         "lab_unit_final",
         "lab_range_min_final",
-        "lab_range_max_final",
-        "is_flagged_final",
-        "healthy_range_min",
-        "healthy_range_max",
-        "is_in_healthy_range"
+        "lab_range_max_final"
     ]
     final_df = merged_df[[col for col in export_columns_final if col in merged_df.columns]]
 
