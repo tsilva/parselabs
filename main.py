@@ -767,7 +767,7 @@ def main():
     max_workers = config.get("max_workers", 1)
 
     # Gather PDFs
-    pdf_files = sorted([f for f in input_dir.glob("*") if re.search(pattern, f.name, re.IGNORECASE)])
+    pdf_files = sorted(list(input_dir.glob(pattern)))
     logger.info(f"Found {len(pdf_files)} PDF(s) matching pattern {pattern}")
 
     # Parallel process each PDF
