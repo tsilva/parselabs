@@ -499,8 +499,7 @@
   },
   "Blood - Basophils": {
     "primary_unit": "10⁹/L",
-    "alternatives": [
-    ],
+    "alternatives": [],
     "ranges": {
       "healthy": {
         "min": 0.0,
@@ -903,8 +902,7 @@
   },
   "Blood - Eosinophils": {
     "primary_unit": "10⁹/L",
-    "alternatives": [
-    ],
+    "alternatives": [],
     "ranges": {
       "healthy": {
         "min": 0.02,
@@ -1142,7 +1140,7 @@
       }
     }
   },
-  "Blood - Haematocrit (HCT)": {
+  "Blood - Haematocrit (HCT) (%)": {
     "primary_unit": "%",
     "alternatives": [
       {
@@ -1159,8 +1157,7 @@
   },
   "Blood - Haemoglobin (Hb)": {
     "primary_unit": "g/dL",
-    "alternatives": [
-    ],
+    "alternatives": [],
     "ranges": {
       "healthy": {
         "min": 12.0,
@@ -1405,6 +1402,10 @@
   "Blood - Lymphocytes": {
     "primary_unit": "10⁹/L",
     "alternatives": [
+      {
+        "unit": "10⁶/L",
+        "factor": 0.001
+      }
     ],
     "ranges": {
       "healthy": {
@@ -1443,28 +1444,8 @@
       }
     }
   },
-  "Blood - MCHC (%)": {
-    "primary_unit": "%",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 32.0,
-        "max": 36.0
-      }
-    }
-  },
   "Blood - MCV": {
     "primary_unit": "fL",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 80.0,
-        "max": 100.0
-      }
-    }
-  },
-  "Blood - MCV (%)": {
-    "primary_unit": "%",
     "alternatives": [],
     "ranges": {
       "healthy": {
@@ -1529,8 +1510,7 @@
   },
   "Blood - Monocytes": {
     "primary_unit": "10⁹/L",
-    "alternatives": [
-    ],
+    "alternatives": [],
     "ranges": {
       "healthy": {
         "min": 0.2,
@@ -1560,8 +1540,7 @@
   },
   "Blood - Neutrophils": {
     "primary_unit": "10⁹/L",
-    "alternatives": [
-    ],
+    "alternatives": [],
     "ranges": {
       "healthy": {
         "min": 2.0,
@@ -1654,24 +1633,18 @@
       }
     }
   },
-  "Blood - Platelet Count": {
+  "Blood - Platelets": {
     "primary_unit": "10⁹/L",
     "alternatives": [
+      {
+        "unit": "10⁶/L",
+        "factor": 0.001
+      }
     ],
     "ranges": {
       "healthy": {
         "min": 150.0,
         "max": 400.0
-      }
-    }
-  },
-  "Blood - Platelet Count (%)": {
-    "primary_unit": "%",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 1.5,
-        "max": 4.5
       }
     }
   },
@@ -1878,16 +1851,6 @@
       "healthy": {
         "min": 135.0,
         "max": 145.0
-      }
-    }
-  },
-  "Blood - TBG (%)": {
-    "primary_unit": "%",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 12.0,
-        "max": 26.0
       }
     }
   },
@@ -2188,16 +2151,6 @@
       "healthy": {
         "min": 0,
         "max": 20
-      }
-    }
-  },
-  "Blood - Waaler-Rose Test (%)": {
-    "primary_unit": "%",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0.0,
-        "max": 10.0
       }
     }
   },
