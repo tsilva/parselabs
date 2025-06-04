@@ -84,17 +84,12 @@
     }
   },
   "Blood - ALT (Alanine Aminotransferase)": {
-    "primary_unit": "fraction of 1",
-    "alternatives": [
-      {
-        "unit": "IU/L",
-        "factor": 1.0
-      }
-    ],
+    "primary_unit": "IU/L",
+    "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 0.0,
-        "max": 0.7
+        "min": 7,
+        "max": 35
       }
     }
   },
@@ -142,10 +137,6 @@
     "primary_unit": "g/dL",
     "alternatives": [
       {
-        "unit": "ratio",
-        "factor": 3.3
-      },
-      {
         "unit": "g/L",
         "factor": 0.1
       }
@@ -169,12 +160,7 @@
   },
   "Blood - Albumin/Globulin Ratio": {
     "primary_unit": "g/dL",
-    "alternatives": [
-      {
-        "unit": "ratio",
-        "factor": null
-      }
-    ],
+    "alternatives": [],
     "ranges": {
       "healthy": {
         "min": 1.1,
@@ -418,7 +404,7 @@
     }
   },
   "Blood - Anti-Scl-70 Ab": {
-    "primary_unit": "U/L",
+    "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
       "healthy": {
@@ -514,14 +500,6 @@
   "Blood - Basophils": {
     "primary_unit": "10⁹/L",
     "alternatives": [
-      {
-        "unit": "µL",
-        "factor": 0.001
-      },
-      {
-        "unit": "L",
-        "factor": 1.0
-      }
     ],
     "ranges": {
       "healthy": {
@@ -792,7 +770,7 @@
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "U/L",
+        "unit": "IU/L",
         "factor": 0.0029
       }
     ],
@@ -926,14 +904,6 @@
   "Blood - Eosinophils": {
     "primary_unit": "10⁹/L",
     "alternatives": [
-      {
-        "unit": "µL",
-        "factor": 0.001
-      },
-      {
-        "unit": "L",
-        "factor": 1.0
-      }
     ],
     "ranges": {
       "healthy": {
@@ -1173,18 +1143,13 @@
     }
   },
   "Blood - Haematocrit (HCT)": {
-    "primary_unit": "L",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0.36,
-        "max": 0.46
-      }
-    }
-  },
-  "Blood - Haematocrit (HCT) (%)": {
     "primary_unit": "%",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "L",
+        "factor": 100.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 36.0,
@@ -1195,10 +1160,6 @@
   "Blood - Haemoglobin (Hb)": {
     "primary_unit": "g/dL",
     "alternatives": [
-      {
-        "unit": "pg",
-        "factor": 1e-05
-      }
     ],
     "ranges": {
       "healthy": {
@@ -1342,7 +1303,7 @@
     "alternatives": [
       {
         "unit": "µmol/L",
-        "factor": 55.85
+        "factor": 5.5845
       },
       {
         "unit": "µg/L",
@@ -1353,16 +1314,6 @@
       "healthy": {
         "min": 50.0,
         "max": 170.0
-      }
-    }
-  },
-  "Blood - Amilase": {
-    "primary_unit": "U/L",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 30.0,
-        "max": 110.0
       }
     }
   },
@@ -1388,16 +1339,6 @@
       "healthy": {
         "min": 0.0,
         "max": 99.0
-      }
-    }
-  },
-  "Blood - LDL Subfractions (direct)": {
-    "primary_unit": "mg/dL",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0.0,
-        "max": 129.0
       }
     }
   },
@@ -1464,14 +1405,6 @@
   "Blood - Lymphocytes": {
     "primary_unit": "10⁹/L",
     "alternatives": [
-      {
-        "unit": "µL",
-        "factor": 0.001
-      },
-      {
-        "unit": "L",
-        "factor": null
-      }
     ],
     "ranges": {
       "healthy": {
@@ -1597,14 +1530,6 @@
   "Blood - Monocytes": {
     "primary_unit": "10⁹/L",
     "alternatives": [
-      {
-        "unit": "µL",
-        "factor": 0.001
-      },
-      {
-        "unit": "L",
-        "factor": 1.0
-      }
     ],
     "ranges": {
       "healthy": {
@@ -1636,14 +1561,6 @@
   "Blood - Neutrophils": {
     "primary_unit": "10⁹/L",
     "alternatives": [
-      {
-        "unit": "µL",
-        "factor": 0.001
-      },
-      {
-        "unit": "L",
-        "factor": 1.0
-      }
     ],
     "ranges": {
       "healthy": {
@@ -1727,16 +1644,6 @@
       }
     }
   },
-  "Blood - Pancreatic Amylase": {
-    "primary_unit": "IU/L",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 25.0,
-        "max": 125.0
-      }
-    }
-  },
   "Blood - Phosphate (inorganic)": {
     "primary_unit": "mg/dL",
     "alternatives": [],
@@ -1750,14 +1657,6 @@
   "Blood - Platelet Count": {
     "primary_unit": "10⁹/L",
     "alternatives": [
-      {
-        "unit": "µL",
-        "factor": 0.001
-      },
-      {
-        "unit": "L",
-        "factor": 1.0
-      }
     ],
     "ranges": {
       "healthy": {
@@ -2016,11 +1915,7 @@
       },
       {
         "unit": "µUI/L",
-        "factor": 1.0
-      },
-      {
-        "unit": "µL",
-        "factor": 1000.0
+        "factor": 10.000001
       }
     ],
     "ranges": {
@@ -2114,7 +2009,7 @@
     "alternatives": [
       {
         "unit": "µmol/L",
-        "factor": 0.0883
+        "factor": 7.957
       }
     ],
     "ranges": {
@@ -2408,16 +2303,6 @@
       "healthy": {
         "min": 70.0,
         "max": 126.0
-      }
-    }
-  },
-  "Blood - hs-CRP": {
-    "primary_unit": "mg/dL",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0.0,
-        "max": 0.3
       }
     }
   },
@@ -2716,16 +2601,6 @@
     }
   },
   "Urine Type II - Biochemistry - Deposit": {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  },
-  "Urine Type II - Biochemistry - Erythrocytes": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {

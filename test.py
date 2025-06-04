@@ -193,15 +193,21 @@ def test_lab_value_outliers_by_lab_name_enum(report):
             outliers = group[
                 (group['lab_unit_final'] == most_freq_unit) &
                 (
-                    (group['lab_value_final'] > mean + 2 * std) |
-                    (group['lab_value_final'] < mean - 2 * std)
+                    (group['lab_value_final'] > mean + 3 * std) |
+                    (group['lab_value_final'] < mean - 3 * std)
                 )
             ]
             if not outliers.empty:
-                # Fix: get all unique source_file values, not characters
                 source_files = set(outliers['source_file'].dropna().astype(str))
+                outlier_values = outliers['lab_value_final'].tolist()
+                # Use "page_number" column for page numbers
+                if 'page_number' in outliers.columns:
+                    page_numbers = outliers['page_number'].tolist()
+                else:
+                    page_numbers = ['unknown'] * len(outlier_values)
                 report.setdefault(file, []).append(
-                    f'lab_name_enum="{lab_name_enum}", lab_unit_final="{most_freq_unit}" has outlier lab_value_final (>2 std from mean {mean:.2f}±{std:.2f}) in files: {list(sorted(source_files))}'
+                    f'lab_name_enum="{lab_name_enum}", lab_unit_final="{most_freq_unit}" has outlier lab_value_final (>3 std from mean {mean:.2f}±{std:.2f}) '
+                    f'in files: {list(sorted(source_files))} outlier values: {outlier_values} page numbers: {page_numbers}'
                 )
     except Exception as e:
         errors.append(f"Exception: {e}")

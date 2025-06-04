@@ -5,3 +5,4 @@
 - Always grab dates from the first page 
 - Log unmapped: lab names, units
 - Add support for next test recommendation (time elapsed + out of range)
+- Merge mappings to labspecs
