@@ -1,9 +1,16 @@
 import pandas as pd
 import hashlib
 import json
+from dotenv import dotenv_values
+import os
+
+# Load OUTPUT_PATH from .env
+env = dotenv_values(".env")
+OUTPUT_PATH = env.get("OUTPUT_PATH", "output")
+ALL_FINAL_CSV = os.path.join(OUTPUT_PATH, "all.csv")
 
 def test_all_rows_have_dates_and_no_duplicates(report):
-    file = "output/all.final.csv"
+    file = ALL_FINAL_CSV
     errors = []
     try:
         df = pd.read_csv(file)
@@ -54,7 +61,7 @@ def test_lab_name_mappings_prefixes(report):
         report.setdefault(file, []).extend(errors)
 
 def test_lab_unit_percent_vs_lab_name(report):
-    file = "output/all.final.csv"
+    file = ALL_FINAL_CSV
     errors = []
     try:
         df = pd.read_csv(file)
@@ -86,7 +93,7 @@ def test_lab_names_mapping_percent_suffix(report):
         report.setdefault(file, []).extend(errors)
 
 def test_lab_unit_not_empty(report):
-    file = "output/all.final.csv"
+    file = ALL_FINAL_CSV
     errors = []
     try:
         df = pd.read_csv(file)
@@ -103,7 +110,7 @@ def test_lab_unit_not_empty(report):
         report.setdefault(file, []).extend(errors)
 
 def test_lab_unit_percent_value_range(report):
-    file = "output/all.final.csv"
+    file = ALL_FINAL_CSV
     errors = []
     try:
         df = pd.read_csv(file)
@@ -124,7 +131,7 @@ def test_lab_unit_percent_value_range(report):
         report.setdefault(file, []).extend(errors)
 
 def test_lab_unit_boolean_value(report):
-    file = "output/all.final.csv"
+    file = ALL_FINAL_CSV
     errors = []
     try:
         df = pd.read_csv(file)
@@ -143,7 +150,7 @@ def test_lab_unit_boolean_value(report):
         report.setdefault(file, []).extend(errors)
 
 def test_lab_name_enum_unit_consistency(report):
-    file = "output/all.final.csv"
+    file = ALL_FINAL_CSV
     errors = []
     try:
         df = pd.read_csv(file)
@@ -162,7 +169,7 @@ def test_lab_name_enum_unit_consistency(report):
         report.setdefault(file, []).extend(errors)
 
 def test_lab_value_outliers_by_lab_name_enum(report):
-    file = "output/all.final.csv"
+    file = ALL_FINAL_CSV
     errors = []
     try:
         df = pd.read_csv(file)
@@ -237,6 +244,25 @@ def test_lab_name_mappings_values_exist_in_lab_specs(report):
     if errors:
         report.setdefault(mappings_file, []).extend(errors)
 
+def test_unique_date_lab_name_enum(report):
+    file = ALL_FINAL_CSV
+    errors = []
+    try:
+        df = pd.read_csv(file)
+        # Check for duplicate (date, lab_name_enum) pairs
+        duplicates = df.duplicated(subset=['date', 'lab_name_enum'], keep=False)
+        if duplicates.any():
+            dup_rows = df[duplicates][['date', 'lab_name_enum']]
+            for idx, row in dup_rows.iterrows():
+                source_file = df.loc[idx].get('source_file', 'unknown')
+                report.setdefault(source_file, []).append(
+                    f"Duplicate (date, lab_name_enum) at index {idx}: date={row['date']}, lab_name_enum={row['lab_name_enum']}"
+                )
+    except Exception as e:
+        errors.append(f"Exception: {e}")
+    if errors:
+        report.setdefault(file, []).extend(errors)
+
 def main():
     report = {}
     test_all_rows_have_dates_and_no_duplicates(report)
@@ -250,6 +276,7 @@ def main():
     test_lab_value_outliers_by_lab_name_enum(report)
     test_lab_specs_keys_exist_in_lab_name_mappings(report)
     test_lab_name_mappings_values_exist_in_lab_specs(report)
+    test_unique_date_lab_name_enum(report)
     print("\n=== Integrity Report ===")
     if not report:
         print("All checks passed.")

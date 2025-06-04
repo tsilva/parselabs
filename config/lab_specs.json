@@ -1017,13 +1017,8 @@
     }
   },
   "Blood - Folate": {
-    "primary_unit": "nmol/L",
-    "alternatives": [
-      {
-        "unit": "ng/mL",
-        "factor": 2.266
-      }
-    ],
+    "primary_unit": "ng/mL",
+    "alternatives": [],
     "ranges": {
       "healthy": {
         "min": 7.0,
