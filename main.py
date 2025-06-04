@@ -630,6 +630,21 @@ def main():
         if all(c in merged_df.columns for c in ["lab_value_final", "healthy_range_min", "healthy_range_max"]):
             merged_df["is_in_healthy_range"] = merged_df.apply(compute_is_in_healthy_range, axis=1)
 
+    # --------- Deduplicate by (date, lab_name_enum) keeping best match ---------
+    # Only if lab_specs is loaded and required columns exist
+    if paths_exist and "date" in merged_df.columns and "lab_name_enum" in merged_df.columns and "lab_unit_enum" in merged_df.columns:
+        def pick_best_dupe(group):
+            # group: DataFrame with same (date, lab_name_enum)
+            name_enum = group.iloc[0]["lab_name_enum"]
+            primary_unit = None
+            if name_enum and name_enum in lab_specs:
+                primary_unit = lab_specs[name_enum].get("primary_unit")
+            if primary_unit and (group["lab_unit_enum"] == primary_unit).any():
+                return group[group["lab_unit_enum"] == primary_unit].iloc[0]
+            else:
+                return group.iloc[0]
+        merged_df = merged_df.groupby(["date", "lab_name_enum"], dropna=False, as_index=False).apply(pick_best_dupe).reset_index(drop=True)
+
     export_cols_ordered = get_export_columns_from_schema(COLUMN_SCHEMA)
     final_select_cols = [col for col in export_cols_ordered if col in merged_df.columns] + \
                         [col for col in merged_df.columns if col not in export_cols_ordered] # Keep all columns
