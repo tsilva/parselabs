@@ -1,37 +1,7 @@
-- review code
-- log error when renaming is not found
-- review acccuracy of extraction for early reports
-- test that dates match
-- split ranges to different file
-- add support for time left to next test recommendation, recommend test if out of range or time elapsed
-- try mounting gdrive with rclone
-- add gdrive workflow support
-- Check for outliers in lab results
-- Ask GPT to find outliers in lab results
-- last should have last values and if it was ever outside range
-- remove date source file page number
-- make last csv not have the text
-- make last csv have source file
-- make last csv have enums
-- phase 1 extract, standardize units,dont swap if unavailable but add to map and then we use grmini
-- retry zeroshot single image extraction
-- reduce target list by mapping to LOINQ codes
-- use thinking model for extraction in single pass
-- Collect raw labs from all pages, then manually use GPT 4.1 to create a mapping dataset, then just manually add missing ones 
-- Combine embedding retrieval with LLM for classificaiton (select top K embeddings, then use LLM to classify)
-- Convert to command-line tool installable with pipx
-- Date injection from first page, won't work when just regenerating specific pages
-- Perform assertions during steps
-- Added outlier detection (let llm judge based on user data)
-- Add support for LOINQ codes
-- Prefix lab test names with LOINQ codes
-- Convert lab spec names to standard names with LOINQ codes
-- Generate excel instead of csv
-- Get rid of lab_methods.json method, let LLM map to LOINQ codes instead
-- Add converted ranges to latest csv
-- Create validation mode that validates all schemas
-- Decouple unit standardization, do that in another pass
-- Perform post json merge validation
-- Match fields against enum and convert units/ranges to create .augmented.json
-- Create csv from .augmented.json
-- Create augmented schema and validate against it
+- Review plots and fix the ones that look SUS
+- Review early reports
+- Assert that metadata dates match file name
+- Add validator that runs each page CSV against its image
+- Always grab dates from the first page 
+- Log unmapped: lab names, units
+- Add support for next test recommendation (time elapsed + out of range)
