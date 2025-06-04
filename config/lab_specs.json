@@ -1,6 +1,12 @@
 {
   "Blood - 1,25-OH₂ Vitamin D": {
     "primary_unit": "pg/mL",
+    "alternatives": [
+      {
+        "unit": "pmol/L",
+        "factor": 0.4166666667
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 19.9,
@@ -474,10 +480,10 @@
       }
     ],
     "ranges": {
-       "healthy": {
-          "min": 0.0,
-          "max": 7.0
-        }
+      "healthy": {
+        "min": 0.0,
+        "max": 7.0
+      }
     }
   },
   "Blood - Anti-tTG IgG": {
@@ -1631,8 +1637,8 @@
     "alternatives": [],
     "ranges": {
       "healthy": {
-         "min": 1.5,
-         "max": 8.5
+        "min": 1.5,
+        "max": 8.5
       }
     }
   },
