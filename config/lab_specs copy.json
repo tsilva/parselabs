@@ -166,10 +166,6 @@
       }
     ]
   },
-  "Blood - Haematocrit (HCT) (%)": {
-    "primary_unit": "%",
-    "alternatives": []
-  },
   "Blood - MCV": {
     "primary_unit": "fL",
     "alternatives": []
@@ -204,7 +200,7 @@
     "primary_unit": "%",
     "alternatives": []
   },
-  "Blood - Platelet Count": {
+  "Blood - Platelets": {
     "primary_unit": "µL",
     "alternatives": [
       {
@@ -719,7 +715,7 @@
     "primary_unit": "%",
     "alternatives": []
   },
-  "Blood - Haematocrit (HCT)": {
+  "Blood - Haematocrit (HCT) (%)": {
     "primary_unit": "L",
     "alternatives": []
   },
@@ -1029,7 +1025,7 @@
     "primary_unit": "boolean",
     "alternatives": []
   },
-  "Blood - Platelet Count (%)": {
+  "Blood - Platelets (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
