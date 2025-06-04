@@ -1247,7 +1247,7 @@
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "U/L",
+        "unit": "IU/L",
         "factor": 0.0029
       }
     ]
@@ -1464,7 +1464,7 @@
     "alternatives": []
   },
   "Blood - Anti-Scl-70 Ab": {
-    "primary_unit": "U/L",
+    "primary_unit": "IU/L",
     "alternatives": []
   },
   "Blood - Waaler-Rose Test (%)": {
