@@ -469,6 +469,7 @@ def plot_lab_enum(args):
     lab_name_enum_val, merged_df_path_str, plots_dir_str, output_plots_dir_str = args
     import pandas as pd # Keep imports inside for multiprocessing safety
     import matplotlib.pyplot as plt
+    import numpy as np
     import re
     from pathlib import Path
 
@@ -486,8 +487,26 @@ def plot_lab_enum(args):
         y_label = f"Value ({unit_str})" if unit_str else "Value"
         title = f"{lab_name_enum_val} " + (f" [{unit_str}]" if unit_str else "")
         
-        plt.figure(figsize=(12, 6)); plt.plot(df_lab[date_col], df_lab[value_col], marker='o', linestyle='-')
-        # Optional: Add reference range lines (simplified)
+        plt.figure(figsize=(12, 6))
+        plt.plot(df_lab[date_col], df_lab[value_col], marker='o', linestyle='-')
+
+        # Add light green band for reference range if available and not distorted
+        if "lab_range_min_final" in df_lab.columns and "lab_range_max_final" in df_lab.columns:
+            mask = df_lab["lab_range_min_final"].notna() & df_lab["lab_range_max_final"].notna() & df_lab[date_col].notna()
+            if mask.any():
+                x = df_lab.loc[mask, date_col].to_numpy()
+                y_min = df_lab.loc[mask, "lab_range_min_final"].to_numpy()
+                y_max = df_lab.loc[mask, "lab_range_max_final"].to_numpy()
+                plt.fill_between(
+                    x,
+                    y_min,
+                    y_max,
+                    color="#d8f5d0",  # very light green
+                    alpha=0.6,
+                    label="Reference Range"
+                )
+
+        # Optional: Add reference range lines (mode)
         if "lab_range_min_final" in df_lab.columns and df_lab["lab_range_min_final"].notna().any():
             plt.axhline(y=float(df_lab["lab_range_min_final"].mode()[0]), color='gray', linestyle='--', label='Ref Min (mode)')
         if "lab_range_max_final" in df_lab.columns and df_lab["lab_range_max_final"].notna().any():
