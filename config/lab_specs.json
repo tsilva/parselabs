@@ -25,14 +25,14 @@
     }
   },
   "Blood - 25-OH Vitamin D": {
-    "primary_unit": "µg/L",
+    "primary_unit": "ng/mL",
     "alternatives": [
       {
         "unit": "nmol/L",
         "factor": 0.4
       },
       {
-        "unit": "ng/mL",
+        "unit": "µg/L",
         "factor": 1.0
       }
     ],
@@ -902,10 +902,6 @@
         "max": 22.0
       }
     }
-  },
-  "Blood - Differential Leukogram": {
-    "primary_unit": "mEq/L",
-    "alternatives": []
   },
   "Blood - ESR (1 h)": {
     "primary_unit": "mm/h",
@@ -1845,7 +1841,7 @@
       }
     }
   },
-  "Blood - RBC Count": {
+  "Blood - Erythrocytes": {
     "primary_unit": "10⁹/L",
     "alternatives": [
       {
@@ -1860,7 +1856,7 @@
       }
     }
   },
-  "Blood - RBC - Hypochromic (%)": {
+  "Blood - Erythrocytes - Hypochromic (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
@@ -2271,7 +2267,7 @@
       }
     }
   },
-  "Blood - WBC Count": {
+  "Blood - Leukocytes": {
     "primary_unit": "10⁹/L",
     "alternatives": [
       {
