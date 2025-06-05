@@ -620,8 +620,6 @@ def main():
             if pd.isna(val): return None
             try: val_f = float(val)
             except: return None
-            low = float(minv) < val_f if pd.notna(minv) and str(minv).replace('.','',1).isdigit() else False # Check if minv is numeric string
-            high = float(maxv) > val_f if pd.notna(maxv) and str(maxv).replace('.','',1).isdigit() else False # Check if maxv is numeric string
             # This logic is reversed, should be val_f < minv_f or val_f > maxv_f
             is_low = pd.notna(minv) and val_f < float(minv)
             is_high = pd.notna(maxv) and val_f > float(maxv)
