@@ -24,11 +24,17 @@ pipx install . --force
 1. Configure your environment variables in a `.env` file:
 
 ```
-MODEL_ID=claude-3-7-sonnet-latest
+SELF_CONSISTENCY_MODEL_ID=openai/gpt-4.1
+TRANSCRIBE_MODEL_ID=google/gemini-2.0-flash-001
+EXTRACT_MODEL_ID=openai/gpt-4.1
+MAPPING_MODEL_ID=openai/gpt-4.1
 INPUT_PATH=./path/to/lab/reports
 INPUT_FILE_REGEX=.*\.jpg
 OUTPUT_PATH=./output
-ANTHROPIC_API_KEY=your_api_key_here
+OPENROUTER_API_KEY=your_api_key_here
+N_TRANSCRIPTIONS=3
+N_EXTRACTIONS=3
+MAX_WORKERS=1
 ```
 
 2. Run the parser:
