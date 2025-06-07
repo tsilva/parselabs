@@ -1919,11 +1919,11 @@
     }
   },
   "Blood - Total T3": {
-    "primary_unit": "nmol/L",
+    "primary_unit": "ng/mL",
     "alternatives": [
       {
-        "unit": "ng/mL",
-        "factor": 1.536
+        "unit": "nmol/L",
+        "factor": 0.651
       }
     ],
     "ranges": {
@@ -1934,15 +1934,11 @@
     }
   },
   "Blood - Total T4": {
-    "primary_unit": "nmol/L",
+    "primary_unit": "µg/dL",
     "alternatives": [
       {
-        "unit": "µg/dL",
-        "factor": 12.87
-      },
-      {
-        "unit": "µg/100mL",
-        "factor": 12.87
+        "unit": "nmol/L",
+        "factor": 0.0777
       }
     ],
     "ranges": {

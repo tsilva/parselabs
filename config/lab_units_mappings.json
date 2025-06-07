@@ -66,5 +66,12 @@
     "microgml": "µg/mL",
     "ugmleqigg": "µg/mL",
     "moll": "µmol/L",
-    "micromoll": "µmol/L"
+    "micromoll": "µmol/L",
+    "cfuml": "CFU/mL",
+    "x106microl": "10¹²/L",
+    "x103microl": "10⁹/L",
+    "ui": "U/L",
+    "ul": "U/L",
+    "mmhora": "mm/h",
+    "ulml": "Ul/mL"
 }
