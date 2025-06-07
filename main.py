@@ -196,6 +196,15 @@ def load_env_config():
         "max_workers": max_workers
     }
 
+def clear_directory(dir_path: Path) -> None:
+    """Remove all contents of a directory without deleting the directory itself."""
+    if dir_path.exists():
+        for item in dir_path.iterdir():
+            if item.is_file() or item.is_symlink():
+                item.unlink()
+            else:
+                shutil.rmtree(item)
+
 ########################################
 # LLM Tools / Pydantic Models
 ########################################
@@ -796,14 +805,12 @@ def main():
        PLOTTING_VALUE_COL in merged_df.columns:
         
         plots_base_dir = Path("plots")
-        if plots_base_dir.exists():
-            shutil.rmtree(plots_base_dir)
         plots_base_dir.mkdir(exist_ok=True)
+        clear_directory(plots_base_dir)
 
         output_plots_dir = output_dir / "plots"
-        if output_plots_dir.exists():
-            shutil.rmtree(output_plots_dir)
         output_plots_dir.mkdir(exist_ok=True)
+        clear_directory(output_plots_dir)
 
         logger.info(
             f"Starting plot generation into '{plots_base_dir}' and '{output_plots_dir}'."
