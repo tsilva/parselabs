@@ -1714,10 +1714,10 @@
     }
   },
   "Blood - Erythrocytes": {
-    "primary_unit": "10⁹/L",
+    "primary_unit": "10¹²/L",
     "alternatives": [
       {
-        "unit": "10¹²/L",
+        "unit": "10⁹/L",
         "factor": 1000.0
       }
     ],
