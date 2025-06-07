@@ -719,7 +719,12 @@ def main():
                 return group[group["lab_unit_enum"] == primary_unit].iloc[0]
             else:
                 return group.iloc[0]
-        merged_df = merged_df.groupby(["date", "lab_name_enum"], dropna=False, as_index=False).apply(pick_best_dupe).reset_index(drop=True)
+        merged_df = (
+            merged_df
+            .groupby(["date", "lab_name_enum"], dropna=False, as_index=False)
+            .apply(pick_best_dupe, include_groups=True)
+            .reset_index(drop=True)
+        )
 
     export_cols_ordered = get_export_columns_from_schema(COLUMN_SCHEMA)
     final_select_cols = [col for col in export_cols_ordered if col in merged_df.columns] + \
