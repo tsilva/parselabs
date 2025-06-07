@@ -506,6 +506,22 @@ def plot_lab_enum(args):
         plt.figure(figsize=(12, 6))
         plt.plot(df_lab[date_col], df_lab[value_col], marker='o', linestyle='-')
 
+        # Ensure the first and last year are always shown on the x-axis
+        import matplotlib.dates as mdates
+        start_date = df_lab[date_col].min()
+        end_date = df_lab[date_col].max()
+        ax = plt.gca()
+        ax.set_xlim(start_date, end_date)
+        year_ticks = pd.date_range(start_date, end_date, freq="YS").to_pydatetime().tolist()
+        ticks = []
+        if start_date not in year_ticks:
+            ticks.append(start_date)
+        ticks.extend(year_ticks)
+        if end_date not in year_ticks:
+            ticks.append(end_date)
+        ax.set_xticks(ticks)
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+
         # Add light green band for reference range if available
         if "lab_range_min_final" in df_lab.columns and "lab_range_max_final" in df_lab.columns:
             min_vals = df_lab["lab_range_min_final"].dropna()
