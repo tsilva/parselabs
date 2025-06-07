@@ -107,7 +107,7 @@ def parse_range_string(range_str, primary_unit=None):
             return {"min": 0, "max": 0}
         if s in ["positive", "present", "yes", "true", "1", "1-1"]:
             return {"min": 1, "max": 1}
-    match = re.match(r"^\s*([-\d\.]+)\s*[-–]\s*([-\d\.]+)\s*$", range_str)
+    match = re.match(r"^\s*([-\d\.]+)\s*[--]\s*([-\d\.]+)\s*$", range_str)
     if match:
         try:
             min_val = float(match.group(1))

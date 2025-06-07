@@ -1,5 +1,5 @@
 {
-  "Blood - TIBC (Total Iron-Binding Capacity)": {
+  "Blood - Total Iron-Binding Capacity (TIBC)": {
     "primary_unit": "µg/dL",
     "alternatives": [
       {
@@ -166,15 +166,15 @@
       }
     ]
   },
-  "Blood - MCV": {
+  "Blood - Mean Corpuscular Volume (MCV)": {
     "primary_unit": "fL",
     "alternatives": []
   },
-  "Blood - MCH": {
+  "Blood - Mean Corpuscular Hemoglobin (MCH)": {
     "primary_unit": "pg",
     "alternatives": []
   },
-  "Blood - MCHC": {
+  "Blood - Mean Corpuscular Hemoglobin Concentration (MCHC)": {
     "primary_unit": "pg",
     "alternatives": [
       {
@@ -183,7 +183,7 @@
       }
     ]
   },
-  "Blood - RDW-SD (%)": {
+  "Blood - Red Cell Distribution Width - Standard Deviation (%) (RDW-SD)": {
     "primary_unit": "%",
     "alternatives": []
   },
@@ -266,7 +266,7 @@
       }
     ]
   },
-  "Blood - aPTT": {
+  "Blood - Activated Partial Thromboplastin Time (aPTT)": {
     "primary_unit": "s",
     "alternatives": []
   },
@@ -274,15 +274,15 @@
     "primary_unit": "ratio",
     "alternatives": []
   },
-  "Blood - PT (%)": {
+  "Blood - Prothrombin Time (%) (PT)": {
     "primary_unit": "%",
     "alternatives": []
   },
-  "Blood - MPV": {
+  "Blood - Mean Platelet Volume (MPV)": {
     "primary_unit": "fL",
     "alternatives": []
   },
-  "Blood - PT": {
+  "Blood - Prothrombin Time (PT)": {
     "primary_unit": "s",
     "alternatives": []
   },
@@ -354,7 +354,7 @@
     "primary_unit": "%",
     "alternatives": []
   },
-  "Blood - LDL Cholesterol": {
+  "Blood - Low-Density Lipoprotein Cholesterol (LDL Cholesterol)": {
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -552,7 +552,7 @@
     "primary_unit": "mmol/L",
     "alternatives": []
   },
-  "Blood - Amylase (α-Amylase)": {
+  "Blood - Amylase (alpha-Amylase)": {
     "primary_unit": "IU/L",
     "alternatives": []
   },
@@ -582,7 +582,7 @@
     "primary_unit": "IU/L",
     "alternatives": []
   },
-  "Blood - HDL Cholesterol": {
+  "Blood - High-Density Lipoprotein Cholesterol (HDL Cholesterol)": {
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -633,7 +633,7 @@
     "primary_unit": "mg/dL",
     "alternatives": []
   },
-  "Blood - PTH (Intact)": {
+  "Blood - Parathyroid Hormone (Intact) (PTH)": {
     "primary_unit": "ng/L",
     "alternatives": [
       {
@@ -664,7 +664,7 @@
       }
     ]
   },
-  "Blood - Anti-Tg Ab": {
+  "Blood - Anti-Thyroglobulin Antibody (Anti-Tg Ab)": {
     "primary_unit": "IU/mL",
     "alternatives": [
       {
@@ -673,7 +673,7 @@
       }
     ]
   },
-  "Blood - Anti-TPO Ab": {
+  "Blood - Anti-Thyroid Peroxidase Antibody (Anti-TPO Ab)": {
     "primary_unit": "IU/mL",
     "alternatives": [
       {
@@ -711,7 +711,7 @@
     "primary_unit": "IU/L",
     "alternatives": []
   },
-  "Blood - MPV (%)": {
+  "Blood - Mean Platelet Volume (MPV) (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
@@ -719,11 +719,11 @@
     "primary_unit": "L",
     "alternatives": []
   },
-  "Blood - PDW (%)": {
+  "Blood - Platelet Distribution Width (PDW) (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
-  "Blood - HDW": {
+  "Blood - Hemoglobin Distribution Width (HDW)": {
     "primary_unit": "g/dL",
     "alternatives": []
   },
@@ -865,11 +865,11 @@
     "primary_unit": "pg/mL",
     "alternatives": []
   },
-  "Blood - IGF-1": {
+  "Blood - Insulin-Like Growth Factor 1 (IGF-1)": {
     "primary_unit": "ng/mL",
     "alternatives": []
   },
-  "Blood - DHEA": {
+  "Blood - Dehydroepiandrosterone (DHEA)": {
     "primary_unit": "nmol/L",
     "alternatives": [
       {
@@ -934,7 +934,7 @@
     "primary_unit": "ng/mL",
     "alternatives": []
   },
-  "Blood - DHT": {
+  "Blood - Dihydrotestosterone (DHT)": {
     "primary_unit": "ng/dL",
     "alternatives": []
   },
@@ -960,7 +960,7 @@
     "primary_unit": "ng/mL",
     "alternatives": []
   },
-  "Blood - DHEA-S": {
+  "Blood - Dehydroepiandrosterone (DHEA)-S": {
     "primary_unit": "µg/mL",
     "alternatives": []
   },
@@ -988,11 +988,11 @@
     "primary_unit": "IU/L",
     "alternatives": []
   },
-  "Blood - RDW-SD": {
+  "Blood - Red Cell Distribution Width - Standard Deviation (RDW-SD)": {
     "primary_unit": "fL",
     "alternatives": []
   },
-  "Blood - Anti-tTG IgA": {
+  "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA)": {
     "primary_unit": "IU/mL",
     "alternatives": [
       {
@@ -1005,19 +1005,19 @@
     "primary_unit": "%",
     "alternatives": []
   },
-  "Blood - PDW": {
+  "Blood - Platelet Distribution Width (PDW)": {
     "primary_unit": "fL",
     "alternatives": []
   },
-  "Blood - IgG": {
+  "Blood - Immunoglobulin G (IgG)": {
     "primary_unit": "mg/dL",
     "alternatives": []
   },
-  "Blood - IgA": {
+  "Blood - Immunoglobulin A (IgA)": {
     "primary_unit": "mg/dL",
     "alternatives": []
   },
-  "Blood - IgM": {
+  "Blood - Immunoglobulin M (IgM)": {
     "primary_unit": "mg/dL",
     "alternatives": []
   },
@@ -1108,7 +1108,7 @@
     "primary_unit": "%",
     "alternatives": []
   },
-  "Blood - MCHC (%)": {
+  "Blood - Mean Corpuscular Hemoglobin Concentration (MCHC) (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
@@ -1124,7 +1124,7 @@
     "primary_unit": "mg/dL",
     "alternatives": []
   },
-  "Blood - MCV (%)": {
+  "Blood - Mean Corpuscular Volume (MCV) (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
@@ -1140,7 +1140,7 @@
     "primary_unit": "µg/L",
     "alternatives": []
   },
-  "Blood - Reticulocyte Hemoglobin Content (CHr)omium": {
+  "Blood - Chromium (Cr)": {
     "primary_unit": "µg/L",
     "alternatives": []
   },
@@ -1172,11 +1172,11 @@
     "primary_unit": "boolean",
     "alternatives": []
   },
-  "Blood - Anti-tTG IgG": {
+  "Blood - Anti-Tissue Transglutaminase Antibody IgG (Anti-tTG IgG)": {
     "primary_unit": "IU/mL",
     "alternatives": []
   },
-  "Blood - Anti-CCP Ab": {
+  "Blood - Anti-Cyclic Citrullinated Peptide Antibody (Anti-CCP Ab)": {
     "primary_unit": "IU/mL",
     "alternatives": []
   },
@@ -1226,7 +1226,7 @@
     "primary_unit": "boolean",
     "alternatives": []
   },
-  "Blood - VLDL Cholesterol": {
+  " Blood - Very Low-Density Lipoprotein Cholesterol (VLDL)": {
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -1269,7 +1269,7 @@
       }
     ]
   },
-  "Blood - LE Cells (screen)": {
+  "Blood - Lupus Erythematosus Cells Screen (LE Cells)": {
     "primary_unit": "boolean",
     "alternatives": []
   },
@@ -1354,7 +1354,7 @@
     "primary_unit": "%",
     "alternatives": []
   },
-  "Blood - 5′-Nucleotidase (5′-NT)": {
+  "Blood - 5'-Nucleotidase (5'-NT)": {
     "primary_unit": "IU/L",
     "alternatives": []
   },
@@ -1374,11 +1374,11 @@
     "primary_unit": "boolean",
     "alternatives": []
   },
-  "Blood - Anti-SSB (La) Ab": {
+  "Blood - Anti-Sjögren's-Syndrome-Related Antigen B Antibody (Anti-SSB/La Ab)": {
     "primary_unit": "IU/mL",
     "alternatives": []
   },
-  "Blood - Anti-SSA (Ro) Ab": {
+  "Blood - Anti-Sjögren's-Syndrome-Related Antigen A Antibody (Anti-SSA/Ro Ab)": {
     "primary_unit": "IU/mL",
     "alternatives": [
       {
@@ -1387,7 +1387,7 @@
       }
     ]
   },
-  "Blood - Anti-dsDNA IgG": {
+  "Blood - Anti-Double-Stranded DNA Antibody IgG (Anti-dsDNA IgG)": {
     "primary_unit": "IU/mL",
     "alternatives": []
   },
@@ -1423,7 +1423,7 @@
     "primary_unit": "boolean",
     "alternatives": []
   },
-  "Blood - Anti-PR3 Ab (IgG)": {
+  "Blood - Anti-Proteinase 3 Antibody IgG (Anti-PR3 Ab)": {
     "primary_unit": "unitless",
     "alternatives": []
   },
@@ -1459,7 +1459,7 @@
     "primary_unit": "boolean",
     "alternatives": []
   },
-  "Blood - Anti-Scl-70 Ab": {
+  "Blood - Anti-Scleroderma-70 Antibody (Anti-Scl-70 Ab)": {
     "primary_unit": "IU/L",
     "alternatives": []
   },
@@ -1467,7 +1467,7 @@
     "primary_unit": "%",
     "alternatives": []
   },
-  "Blood - RA Test": {
+  "Blood - Rheumatoid Arthritis Test (RA Test)": {
     "primary_unit": "IU/mL",
     "alternatives": []
   },
