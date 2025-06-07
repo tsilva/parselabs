@@ -588,7 +588,7 @@ def main():
             return value
 
         merged_df["lab_name_slug"] = merged_df.apply(lambda r: f"{str(r.get('lab_type','')).lower()}-{slugify(r.get('lab_name',''))}", axis=1)
-        merged_df["lab_name_enum"] = merged_df["lab_name_slug"].apply(lambda x: lab_names_mapping.get(x, ""))
+        merged_df["lab_name_enum"] = merged_df["lab_name_slug"].apply(lambda x: lab_names_mapping.get(x, x))
         merged_df["lab_unit_enum"] = merged_df.get("lab_unit", pd.Series(dtype='str')).apply(lambda x: lab_units_mapping.get(slugify(x), ""))
 
         def convert_to_primary_unit(row):
