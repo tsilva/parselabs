@@ -490,20 +490,22 @@ def plot_lab_enum(args):
         plt.figure(figsize=(12, 6))
         plt.plot(df_lab[date_col], df_lab[value_col], marker='o', linestyle='-')
 
-        # Add light green band for reference range if available and not distorted
+        # Add light green band for reference range if available
         if "lab_range_min_final" in df_lab.columns and "lab_range_max_final" in df_lab.columns:
-            mask = df_lab["lab_range_min_final"].notna() & df_lab["lab_range_max_final"].notna() & df_lab[date_col].notna()
-            if mask.any():
-                x = df_lab.loc[mask, date_col].to_numpy()
-                y_min = df_lab.loc[mask, "lab_range_min_final"].to_numpy()
-                y_max = df_lab.loc[mask, "lab_range_max_final"].to_numpy()
+            min_vals = df_lab["lab_range_min_final"].dropna()
+            max_vals = df_lab["lab_range_max_final"].dropna()
+            if not min_vals.empty and not max_vals.empty:
+                y_min_mode = float(min_vals.mode()[0])
+                y_max_mode = float(max_vals.mode()[0])
+                x_start = df_lab[date_col].min()
+                x_end = df_lab[date_col].max()
                 plt.fill_between(
-                    x,
-                    y_min,
-                    y_max,
+                    [x_start, x_end],
+                    y_min_mode,
+                    y_max_mode,
                     color="#d8f5d0",  # very light green
                     alpha=0.6,
-                    label="Reference Range"
+                    label="Reference Range",
                 )
 
         # Optional: Add reference range lines (mode)
