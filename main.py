@@ -55,6 +55,7 @@ COLUMN_SCHEMA = {
 
     # Derived columns in main()
     "lab_name_slug": {"dtype": "str", "excel_width": 30, "excel_hidden": True, "derivation_logic": "map_lab_name_slug"},
+    "lab_unit_slug": {"dtype": "str", "excel_width": 15, "excel_hidden": True, "derivation_logic": "map_lab_unit_slug"},
     "lab_name_enum": {"dtype": "str", "excel_width": 30, "derivation_logic": "map_lab_name_enum", "plotting_role": "group"},
     "lab_unit_enum": {"dtype": "str", "excel_width": 15, "derivation_logic": "map_lab_unit_enum"},
 
@@ -74,7 +75,7 @@ def get_export_columns_from_schema(schema: dict) -> list:
     """Returns an ordered list of columns for the main export."""
     ordered_keys = [
         "date", "lab_type", "lab_name", "lab_name_enum", "lab_name_slug",
-        "lab_value", "lab_unit", "lab_unit_enum",
+        "lab_value", "lab_unit", "lab_unit_slug", "lab_unit_enum",
         "lab_range_min", "lab_range_max", "reference_range_text",
         "lab_value_final", "lab_unit_final",
         "lab_range_min_final", "lab_range_max_final",
@@ -286,6 +287,17 @@ def preprocess_page_image(image: Image.Image) -> Image.Image:
         new_height = int(gray_image.height * ratio)
         gray_image = gray_image.resize((MAX_WIDTH, new_height), Image.Resampling.LANCZOS)
     return ImageEnhance.Contrast(gray_image).enhance(2.0)
+
+def slugify(value: Any) -> str:
+    """Create a normalized slug for mapping/debugging purposes."""
+    if pd.isna(value):
+        return ""
+    value = str(value).strip().lower().replace('µ', 'micro').replace('%', 'percent')
+    value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+    value = re.sub(r"[^\w\s-]", "", value)
+    value = re.sub(r"[\s_]+", "-", value).strip('-')
+    value = value.replace("-", "")
+    return value
 
 def self_consistency(fn, model_id, n, *args, **kwargs):
     if n == 1:
@@ -609,14 +621,20 @@ def main():
     logger.info(f"Merged data: {len(merged_df)} rows.")
 
     # --------- Add derived columns (slugs, enums, final values) ---------
+    merged_df["lab_name_slug"] = merged_df.apply(
+        lambda r: f"{str(r.get('lab_type', '')).lower()}-{slugify(r.get('lab_name', ''))}",
+        axis=1,
+    )
+    merged_df["lab_unit_slug"] = merged_df.get("lab_unit", pd.Series(dtype="str")).apply(slugify)
+
     config_path = Path("config")
     paths_exist = all([(config_path / f).exists() for f in ["lab_names_mappings.json", "lab_units_mappings.json", "lab_specs.json"]])
     if not paths_exist:
         logger.error(f"Missing config files in '{config_path}'. Derived columns might be incomplete.")
         # Initialize columns to prevent KeyErrors if they are used later
         derived_cols_to_init = [
-            "lab_name_slug", "lab_name_enum", "lab_unit_enum", "lab_value_final", 
-            "lab_unit_final", "lab_range_min_final", "lab_range_max_final", 
+            "lab_name_slug", "lab_unit_slug", "lab_name_enum", "lab_unit_enum", "lab_value_final",
+            "lab_unit_final", "lab_range_min_final", "lab_range_max_final",
             "is_flagged_final", "healthy_range_min", "healthy_range_max", "is_in_healthy_range"
         ]
         for col_key in derived_cols_to_init:
@@ -625,21 +643,6 @@ def main():
         with open(config_path / "lab_names_mappings.json", "r", encoding="utf-8") as f: lab_names_mapping = json.load(f)
         with open(config_path / "lab_units_mappings.json", "r", encoding="utf-8") as f: lab_units_mapping = json.load(f)
         with open(config_path / "lab_specs.json", "r", encoding="utf-8") as f: lab_specs = json.load(f)
-
-        def slugify(value):
-            if pd.isna(value):
-                return ""
-            value = str(value).strip().lower().replace('µ', 'micro').replace('%', 'percent')
-            value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
-            value = re.sub(r"[^\w\s-]", "", value)
-            value = re.sub(r"[\s_]+", "-", value).strip('-')
-            value = value.replace("-", "")  # Remove all hyphens
-            return value
-
-        merged_df["lab_name_slug"] = merged_df.apply(
-            lambda r: f"{str(r.get('lab_type', '')).lower()}-{slugify(r.get('lab_name', ''))}",
-            axis=1,
-        )
 
         def map_lab_name_enum(slug: str) -> str:
             mapped = lab_names_mapping.get(slug)
