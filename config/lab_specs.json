@@ -2128,12 +2128,12 @@
   "Blood - Leukocytes": {
     "primary_unit": "10⁹/L",
     "alternatives": [
-      {
-        "unit": "cells/µL",
+       {
+        "unit": "10⁶/L",
         "factor": 0.001
       },
       {
-        "unit": "µL",
+        "unit": "cells/µL",
         "factor": 0.001
       }
     ],
