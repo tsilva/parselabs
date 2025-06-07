@@ -757,9 +757,19 @@ def main():
        date_col_name in merged_df.columns and \
        PLOTTING_VALUE_COL in merged_df.columns:
         
-        plots_base_dir = Path("plots"); plots_base_dir.mkdir(exist_ok=True)
-        output_plots_dir = output_dir / "plots"; output_plots_dir.mkdir(exist_ok=True)
-        logger.info(f"Starting plot generation into '{plots_base_dir}' and '{output_plots_dir}'.")
+        plots_base_dir = Path("plots")
+        if plots_base_dir.exists():
+            shutil.rmtree(plots_base_dir)
+        plots_base_dir.mkdir(exist_ok=True)
+
+        output_plots_dir = output_dir / "plots"
+        if output_plots_dir.exists():
+            shutil.rmtree(output_plots_dir)
+        output_plots_dir.mkdir(exist_ok=True)
+
+        logger.info(
+            f"Starting plot generation into '{plots_base_dir}' and '{output_plots_dir}'."
+        )
         
         if not pd.api.types.is_datetime64_any_dtype(merged_df[date_col_name]): # Ensure date is datetime for plotting
             merged_df[date_col_name] = pd.to_datetime(merged_df[date_col_name], errors="coerce")
