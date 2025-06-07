@@ -560,12 +560,20 @@ def plot_lab_enum(args):
                     alpha=0.6,
                     label="Reference Range",
                 )
+                cur_ymin, cur_ymax = ax.get_ylim()
+                ax.set_ylim(min(cur_ymin, y_min_mode), max(cur_ymax, y_max_mode))
 
         # Optional: Add reference range lines (mode)
         if "lab_range_min_final" in df_lab.columns and df_lab["lab_range_min_final"].notna().any():
-            plt.axhline(y=float(df_lab["lab_range_min_final"].mode()[0]), color='gray', linestyle='--', label='Ref Min (mode)')
+            y_min_line = float(df_lab["lab_range_min_final"].mode()[0])
+            plt.axhline(y=y_min_line, color='gray', linestyle='--', label='Ref Min (mode)')
+            cur_ymin, cur_ymax = ax.get_ylim()
+            ax.set_ylim(min(cur_ymin, y_min_line), cur_ymax)
         if "lab_range_max_final" in df_lab.columns and df_lab["lab_range_max_final"].notna().any():
-             plt.axhline(y=float(df_lab["lab_range_max_final"].mode()[0]), color='gray', linestyle='--', label='Ref Max (mode)')
+             y_max_line = float(df_lab["lab_range_max_final"].mode()[0])
+             plt.axhline(y=y_max_line, color='gray', linestyle='--', label='Ref Max (mode)')
+             cur_ymin, cur_ymax = ax.get_ylim()
+             ax.set_ylim(cur_ymin, max(cur_ymax, y_max_line))
         if ("lab_range_min_final" in df_lab.columns and df_lab["lab_range_min_final"].notna().any()) or \
            ("lab_range_max_final" in df_lab.columns and df_lab["lab_range_max_final"].notna().any()):
             plt.legend()
