@@ -117,18 +117,34 @@ LOG_DIR.mkdir(exist_ok=True)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 INFO_LOG_PATH = LOG_DIR / "info.log"
 ERROR_LOG_PATH = LOG_DIR / "error.log"
-for log_file in [INFO_LOG_PATH, ERROR_LOG_PATH]:
-    if log_file.exists(): log_file.write_text("", encoding='utf-8')
-info_handler = logging.FileHandler(INFO_LOG_PATH, encoding='utf-8')
-info_handler.setLevel(logging.INFO)
-error_handler = logging.FileHandler(ERROR_LOG_PATH, encoding='utf-8')
-error_handler.setLevel(logging.ERROR)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-info_handler.setFormatter(formatter)
-error_handler.setFormatter(formatter)
-logger = logging.getLogger(__name__)
-logger.addHandler(info_handler)
-logger.addHandler(error_handler)
+
+def setup_logging(clear_logs: bool = False) -> logging.Logger:
+    """Configure file logging, optionally clearing existing logs."""
+    if clear_logs:
+        for log_file in (INFO_LOG_PATH, ERROR_LOG_PATH):
+            if log_file.exists():
+                log_file.write_text("", encoding="utf-8")
+
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+
+    for handler in list(logger.handlers):
+        if isinstance(handler, logging.FileHandler):
+            logger.removeHandler(handler)
+            handler.close()
+
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    info_handler = logging.FileHandler(INFO_LOG_PATH, encoding='utf-8')
+    info_handler.setLevel(logging.INFO)
+    info_handler.setFormatter(formatter)
+    error_handler = logging.FileHandler(ERROR_LOG_PATH, encoding='utf-8')
+    error_handler.setLevel(logging.ERROR)
+    error_handler.setFormatter(formatter)
+    logger.addHandler(info_handler)
+    logger.addHandler(error_handler)
+    return logger
+
+logger = setup_logging(clear_logs=False)
 
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
@@ -527,6 +543,9 @@ def plot_lab_enum(args):
 
 
 def main():
+    # Clear previous logs once per run and reconfigure file handlers
+    setup_logging(clear_logs=True)
+
     config = load_env_config()
     output_dir = config["output_path"]
 
