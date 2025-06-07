@@ -292,7 +292,7 @@ def slugify(value: Any) -> str:
     """Create a normalized slug for mapping/debugging purposes."""
     if pd.isna(value):
         return ""
-    value = str(value).strip().lower().replace('µ', 'micro').replace('%', 'percent')
+    value = str(value).strip().lower().replace('µ', 'micro').replace('μ', 'micro').replace('%', 'percent')
     value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
     value = re.sub(r"[^\w\s-]", "", value)
     value = re.sub(r"[\s_]+", "-", value).strip('-')
