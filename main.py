@@ -544,9 +544,9 @@ def plot_lab_enum(args):
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
         # Add light green band for reference range if available
-        if "lab_range_min_final" in df_lab.columns and "lab_range_max_final" in df_lab.columns:
-            min_vals = df_lab["lab_range_min_final"].dropna()
-            max_vals = df_lab["lab_range_max_final"].dropna()
+        if "healthy_range_min" in df_lab.columns and "healthy_range_max" in df_lab.columns:
+            min_vals = df_lab["healthy_range_min"].dropna()
+            max_vals = df_lab["healthy_range_max"].dropna()
             if not min_vals.empty and not max_vals.empty:
                 y_min_mode = float(min_vals.mode()[0])
                 y_max_mode = float(max_vals.mode()[0])
@@ -564,18 +564,18 @@ def plot_lab_enum(args):
                 ax.set_ylim(min(cur_ymin, y_min_mode), max(cur_ymax, y_max_mode))
 
         # Optional: Add reference range lines (mode)
-        if "lab_range_min_final" in df_lab.columns and df_lab["lab_range_min_final"].notna().any():
-            y_min_line = float(df_lab["lab_range_min_final"].mode()[0])
+        if "healthy_range_min" in df_lab.columns and df_lab["healthy_range_min"].notna().any():
+            y_min_line = float(df_lab["healthy_range_min"].mode()[0])
             plt.axhline(y=y_min_line, color='gray', linestyle='--', label='Ref Min (mode)')
             cur_ymin, cur_ymax = ax.get_ylim()
             ax.set_ylim(min(cur_ymin, y_min_line), cur_ymax)
-        if "lab_range_max_final" in df_lab.columns and df_lab["lab_range_max_final"].notna().any():
-             y_max_line = float(df_lab["lab_range_max_final"].mode()[0])
+        if "healthy_range_max" in df_lab.columns and df_lab["healthy_range_max"].notna().any():
+             y_max_line = float(df_lab["healthy_range_max"].mode()[0])
              plt.axhline(y=y_max_line, color='gray', linestyle='--', label='Ref Max (mode)')
              cur_ymin, cur_ymax = ax.get_ylim()
              ax.set_ylim(cur_ymin, max(cur_ymax, y_max_line))
-        if ("lab_range_min_final" in df_lab.columns and df_lab["lab_range_min_final"].notna().any()) or \
-           ("lab_range_max_final" in df_lab.columns and df_lab["lab_range_max_final"].notna().any()):
+        if ("healthy_range_min" in df_lab.columns and df_lab["healthy_range_min"].notna().any()) or \
+           ("healthy_range_max" in df_lab.columns and df_lab["healthy_range_max"].notna().any()):
             plt.legend()
 
         plt.title(title, fontsize=16); plt.xlabel("Date", fontsize=12); plt.ylabel(y_label, fontsize=12)
