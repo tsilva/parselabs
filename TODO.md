@@ -7,3 +7,4 @@
 - Add support for next test recommendation (time elapsed + out of range)
 - Merge mappings to labspecs
 - Add support for conversions that are the same for all units without relying on lab specs
+- Unit mappings should stardadize mentioned unit, not convert it
