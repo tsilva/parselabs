@@ -424,7 +424,7 @@
     "ranges": {
       "healthy": {
         "min": 0.0,
-        "max": 35.0
+        "max": 60.0
       }
     }
   },
@@ -435,7 +435,13 @@
         "unit": "KU/L",
         "factor": 1.0
       }
-    ]
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 60.0
+      }
+    }
   },
   "Blood - Anti-Double-Stranded DNA Antibody IgG (Anti-dsDNA IgG)": {
     "primary_unit": "IU/mL",
@@ -770,7 +776,7 @@
     ],
     "ranges": {
       "healthy": {
-        "min": 90.0,
+        "min": 70.0,
         "max": 180.0
       }
     }
@@ -1464,13 +1470,13 @@
       }
     }
   },
-  "Blood - Mean Platelet Volume (MPV) (%)": {
+  "Blood - Plateletcrit (PCT) (%)": {
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 7.5,
-        "max": 11.5
+        "min": 0.13,
+        "max": 0.32
       }
     }
   },
@@ -1593,8 +1599,8 @@
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 9.0,
-        "max": 17.0
+        "min": 25,
+        "max": 65
       }
     }
   },
@@ -1688,8 +1694,8 @@
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 0.1,
-        "max": 0.51
+        "min": 0.33,
+        "max": 17.8
       }
     }
   },
@@ -1865,11 +1871,11 @@
     }
   },
   "Blood - Total Iron-Binding Capacity (TIBC)": {
-    "primary_unit": "µg/L",
+    "primary_unit": "µg/dL",
     "alternatives": [
       {
-        "unit": "µg/dL",
-        "factor": 10.0
+        "unit": "µg/L",
+        "factor": 0.01
       }
     ],
     "ranges": {
@@ -2009,7 +2015,13 @@
         "unit": "mmol/L",
         "factor": 88.57
       }
-    ]
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 30.0,
+        "max": 150.0
+      }
+    }
   },
   "Blood - Urea": {
     "primary_unit": "mg/dL",
@@ -2021,8 +2033,8 @@
     ],
     "ranges": {
       "healthy": {
-        "min": 7.0,
-        "max": 20.0
+        "min": 13,
+        "max": 45
       }
     }
   },
@@ -2503,7 +2515,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Albumin": {
+  "Urine Type II - Albumin": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2513,7 +2525,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Appearance": {
+  "Urine Type II - Appearance": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2523,7 +2535,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Bilirubin": {
+  "Urine Type II - Bilirubin": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2533,7 +2545,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Blood": {
+  "Urine Type II - Blood": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2543,7 +2555,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Colour": {
+  "Urine Type II - Colour": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2553,7 +2565,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Density": {
+  "Urine Type II - Density": {
     "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {
@@ -2563,7 +2575,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Deposit": {
+  "Urine Type II - Deposit": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2573,7 +2585,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Glucose": {
+  "Urine Type II - Glucose": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2583,7 +2595,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Haemoglobin": {
+  "Urine Type II - Haemoglobin": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2593,7 +2605,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Ketones": {
+  "Urine Type II - Ketones": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2603,7 +2615,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Leukocytes": {
+  "Urine Type II - Leukocytes": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2613,7 +2625,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Nitrites": {
+  "Urine Type II - Nitrites": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2623,7 +2635,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Proteins": {
+  "Urine Type II - Proteins": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2633,7 +2645,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Turbidity": {
+  "Urine Type II - Turbidity": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2643,7 +2655,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - Urobilinogen": {
+  "Urine Type II - Urobilinogen": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2653,7 +2665,7 @@
       }
     }
   },
-  "Urine Type II - Biochemistry - pH": {
+  "Urine Type II - pH": {
     "primary_unit": "pH",
     "alternatives": [],
     "ranges": {
