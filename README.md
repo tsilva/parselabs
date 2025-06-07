@@ -15,8 +15,8 @@ Labs Parser is a Python tool that uses Claude AI to extract laboratory test resu
 git clone https://github.com/yourusername/labs-parser.git
 cd labs-parser
 
-# Install with pipx for isolated environment
-pipx install . --force
+# Set up the virtual environment with uv
+./activate-env.sh    # or activate-env.bat on Windows
 ```
 
 ## 🛠️ Usage
