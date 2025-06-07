@@ -587,9 +587,28 @@ def main():
             value = value.replace("-", "")  # Remove all hyphens
             return value
 
-        merged_df["lab_name_slug"] = merged_df.apply(lambda r: f"{str(r.get('lab_type','')).lower()}-{slugify(r.get('lab_name',''))}", axis=1)
-        merged_df["lab_name_enum"] = merged_df["lab_name_slug"].apply(lambda x: lab_names_mapping.get(x, x))
-        merged_df["lab_unit_enum"] = merged_df.get("lab_unit", pd.Series(dtype='str')).apply(lambda x: lab_units_mapping.get(slugify(x), ""))
+        merged_df["lab_name_slug"] = merged_df.apply(
+            lambda r: f"{str(r.get('lab_type', '')).lower()}-{slugify(r.get('lab_name', ''))}",
+            axis=1,
+        )
+
+        def map_lab_name_enum(slug: str) -> str:
+            mapped = lab_names_mapping.get(slug)
+            if mapped is None:
+                logger.error(f"Unmapped lab name slug '{slug}'")
+                return slug
+            return mapped
+
+        def map_lab_unit_enum(value: Any) -> str:
+            slug = slugify(value)
+            mapped = lab_units_mapping.get(slug)
+            if mapped is None or mapped == "":
+                logger.error(f"Unmapped lab unit '{value}' (slug '{slug}')")
+                return ""
+            return mapped
+
+        merged_df["lab_name_enum"] = merged_df["lab_name_slug"].apply(map_lab_name_enum)
+        merged_df["lab_unit_enum"] = merged_df.get("lab_unit", pd.Series(dtype="str")).apply(map_lab_unit_enum)
 
         def convert_to_primary_unit(row):
             name_enum, unit_enum = row.get("lab_name_enum",""), row.get("lab_unit_enum","")
