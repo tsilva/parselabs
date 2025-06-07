@@ -499,7 +499,12 @@
   },
   "Blood - Basophils": {
     "primary_unit": "10⁹/L",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "10⁶/L",
+        "factor": 0.001
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0.0,
@@ -710,7 +715,7 @@
       },
       {
         "unit": "mEq/L",
-        "factor": 0.5
+        "factor": 2.004
       }
     ],
     "ranges": {
@@ -902,7 +907,12 @@
   },
   "Blood - Eosinophils": {
     "primary_unit": "10⁹/L",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "10⁶/L",
+        "factor": 0.001
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0.02,
@@ -975,7 +985,7 @@
     ],
     "ranges": {
       "healthy": {
-        "min": 15.0,
+        "min": 50.0,
         "max": 150.0
       }
     }
@@ -1483,7 +1493,7 @@
       },
       {
         "unit": "mEq/L",
-        "factor": 0.5
+        "factor": 1.215
       }
     ],
     "ranges": {
@@ -1510,7 +1520,12 @@
   },
   "Blood - Monocytes": {
     "primary_unit": "10⁹/L",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "10⁶/L",
+        "factor": 0.001
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0.2,
@@ -1540,7 +1555,12 @@
   },
   "Blood - Neutrophils": {
     "primary_unit": "10⁹/L",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "10⁶/L",
+        "factor": 0.001
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 2.0,
@@ -1877,8 +1897,12 @@
         "factor": 1000.0
       },
       {
-        "unit": "µUI/L",
-        "factor": 10.000001
+        "unit": "µIU/mL",
+        "factor": 0.001
+      },
+      {
+        "unit": "µIU/L",
+        "factor": 0.000001
       }
     ],
     "ranges": {
