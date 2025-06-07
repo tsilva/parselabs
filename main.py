@@ -552,16 +552,35 @@ def plot_lab_enum(args):
                 y_max_mode = float(max_vals.mode()[0])
                 x_start = df_lab[date_col].min()
                 x_end = df_lab[date_col].max()
+                light_green = "#d8f5d0"
+                light_red = "#f5d8d8"  # same tone as green
                 plt.fill_between(
                     [x_start, x_end],
                     y_min_mode,
                     y_max_mode,
-                    color="#d8f5d0",  # very light green
+                    color=light_green,
                     alpha=0.6,
                     label="Reference Range",
                 )
                 cur_ymin, cur_ymax = ax.get_ylim()
                 ax.set_ylim(min(cur_ymin, y_min_mode), max(cur_ymax, y_max_mode))
+                cur_ymin, cur_ymax = ax.get_ylim()
+                plt.fill_between(
+                    [x_start, x_end],
+                    cur_ymin,
+                    y_min_mode,
+                    color=light_red,
+                    alpha=0.3,
+                    label="Below Range",
+                )
+                plt.fill_between(
+                    [x_start, x_end],
+                    y_max_mode,
+                    cur_ymax,
+                    color=light_red,
+                    alpha=0.3,
+                    label="Above Range",
+                )
 
         # Optional: Add reference range lines (mode)
         if "healthy_range_min" in df_lab.columns and df_lab["healthy_range_min"].notna().any():
