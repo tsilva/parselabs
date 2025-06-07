@@ -63,7 +63,7 @@
       }
     }
   },
-  "Blood - ACTH": {
+  "Blood - Adrenocorticotropic Hormone (ACTH)": {
     "primary_unit": "pg/mL",
     "alternatives": [],
     "ranges": {
@@ -73,7 +73,7 @@
       }
     }
   },
-  "Blood - ALP (Alkaline Phosphatase)": {
+  "Blood - Alkaline Phosphatase (ALP)": {
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -83,7 +83,7 @@
       }
     }
   },
-  "Blood - ALT (Alanine Aminotransferase)": {
+  "Blood - Alanine Aminotransferase (ALT)": {
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -93,7 +93,7 @@
       }
     }
   },
-  "Blood - ANA": {
+  "Blood - Antinuclear Antibodies (ANA)": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -103,7 +103,7 @@
       }
     }
   },
-  "Blood - ANCA IgG": {
+  "Blood - Anti-Neutrophil Cytoplasmic Antibodies IgG (ANCA IgG)": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -113,7 +113,7 @@
       }
     }
   },
-  "Blood - ASO (Titre)": {
+  "Blood - Antistreptolysin O Titre (ASO)": {
     "primary_unit": "IU/mL",
     "alternatives": [],
     "ranges": {
@@ -123,7 +123,7 @@
       }
     }
   },
-  "Blood - AST (Aspartate Aminotransferase)": {
+  "Blood - Aspartate Aminotransferase (AST)": {
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -178,8 +178,8 @@
     ],
     "ranges": {
       "healthy": {
-        "min": 1.4,
-        "max": 4.6
+        "min": 0.1,
+        "max": 0.3
       }
     }
   },
@@ -193,16 +193,6 @@
       }
     }
   },
-  "Blood - Alpha-1-Antitrypsin (AAT)": {
-    "primary_unit": "IU/mL",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0.9,
-        "max": 2.0
-      }
-    }
-  },
   "Blood - Alpha-2 Globulins": {
     "primary_unit": "g/dL",
     "alternatives": [
@@ -213,8 +203,8 @@
     ],
     "ranges": {
       "healthy": {
-        "min": 7,
-        "max": 15.5
+        "min": 0.6,
+        "max": 1.0
       }
     }
   },
@@ -348,7 +338,7 @@
       }
     }
   },
-  "Blood - MPO-ANCA": {
+  "Blood - Myeloperoxidase Anti-Neutrophil Cytoplasmic Antibodies (MPO-ANCA)": {
     "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {
@@ -527,8 +517,8 @@
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 8,
-        "max": 16.6
+        "min": 0.7,
+        "max": 1.1
       }
     }
   },
@@ -647,7 +637,7 @@
       }
     }
   },
-  "Blood - CHr": {
+  "Blood - Reticulocyte Hemoglobin Content (CHr)": {
     "primary_unit": "pg",
     "alternatives": [],
     "ranges": {
@@ -657,7 +647,7 @@
       }
     }
   },
-  "Blood - CK (Creatine Kinase)": {
+  "Blood - Creatine Kinase (CK)": {
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -667,7 +657,7 @@
       }
     }
   },
-  "Blood - CRP": {
+  "Blood - C-Reactive Protein (CRP)": {
     "primary_unit": "mg/L",
     "alternatives": [
       {
@@ -750,7 +740,7 @@
       }
     }
   },
-  "Blood - Chromium": {
+  "Blood - Reticulocyte Hemoglobin Content (CHr)omium": {
     "primary_unit": "µg/L",
     "alternatives": [],
     "ranges": {
@@ -885,7 +875,7 @@
       }
     }
   },
-  "Blood - ESR (1 h)": {
+  "Blood - Erythrocyte Sedimentation Rate (ESR, 1 Hour)": {
     "primary_unit": "mm/h",
     "alternatives": [],
     "ranges": {
@@ -895,7 +885,7 @@
       }
     }
   },
-  "Blood - ESR (2 h)": {
+  "Blood - Erythrocyte Sedimentation Rate (ESR, 2 Hour)": {
     "primary_unit": "mm/h",
     "alternatives": [],
     "ranges": {
@@ -945,8 +935,8 @@
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 19.5,
-        "max": 356.7
+        "min": 0,
+        "max": 20
       }
     }
   },
@@ -956,11 +946,11 @@
     "ranges": {
       "healthy": {
         "min": 0,
-        "max": 4
+        "max": 0.21
       }
     }
   },
-  "Blood - FSH": {
+  "Blood - Follicle-Stimulating Hormone (FSH)": {
     "primary_unit": "mIU/mL",
     "alternatives": [
       {
@@ -985,7 +975,7 @@
     ],
     "ranges": {
       "healthy": {
-        "min": 50.0,
+        "min": 15.0,
         "max": 150.0
       }
     }
@@ -1035,12 +1025,12 @@
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 0.0,
-        "max": 4.2
+        "min": 0.1,
+        "max": 6.4
       }
     }
   },
-  "Blood - GGT (Gamma-Glutamyl Transferase)": {
+  "Blood - Gamma-Glutamyl Transferase (GGT)": {
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -1055,8 +1045,8 @@
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 8,
-        "max": 22.9
+        "min": 0.6,
+        "max": 1.4
       }
     }
   },
@@ -1085,7 +1075,7 @@
       }
     }
   },
-  "Blood - HBsAg": {
+  "Blood - Hepatitis B Surface Antigen (HBsAg)": {
     "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {
@@ -1185,7 +1175,7 @@
       }
     }
   },
-  "Blood - HbA1c (IFCC)": {
+  "Blood - Hemoglobin A1c (IFCC)": {
     "primary_unit": "mmol/mol creatinine",
     "alternatives": [],
     "ranges": {
@@ -1195,7 +1185,7 @@
       }
     }
   },
-  "Blood - HbA1c (IFCC) (%)": {
+  "Blood - Hemoglobin A1c (IFCC) (%)": {
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1215,8 +1205,8 @@
     ],
     "ranges": {
       "healthy": {
-        "min": 4.4,
-        "max": 10.8
+        "min": 0.54,
+        "max": 2.03
       }
     }
   },
@@ -1324,7 +1314,7 @@
       }
     }
   },
-  "Blood - LDH": {
+  "Blood - Lactate Dehydrogenase (LDH)": {
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -1374,7 +1364,7 @@
       }
     }
   },
-  "Blood - LH": {
+  "Blood - Luteinizing Hormone (LH)": {
     "primary_unit": "mIU/mL",
     "alternatives": [
       {
@@ -1699,7 +1689,7 @@
     "ranges": {
       "healthy": {
         "min": 0.1,
-        "max": 0.8
+        "max": 0.51
       }
     }
   },
@@ -1839,7 +1829,7 @@
       }
     }
   },
-  "Blood - SHBG": {
+  "Blood - Sex Hormone-Binding Globulin (SHBG)": {
     "primary_unit": "nmol/L",
     "alternatives": [],
     "ranges": {
@@ -1889,7 +1879,7 @@
       }
     }
   },
-  "Blood - TSH": {
+  "Blood - Thyroid-Stimulating Hormone (TSH)": {
     "primary_unit": "mIU/mL",
     "alternatives": [
       {
@@ -1952,8 +1942,8 @@
     ],
     "ranges": {
       "healthy": {
-        "min": 1.2,
-        "max": 2.8
+        "min": 0.6,
+        "max": 2.0
       }
     }
   },
@@ -1967,8 +1957,8 @@
     ],
     "ranges": {
       "healthy": {
-        "min": 64.0,
-        "max": 154.0
+        "min": 5,
+        "max": 12
       }
     }
   },

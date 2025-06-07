@@ -21,7 +21,7 @@
       }
     ]
   },
-  "Blood - LH": {
+  "Blood - Luteinizing Hormone (LH)": {
     "primary_unit": "mIU/mL",
     "alternatives": [
       {
@@ -82,7 +82,7 @@
     "primary_unit": "%",
     "alternatives": []
   },
-  "Blood - TSH": {
+  "Blood - Thyroid-Stimulating Hormone (TSH)": {
     "primary_unit": "mIU/mL",
     "alternatives": [
       {
@@ -108,7 +108,7 @@
       }
     ]
   },
-  "Blood - FSH": {
+  "Blood - Follicle-Stimulating Hormone (FSH)": {
     "primary_unit": "mIU/mL",
     "alternatives": [
       {
@@ -439,7 +439,7 @@
     "primary_unit": "boolean",
     "alternatives": []
   },
-  "Blood - CRP": {
+  "Blood - C-Reactive Protein (CRP)": {
     "primary_unit": "boolean",
     "alternatives": [
       {
@@ -483,15 +483,15 @@
       }
     ]
   },
-  "Blood - HbA1c (IFCC) (%)": {
+  "Blood - Hemoglobin A1c (IFCC) (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
-  "Blood - ESR (1 h)": {
+  "Blood - Erythrocyte Sedimentation Rate (ESR, 1 Hour)": {
     "primary_unit": "mm/h",
     "alternatives": []
   },
-  "Blood - ALT (Alanine Aminotransferase)": {
+  "Blood - Alanine Aminotransferase (ALT)": {
     "primary_unit": "IU/L",
     "alternatives": [
       {
@@ -500,7 +500,7 @@
       }
     ]
   },
-  "Blood - AST (Aspartate Aminotransferase)": {
+  "Blood - Aspartate Aminotransferase (AST)": {
     "primary_unit": "IU/L",
     "alternatives": []
   },
@@ -569,7 +569,7 @@
       }
     ]
   },
-  "Blood - GGT (Gamma-Glutamyl Transferase)": {
+  "Blood - Gamma-Glutamyl Transferase (GGT)": {
     "primary_unit": "IU/L",
     "alternatives": [
       {
@@ -578,7 +578,7 @@
       }
     ]
   },
-  "Blood - ALP (Alkaline Phosphatase)": {
+  "Blood - Alkaline Phosphatase (ALP)": {
     "primary_unit": "IU/L",
     "alternatives": []
   },
@@ -591,7 +591,7 @@
       }
     ]
   },
-  "Blood - ASO (Titre)": {
+  "Blood - Antistreptolysin O Titre (ASO)": {
     "primary_unit": "IU/mL",
     "alternatives": []
   },
@@ -612,7 +612,7 @@
       }
     ]
   },
-  "Blood - HbA1c (IFCC)": {
+  "Blood - Hemoglobin A1c (IFCC)": {
     "primary_unit": "mmol/mol creatinine",
     "alternatives": []
   },
@@ -686,7 +686,7 @@
     "primary_unit": "mg/dL",
     "alternatives": []
   },
-  "Blood - CK (Creatine Kinase)": {
+  "Blood - Creatine Kinase (CK)": {
     "primary_unit": "IU/L",
     "alternatives": []
   },
@@ -707,7 +707,7 @@
     "primary_unit": "boolean",
     "alternatives": []
   },
-  "Blood - LDH": {
+  "Blood - Lactate Dehydrogenase (LDH)": {
     "primary_unit": "IU/L",
     "alternatives": []
   },
@@ -887,7 +887,7 @@
       }
     ]
   },
-  "Blood - SHBG": {
+  "Blood - Sex Hormone-Binding Globulin (SHBG)": {
     "primary_unit": "nmol/L",
     "alternatives": []
   },
@@ -1041,7 +1041,7 @@
     "primary_unit": "%",
     "alternatives": []
   },
-  "Blood - CHr": {
+  "Blood - Reticulocyte Hemoglobin Content (CHr)": {
     "primary_unit": "pg",
     "alternatives": []
   },
@@ -1140,7 +1140,7 @@
     "primary_unit": "µg/L",
     "alternatives": []
   },
-  "Blood - Chromium": {
+  "Blood - Reticulocyte Hemoglobin Content (CHr)omium": {
     "primary_unit": "µg/L",
     "alternatives": []
   },
@@ -1256,7 +1256,7 @@
     "primary_unit": "boolean",
     "alternatives": []
   },
-  "Blood - ANA": {
+  "Blood - Antinuclear Antibodies (ANA)": {
     "primary_unit": "boolean",
     "alternatives": []
   },
@@ -1277,7 +1277,7 @@
     "primary_unit": "mEq/L",
     "alternatives": []
   },
-  "Blood - ACTH": {
+  "Blood - Adrenocorticotropic Hormone (ACTH)": {
     "primary_unit": "pg/mL",
     "alternatives": []
   },
@@ -1301,7 +1301,7 @@
     "primary_unit": "boolean",
     "alternatives": []
   },
-  "Blood - ESR (2 h)": {
+  "Blood - Erythrocyte Sedimentation Rate (ESR, 2 Hour)": {
     "primary_unit": "mm/h",
     "alternatives": []
   },
@@ -1403,7 +1403,7 @@
     "primary_unit": "mIU/mL",
     "alternatives": []
   },
-  "Blood - HBsAg": {
+  "Blood - Hepatitis B Surface Antigen (HBsAg)": {
     "primary_unit": "unitless",
     "alternatives": []
   },
@@ -1431,7 +1431,7 @@
     "primary_unit": "unitless",
     "alternatives": []
   },
-  "Blood - ANCA IgG": {
+  "Blood - Anti-Neutrophil Cytoplasmic Antibodies IgG (ANCA IgG)": {
     "primary_unit": "boolean",
     "alternatives": []
   },
