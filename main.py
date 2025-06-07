@@ -552,8 +552,10 @@ def plot_lab_enum(args):
                 y_max_mode = float(max_vals.mode()[0])
                 x_start = df_lab[date_col].min()
                 x_end = df_lab[date_col].max()
-                light_green = "#d8f5d0"
-                light_red = "#f5d8d8"  # same tone as green
+                #light_green = "#d8f5d0"
+                #light_red = "#f5d8d8"  # same tone as green
+                light_green = "#b7e6a1"  # slightly darker than before
+                light_red = "#e6b7b7"
                 plt.fill_between(
                     [x_start, x_end],
                     y_min_mode,
