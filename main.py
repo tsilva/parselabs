@@ -519,7 +519,10 @@ def plot_lab_enum(args):
 
         plt.title(title, fontsize=16); plt.xlabel("Date", fontsize=12); plt.ylabel(y_label, fontsize=12)
         plt.grid(True, which='both', linestyle='--', linewidth=0.5); plt.xticks(rotation=45, ha='right'); plt.tight_layout()
-        safe_lab_name = re.sub(r'[^\w\-_. ]', '_', str(lab_name_enum_val))
+        # Convert '(%)' to '(percentage)' before sanitizing the filename
+        lab_name_for_filename = str(lab_name_enum_val).replace('(%)', '(percentage)')
+        # Allow parentheses in filenames by including them in the allowed characters
+        safe_lab_name = re.sub(r'[^\w\-_. ()]', '_', lab_name_for_filename)
         plt.savefig(Path(plots_dir_str) / f"{safe_lab_name}.png")
         plt.savefig(Path(output_plots_dir_str) / f"{safe_lab_name}.png")
         plt.close()
