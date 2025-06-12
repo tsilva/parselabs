@@ -1,3 +1,4 @@
+- Add support for regular health reports, not only blood tests
 - Review plots and fix the ones that look SUS
 - Review early reports
 - Assert that metadata dates match file name
