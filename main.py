@@ -219,11 +219,11 @@ class LabType(str, Enum):
 
 class LabResult(BaseModel):
     lab_type: LabType = Field(default=LabType.UNKNOWN, description="Type of laboratory test")
-    lab_name: str = Field(description="Name of the laboratory test")
+    lab_name: str = Field(description="Name of the laboratory test (only lab name, don't include lab method)")
     lab_code: Optional[str] = Field(default=None, description="Standardized code for the test")
     lab_value: Optional[float] = Field(default=None, description="Quantitative result") # Allow string for non-numeric if strictly needed by source
     lab_unit: Optional[str] = Field(default=None, description="Unit of measurement")
-    lab_method: Optional[str] = Field(default=None, description="Analytical method")
+    lab_method: Optional[str] = Field(default=None, description="Method used for the test, if applicable")
     lab_range_min: Optional[float] = Field(default=None, description="Lower bound of reference range")
     lab_range_max: Optional[float] = Field(default=None, description="Upper bound of reference range")
     reference_range_text: Optional[str] = Field(default=None, description="Reference range as text")
@@ -364,7 +364,7 @@ def transcription_from_page_image(image_path: Path, model_id: str, temperature: 
     system_prompt = """
 You are a precise document transcriber for medical lab reports. Your task is to:
 1. Write out ALL text visible in the image exactly as it appears
-2. Preserve the document's layout and formatting as much as possible using spaces and newlines
+2. Preserve the document's layout and formatting as much as possible; use markdown tables for lab results.
 3. Include ALL numbers, units, and reference ranges exactly as shown
 4. Use the exact same text case (uppercase/lowercase) as the document
 5. Do not interpret, summarize, or structure the content - just transcribe it
