@@ -333,7 +333,6 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
         "Do NOT include any delimiters, output numbers, or extra labels in your response—return only the raw content of the best output."
     )
     prompt = "".join(f"--- Output {i+1} ---\n{json.dumps(v, ensure_ascii=False) if type(v) in [list, dict] else v}\n\n" for i, v in enumerate(results))
-    prompt += "Based on the outputs above, provide the most consistent and complete JSON output. Ensure all fields are correctly populated according to the descriptions and requirements given in the function schema if this were a function call. Return only the JSON object."
 
     voted_raw = None
     try:
@@ -342,16 +341,7 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}]
         )
         voted_raw = completion.choices[0].message.content.strip()
-        if isinstance(results[0], dict): # Expecting JSON
-            if voted_raw.startswith("```json"): voted_raw = voted_raw[7:]
-            if voted_raw.endswith("```"): voted_raw = voted_raw[:-3]
-            voted_raw = voted_raw.strip()
-            try: voted = json.loads(voted_raw)
-            except json.JSONDecodeError:
-                logger.error(f"Self-consistency voting returned non-JSON. Raw: '{voted_raw}'. Falling back to first result.")
-                voted = results[0] 
-        else: voted = voted_raw # String result
-        return voted, results
+        return voted_raw, results
     except Exception as e:
         logger.error(f"Error during self-consistency voting logic. Raw: '{voted_raw if voted_raw else 'N/A'}'. Error: {e}")
         return results[0], results # Fallback
