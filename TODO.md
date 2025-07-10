@@ -1,3 +1,4 @@
+- Takes a long time to get to the new labs (existence check is slow)
 - Add support for regular health reports, not only blood tests
 - Review plots and fix the ones that look SUS
 - Review early reports
