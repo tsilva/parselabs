@@ -310,7 +310,6 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
     if 'temperature' in fn.__code__.co_varnames and 'temperature' not in effective_kwargs:
         effective_kwargs['temperature'] = 0.5
 
-
     with ThreadPoolExecutor(max_workers=n) as executor:
         futures = [executor.submit(fn, *args, **effective_kwargs) for _ in range(n)]
         for future in as_completed(futures):
@@ -323,9 +322,18 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
     if not results: raise RuntimeError("All self-consistency calls failed.")
     if all(r == results[0] for r in results): return results[0], results
 
-    system_prompt = "You are an expert at comparing multiple outputs..." # Truncated
+    system_prompt = (
+        "You are an expert at comparing multiple outputs of the same extraction task. "
+        "We have extracted several samples from the same prompt in order to average out any errors or inconsistencies that may appear in individual outputs. "
+        "Your job is to select the output that is most consistent with the majority of the provided samples—"
+        "in other words, the output that best represents the 'average' or consensus among all outputs. "
+        "Prioritize agreement on extracted content (test names, values, units, reference ranges, etc.). "
+        "Ignore formatting, whitespace, and layout differences. "
+        "Return ONLY the best output, verbatim, with no extra commentary. "
+        "Do NOT include any delimiters, output numbers, or extra labels in your response—return only the raw content of the best output."
+    )
     prompt = "".join(f"--- Output {i+1} ---\n{json.dumps(v, ensure_ascii=False) if type(v) in [list, dict] else v}\n\n" for i, v in enumerate(results))
-    prompt += "Based on the outputs above, provide the most consistent and complete JSON output..." # Truncated
+    prompt += "Based on the outputs above, provide the most consistent and complete JSON output. Ensure all fields are correctly populated according to the descriptions and requirements given in the function schema if this were a function call. Return only the JSON object."
 
     voted_raw = None
     try:
@@ -349,8 +357,20 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
         return results[0], results # Fallback
 
 def transcription_from_page_image(image_path: Path, model_id: str, temperature: float = 0.0) -> str:
-    system_prompt = "You are a precise document transcriber..." # Truncated
-    user_prompt = "Please transcribe this lab report exactly..." # Truncated
+    system_prompt = """
+You are a precise document transcriber for medical lab reports. Your task is to:
+1. Write out ALL text visible in the image exactly as it appears
+2. Preserve the document's layout and formatting as much as possible using spaces and newlines
+3. Include ALL numbers, units, and reference ranges exactly as shown
+4. Use the exact same text case (uppercase/lowercase) as the document
+5. Do not interpret, summarize, or structure the content - just transcribe it
+""".strip()
+    
+    user_prompt = """
+Please transcribe this lab report exactly as it appears, preserving layout and all details. 
+Pay special attention to numbers, units (e.g., mg/dL), and reference ranges.
+""".strip()
+    
     with open(image_path, "rb") as img_file: img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
     try:
         completion = client.chat.completions.create(
@@ -364,7 +384,18 @@ def transcription_from_page_image(image_path: Path, model_id: str, temperature: 
         raise RuntimeError(f"Transcription failed for {image_path.name}: {e}")
 
 def extract_labs_from_page_transcription(transcription: str, model_id: str, temperature: float = 0.0) -> dict:
-    system_prompt = "You are a medical lab report analyzer..." # Truncated
+    system_prompt = """
+You are a medical lab report analyzer. Your task is to extract information from the provided transcription and structure it according to the 'extract_lab_results' tool schema.
+Follow these strict requirements:
+1. COMPLETENESS: Extract ALL test results from the provided transcription.
+2. ACCURACY: Values and units must match exactly as they appear in the transcription.
+3. SCHEMA ADHERENCE: Populate ALL fields of the `HealthLabReport` and nested `LabResult` models. If information for an optional field is not present, use `null`.
+4. DATES: Ensure `report_date` and `collection_date` are in YYYY-MM-DD format or `null`.
+5. LAB VALUES: If a lab value is clearly boolean (e.g., "Positive", "Negative"), convert `lab_value` to 1 or 0 respectively. Otherwise, use the numerical value. If it's purely textual (e.g., "See comments"), `lab_value` should be null and the text captured in `lab_comments` or `source_text`.
+6. THOROUGHNESS: Process the text line by line to ensure nothing is missed.
+7. UNKNOWN VALUES: For `lab_type`, if not clearly blood, urine, saliva, or feces, use 'unknown'.
+""".strip()
+
     try:
         completion = client.chat.completions.create(
             model=model_id,
