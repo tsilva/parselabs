@@ -22,6 +22,7 @@
     "u": "IU/L",
     "boolean": "boolean",
     "mmc": "cells/µL",
+    "cellsmicrol" : "cells/µL",
     "fl": "fL",
     "campo": "campo",
     "01": "IU/L",
@@ -73,5 +74,8 @@
     "ui": "U/L",
     "ul": "U/L",
     "mmhora": "mm/h",
-    "ulml": "Ul/mL"
+    "ulml": "Ul/mL",
+    "microuiml" : "µIU/mL",
+    "microgg": "µg/g",
+    "microl" : "µL"
 }
