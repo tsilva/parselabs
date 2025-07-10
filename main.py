@@ -341,7 +341,21 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}]
         )
         voted_raw = completion.choices[0].message.content.strip()
-        return voted_raw, results
+        
+        # TODO: hack
+        # Try to parse the voted result back to the expected type
+        if fn.__name__ == 'extract_labs_from_page_transcription':
+            # For extract function, we expect a dictionary
+            try:
+                voted_result = json.loads(voted_raw)
+                return voted_result, results
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse voted result as JSON for extract function. Raw: '{voted_raw[:200]}...'")
+                return results[0], results  # Fallback to first result
+        else:
+            # For other functions (like transcription), return the string as-is
+            return voted_raw, results
+            
     except Exception as e:
         logger.error(f"Error during self-consistency voting logic. Raw: '{voted_raw if voted_raw else 'N/A'}'. Error: {e}")
         return results[0], results # Fallback
@@ -481,11 +495,20 @@ def process_single_pdf(
                 )
                 current_page_json_data = page_json_dict # Already validated dict from extract_labs
                 page_json_path.write_text(json.dumps(current_page_json_data, indent=2, ensure_ascii=False), encoding='utf-8')
-            except Exception as e: logger.error(f"[{page_file_name}] Extract. failed: {e}"); current_page_json_data = HealthLabReport(lab_results=[]).model_dump()
+            except Exception as e: 
+                logger.error(f"[{page_file_name}] Extract. failed: {e}")
+                current_page_json_data = HealthLabReport(lab_results=[]).model_dump()
         else:
-            try: current_page_json_data = json.loads(page_json_path.read_text(encoding='utf-8'))
-            except Exception as e: logger.error(f"[{page_file_name}] Load JSON failed: {e}"); current_page_json_data = HealthLabReport(lab_results=[]).model_dump()
+            try: 
+                current_page_json_data = json.loads(page_json_path.read_text(encoding='utf-8'))
+            except Exception as e: 
+                logger.error(f"[{page_file_name}] Load JSON failed: {e}")
+                current_page_json_data = HealthLabReport(lab_results=[]).model_dump()
 
+        # Ensure current_page_json_data is always a dictionary
+        if not isinstance(current_page_json_data, dict):
+            logger.error(f"[{page_file_name}] current_page_json_data is not a dict: {type(current_page_json_data)}")
+            current_page_json_data = HealthLabReport(lab_results=[]).model_dump()
 
         if current_page_json_data:
             if page_idx == 0: # First page processing for report-level data
