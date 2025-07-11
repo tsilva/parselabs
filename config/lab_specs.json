@@ -93,6 +93,16 @@
       }
     }
   },
+  "Blood - Anti-Dopamine D2 Receptor Antibody (D2R)": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
   "Blood - Antinuclear Antibodies (ANA)": {
     "primary_unit": "boolean",
     "alternatives": [],
