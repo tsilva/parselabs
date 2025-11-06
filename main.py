@@ -360,7 +360,7 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
         logger.error(f"Error during self-consistency voting logic. Raw: '{voted_raw if voted_raw else 'N/A'}'. Error: {e}")
         return results[0], results # Fallback
 
-def transcription_from_page_image(image_path: Path, model_id: str, temperature: float = 0.0) -> str:
+def transcription_from_page_image(image_path: Path, model_id: str, temperature: float = 0.3) -> str:
     system_prompt = """
 You are a precise document transcriber for medical lab reports. Your task is to:
 1. Write out ALL text visible in the image exactly as it appears
@@ -387,7 +387,7 @@ Pay special attention to numbers, units (e.g., mg/dL), and reference ranges.
         logger.error(f"API Error during transcription for {image_path.name}: {e}")
         raise RuntimeError(f"Transcription failed for {image_path.name}: {e}")
 
-def extract_labs_from_page_transcription(transcription: str, model_id: str, temperature: float = 0.0) -> dict:
+def extract_labs_from_page_transcription(transcription: str, model_id: str, temperature: float = 0.3) -> dict:
     system_prompt = """
 You are a medical lab report analyzer. Your task is to extract information from the provided transcription and structure it according to the 'extract_lab_results' tool schema.
 Follow these strict requirements:
