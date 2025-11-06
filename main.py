@@ -358,7 +358,22 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
             
     except Exception as e:
         logger.error(f"Error during self-consistency voting logic. Raw: '{voted_raw if voted_raw else 'N/A'}'. Error: {e}")
-        return results[0], results # Fallback
+
+        # Fallback: Pick result with highest average confidence if available
+        if fn.__name__ == 'extract_labs_from_page_transcription':
+            try:
+                best_result = max(results, key=lambda r:
+                    sum(lr.get('confidence', 0.5) for lr in r.get('lab_results', [])) /
+                    max(len(r.get('lab_results', [])), 1)
+                )
+                logger.info(f"Voting failed. Selected extraction result with highest average confidence.")
+                return best_result, results
+            except Exception as fallback_error:
+                logger.error(f"Confidence-based fallback also failed: {fallback_error}")
+                return results[0], results
+
+        # For transcription or other functions, return first result
+        return results[0], results
 
 def transcription_from_page_image(image_path: Path, model_id: str, temperature: float = 0.3) -> str:
     system_prompt = """
