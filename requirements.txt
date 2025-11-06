@@ -1,9 +1,0 @@
-openai
-pillow
-pandas
-pdf2image
-xlsxwriter
-matplotlib
-python-dotenv
-pydantic
-numpy
