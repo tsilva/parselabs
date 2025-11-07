@@ -1,0 +1,246 @@
+"""DataFrame normalization and transformation logic."""
+
+import logging
+import pandas as pd
+from typing import Optional
+
+from config import LabSpecsConfig, UNKNOWN_VALUE
+from utils import slugify, normalize_unit, ensure_columns
+
+logger = logging.getLogger(__name__)
+
+
+def apply_normalizations(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+    """
+    Apply all normalization transformations to the DataFrame in batched operations.
+
+    This function consolidates multiple row-wise operations into efficient vectorized
+    operations where possible.
+
+    Args:
+        df: DataFrame with raw lab results
+        lab_specs: Lab specifications configuration
+
+    Returns:
+        DataFrame with normalized columns added
+    """
+    if df.empty:
+        return df
+
+    # Ensure required columns exist
+    ensure_columns(df, ["lab_name_standardized", "unit", "test_name"], default=None)
+
+    # Use lab_name_standardized as lab_name (already populated by standardization)
+    if "lab_name_standardized" in df.columns:
+        df["lab_name"] = df["lab_name_standardized"]
+    elif "test_name" in df.columns:
+        df["lab_name"] = df["test_name"]
+    else:
+        df["lab_name"] = UNKNOWN_VALUE
+
+    # Normalize units using vectorized map
+    if "unit" in df.columns:
+        df["lab_unit"] = df["unit"].apply(normalize_unit)
+    else:
+        df["lab_unit"] = None
+
+    # Look up lab_type from config (vectorized)
+    if lab_specs.exists:
+        df["lab_type"] = df["lab_name"].apply(
+            lambda name: lab_specs.get_lab_type(name) if pd.notna(name) and name != UNKNOWN_VALUE else "blood"
+        )
+    else:
+        df["lab_type"] = "blood"
+
+    # Create lab_name_slug (vectorized)
+    if "test_name" in df.columns:
+        df["lab_name_slug"] = df.apply(
+            lambda row: f"{row.get('lab_type', 'blood')}-{slugify(row.get('test_name', ''))}",
+            axis=1
+        )
+    else:
+        df["lab_name_slug"] = ""
+
+    # Convert to primary units (batched)
+    if lab_specs.exists:
+        df = apply_unit_conversions(df, lab_specs)
+    else:
+        # No conversions, just copy values
+        df["value_normalized"] = df.get("value")
+        df["unit_normalized"] = df.get("lab_unit")
+        df["reference_min_normalized"] = df.get("reference_min")
+        df["reference_max_normalized"] = df.get("reference_max")
+
+    # Compute health status columns (vectorized where possible)
+    if lab_specs.exists:
+        df = compute_health_status(df, lab_specs)
+    else:
+        df["is_out_of_reference"] = None
+        df["healthy_range_min"] = None
+        df["healthy_range_max"] = None
+        df["is_in_healthy_range"] = None
+
+    return df
+
+
+def apply_unit_conversions(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+    """
+    Convert values to primary units defined in lab specs.
+
+    This function applies unit conversions in a vectorized manner where possible.
+    """
+    # Initialize normalized columns
+    df["value_normalized"] = df["value"]
+    df["unit_normalized"] = df["lab_unit"]
+    df["reference_min_normalized"] = df["reference_min"]
+    df["reference_max_normalized"] = df["reference_max"]
+
+    # Group by lab_name to apply conversions efficiently
+    for lab_name in df["lab_name"].unique():
+        if pd.isna(lab_name) or lab_name == UNKNOWN_VALUE:
+            continue
+
+        primary_unit = lab_specs.get_primary_unit(lab_name)
+        if not primary_unit:
+            continue
+
+        # Get rows for this lab
+        mask = df["lab_name"] == lab_name
+
+        # For each unique unit in this lab
+        for unit in df.loc[mask, "lab_unit"].unique():
+            if pd.isna(unit):
+                continue
+
+            unit_mask = mask & (df["lab_unit"] == unit)
+
+            # If already in primary unit, just update unit_normalized
+            if unit == primary_unit:
+                df.loc[unit_mask, "unit_normalized"] = primary_unit
+                continue
+
+            # Get conversion factor
+            factor = lab_specs.get_conversion_factor(lab_name, unit)
+            if factor is None:
+                continue
+
+            # Apply conversion to all matching rows (vectorized)
+            df.loc[unit_mask, "value_normalized"] = df.loc[unit_mask, "value"] * factor
+            df.loc[unit_mask, "reference_min_normalized"] = df.loc[unit_mask, "reference_min"] * factor
+            df.loc[unit_mask, "reference_max_normalized"] = df.loc[unit_mask, "reference_max"] * factor
+            df.loc[unit_mask, "unit_normalized"] = primary_unit
+
+    return df
+
+
+def compute_health_status(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+    """
+    Compute health status columns (is_out_of_reference, is_in_healthy_range).
+
+    Uses vectorized operations where possible.
+    """
+    # Get healthy ranges for all unique lab names
+    lab_names = df["lab_name"].unique()
+    healthy_ranges = {}
+    for lab_name in lab_names:
+        if pd.notna(lab_name) and lab_name != UNKNOWN_VALUE:
+            healthy_ranges[lab_name] = lab_specs.get_healthy_range(lab_name)
+
+    # Apply healthy ranges (vectorized lookup)
+    df["healthy_range_min"] = df["lab_name"].map(lambda name: healthy_ranges.get(name, (None, None))[0])
+    df["healthy_range_max"] = df["lab_name"].map(lambda name: healthy_ranges.get(name, (None, None))[1])
+
+    # Compute is_out_of_reference (vectorized)
+    value_series = pd.to_numeric(df["value_normalized"], errors='coerce')
+    ref_min_series = pd.to_numeric(df["reference_min_normalized"], errors='coerce')
+    ref_max_series = pd.to_numeric(df["reference_max_normalized"], errors='coerce')
+
+    is_low = value_series < ref_min_series
+    is_high = value_series > ref_max_series
+    has_ref = ref_min_series.notna() | ref_max_series.notna()
+
+    df["is_out_of_reference"] = None
+    df.loc[has_ref, "is_out_of_reference"] = (is_low | is_high)[has_ref]
+
+    # Compute is_in_healthy_range (vectorized)
+    healthy_min_series = pd.to_numeric(df["healthy_range_min"], errors='coerce')
+    healthy_max_series = pd.to_numeric(df["healthy_range_max"], errors='coerce')
+
+    too_low = value_series < healthy_min_series
+    too_high = value_series > healthy_max_series
+    has_healthy = healthy_min_series.notna() | healthy_max_series.notna()
+
+    df["is_in_healthy_range"] = None
+    df.loc[has_healthy, "is_in_healthy_range"] = ~(too_low | too_high)[has_healthy]
+
+    return df
+
+
+def deduplicate_results(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+    """
+    Deduplicate by (date, lab_name), keeping best match (prefer primary unit).
+
+    Args:
+        df: DataFrame with lab results
+        lab_specs: Lab specifications configuration
+
+    Returns:
+        Deduplicated DataFrame
+    """
+    if df.empty or "date" not in df.columns or "lab_name" not in df.columns:
+        return df
+
+    def pick_best_dupe(group):
+        """Pick best duplicate: prefer primary unit if multiple entries exist."""
+        # Get lab_name from first row (grouping columns are included)
+        lab_name = group.iloc[0]["lab_name"]
+        primary_unit = lab_specs.get_primary_unit(lab_name) if lab_specs.exists else None
+
+        if primary_unit and "lab_unit" in group.columns and (group["lab_unit"] == primary_unit).any():
+            return group[group["lab_unit"] == primary_unit].iloc[0]
+        else:
+            return group.iloc[0]
+
+    # Group and apply deduplication (using deprecated behavior to preserve columns)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=FutureWarning)
+        deduplicated = (
+            df
+            .groupby(["date", "lab_name"], dropna=False, as_index=False, group_keys=False)
+            .apply(pick_best_dupe)
+            .reset_index(drop=True)
+        )
+
+    return deduplicated
+
+
+def apply_dtype_conversions(df: pd.DataFrame, dtype_map: dict) -> pd.DataFrame:
+    """
+    Apply dtype conversions to DataFrame columns based on schema.
+
+    Args:
+        df: DataFrame to convert
+        dtype_map: Dictionary mapping column names to dtype strings
+
+    Returns:
+        DataFrame with converted dtypes
+    """
+    for col, target_dtype in dtype_map.items():
+        if col not in df.columns:
+            continue
+
+        try:
+            if target_dtype == "datetime64[ns]":
+                df[col] = pd.to_datetime(df[col], errors="coerce")
+            elif target_dtype == "boolean":
+                df[col] = df[col].astype("boolean")
+            elif target_dtype == "Int64":
+                df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
+            elif "float" in target_dtype:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+            # Other types like string are often fine as 'object'
+        except Exception as e:
+            logger.warning(f"Dtype conversion failed for {col} to {target_dtype}: {e}")
+
+    return df
