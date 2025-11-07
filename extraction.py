@@ -421,6 +421,12 @@ def _fix_lab_results_format(tool_result_dict: dict) -> dict:
                     parsed_lab_results.append(parsed_dict)
                     continue
 
+            # Try to parse plain text format (e.g., "TEST - NAME: value (reference_range: min-max)")
+            parsed_dict = _parse_plain_text_format(lr_data)
+            if parsed_dict:
+                parsed_lab_results.append(parsed_dict)
+                continue
+
             # Log first 200 chars of malformed data for debugging
             preview = lr_data[:200] if len(lr_data) > 200 else lr_data
             logger.warning(f"Failed to parse lab_result[{i}], skipping. Data preview: {preview}")
@@ -456,6 +462,90 @@ def _parse_repr_string(repr_str: str) -> Optional[dict]:
 
         return parsed_dict if parsed_dict else None
     except Exception:
+        return None
+
+
+def _parse_plain_text_format(text: str) -> Optional[dict]:
+    """
+    Parse plain text format like:
+    'QUÍMICA CLÍNICA - URINA - URINA-TIPO II - pH: 7,0 (reference_range: 5,0-8,0)'
+    'HEMATOLOGIA - HEMOGRAMA - Eritrócitos: 3,72 x10E6/μ1 (Reference Range: 4,5-5,9)'
+
+    Returns a dict that can be validated by LabResult model.
+    """
+    try:
+        # Extract reference_range if present (in parentheses at the end)
+        # Make it case-insensitive to handle both "reference_range" and "Reference Range"
+        reference_range = None
+        reference_min = None
+        reference_max = None
+
+        ref_match = re.search(r'\((?:reference[_\s]range):\s*([^)]+)\)\s*$', text, re.IGNORECASE)
+        if ref_match:
+            reference_range = ref_match.group(1).strip()
+            text = text[:ref_match.start()].strip()
+
+            # Try to parse min/max from reference_range
+            range_match = re.search(r'(\d+[.,]?\d*)\s*[-a]\s*(\d+[.,]?\d*)', reference_range)
+            if range_match:
+                try:
+                    reference_min = float(range_match.group(1).replace(',', '.'))
+                    reference_max = float(range_match.group(2).replace(',', '.'))
+                except ValueError:
+                    pass
+
+        # Split on last colon to separate test_name from value
+        if ':' not in text:
+            return None
+
+        last_colon_idx = text.rfind(':')
+        test_name = text[:last_colon_idx].strip()
+        value_part = text[last_colon_idx + 1:].strip()
+
+        # Try to extract unit and numeric value
+        # Pattern: number (with comma or dot as decimal), optional space, then unit
+        value = None
+        unit = None
+
+        # Try to match: numeric value followed by optional space and unit
+        value_unit_match = re.match(r'^\s*(\d+[.,]?\d*)\s*(.*)$', value_part)
+        if value_unit_match:
+            try:
+                value_str = value_unit_match.group(1).replace(',', '.')
+                value = float(value_str)
+                unit_candidate = value_unit_match.group(2).strip()
+                unit = unit_candidate if unit_candidate else None
+            except ValueError:
+                # Not a numeric value
+                pass
+
+        # If we couldn't parse a numeric value, treat it as qualitative
+        if value is None:
+            # Try one more time with just the first token as the value
+            tokens = value_part.split()
+            if tokens:
+                try:
+                    value = float(tokens[0].replace(',', '.'))
+                    unit = ' '.join(tokens[1:]) if len(tokens) > 1 else None
+                except ValueError:
+                    pass
+
+        # Build the result dict
+        result = {
+            "test_name": test_name,
+            "value": value,
+            "unit": unit,
+            "reference_range": reference_range,
+            "reference_min": reference_min,
+            "reference_max": reference_max,
+            "is_abnormal": None,
+            "comments": value_part if value is None else None,
+            "source_text": text if not reference_range else f"{text} ({reference_range})"
+        }
+
+        return result
+    except Exception as e:
+        logger.debug(f"Failed to parse plain text format: {e}")
         return None
 
 
