@@ -167,6 +167,7 @@ plots/
 user.json
 tests/fixtures/*
 logs/
+test/outputs/
 
 __pycache__/
 output/
@@ -177,3 +178,5 @@ user_stats.json
 
 .vscode/*
 !.vscode/settings.json
+
+test/

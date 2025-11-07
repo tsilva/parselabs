@@ -56,19 +56,34 @@ The `self_consistency` function is critical for accuracy:
 
 ### Configuration System
 
-Two JSON config files in `config/` drive the normalization:
+One JSON config file in `config/` drives the standardization and normalization:
 
-1. **`lab_names_mappings.json`**
-   - Maps slugified lab names (e.g., "blood-hemoglobina1c") to standardized enums (e.g., "Blood - Hemoglobin A1c")
-   - Keys follow pattern: `{lab_type}-{slugified_name}`
-   - Also used to populate `VALID_LAB_NAMES` for Pydantic validation
-   - **Migration path**: As LLM accuracy improves with standardized names in prompts, the mapping logic will become unnecessary
+**`lab_specs.json`**
+- **Keys**: Standardized lab test names (e.g., "Blood - Hemoglobin A1c", "Blood - Glucose")
+- **Values**: Lab specifications including:
+  - `primary_unit`: The preferred unit for this test (e.g., "mg/dL", "%")
+  - `alternatives`: List of alternative units with conversion factors
+  - `ranges`: Healthy reference ranges (min/max values)
 
-2. **`lab_specs.json`**
-   - Defines primary units, alternative units with conversion factors, and healthy reference ranges
-   - Structure: `{lab_name_enum: {primary_unit, alternatives: [{unit, factor}], ranges: {healthy: {min, max}}}}`
+This single file serves three purposes:
+1. **Standardized Names**: Keys provide the canonical list of standardized lab names for LLM-based name mapping
+2. **Standardized Units**: Values provide the canonical list of standardized units for LLM-based unit mapping
+3. **Normalization**: Alternative units and conversion factors enable value normalization to primary units
 
-Note: Lab units and names are now validated via Pydantic (`LabUnit` enum and `VALID_LAB_NAMES` set), with validation errors tracked for manual review. This enables eventual elimination of mapping files once extraction accuracy is high enough.
+Example entry:
+```json
+{
+  "Blood - Glucose": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {"unit": "mmol/L", "factor": 18.0}
+    ],
+    "ranges": {
+      "healthy": {"min": 70, "max": 100}
+    }
+  }
+}
+```
 
 ### Data Schema (COLUMN_SCHEMA)
 
@@ -79,33 +94,42 @@ The centralized `COLUMN_SCHEMA` dictionary defines:
 - Derivation logic for computed columns
 
 Key column categories:
-- **Raw extraction**: lab_name (LabName enum), lab_value, lab_unit (LabUnit enum), lab_range_min/max
-- **Mapped/slugified**: lab_name_slug, lab_name_enum, lab_unit_enum (alias of lab_unit)
-- **Data quality**:
-  - Both `lab_name` and `lab_unit` are strictly enforced as enum types at extraction time
+- **Raw extraction**:
+  - `test_name`: Raw test name from PDF (e.g., "HEMATOLOGIA - HEMOGRAMA - Eritrocitos")
+  - `value`: Numeric or text value
+  - `unit`: Raw unit from PDF (e.g., "mg/dl", "x10^9/L")
+  - `reference_range`, `reference_min`, `reference_max`: Reference ranges from PDF
+- **Standardized** (added by post-extraction LLM standardization):
+  - `lab_name_standardized`: Standardized test name (e.g., "Blood - Erythrocytes")
+  - `lab_unit_standardized`: Standardized unit (e.g., "mg/dL", "10⁹/L")
   - Unknown/unmappable values are stored as `$UNKNOWN$` for manual review
-  - Filter by `lab_name == '$UNKNOWN$'` or `lab_unit == '$UNKNOWN$'` to find rows needing review
-- **Normalized**: lab_value_final, lab_unit_final (converted to primary units)
-- **Health status**: is_flagged_final, healthy_range_min/max, is_in_healthy_range
+- **Data quality**:
+  - Filter by `lab_name_standardized == '$UNKNOWN$'` to find tests needing config updates
+  - Filter by `lab_unit_standardized == '$UNKNOWN$'` to find units needing config updates
 
 ### Pydantic Models
 
-- `LabResult`: Single test result with metadata (name, value, unit, range, confidence, etc.)
+- `LabResult`: Single test result with metadata including:
+  - Raw fields: `test_name`, `value`, `unit`, `reference_range`, etc.
+  - Standardized fields: `lab_name_standardized`, `lab_unit_standardized` (added post-extraction)
 - `HealthLabReport`: Document-level metadata + list of LabResult objects
 - `LabType`: Enum for test types (blood, urine, saliva, feces, unknown)
-- `LabUnit`: Enum defining standardized units (%, mg/dL, IU/L, etc.) - 59 values including $UNKNOWN$
-  - `lab_unit` field is strictly typed as `LabUnit` enum
-  - LLM must select from available enum values during extraction
-  - Unmappable units are stored as `$UNKNOWN$` for manual review
-- `LabName`: Dynamically generated enum from VALID_LAB_NAMES (295 values including $UNKNOWN$)
-  - Created at module init from `lab_names_mappings.json`
-  - `lab_name` field is strictly typed as `LabName` enum
-  - LLM must select from available enum values during extraction
-  - Unmappable lab names are stored as `$UNKNOWN$` for manual review
-- **Validation approach**:
-  - Validation is enforced at Pydantic type level (extraction time)
-  - No post-extraction validation needed - LLM must choose valid enum values or $UNKNOWN$
-  - Filter by `lab_name == '$UNKNOWN$'` or `lab_unit == '$UNKNOWN$'` to find rows needing review
+
+### Standardization Approach
+
+The extraction process has two distinct phases:
+
+1. **Raw Extraction** (during transcription/extraction):
+   - LLM extracts test names and units EXACTLY as they appear in the PDF
+   - No standardization or normalization at this stage
+   - Goal: Perfect accuracy and traceability
+
+2. **Standardization** (post-extraction):
+   - After all raw data is extracted, a separate LLM call maps raw values to standardized enums
+   - Uses `lab_specs.json` as the source of truth for valid standardized names and units
+   - Raw test names → Standardized names (e.g., "GLICOSE -jejum-" → "Blood - Glucose (Fasting)")
+   - Raw units → Standardized units (e.g., "mg/dl" → "mg/dL", "x10^9/L" → "10⁹/L")
+   - Unknown values marked as `$UNKNOWN$` for manual review
 
 ### Output Files
 
@@ -159,30 +183,34 @@ The `slugify` function normalizes text for mapping keys:
 
 ### Reviewing Extracted Data
 
-Since lab_name and lab_unit are strictly enforced as enums, you can identify unmapped values by checking for $UNKNOWN$:
+You can identify unmapped values by checking for $UNKNOWN$ in the CSV:
 
 ```python
-import json
-from main import LabResult, HealthLabReport
+import pandas as pd
 
-# Check for unknown values in a single page JSON
-with open("output/doc_name/doc_name.1.json") as f:
-    data = json.load(f)
-    report = HealthLabReport(**data)
+# Load CSV
+df = pd.read_csv("output/doc_name/doc_name.csv")
 
-    # Check for unknown lab names or units
-    for result in report.lab_results:
-        if result.lab_name == "$UNKNOWN$":
-            print(f"❌ Unknown lab name in: {result.source_text}")
-        if result.lab_unit == "$UNKNOWN$":
-            print(f"❌ Unknown unit for {result.lab_name}: {result.source_text}")
+# Check for unknown standardized lab names
+unknown_names = df[df['lab_name_standardized'] == '$UNKNOWN$']
+if len(unknown_names) > 0:
+    print(f"❌ {len(unknown_names)} tests need standardization:")
+    for _, row in unknown_names.iterrows():
+        print(f"  - {row['test_name']}")
+
+# Check for unknown standardized units
+unknown_units = df[df['lab_unit_standardized'] == '$UNKNOWN$']
+if len(unknown_units) > 0:
+    print(f"❌ {len(unknown_units)} units need standardization:")
+    for _, row in unknown_units[['test_name', 'unit']].drop_duplicates().iterrows():
+        print(f"  - {row['test_name']}: {row['unit']}")
 ```
 
 This is useful for:
-- Finding labs that need to be added to the standardized list
-- Identifying units that need to be mapped
+- Finding labs that need to be added to `lab_specs.json`
+- Identifying units that need to be added to `lab_specs.json`
 - Auditing data quality after extraction
-- Improving extraction prompts to better guide the LLM
+- Improving standardization prompts to better guide the LLM
 
 ## Environment Configuration
 
