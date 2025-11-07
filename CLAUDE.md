@@ -61,12 +61,14 @@ Two JSON config files in `config/` drive the normalization:
 1. **`lab_names_mappings.json`**
    - Maps slugified lab names (e.g., "blood-hemoglobina1c") to standardized enums (e.g., "Blood - Hemoglobin A1c")
    - Keys follow pattern: `{lab_type}-{slugified_name}`
+   - Also used to populate `VALID_LAB_NAMES` for Pydantic validation
+   - **Migration path**: As LLM accuracy improves with standardized names in prompts, the mapping logic will become unnecessary
 
 2. **`lab_specs.json`**
    - Defines primary units, alternative units with conversion factors, and healthy reference ranges
    - Structure: `{lab_name_enum: {primary_unit, alternatives: [{unit, factor}], ranges: {healthy: {min, max}}}}`
 
-Note: Lab units are now enforced via the `LabUnit` enum in the Pydantic model, eliminating the need for a separate mapping file.
+Note: Lab units and names are now validated via Pydantic (`LabUnit` enum and `VALID_LAB_NAMES` set), with validation errors tracked for manual review. This enables eventual elimination of mapping files once extraction accuracy is high enough.
 
 ### Data Schema (COLUMN_SCHEMA)
 
@@ -80,8 +82,10 @@ Key column categories:
 - **Raw extraction**: lab_name, lab_value, lab_unit (guided by LabUnit enum), lab_range_min/max
 - **Mapped/slugified**: lab_name_slug, lab_name_enum, lab_unit_enum (alias of lab_unit)
 - **Data quality**:
-  - `validation_errors`: Semicolon-separated list of Pydantic validation errors (e.g., "Invalid unit 'gr/dL' - not in LabUnit enum")
+  - `validation_errors`: Semicolon-separated list of Pydantic validation errors
+    - Examples: "Invalid unit 'gr/dL' - not in LabUnit enum", "Invalid lab_name 'Glucose' - not in standardized list"
   - `is_valid_unit`: Boolean derived from validation_errors (False = needs review)
+    - Note: This covers both lab_name and lab_unit validation errors
 - **Normalized**: lab_value_final, lab_unit_final (converted to primary units)
 - **Health status**: is_flagged_final, healthy_range_min/max, is_in_healthy_range
 
@@ -90,10 +94,15 @@ Key column categories:
 - `LabResult`: Single test result with metadata (name, value, unit, range, confidence, etc.)
 - `HealthLabReport`: Document-level metadata + list of LabResult objects
 - `LabType`: Enum for test types (blood, urine, saliva, feces, unknown)
-- `LabUnit`: Enum defining standardized units (%, mg/dL, IU/L, etc.)
+- `LabUnit`: Enum defining standardized units (%, mg/dL, IU/L, etc.) - 58 values
   - Values are passed to the LLM via field description to guide extraction
   - `lab_unit` field accepts strings (not strictly enforced) for graceful handling of unexpected units
   - `@model_validator` checks lab_unit against LabUnit enum and populates `validation_errors` field
+- `VALID_LAB_NAMES`: Set of 294 standardized lab names (e.g., "Blood - Glucose", "Urine - pH")
+  - Loaded from `lab_names_mappings.json` at module init
+  - Sample names passed to LLM via `lab_name` field description
+  - `@model_validator` checks lab_name against this list and logs validation errors
+- **Validation approach**:
   - Validation happens at Pydantic level (extraction time), stored in JSON, and carried through to CSV/Excel
   - Filter by `is_valid_unit==False` or non-empty `validation_errors` to find rows needing review
   - You can re-run validation on JSON files at any time by re-parsing with Pydantic
@@ -164,13 +173,16 @@ with open("output/doc_name/doc_name.1.json") as f:
     # Check for validation errors
     for result in report.results:
         if result.validation_errors:
-            print(f"{result.lab_name}: {result.validation_errors}")
+            print(f"❌ {result.lab_name} ({result.lab_unit})")
+            for error in result.validation_errors:
+                print(f"   - {error}")
 ```
 
 This is useful for:
 - Debugging extraction issues without re-running OCR
-- Testing new LabUnit enum values before re-extracting
+- Testing new LabUnit enum values or VALID_LAB_NAMES before re-extracting
 - Auditing data quality after extraction
+- Finding patterns in extraction errors to improve prompts
 
 ## Environment Configuration
 
