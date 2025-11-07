@@ -409,10 +409,17 @@ Follow these strict requirements:
 1. COMPLETENESS: Extract ALL test results from the provided transcription.
 2. ACCURACY: Values and units must match exactly as they appear in the transcription.
 3. SCHEMA ADHERENCE: Populate ALL fields of the `HealthLabReport` and nested `LabResult` models. If information for an optional field is not present, use `null`.
+   - CRITICAL: Use EXACT field names from the schema: `lab_name` (NOT test_name), `lab_unit` (NOT unit), `lab_value`, etc.
 4. DATES: Ensure `report_date` and `collection_date` are in YYYY-MM-DD format or `null`.
 5. LAB VALUES: If a lab value is clearly boolean (e.g., "Positive", "Negative"), convert `lab_value` to 1 or 0 respectively. Otherwise, use the numerical value. If it's purely textual (e.g., "See comments"), `lab_value` should be null and the text captured in `lab_comments` or `source_text`.
 6. THOROUGHNESS: Process the text line by line to ensure nothing is missed.
-7. UNKNOWN VALUES: For `lab_type`, if not clearly blood, urine, saliva, or feces, use 'unknown'.
+7. LAB TYPE (CRITICAL): ALWAYS specify `lab_type` for EVERY test:
+   - Use 'blood' for: CBC, chemistry panels, hormones, enzymes, electrolytes, glucose, cholesterol, liver/kidney function tests
+   - Use 'urine' for: urinalysis, urine microscopy, urine culture
+   - Use 'saliva' for: saliva-based tests
+   - Use 'feces' for: stool tests
+   - DEFAULT to 'blood' if unclear - most lab tests are blood tests
+   - NEVER leave `lab_type` as null or use 'unknown' - always make your best determination
 """.strip()
 
     try:
@@ -432,24 +439,86 @@ Follow these strict requirements:
     tool_args_raw = completion.choices[0].message.tool_calls[0].function.arguments
     try: tool_result_dict = json.loads(tool_args_raw)
     except json.JSONDecodeError as e:
-        logger.error(f"JSON decode error for tool args: {e}. Raw: '{tool_args_raw}'")
+        logger.error(f"JSON decode error for tool args: {e}. Raw: '{tool_args_raw[:500]}'")
         return HealthLabReport(lab_results=[]).model_dump() # Fallback
+
+    # Pre-process: Fix common LLM issues before Pydantic validation
+
+    # Fix 1: Convert page_count string to int (e.g., "2/2", "2 de 2", "3 de 5")
+    if "page_count" in tool_result_dict and isinstance(tool_result_dict["page_count"], str):
+        try:
+            # Extract first number from string like "2/2" or "2 de 2"
+            import re
+            match = re.search(r'(\d+)', tool_result_dict["page_count"])
+            if match:
+                tool_result_dict["page_count"] = int(match.group(1))
+            else:
+                tool_result_dict["page_count"] = None
+        except:
+            tool_result_dict["page_count"] = None
+
+    # Fix 2: Convert lab_results strings to dicts (LLM sometimes returns JSON strings or Python repr strings)
+    if "lab_results" in tool_result_dict and isinstance(tool_result_dict["lab_results"], list):
+        parsed_lab_results = []
+        for i, lr_data in enumerate(tool_result_dict["lab_results"]):
+            # If it's a string, try to parse it
+            if isinstance(lr_data, str):
+                # Try JSON first
+                try:
+                    parsed_lr = json.loads(lr_data)
+                    parsed_lab_results.append(parsed_lr)
+                    logger.debug(f"Parsed lab_result[{i}] from JSON string")
+                    continue
+                except json.JSONDecodeError:
+                    pass
+
+                # Try Python literal eval for LabResult(...) repr strings
+                if lr_data.startswith("LabResult("):
+                    logger.warning(f"lab_result[{i}] is a Python repr string, not JSON. Skipping. Raw: {lr_data[:200]}")
+                    continue
+
+                # Unknown format
+                logger.warning(f"Failed to parse lab_result[{i}] - unknown format. Skipping. Raw: {lr_data[:200]}")
+                continue
+            else:
+                parsed_lab_results.append(lr_data)
+        tool_result_dict["lab_results"] = parsed_lab_results
+
+    # Fix 3: Map common field name mistakes (e.g., test_name -> lab_name)
+    if "lab_results" in tool_result_dict and isinstance(tool_result_dict["lab_results"], list):
+        for lr_data in tool_result_dict["lab_results"]:
+            if isinstance(lr_data, dict):
+                # Map test_name to lab_name
+                if "test_name" in lr_data and "lab_name" not in lr_data:
+                    lr_data["lab_name"] = lr_data.pop("test_name")
+                # Map lab_test_name to lab_name
+                if "lab_test_name" in lr_data and "lab_name" not in lr_data:
+                    lr_data["lab_name"] = lr_data.pop("lab_test_name")
+                # Map unit to lab_unit
+                if "unit" in lr_data and "lab_unit" not in lr_data:
+                    lr_data["lab_unit"] = lr_data.pop("unit")
 
     try:
         report_model = HealthLabReport(**tool_result_dict)
         report_model.normalize_empty_optionals()
         return report_model.model_dump()
     except Exception as e: # Pydantic validation or other error
-        logger.error(f"Model validation error post-extraction: {e}. Data: {tool_result_dict}")
+        logger.error(f"Model validation error post-extraction: {e}. Data keys: {tool_result_dict.keys()}, lab_results count: {len(tool_result_dict.get('lab_results', []))}")
         # Attempt to salvage results if main report fails
         if "lab_results" in tool_result_dict and isinstance(tool_result_dict["lab_results"], list):
             valid_results = []
-            for lr_data in tool_result_dict["lab_results"]:
+            for i, lr_data in enumerate(tool_result_dict["lab_results"]):
                 try:
+                    # Skip if it's still a string (shouldn't happen after preprocessing)
+                    if isinstance(lr_data, str):
+                        logger.warning(f"lab_result[{i}] is still a string after preprocessing, skipping")
+                        continue
                     lr_model = LabResult(**lr_data)
-                    # lr_model.normalize_empty_optionals() # Assume LabResult doesn't have this, or adapt
                     valid_results.append(lr_model.model_dump())
-                except: pass # Ignore individual failures
+                except Exception as lr_error:
+                    logger.debug(f"Failed to validate lab_result[{i}]: {lr_error}")
+                    pass # Ignore individual failures
+            logger.info(f"Salvaged {len(valid_results)}/{len(tool_result_dict['lab_results'])} lab results after validation error")
             return HealthLabReport(lab_results=valid_results).model_dump() # Return with what could be salvaged
         return HealthLabReport(lab_results=[]).model_dump() # Final fallback
 
@@ -463,99 +532,103 @@ def process_single_pdf(
     transcribe_model_id: str, n_transcribe: int, extract_model_id: str, n_extract: int
 ) -> Optional[Path]:
     pdf_stem = pdf_path.stem
-    doc_out_dir = output_dir / pdf_stem 
+    doc_out_dir = output_dir / pdf_stem
     doc_out_dir.mkdir(exist_ok=True, parents=True)
     pdf_level_csv_path = doc_out_dir / f"{pdf_stem}.csv"
 
-    logger.info(f"[{pdf_stem}] - processing...")
-    copied_pdf_path = doc_out_dir / pdf_path.name
-    if not copied_pdf_path.exists() or copied_pdf_path.stat().st_size != pdf_path.stat().st_size:
-        shutil.copy2(pdf_path, copied_pdf_path)
+    try:
+        logger.info(f"[{pdf_stem}] - processing...")
+        copied_pdf_path = doc_out_dir / pdf_path.name
+        if not copied_pdf_path.exists() or copied_pdf_path.stat().st_size != pdf_path.stat().st_size:
+            shutil.copy2(pdf_path, copied_pdf_path)
 
-    try: pil_pages = pdf2image.convert_from_path(str(copied_pdf_path))
+        try: pil_pages = pdf2image.convert_from_path(str(copied_pdf_path))
+        except Exception as e:
+            logger.error(f"[{pdf_stem}] - Failed to convert PDF: {e}"); return None
+
+        all_page_lab_results = []
+        first_page_report_data = {}
+        resolved_doc_date_for_pdf = None
+
+        for page_idx, page_image in enumerate(pil_pages):
+            page_file_name = f"{pdf_stem}.{page_idx+1:03d}"
+            page_jpg_path = doc_out_dir / f"{page_file_name}.jpg"
+
+            if not page_jpg_path.exists():
+                processed_image = preprocess_page_image(page_image)
+                processed_image.save(page_jpg_path, "JPEG", quality=95)
+
+            page_txt_path = doc_out_dir / f"{page_file_name}.txt"
+            page_txt = ""
+            if not page_txt_path.exists():
+                try:
+                    voted_txt, _ = self_consistency(
+                        transcription_from_page_image, self_consistency_model_id, n_transcribe,
+                        page_jpg_path, transcribe_model_id # fn, model_id, n, *args for fn
+                    )
+                    page_txt_path.write_text(voted_txt, encoding='utf-8'); page_txt = voted_txt
+                except Exception as e: logger.error(f"[{page_file_name}] Transcr. failed: {e}"); continue
+            else: page_txt = page_txt_path.read_text(encoding='utf-8')
+
+            page_json_path = doc_out_dir / f"{page_file_name}.json"
+            current_page_json_data = None
+            if not page_json_path.exists():
+                try:
+                    page_json_dict, _ = self_consistency(
+                        extract_labs_from_page_transcription, self_consistency_model_id, n_extract,
+                        page_txt, extract_model_id # fn, model_id, n, *args for fn
+                    )
+                    current_page_json_data = page_json_dict # Already validated dict from extract_labs
+                    page_json_path.write_text(json.dumps(current_page_json_data, indent=2, ensure_ascii=False), encoding='utf-8')
+                except Exception as e:
+                    logger.error(f"[{page_file_name}] Extract. failed: {e}")
+                    current_page_json_data = HealthLabReport(lab_results=[]).model_dump()
+            else:
+                try:
+                    current_page_json_data = json.loads(page_json_path.read_text(encoding='utf-8'))
+                except Exception as e:
+                    logger.error(f"[{page_file_name}] Load JSON failed: {e}")
+                    current_page_json_data = HealthLabReport(lab_results=[]).model_dump()
+
+            # Ensure current_page_json_data is always a dictionary
+            if not isinstance(current_page_json_data, dict):
+                logger.error(f"[{page_file_name}] current_page_json_data is not a dict: {type(current_page_json_data)}")
+                current_page_json_data = HealthLabReport(lab_results=[]).model_dump()
+
+            if current_page_json_data:
+                if page_idx == 0: # First page processing for report-level data
+                    first_page_report_data = {k: v for k, v in current_page_json_data.items() if k != "lab_results"}
+                    resolved_doc_date_for_pdf = current_page_json_data.get("collection_date") or current_page_json_data.get("report_date")
+                    if resolved_doc_date_for_pdf == "0000-00-00": resolved_doc_date_for_pdf = None
+                    if not resolved_doc_date_for_pdf:
+                        match = re.search(r"(\d{4}-\d{2}-\d{2})", pdf_stem)
+                        if match: resolved_doc_date_for_pdf = match.group(1)
+                    if not resolved_doc_date_for_pdf: logger.warning(f"[{pdf_stem}] No date found for PDF.")
+
+                for lab_result_dict in current_page_json_data.get("lab_results", []):
+                    lab_result_dict["page_number"] = page_idx + 1
+                    lab_result_dict["source_file"] = page_file_name # Page specific source
+                    all_page_lab_results.append(lab_result_dict)
+
+        if not all_page_lab_results:
+            logger.warning(f"[{pdf_stem}] - No lab results extracted."); pd.DataFrame().to_csv(pdf_level_csv_path, index=False); return pdf_level_csv_path
+
+        pdf_df = pd.DataFrame(all_page_lab_results)
+        if resolved_doc_date_for_pdf: pdf_df["date"] = resolved_doc_date_for_pdf
+        else: pdf_df["date"] = None
+
+        # Ensure core LabResult columns exist
+        core_cols = list(LabResult.model_fields.keys()) + ["date"]
+        for col_name in core_cols:
+            if col_name not in pdf_df.columns: pdf_df[col_name] = None
+
+        pdf_df = pdf_df[[col for col in core_cols if col in pdf_df.columns]] # Select relevant known columns
+        pdf_df.to_csv(pdf_level_csv_path, index=False, encoding='utf-8')
+        logger.info(f"[{pdf_stem}] - processing finished. CSV: {pdf_level_csv_path}")
+        return pdf_level_csv_path
     except Exception as e:
-        logger.error(f"[{pdf_stem}] - Failed to convert PDF: {e}"); return None
-    
-    all_page_lab_results = []
-    first_page_report_data = {}
-    resolved_doc_date_for_pdf = None
-
-    for page_idx, page_image in enumerate(pil_pages):
-        page_file_name = f"{pdf_stem}.{page_idx+1:03d}"
-        page_jpg_path = doc_out_dir / f"{page_file_name}.jpg"
-        
-        if not page_jpg_path.exists():
-            processed_image = preprocess_page_image(page_image)
-            processed_image.save(page_jpg_path, "JPEG", quality=95)
-
-        page_txt_path = doc_out_dir / f"{page_file_name}.txt"
-        page_txt = ""
-        if not page_txt_path.exists():
-            try:
-                voted_txt, _ = self_consistency(
-                    transcription_from_page_image, self_consistency_model_id, n_transcribe,
-                    page_jpg_path, transcribe_model_id # fn, model_id, n, *args for fn
-                )
-                page_txt_path.write_text(voted_txt, encoding='utf-8'); page_txt = voted_txt
-            except Exception as e: logger.error(f"[{page_file_name}] Transcr. failed: {e}"); continue
-        else: page_txt = page_txt_path.read_text(encoding='utf-8')
-
-        page_json_path = doc_out_dir / f"{page_file_name}.json"
-        current_page_json_data = None
-        if not page_json_path.exists():
-            try:
-                page_json_dict, _ = self_consistency(
-                    extract_labs_from_page_transcription, self_consistency_model_id, n_extract,
-                    page_txt, extract_model_id # fn, model_id, n, *args for fn
-                )
-                current_page_json_data = page_json_dict # Already validated dict from extract_labs
-                page_json_path.write_text(json.dumps(current_page_json_data, indent=2, ensure_ascii=False), encoding='utf-8')
-            except Exception as e: 
-                logger.error(f"[{page_file_name}] Extract. failed: {e}")
-                current_page_json_data = HealthLabReport(lab_results=[]).model_dump()
-        else:
-            try: 
-                current_page_json_data = json.loads(page_json_path.read_text(encoding='utf-8'))
-            except Exception as e: 
-                logger.error(f"[{page_file_name}] Load JSON failed: {e}")
-                current_page_json_data = HealthLabReport(lab_results=[]).model_dump()
-
-        # Ensure current_page_json_data is always a dictionary
-        if not isinstance(current_page_json_data, dict):
-            logger.error(f"[{page_file_name}] current_page_json_data is not a dict: {type(current_page_json_data)}")
-            current_page_json_data = HealthLabReport(lab_results=[]).model_dump()
-
-        if current_page_json_data:
-            if page_idx == 0: # First page processing for report-level data
-                first_page_report_data = {k: v for k, v in current_page_json_data.items() if k != "lab_results"}
-                resolved_doc_date_for_pdf = current_page_json_data.get("collection_date") or current_page_json_data.get("report_date")
-                if resolved_doc_date_for_pdf == "0000-00-00": resolved_doc_date_for_pdf = None
-                if not resolved_doc_date_for_pdf:
-                    match = re.search(r"(\d{4}-\d{2}-\d{2})", pdf_stem)
-                    if match: resolved_doc_date_for_pdf = match.group(1)
-                if not resolved_doc_date_for_pdf: logger.warning(f"[{pdf_stem}] No date found for PDF.")
-            
-            for lab_result_dict in current_page_json_data.get("lab_results", []):
-                lab_result_dict["page_number"] = page_idx + 1
-                lab_result_dict["source_file"] = page_file_name # Page specific source
-                all_page_lab_results.append(lab_result_dict)
-    
-    if not all_page_lab_results:
-        logger.warning(f"[{pdf_stem}] - No lab results extracted."); pd.DataFrame().to_csv(pdf_level_csv_path, index=False); return pdf_level_csv_path
-
-    pdf_df = pd.DataFrame(all_page_lab_results)
-    if resolved_doc_date_for_pdf: pdf_df["date"] = resolved_doc_date_for_pdf
-    else: pdf_df["date"] = None 
-
-    # Ensure core LabResult columns exist
-    core_cols = list(LabResult.model_fields.keys()) + ["date"]
-    for col_name in core_cols:
-        if col_name not in pdf_df.columns: pdf_df[col_name] = None
-    
-    pdf_df = pdf_df[[col for col in core_cols if col in pdf_df.columns]] # Select relevant known columns
-    pdf_df.to_csv(pdf_level_csv_path, index=False, encoding='utf-8')
-    logger.info(f"[{pdf_stem}] - processing finished. CSV: {pdf_level_csv_path}")
-    return pdf_level_csv_path
+        logger.error(f"[{pdf_stem}] - Unhandled exception during processing: {e}", exc_info=True)
+        return None
 
 ########################################
 # The Main Function
@@ -709,10 +782,14 @@ def main():
     logger.info(f"Merged data: {len(merged_df)} rows.")
 
     # --------- Add derived columns (slugs, enums, final values) ---------
-    merged_df["lab_name_slug"] = merged_df.apply(
-        lambda r: f"{str(r.get('lab_type', '')).lower()}-{slugify(r.get('lab_name', ''))}",
-        axis=1,
-    )
+    def create_lab_name_slug(row):
+        lab_type = row.get('lab_type', '')
+        # Handle NaN, None, empty string, or 'unknown' -> default to 'blood'
+        if pd.isna(lab_type) or not lab_type or str(lab_type).lower() in ['nan', 'none', 'unknown', '']:
+            lab_type = 'blood'
+        return f"{str(lab_type).lower()}-{slugify(row.get('lab_name', ''))}"
+
+    merged_df["lab_name_slug"] = merged_df.apply(create_lab_name_slug, axis=1)
     merged_df["lab_unit_slug"] = merged_df.get("lab_unit", pd.Series(dtype="str")).apply(slugify)
 
     config_path = Path("config")
@@ -740,7 +817,14 @@ def main():
             return mapped
 
         def map_lab_unit_enum(value: Any) -> str:
+            # Skip logging for null/empty units (qualitative tests)
+            if pd.isna(value) or value == "" or value is None:
+                return ""
+
             slug = slugify(value)
+            if not slug:  # Empty slug after slugification
+                return ""
+
             mapped = lab_units_mapping.get(slug)
             if mapped is None or mapped == "":
                 logger.error(f"Unmapped lab unit '{value}' (slug '{slug}')")
