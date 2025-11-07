@@ -354,7 +354,8 @@ def extract_labs_from_page_image(
         report_model.normalize_empty_optionals()
         return report_model.model_dump(mode='json')
     except Exception as e:
-        logger.error(f"Model validation error: {e}")
+        num_results = len(tool_result_dict.get("lab_results", []))
+        logger.error(f"Model validation error for report with {num_results} lab_results: {e}")
         # Try to salvage individual results
         return _salvage_lab_results(tool_result_dict)
 
@@ -420,7 +421,9 @@ def _fix_lab_results_format(tool_result_dict: dict) -> dict:
                     parsed_lab_results.append(parsed_dict)
                     continue
 
-            logger.warning(f"Failed to parse lab_result[{i}], skipping")
+            # Log first 200 chars of malformed data for debugging
+            preview = lr_data[:200] if len(lr_data) > 200 else lr_data
+            logger.warning(f"Failed to parse lab_result[{i}], skipping. Data preview: {preview}")
         else:
             parsed_lab_results.append(lr_data)
 
@@ -464,12 +467,13 @@ def _salvage_lab_results(tool_result_dict: dict) -> dict:
     valid_results = []
     for i, lr_data in enumerate(tool_result_dict["lab_results"]):
         if isinstance(lr_data, str):
+            logger.warning(f"Skipping string lab_result[{i}] in salvage: {lr_data[:100]}")
             continue
         try:
             lr_model = LabResult(**lr_data)
             valid_results.append(lr_model.model_dump(mode='json'))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to validate lab_result[{i}] in salvage: {e}. Data: {lr_data}")
 
     logger.info(f"Salvaged {len(valid_results)}/{len(tool_result_dict['lab_results'])} lab results")
     return HealthLabReport(lab_results=valid_results).model_dump(mode='json')
