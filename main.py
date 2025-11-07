@@ -277,9 +277,30 @@ class LabUnit(str, Enum):
     MICROGRAM_PER_ML = "µg/mL"
     MICROMOL_PER_LITER = "µmol/L"
 
+# Load valid lab names from config for validation
+def _load_valid_lab_names() -> set[str]:
+    """Load standardized lab names from config file."""
+    config_path = Path("config/lab_names_mappings.json")
+    if config_path.exists():
+        with open(config_path, "r", encoding="utf-8") as f:
+            lab_names_mapping = json.load(f)
+            return set(lab_names_mapping.values())
+    return set()
+
+VALID_LAB_NAMES = _load_valid_lab_names()
+
 class LabResult(BaseModel):
     lab_type: LabType = Field(default=LabType.UNKNOWN, description="Type of laboratory test")
-    lab_name: str = Field(description="Name of the laboratory test (only lab name, don't include lab method)")
+    lab_name: str = Field(
+        description=(
+            "Standardized name of the laboratory test with type prefix. "
+            "Format: '{Type} - {Test Name}' (e.g., 'Blood - Glucose', 'Urine - pH'). "
+            f"Use one of {len(VALID_LAB_NAMES)} standardized names when possible. "
+            "Examples: 'Blood - Hemoglobin A1c', 'Blood - Cholesterol Total', "
+            "'Blood - Alanine Aminotransferase (ALT)', 'Urine - Creatinine'. "
+            "Include lab type prefix (Blood, Urine, Feces, Saliva) and use proper capitalization."
+        )
+    )
     lab_code: Optional[str] = Field(default=None, description="Standardized code for the test")
     lab_value: Optional[float] = Field(default=None, description="Quantitative result") # Allow string for non-numeric if strictly needed by source
     lab_unit: Optional[str] = Field(
@@ -300,8 +321,17 @@ class LabResult(BaseModel):
     validation_errors: Optional[list[str]] = Field(default=None, description="List of validation errors found")
 
     @model_validator(mode='after')
-    def validate_lab_unit(self) -> 'LabResult':
-        """Validate lab_unit against LabUnit enum and log issues without blocking."""
+    def validate_lab_data(self) -> 'LabResult':
+        """Validate lab_name and lab_unit against standardized values."""
+        # Validate lab_name
+        if self.lab_name and self.lab_name.strip() and VALID_LAB_NAMES:
+            if self.lab_name not in VALID_LAB_NAMES:
+                error_msg = f"Invalid lab_name '{self.lab_name}' - not in standardized list"
+                if self.validation_errors is None:
+                    self.validation_errors = []
+                self.validation_errors.append(error_msg)
+
+        # Validate lab_unit
         if self.lab_unit and self.lab_unit.strip():
             valid_units = set(u.value for u in LabUnit)
             if self.lab_unit not in valid_units:
