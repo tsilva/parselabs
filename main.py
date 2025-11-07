@@ -578,10 +578,43 @@ Follow these strict requirements:
                 except json.JSONDecodeError:
                     pass
 
-                # Try Python literal eval for LabResult(...) repr strings
+                # Try Python repr string parser for LabResult(...) format
                 if lr_data.startswith("LabResult("):
-                    logger.warning(f"lab_result[{i}] is a Python repr string, not JSON. Skipping. Raw: {lr_data[:200]}")
-                    continue
+                    try:
+                        # Parse LabResult(key=value, key=value, ...) format
+                        # Extract content between LabResult( and )
+                        content = lr_data[len("LabResult("):-1]
+
+                        # Simple parser for key=value pairs
+                        parsed_dict = {}
+                        # Match key='value' or key="value" or key=number or key=null
+                        pattern = r"(\w+)=(?:'([^']*)'|\"([^\"]*)\"|(\d+\.?\d*)|(\w+))"
+                        matches = re.findall(pattern, content)
+
+                        for match in matches:
+                            key = match[0]
+                            # Get the value from whichever group matched
+                            value = match[1] or match[2] or match[3] or match[4]
+
+                            # Convert types
+                            if value == 'null' or value == 'None':
+                                parsed_dict[key] = None
+                            elif value == 'True':
+                                parsed_dict[key] = True
+                            elif value == 'False':
+                                parsed_dict[key] = False
+                            elif match[3]:  # Numeric match
+                                parsed_dict[key] = float(value) if '.' in value else int(value)
+                            else:
+                                parsed_dict[key] = value
+
+                        if parsed_dict:
+                            parsed_lab_results.append(parsed_dict)
+                            logger.debug(f"Parsed lab_result[{i}] from Python repr string")
+                            continue
+                    except Exception as e:
+                        logger.warning(f"Failed to parse lab_result[{i}] Python repr string: {e}. Raw: {lr_data[:200]}")
+                        continue
 
                 # Unknown format
                 logger.warning(f"Failed to parse lab_result[{i}] - unknown format. Skipping. Raw: {lr_data[:200]}")
