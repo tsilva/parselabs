@@ -84,7 +84,7 @@ def ensure_columns(df: pd.DataFrame, columns: list[str], default: Any = None) ->
 
 
 def setup_logging(log_dir: Path, clear_logs: bool = False) -> logging.Logger:
-    """Configure file logging, optionally clearing existing logs."""
+    """Configure file and console logging, optionally clearing existing logs."""
     log_dir.mkdir(exist_ok=True)
     info_log_path = log_dir / "info.log"
     error_log_path = log_dir / "error.log"
@@ -97,24 +97,32 @@ def setup_logging(log_dir: Path, clear_logs: bool = False) -> logging.Logger:
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
 
-    # Remove existing file handlers
+    # Remove existing handlers
     for handler in list(logger.handlers):
-        if isinstance(handler, logging.FileHandler):
-            logger.removeHandler(handler)
-            handler.close()
+        logger.removeHandler(handler)
+        handler.close()
 
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    # Formatters
+    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    console_formatter = logging.Formatter('%(levelname)s: %(message)s')
 
+    # File handlers
     info_handler = logging.FileHandler(info_log_path, encoding='utf-8')
     info_handler.setLevel(logging.INFO)
-    info_handler.setFormatter(formatter)
+    info_handler.setFormatter(file_formatter)
 
     error_handler = logging.FileHandler(error_log_path, encoding='utf-8')
     error_handler.setLevel(logging.ERROR)
-    error_handler.setFormatter(formatter)
+    error_handler.setFormatter(file_formatter)
+
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(console_formatter)
 
     logger.addHandler(info_handler)
     logger.addHandler(error_handler)
+    logger.addHandler(console_handler)
 
     return logger
 

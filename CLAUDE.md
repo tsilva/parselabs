@@ -20,8 +20,6 @@ python test.py
 ### Development
 The `utils/` directory contains helper scripts for building and maintaining configuration:
 - `build_labs_specs.py` / `build_labs_specs_2.py` - Generate lab specifications
-- `map.py` - Build lab name and unit mappings
-- `fix_lab_name_percent.py` / `fix_lab_names_mapping_percent_suffix.py` - Fix percentage-based lab names
 - `sort_lab_specs.py` - Sort lab specifications alphabetically
 
 ## Architecture
@@ -167,8 +165,8 @@ Lab name enums MUST start with lab type prefix:
 - Feces labs: "Feces - {name}"
 
 ### Percentage Units
-- Labs with unit "%" must have lab_name_enum ending in "(%)"
-- Keys in lab_names_mappings.json containing "percent" must map to values ending with "(%)"
+- Labs with unit "%" must have standardized names ending in "(%)"
+- This ensures consistency between unit representation and lab name
 
 ### Slugification
 The `slugify` function normalizes text for mapping keys:
