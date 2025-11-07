@@ -28,8 +28,8 @@ The pipeline transforms PDF lab reports into structured, normalized CSV/Excel da
 
 - **Load Configuration Files**
   - `config/lab_names_mappings.json` - Maps slugified lab names to standardized enums
-  - `config/lab_units_mappings.json` - Maps slugified units to standardized units
   - `config/lab_specs.json` - Defines primary units, conversion factors, and healthy ranges
+  - Note: Lab units are enforced via `LabUnit` enum in Pydantic model
 
 - **Create Output Directory Structure**
   - Ensure output directory exists
@@ -136,17 +136,13 @@ For each page in the PDF:
   - Lab type defaults to "blood" if missing/unknown
   - Slugify: lowercase, µ→"micro", %→"percent", remove non-alphanumeric except hyphens, collapse spaces/underscores, remove hyphens
 
-- **`lab_unit_slug`**: Slugified unit string
-  - Example: "mgdl" (from "mg/dL")
-
 #### 5.2 Enum Mapping
 - **`lab_name_enum`**: Map `lab_name_slug` → standardized enum via `lab_names_mappings.json`
   - Example: "blood-hemoglobina1c" → "Blood - Hemoglobin A1c"
   - Log error if unmapped
 
-- **`lab_unit_enum`**: Map `lab_unit_slug` → standardized unit via `lab_units_mappings.json`
-  - Example: "mgdl" → "mg/dL"
-  - Log error if unmapped
+- **`lab_unit_enum`**: Alias of `lab_unit` (already standardized via LabUnit enum during extraction)
+  - Example: "mg/dL" (directly from extraction, no mapping needed)
 
 #### 5.3 Unit Conversion (`convert_to_primary_unit`)
 For each row:
@@ -270,7 +266,6 @@ PDF → Pages → Images (.jpg)
 ### Configuration
 - `.env` - Environment variables
 - `config/lab_names_mappings.json` - Name standardization
-- `config/lab_units_mappings.json` - Unit standardization
 - `config/lab_specs.json` - Primary units, conversions, healthy ranges
 
 ### Intermediate Outputs (per PDF)

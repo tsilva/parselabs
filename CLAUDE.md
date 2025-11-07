@@ -56,18 +56,17 @@ The `self_consistency` function is critical for accuracy:
 
 ### Configuration System
 
-Three JSON config files in `config/` drive the normalization:
+Two JSON config files in `config/` drive the normalization:
 
 1. **`lab_names_mappings.json`**
    - Maps slugified lab names (e.g., "blood-hemoglobina1c") to standardized enums (e.g., "Blood - Hemoglobin A1c")
    - Keys follow pattern: `{lab_type}-{slugified_name}`
 
-2. **`lab_units_mappings.json`**
-   - Maps slugified units (e.g., "mgdl") to standardized units (e.g., "mg/dL")
-
-3. **`lab_specs.json`**
+2. **`lab_specs.json`**
    - Defines primary units, alternative units with conversion factors, and healthy reference ranges
    - Structure: `{lab_name_enum: {primary_unit, alternatives: [{unit, factor}], ranges: {healthy: {min, max}}}}`
+
+Note: Lab units are now enforced via the `LabUnit` enum in the Pydantic model, eliminating the need for a separate mapping file.
 
 ### Data Schema (COLUMN_SCHEMA)
 
@@ -78,8 +77,11 @@ The centralized `COLUMN_SCHEMA` dictionary defines:
 - Derivation logic for computed columns
 
 Key column categories:
-- **Raw extraction**: lab_name, lab_value, lab_unit, lab_range_min/max
-- **Mapped/slugified**: lab_name_slug, lab_unit_slug, lab_name_enum, lab_unit_enum
+- **Raw extraction**: lab_name, lab_value, lab_unit (guided by LabUnit enum), lab_range_min/max
+- **Mapped/slugified**: lab_name_slug, lab_name_enum, lab_unit_enum (alias of lab_unit)
+- **Data quality**:
+  - `validation_errors`: Semicolon-separated list of Pydantic validation errors (e.g., "Invalid unit 'gr/dL' - not in LabUnit enum")
+  - `is_valid_unit`: Boolean derived from validation_errors (False = needs review)
 - **Normalized**: lab_value_final, lab_unit_final (converted to primary units)
 - **Health status**: is_flagged_final, healthy_range_min/max, is_in_healthy_range
 
@@ -88,6 +90,13 @@ Key column categories:
 - `LabResult`: Single test result with metadata (name, value, unit, range, confidence, etc.)
 - `HealthLabReport`: Document-level metadata + list of LabResult objects
 - `LabType`: Enum for test types (blood, urine, saliva, feces, unknown)
+- `LabUnit`: Enum defining standardized units (%, mg/dL, IU/L, etc.)
+  - Values are passed to the LLM via field description to guide extraction
+  - `lab_unit` field accepts strings (not strictly enforced) for graceful handling of unexpected units
+  - `@model_validator` checks lab_unit against LabUnit enum and populates `validation_errors` field
+  - Validation happens at Pydantic level (extraction time), stored in JSON, and carried through to CSV/Excel
+  - Filter by `is_valid_unit==False` or non-empty `validation_errors` to find rows needing review
+  - You can re-run validation on JSON files at any time by re-parsing with Pydantic
 
 ### Output Files
 
@@ -138,6 +147,30 @@ The `slugify` function normalizes text for mapping keys:
 - Replace µ/μ with "micro", % with "percent"
 - Remove non-alphanumeric except hyphens
 - Collapse spaces/underscores to hyphens, then remove hyphens
+
+### Re-validating Extracted Data
+
+Since validation happens in Pydantic, you can re-validate any JSON file:
+
+```python
+import json
+from main import LabResult, HealthLabReport
+
+# Re-validate a single page JSON
+with open("output/doc_name/doc_name.1.json") as f:
+    data = json.load(f)
+    report = HealthLabReport(**data)
+
+    # Check for validation errors
+    for result in report.results:
+        if result.validation_errors:
+            print(f"{result.lab_name}: {result.validation_errors}")
+```
+
+This is useful for:
+- Debugging extraction issues without re-running OCR
+- Testing new LabUnit enum values before re-extracting
+- Auditing data quality after extraction
 
 ## Environment Configuration
 

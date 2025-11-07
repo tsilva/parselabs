@@ -12,7 +12,7 @@ MAPPING_MODEL_ID = os.getenv("MAPPING_MODEL_ID")
 OUTPUT_DIR = os.getenv("OUTPUT_PATH")
 OUTPUT_DIR = Path(OUTPUT_DIR)
 
-# Generalized config for both labs and units
+# Config for lab name mapping (units are now handled via LabUnit enum in main.py)
 MAPPING_CONFIGS = [
     {
         "col_type": "lab_type",
@@ -21,14 +21,6 @@ MAPPING_CONFIGS = [
         "map_path": Path("config/lab_names_mappings.json"),
         "all_values_path": Path("config/all_lab_names.txt"),
         "use_type_prefix": True,
-    },
-    {
-        "col_type": "lab_type",
-        "col_value": "lab_unit",
-        "enum_col": "lab_unit_enum",
-        "map_path": Path("config/lab_units_mappings.json"),
-        "all_values_path": Path("config/all_lab_units.txt"),
-        "use_type_prefix": False,
     }
 ]
 

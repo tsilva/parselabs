@@ -16,7 +16,7 @@ import hashlib
 from multiprocessing import Pool
 from PIL import Image
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional, Any, Literal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -52,12 +52,13 @@ COLUMN_SCHEMA = {
     "source_text": {"dtype": "str", "excel_width": 50},
     "page_number": {"dtype": "Int64", "excel_width": 8},
     "source_file": {"dtype": "str", "excel_width": 25},
+    "validation_errors": {"dtype": "str", "excel_width": 60},
 
     # Derived columns in main()
     "lab_name_slug": {"dtype": "str", "excel_width": 30, "excel_hidden": True, "derivation_logic": "map_lab_name_slug"},
-    "lab_unit_slug": {"dtype": "str", "excel_width": 15, "excel_hidden": True, "derivation_logic": "map_lab_unit_slug"},
     "lab_name_enum": {"dtype": "str", "excel_width": 30, "derivation_logic": "map_lab_name_enum", "plotting_role": "group"},
-    "lab_unit_enum": {"dtype": "str", "excel_width": 15, "derivation_logic": "map_lab_unit_enum"},
+    "lab_unit_enum": {"dtype": "str", "excel_width": 15, "derivation_logic": "alias_lab_unit"},
+    "is_valid_unit": {"dtype": "boolean", "excel_width": 12, "derivation_logic": "derive_from_validation_errors"},
 
     "lab_value_final": {"dtype": "float64", "excel_width": 14, "derivation_logic": "convert_to_primary_unit", "plotting_role": "value"},
     "lab_unit_final": {"dtype": "str", "excel_width": 14, "derivation_logic": "convert_to_primary_unit", "plotting_role": "unit"},
@@ -75,14 +76,15 @@ def get_export_columns_from_schema(schema: dict) -> list:
     """Returns an ordered list of columns for the main export."""
     ordered_keys = [
         "date", "lab_type", "lab_name", "lab_name_enum", "lab_name_slug",
-        "lab_value", "lab_unit", "lab_unit_slug", "lab_unit_enum",
+        "lab_value", "lab_unit", "lab_unit_enum", "is_valid_unit",
         "lab_range_min", "lab_range_max", "reference_range_text",
         "lab_value_final", "lab_unit_final",
         "lab_range_min_final", "lab_range_max_final",
         "is_flagged", "is_flagged_final",
         "healthy_range_min", "healthy_range_max", "is_in_healthy_range",
         "confidence", "lab_code", "lab_method", "lab_comments",
-        "lack_of_confidence_reason", "source_text", "page_number", "source_file"
+        "lack_of_confidence_reason", "source_text", "page_number", "source_file",
+        "validation_errors"
     ]
     return [key for key in ordered_keys if key in schema]
 
@@ -217,12 +219,73 @@ class LabType(str, Enum):
     FECES = "feces"
     UNKNOWN = "unknown"
 
+class LabUnit(str, Enum):
+    """Standardized laboratory test units of measurement."""
+    PERCENT = "%"
+    PER_CAMPO = "/campo"
+    TEN_CUBED_PER_MICROLITER = "10³/µL"
+    TEN_TWELFTH_PER_LITER = "10¹²/L"
+    TEN_SIXTH_PER_LITER = "10⁶/L"
+    TEN_SIXTH_PER_MM_CUBED = "10⁶/mm³"
+    TEN_SIXTH_PER_MICROLITER = "10⁶/µL"
+    TEN_NINTH_PER_LITER = "10⁹/L"
+    CFU_PER_ML = "CFU/mL"
+    IU_PER_LITER = "IU/L"
+    IU_PER_ML = "IU/mL"
+    KU_PER_LITER = "KU/L"
+    LITER = "L"
+    U_PER_LITER = "U/L"
+    UFC_PER_ML = "UFC/mL"
+    UL_PER_ML = "Ul/mL"
+    BOOLEAN = "boolean"
+    CAMPO = "campo"
+    CELLS_PER_MICROLITER = "cells/µL"
+    FEMTOLITER = "fL"
+    GRAM = "g"
+    GRAM_PER_LITER = "g/L"
+    GRAM_PER_DECILITER = "g/dL"
+    INDEX = "index"
+    MILLIEQ_PER_LITER = "mEq/L"
+    MILLIIU_PER_ML = "mIU/mL"
+    MILLILITER = "mL"
+    MG_PER_LITER = "mg/L"
+    MG_PER_DECILITER = "mg/dL"
+    MILLIMETER = "mm"
+    MM_PER_HOUR = "mm/h"
+    MILLIMOL_PER_LITER = "mmol/L"
+    MILLIMOL_PER_MOL_CREATININE = "mmol/mol creatinine"
+    NG_PER_LITER = "ng/L"
+    NG_PER_DECILITER = "ng/dL"
+    NG_PER_ML = "ng/mL"
+    NANOMOL_PER_LITER = "nmol/L"
+    PH = "pH"
+    PICOGRAM = "pg"
+    PG_PER_LITER = "pg/L"
+    PG_PER_ML = "pg/mL"
+    PICOMOL_PER_LITER = "pmol/L"
+    RATIO = "ratio"
+    SECOND = "s"
+    UNITLESS = "unitless"
+    MICROIU_PER_LITER = "µIU/L"
+    MICROIU_PER_ML = "µIU/mL"
+    MICROLITER = "µL"
+    MICROGRAM = "µg"
+    MICROGRAM_PER_100ML = "µg/100mL"
+    MICROGRAM_PER_LITER = "µg/L"
+    MICROGRAM_PER_DECILITER = "µg/dL"
+    MICROGRAM_PER_GRAM = "µg/g"
+    MICROGRAM_PER_ML = "µg/mL"
+    MICROMOL_PER_LITER = "µmol/L"
+
 class LabResult(BaseModel):
     lab_type: LabType = Field(default=LabType.UNKNOWN, description="Type of laboratory test")
     lab_name: str = Field(description="Name of the laboratory test (only lab name, don't include lab method)")
     lab_code: Optional[str] = Field(default=None, description="Standardized code for the test")
     lab_value: Optional[float] = Field(default=None, description="Quantitative result") # Allow string for non-numeric if strictly needed by source
-    lab_unit: Optional[str] = Field(default=None, description="Unit of measurement")
+    lab_unit: Optional[str] = Field(
+        default=None,
+        description=f"Unit of measurement. Prefer one of: {', '.join([u.value for u in LabUnit])}"
+    )
     lab_method: Optional[str] = Field(default=None, description="Method used for the test, if applicable")
     lab_range_min: Optional[float] = Field(default=None, description="Lower bound of reference range")
     lab_range_max: Optional[float] = Field(default=None, description="Upper bound of reference range")
@@ -234,6 +297,19 @@ class LabResult(BaseModel):
     source_text: Optional[str] = Field(default=None, description="Exact source snippet")
     page_number: Optional[int] = Field(default=None, ge=1, description="Page number in PDF")
     source_file: Optional[str] = Field(default=None, description="Source file/page identifier")
+    validation_errors: Optional[list[str]] = Field(default=None, description="List of validation errors found")
+
+    @model_validator(mode='after')
+    def validate_lab_unit(self) -> 'LabResult':
+        """Validate lab_unit against LabUnit enum and log issues without blocking."""
+        if self.lab_unit and self.lab_unit.strip():
+            valid_units = set(u.value for u in LabUnit)
+            if self.lab_unit not in valid_units:
+                error_msg = f"Invalid unit '{self.lab_unit}' - not in LabUnit enum"
+                if self.validation_errors is None:
+                    self.validation_errors = []
+                self.validation_errors.append(error_msg)
+        return self
 
 class HealthLabReport(BaseModel):
     report_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="Report issue date")
@@ -790,15 +866,44 @@ def main():
         return f"{str(lab_type).lower()}-{slugify(row.get('lab_name', ''))}"
 
     merged_df["lab_name_slug"] = merged_df.apply(create_lab_name_slug, axis=1)
-    merged_df["lab_unit_slug"] = merged_df.get("lab_unit", pd.Series(dtype="str")).apply(slugify)
+
+    # Convert validation_errors from list to string for CSV export
+    def format_validation_errors(errors):
+        """Convert validation_errors list to semicolon-separated string."""
+        if pd.isna(errors) or errors is None:
+            return None
+        # Handle if it's already a string or convert list to string
+        if isinstance(errors, str):
+            return errors if errors.strip() else None
+        if isinstance(errors, list) and errors:
+            return "; ".join(str(e) for e in errors)
+        return None
+
+    if "validation_errors" in merged_df.columns:
+        merged_df["validation_errors"] = merged_df["validation_errors"].apply(format_validation_errors)
+    else:
+        merged_df["validation_errors"] = None
+
+    # Derive is_valid_unit from validation_errors (True if no errors, False if errors present)
+    def derive_is_valid_unit(validation_errors) -> bool:
+        """Check if there are validation errors. No errors = valid."""
+        if pd.isna(validation_errors) or validation_errors is None or validation_errors == "":
+            return True
+        return False
+
+    merged_df["is_valid_unit"] = merged_df["validation_errors"].apply(derive_is_valid_unit)
+
+    # lab_unit is already guided by LabUnit enum description, so just alias it
+    lab_unit_col = merged_df.get("lab_unit", pd.Series(dtype="str"))
+    merged_df["lab_unit_enum"] = lab_unit_col
 
     config_path = Path("config")
-    paths_exist = all([(config_path / f).exists() for f in ["lab_names_mappings.json", "lab_units_mappings.json", "lab_specs.json"]])
+    paths_exist = all([(config_path / f).exists() for f in ["lab_names_mappings.json", "lab_specs.json"]])
     if not paths_exist:
         logger.error(f"Missing config files in '{config_path}'. Derived columns might be incomplete.")
         # Initialize columns to prevent KeyErrors if they are used later
         derived_cols_to_init = [
-            "lab_name_slug", "lab_unit_slug", "lab_name_enum", "lab_unit_enum", "lab_value_final",
+            "lab_name_slug", "lab_name_enum", "lab_unit_enum", "is_valid_unit", "lab_value_final",
             "lab_unit_final", "lab_range_min_final", "lab_range_max_final",
             "is_flagged_final", "healthy_range_min", "healthy_range_max", "is_in_healthy_range"
         ]
@@ -806,7 +911,6 @@ def main():
             if col_key not in merged_df.columns: merged_df[col_key] = None
     else:
         with open(config_path / "lab_names_mappings.json", "r", encoding="utf-8") as f: lab_names_mapping = json.load(f)
-        with open(config_path / "lab_units_mappings.json", "r", encoding="utf-8") as f: lab_units_mapping = json.load(f)
         with open(config_path / "lab_specs.json", "r", encoding="utf-8") as f: lab_specs = json.load(f)
 
         def map_lab_name_enum(slug: str) -> str:
@@ -816,23 +920,7 @@ def main():
                 return slug
             return mapped
 
-        def map_lab_unit_enum(value: Any) -> str:
-            # Skip logging for null/empty units (qualitative tests)
-            if pd.isna(value) or value == "" or value is None:
-                return ""
-
-            slug = slugify(value)
-            if not slug:  # Empty slug after slugification
-                return ""
-
-            mapped = lab_units_mapping.get(slug)
-            if mapped is None or mapped == "":
-                logger.error(f"Unmapped lab unit '{value}' (slug '{slug}')")
-                return ""
-            return mapped
-
         merged_df["lab_name_enum"] = merged_df["lab_name_slug"].apply(map_lab_name_enum)
-        merged_df["lab_unit_enum"] = merged_df.get("lab_unit", pd.Series(dtype="str")).apply(map_lab_unit_enum)
 
         def convert_to_primary_unit(row):
             name_enum, unit_enum = row.get("lab_name_enum",""), row.get("lab_unit_enum","")
