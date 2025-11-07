@@ -1739,7 +1739,12 @@
   },
   "Blood - Mean Corpuscular Volume (MCV)": {
     "primary_unit": "fL",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "f1",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 80.0,
@@ -1749,7 +1754,12 @@
   },
   "Blood - Mean Platelet Volume (MPV)": {
     "primary_unit": "fL",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "f1",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 7.5,
@@ -1899,7 +1909,12 @@
   },
   "Blood - Platelet Distribution Width (PDW)": {
     "primary_unit": "fL",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "f1",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 9.0,
@@ -2094,7 +2109,12 @@
   },
   "Blood - Red Cell Distribution Width - Standard Deviation (RDW-SD)": {
     "primary_unit": "fL",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "f1",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 39.0,
@@ -3022,12 +3042,22 @@
   },
   "Urine Type II - Sediment - Casts": {
     "primary_unit": "/field",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "/campo",
+        "factor": 1.0
+      }
+    ],
     "ranges": {}
   },
   "Urine Type II - Sediment - Cells": {
     "primary_unit": "/field",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "/campo",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0.0,
@@ -3037,7 +3067,12 @@
   },
   "Urine Type II - Sediment - Crystals": {
     "primary_unit": "/field",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "/campo",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0.0,
@@ -3047,12 +3082,22 @@
   },
   "Urine Type II - Sediment - Epithelial Cells": {
     "primary_unit": "/field",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "/campo",
+        "factor": 1.0
+      }
+    ],
     "ranges": {}
   },
   "Urine Type II - Sediment - Epithelial cells": {
     "primary_unit": "/field",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "/campo",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0.0,
@@ -3062,7 +3107,12 @@
   },
   "Urine Type II - Sediment - Erythrocytes": {
     "primary_unit": "/field",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "/campo",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0.0,
@@ -3072,7 +3122,12 @@
   },
   "Urine Type II - Sediment - Leukocytes": {
     "primary_unit": "/field",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "/campo",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0.0,
@@ -3082,7 +3137,12 @@
   },
   "Urine Type II - Sediment - Small Round Cells": {
     "primary_unit": "/field",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "/campo",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0.0,
@@ -3092,12 +3152,22 @@
   },
   "Urine Type II - Sediment - Squamous Epithelial Cells": {
     "primary_unit": "/field",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "/campo",
+        "factor": 1.0
+      }
+    ],
     "ranges": {}
   },
   "Urine Type II - Sediment - Squamous epithelial cells": {
     "primary_unit": "/field",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "/campo",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0.0,

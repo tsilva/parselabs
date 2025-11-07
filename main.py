@@ -514,7 +514,15 @@ CRITICAL RULES:
    - For RANGE results (e.g., "1 a 2/campo", "0 a 1/campo"):
      * Set `value` to null (None)
      * Put the full text in `comments`
-   - `unit`: Copy the unit exactly as shown (or null if no unit)
+     * Extract the unit (e.g., "/campo", "/field") from the range text
+   - `unit`: Extract the unit. Special cases:
+     * If test name is "pH" and no unit shown → use "pH" as the unit
+     * If test name contains "Densidade" or "Density" and no unit shown → use "unitless"
+     * If test name contains "Cor" or "Color" and value is qualitative (e.g., "AMARELA") → use "unitless"
+     * If test is a presence/absence test (Proteinas, Glicose/Glucose, Corpos cetonicos/Ketones, Bilirrubina, Sangue/Blood, Urobilinogenio/Urobilinogen)
+       with qualitative results (e.g., "NAO CONTEM", "NORMAL", "POSITIVE", "NEGATIVE") → use "boolean"
+     * If value contains "/campo" or "per field" → extract as unit (e.g., "/campo", "/field")
+     * Otherwise copy the unit exactly as shown or null if truly no unit
 
 5. REFERENCE RANGES:
    - `reference_range`: Copy the complete reference range text (e.g., "4.5-6.0", "<5.7", "70-100 mg/dL")
@@ -539,14 +547,21 @@ SCHEMA FIELD NAMES:
 
 EXAMPLES:
 ✅ CORRECT:
-  {"test_name": "URINA - Cor", "value": null, "unit": null, "comments": "AMARELA"}
-  {"test_name": "URINA - Proteinas", "value": null, "unit": null, "comments": "NAO CONTEM"}
+  {"test_name": "URINA - Cor", "value": null, "unit": "unitless", "comments": "AMARELA"}
+  {"test_name": "URINA - Proteinas", "value": null, "unit": "boolean", "comments": "NAO CONTEM"}
+  {"test_name": "URINA - Glicose", "value": null, "unit": "boolean", "comments": "NAO CONTEM"}
+  {"test_name": "URINA - Urobilinogenio", "value": null, "unit": "boolean", "comments": "NORMAL"}
   {"test_name": "Hemoglobina", "value": 14.2, "unit": "g/dl", "comments": null}
-  {"test_name": "EXAME MICROSCOPICO - CELULAS EPITELIAIS", "value": null, "unit": null, "comments": "1 a 2/campo"}
+  {"test_name": "URINA - pH", "value": 5.0, "unit": "pH", "comments": null}
+  {"test_name": "URINA - Densidade", "value": 1.022, "unit": "unitless", "comments": null}
+  {"test_name": "EXAME MICROSCOPICO - CELULAS EPITELIAIS", "value": null, "unit": "/campo", "comments": "1 a 2/campo"}
+  {"test_name": "EXAME MICROSCOPICO - LEUCOCITOS", "value": null, "unit": "/campo", "comments": "0 a 1/campo"}
 
 ❌ WRONG:
   {"test_name": "Cor", "value": "AMARELA", ...}  # Text in value field!
   {"test_name": "Total", ...}  # Missing context (should be "BILIRRUBINAS - Total")
+  {"test_name": "URINA - pH", "value": 5.0, "unit": null, ...}  # Missing pH unit!
+  {"test_name": "CELULAS EPITELIAIS", "value": null, "unit": null, "comments": "1 a 2/campo"}  # Missing /campo unit!
 
 Remember: Your job is to be a perfect copier, not an interpreter. Extract EVERYTHING, even qualitative results.
 """.strip()
@@ -860,6 +875,9 @@ EXAMPLES:
 - "x10^12/L" → "10¹²/L"
 - "x10^9/L" → "10⁹/L"
 - "percent" → "%"
+- "/campo" → "/field"
+- "pH" → "pH"
+- "unitless" → "unitless"
 - "Some Unknown Unit" → "{UNKNOWN_VALUE}"
 """
 
