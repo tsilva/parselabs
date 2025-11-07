@@ -514,15 +514,11 @@ CRITICAL RULES:
    - For RANGE results (e.g., "1 a 2/campo", "0 a 1/campo"):
      * Set `value` to null (None)
      * Put the full text in `comments`
-     * Extract the unit (e.g., "/campo", "/field") from the range text
-   - `unit`: Extract the unit. Special cases:
-     * If test name is "pH" and no unit shown → use "pH" as the unit
-     * If test name contains "Densidade" or "Density" and no unit shown → use "unitless"
-     * If test name contains "Cor" or "Color" and value is qualitative (e.g., "AMARELA") → use "unitless"
-     * If test is a presence/absence test (Proteinas, Glicose/Glucose, Corpos cetonicos/Ketones, Bilirrubina, Sangue/Blood, Urobilinogenio/Urobilinogen)
-       with qualitative results (e.g., "NAO CONTEM", "NORMAL", "POSITIVE", "NEGATIVE") → use "boolean"
-     * If value contains "/campo" or "per field" → extract as unit (e.g., "/campo", "/field")
-     * Otherwise copy the unit exactly as shown or null if truly no unit
+     * Extract any unit visible in the text (e.g., "/campo" from "1 a 2/campo")
+   - `unit`: Extract the unit EXACTLY as shown in the document
+     * Copy the unit symbol or abbreviation exactly (e.g., "mg/dl", "g/dl", "%", "U/L", "/campo")
+     * If NO unit is visible or implied in the document → use null
+     * Do NOT infer or normalize units - just extract what you see
 
 5. REFERENCE RANGES:
    - `reference_range`: Copy the complete reference range text (e.g., "4.5-6.0", "<5.7", "70-100 mg/dL")
@@ -547,21 +543,20 @@ SCHEMA FIELD NAMES:
 
 EXAMPLES:
 ✅ CORRECT:
-  {"test_name": "URINA - Cor", "value": null, "unit": "unitless", "comments": "AMARELA"}
-  {"test_name": "URINA - Proteinas", "value": null, "unit": "boolean", "comments": "NAO CONTEM"}
-  {"test_name": "URINA - Glicose", "value": null, "unit": "boolean", "comments": "NAO CONTEM"}
-  {"test_name": "URINA - Urobilinogenio", "value": null, "unit": "boolean", "comments": "NORMAL"}
+  {"test_name": "URINA - Cor", "value": null, "unit": null, "comments": "AMARELA"}
+  {"test_name": "URINA - Proteinas", "value": null, "unit": null, "comments": "NAO CONTEM"}
+  {"test_name": "URINA - Glicose", "value": null, "unit": null, "comments": "NAO CONTEM"}
+  {"test_name": "URINA - Urobilinogenio", "value": null, "unit": null, "comments": "NORMAL"}
   {"test_name": "Hemoglobina", "value": 14.2, "unit": "g/dl", "comments": null}
-  {"test_name": "URINA - pH", "value": 5.0, "unit": "pH", "comments": null}
-  {"test_name": "URINA - Densidade", "value": 1.022, "unit": "unitless", "comments": null}
+  {"test_name": "URINA - pH", "value": 5.0, "unit": null, "comments": null}
+  {"test_name": "URINA - Densidade a 15º C", "value": 1.022, "unit": null, "comments": null}
   {"test_name": "EXAME MICROSCOPICO - CELULAS EPITELIAIS", "value": null, "unit": "/campo", "comments": "1 a 2/campo"}
   {"test_name": "EXAME MICROSCOPICO - LEUCOCITOS", "value": null, "unit": "/campo", "comments": "0 a 1/campo"}
 
 ❌ WRONG:
   {"test_name": "Cor", "value": "AMARELA", ...}  # Text in value field!
   {"test_name": "Total", ...}  # Missing context (should be "BILIRRUBINAS - Total")
-  {"test_name": "URINA - pH", "value": 5.0, "unit": null, ...}  # Missing pH unit!
-  {"test_name": "CELULAS EPITELIAIS", "value": null, "unit": null, "comments": "1 a 2/campo"}  # Missing /campo unit!
+  {"test_name": "CELULAS EPITELIAIS", "value": null, "unit": null, "comments": "1 a 2/campo"}  # Missing /campo unit from range text!
 
 Remember: Your job is to be a perfect copier, not an interpreter. Extract EVERYTHING, even qualitative results.
 """.strip()
@@ -833,66 +828,69 @@ Return a JSON object with the mapping:
         logger.error(f"Error during standardization: {e}")
         return {name: UNKNOWN_VALUE for name in raw_test_names}
 
-def standardize_lab_units(raw_units: list[str], model_id: str, standardized_units: list[str]) -> dict[str, str]:
+def standardize_lab_units(unit_contexts: list[tuple[str, str]], model_id: str, standardized_units: list[str]) -> dict[str, str]:
     """
-    Map raw lab units to standardized units using LLM.
+    Map raw lab units to standardized units using LLM with lab name context.
 
     Args:
-        raw_units: List of raw units from extraction
+        unit_contexts: List of (raw_unit, standardized_lab_name) tuples for context
         model_id: Model to use for standardization
         standardized_units: List of valid standardized units
 
     Returns:
         Dictionary mapping raw_unit -> standardized_unit
     """
-    if not raw_units:
+    if not unit_contexts:
         return {}
 
     if not standardized_units:
         logger.warning("No standardized units available, returning $UNKNOWN$ for all")
-        return {unit: UNKNOWN_VALUE for unit in raw_units}
+        return {unit: UNKNOWN_VALUE for unit, _ in unit_contexts}
 
-    # Build the prompt
+    # Get unique (raw_unit, lab_name) pairs for context-aware mapping
+    unique_pairs = list(set(unit_contexts))
+
+    # Build the prompt with context
     system_prompt = f"""You are a medical laboratory unit standardization expert.
 
-Your task: Map raw lab units to standardized units from a predefined list.
+Your task: Map (raw_unit, lab_name) pairs to standardized units from a predefined list.
 
 CRITICAL RULES:
 1. Choose the BEST MATCH from the standardized units list
 2. Handle case variations (e.g., "mg/dl" → "mg/dL", "u/l" → "IU/L")
 3. Handle symbol variations (e.g., "µ" vs "μ", superscripts)
 4. Handle spacing variations (e.g., "mg / dl" → "mg/dL")
-5. If NO good match exists, use exactly: "{UNKNOWN_VALUE}"
-6. Return a JSON object mapping each raw unit to its standardized unit
+5. For null/missing units, infer from lab name:
+   - "Urine Type II - Color", "Urine Type II - Density" → "unitless"
+   - "Urine Type II - pH" → "pH"
+   - "Urine Type II - Proteins", "Urine Type II - Glucose", "Urine Type II - Blood", etc. → "boolean"
+   - "Blood - Red Blood Cell Morphology" (qualitative) → "{UNKNOWN_VALUE}"
+6. If NO good match exists, use exactly: "{UNKNOWN_VALUE}"
+7. Return a JSON array with objects: {{"raw_unit": "...", "lab_name": "...", "standardized_unit": "..."}}
 
 STANDARDIZED UNITS LIST ({len(standardized_units)} units):
 {json.dumps(standardized_units, ensure_ascii=False, indent=2)}
 
 EXAMPLES:
-- "mg/dl" → "mg/dL"
-- "u/l" → "IU/L"
-- "U/L" → "IU/L"
-- "x10^12/L" → "10¹²/L"
-- "x10^9/L" → "10⁹/L"
-- "percent" → "%"
-- "/campo" → "/field"
-- "pH" → "pH"
-- "unitless" → "unitless"
-- "Some Unknown Unit" → "{UNKNOWN_VALUE}"
+- {{"raw_unit": "mg/dl", "lab_name": "Blood - Glucose", "standardized_unit": "mg/dL"}}
+- {{"raw_unit": "U/L", "lab_name": "Blood - AST", "standardized_unit": "IU/L"}}
+- {{"raw_unit": "fl", "lab_name": "Blood - MCV", "standardized_unit": "fL"}}
+- {{"raw_unit": "null", "lab_name": "Urine Type II - Color", "standardized_unit": "unitless"}}
+- {{"raw_unit": "null", "lab_name": "Urine Type II - pH", "standardized_unit": "pH"}}
+- {{"raw_unit": "null", "lab_name": "Urine Type II - Proteins", "standardized_unit": "boolean"}}
 """
 
-    user_prompt = f"""Map these raw lab units to standardized units:
+    # Build list of pairs to map
+    pairs_to_map = [
+        {"raw_unit": raw_unit, "lab_name": lab_name}
+        for raw_unit, lab_name in unique_pairs
+    ]
 
-RAW UNITS:
-{json.dumps(raw_units, ensure_ascii=False, indent=2)}
+    user_prompt = f"""Map these (raw_unit, lab_name) pairs to standardized units:
 
-Return a JSON object with the mapping:
-{{
-  "raw_unit_1": "Standardized Unit 1",
-  "raw_unit_2": "Standardized Unit 2",
-  ...
-}}
-"""
+{json.dumps(pairs_to_map, ensure_ascii=False, indent=2)}
+
+Return a JSON array with the standardized_unit added to each object."""
 
     try:
         completion = client.chat.completions.create(
@@ -920,32 +918,40 @@ Return a JSON object with the mapping:
                 lines = lines[:-1]
             response_text = '\n'.join(lines).strip()
 
-        # Parse the JSON mapping
-        mapping = json.loads(response_text)
+        # Parse the JSON array response
+        mappings_array = json.loads(response_text)
 
-        # Validate that all raw units are in the mapping
+        # Convert array to dict mapping (raw_unit, lab_name) -> standardized_unit
         result = {}
-        for raw_unit in raw_units:
-            if raw_unit in mapping:
-                standardized = mapping[raw_unit]
-                # Validate it's either $UNKNOWN$ or in the list
-                if standardized == UNKNOWN_VALUE or standardized in standardized_units:
-                    result[raw_unit] = standardized
-                else:
-                    logger.warning(f"LLM returned invalid standardized unit: '{standardized}' for '{raw_unit}', using $UNKNOWN$")
-                    result[raw_unit] = UNKNOWN_VALUE
+        for item in mappings_array:
+            raw_unit = item.get("raw_unit")
+            lab_name = item.get("lab_name")
+            standardized = item.get("standardized_unit")
+
+            if raw_unit is None or lab_name is None:
+                continue
+
+            # Validate standardized unit
+            if standardized and (standardized == UNKNOWN_VALUE or standardized in standardized_units):
+                result[(raw_unit, lab_name)] = standardized
             else:
-                logger.warning(f"LLM didn't return mapping for '{raw_unit}', using $UNKNOWN$")
-                result[raw_unit] = UNKNOWN_VALUE
+                logger.warning(f"LLM returned invalid standardized unit: '{standardized}' for ({raw_unit}, {lab_name}), using $UNKNOWN$")
+                result[(raw_unit, lab_name)] = UNKNOWN_VALUE
+
+        # Ensure all unique pairs have a mapping
+        for pair in unique_pairs:
+            if pair not in result:
+                logger.warning(f"LLM didn't return mapping for {pair}, using $UNKNOWN$")
+                result[pair] = UNKNOWN_VALUE
 
         return result
 
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse unit standardization response as JSON: {e}")
-        return {unit: UNKNOWN_VALUE for unit in raw_units}
+        return {pair: UNKNOWN_VALUE for pair in unique_pairs}
     except Exception as e:
         logger.error(f"Error during unit standardization: {e}")
-        return {unit: UNKNOWN_VALUE for unit in raw_units}
+        return {pair: UNKNOWN_VALUE for pair in unique_pairs}
 
 
 ########################################
@@ -1069,23 +1075,27 @@ def process_single_pdf(
             for result in all_page_lab_results:
                 result["lab_name_standardized"] = UNKNOWN_VALUE
 
-        # Standardize lab units
+        # Standardize lab units (with lab name context for better inference)
         logger.info(f"[{pdf_stem}] - Standardizing lab units...")
-        raw_units = [result.get("unit") for result in all_page_lab_results if result.get("unit")]
-        if raw_units and standardized_units:
+        # Build context pairs: (raw_unit, standardized_lab_name) for all results
+        # Convert None to "null" string for consistency
+        unit_contexts = [
+            (result.get("unit") if result.get("unit") is not None else "null",
+             result.get("lab_name_standardized", ""))
+            for result in all_page_lab_results
+        ]
+
+        if unit_contexts and standardized_units:
             try:
-                # Get unique raw units to avoid duplicate API calls
-                unique_raw_units = list(set(raw_units))
-                unit_mapping = standardize_lab_units(unique_raw_units, self_consistency_model_id, standardized_units)
+                unit_mapping = standardize_lab_units(unit_contexts, self_consistency_model_id, standardized_units)
 
-                # Apply standardized units to all results
+                # Apply standardized units to all results using (raw_unit, lab_name) lookup
                 for result in all_page_lab_results:
-                    raw_unit = result.get("unit")
-                    if raw_unit:
-                        result["lab_unit_standardized"] = unit_mapping.get(raw_unit, UNKNOWN_VALUE)
-                    else:
-                        result["lab_unit_standardized"] = UNKNOWN_VALUE
+                    raw_unit = result.get("unit") if result.get("unit") is not None else "null"
+                    lab_name = result.get("lab_name_standardized", "")
+                    result["lab_unit_standardized"] = unit_mapping.get((raw_unit, lab_name), UNKNOWN_VALUE)
 
+                unique_raw_units = list(set(result.get("unit") for result in all_page_lab_results))
                 logger.info(f"[{pdf_stem}] - Standardized {len(unique_raw_units)} unique units")
             except Exception as e:
                 logger.error(f"[{pdf_stem}] - Unit standardization failed: {e}, using $UNKNOWN$ for all")
