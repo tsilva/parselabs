@@ -28,21 +28,18 @@ The `utils/` directory contains helper scripts for building and maintaining conf
 
 ### Core Pipeline (main.py)
 
-The processing pipeline has 4 main stages:
+The processing pipeline has 3 main stages:
 
 1. **PDF Processing** (`process_single_pdf`)
    - Converts each PDF page to preprocessed JPG images (grayscale, contrast-enhanced)
    - Each page is processed independently
 
-2. **Transcription** (`transcription_from_page_image`)
-   - Uses vision models (default: Gemini Flash) to transcribe page images to text
-   - Preserves layout and formatting using markdown tables
-
-3. **Extraction** (`extract_labs_from_page_transcription`)
-   - Extracts structured lab data from transcriptions using function calling
+2. **Extraction** (`extract_labs_from_page_image`)
+   - Extracts structured lab data directly from page images using vision models with function calling
    - Returns `HealthLabReport` with nested `LabResult` objects validated by Pydantic
+   - No intermediate text transcription step - extraction happens directly from images
 
-4. **Normalization & Mapping**
+3. **Normalization & Mapping**
    - Maps raw lab names/units to standardized enums via config files
    - Converts values to primary units using conversion factors
    - Deduplicates by (date, lab_name_enum) pairs
@@ -50,9 +47,9 @@ The processing pipeline has 4 main stages:
 ### Self-Consistency Pattern
 
 The `self_consistency` function is critical for accuracy:
-- Runs transcription/extraction N times (configurable via N_TRANSCRIPTIONS, N_EXTRACTIONS)
+- Runs extraction N times (configurable via N_EXTRACTIONS)
 - If outputs differ, uses an LLM to vote on the most consistent result
-- Applied to both transcription and extraction steps
+- Applied to the extraction step to ensure accuracy
 
 ### Configuration System
 
@@ -119,8 +116,8 @@ Key column categories:
 
 The extraction process has two distinct phases:
 
-1. **Raw Extraction** (during transcription/extraction):
-   - LLM extracts test names and units EXACTLY as they appear in the PDF
+1. **Raw Extraction** (during image extraction):
+   - Vision model extracts test names and units EXACTLY as they appear in the image
    - No standardization or normalization at this stage
    - Goal: Perfect accuracy and traceability
 
@@ -136,8 +133,7 @@ The extraction process has two distinct phases:
 For each PDF `{doc_stem}.pdf`:
 - `{doc_stem}/` directory containing:
   - `{doc_stem}.{page}.jpg` - Preprocessed page images
-  - `{doc_stem}.{page}.txt` - Transcribed text
-  - `{doc_stem}.{page}.json` - Extracted structured data
+  - `{doc_stem}.{page}.json` - Extracted structured data (directly from images)
   - `{doc_stem}.csv` - Combined results for the document
 
 Final outputs in `OUTPUT_PATH`:
@@ -152,7 +148,7 @@ Final outputs in `OUTPUT_PATH`:
 The system is designed to be resumable:
 - Files are only regenerated if they don't exist
 - PDF processing is parallelized via multiprocessing.Pool (MAX_WORKERS)
-- Extraction and transcription use ThreadPoolExecutor for concurrent self-consistency checks
+- Extraction uses ThreadPoolExecutor for concurrent self-consistency checks
 
 ### Date Resolution Logic
 
@@ -216,13 +212,11 @@ This is useful for:
 
 Required `.env` variables:
 - `SELF_CONSISTENCY_MODEL_ID` - Model for voting on self-consistency results
-- `TRANSCRIBE_MODEL_ID` - Vision model for OCR (e.g., google/gemini-2.5-flash)
-- `EXTRACT_MODEL_ID` - Model for structured extraction
+- `EXTRACT_MODEL_ID` - Vision model for extraction (e.g., google/gemini-2.5-flash, anthropic/claude-3.5-sonnet)
 - `INPUT_PATH` - Directory containing PDF files
 - `INPUT_FILE_REGEX` - Regex pattern to match input files (e.g., `.*\.pdf`)
 - `OUTPUT_PATH` - Directory for output files
 - `OPENROUTER_API_KEY` - API key for OpenRouter
-- `N_TRANSCRIPTIONS` - Number of transcription attempts for self-consistency (default: 1)
 - `N_EXTRACTIONS` - Number of extraction attempts for self-consistency (default: 1)
 - `MAX_WORKERS` - Parallel workers for PDF processing (default: 1)
 
