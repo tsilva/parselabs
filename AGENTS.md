@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 - `main.py` orchestrates ingestion of lab reports, transcription via OpenRouter models, normalization, and CSV/Excel export; treat it as the single entry point for runtime changes.
-- `config/lab_names_mappings.json`, `lab_specs.json`, and `lab_units_mappings.json` define controlled vocabularies used in normalization; edits must keep keys and values in sync with the integrity checks in `test.py`.
+- `config/lab_names_mappings.json` and `lab_specs.json` define controlled vocabularies used in normalization; edits must keep keys and values in sync with the integrity checks in `test.py`. Lab units are enforced via the `LabUnit` enum in `main.py`.
 - `utils/` contains maintenance scripts (e.g., `build_labs_specs.py`, `sort_lab_specs.py`) that regenerate specification assets; keep their outputs version-controlled.
 - Data written to `OUTPUT_PATH` (configured via `.env`) is expected to include `all.csv`, which feeds the test suite and downstream analysis.
 
