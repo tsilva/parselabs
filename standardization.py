@@ -221,14 +221,16 @@ def standardize_lab_units(
     primary_units_context = ""
     if primary_units_map:
         primary_units_list = [f'  "{lab}": "{unit}"' for lab, unit in sorted(primary_units_map.items())]
-        primary_units_context = f"""
+        # Build the mapping and escape curly braces for .format()
+        mapping_content = "\n".join(primary_units_list)
+        primary_units_context = """
 PRIMARY UNITS MAPPING (use this for null/missing units):
 {{
-{chr(10).join(primary_units_list)}
+""" + mapping_content + """
 }}
 """
 
-    system_prompt_template = f"""You are a medical laboratory unit standardization expert.
+    system_prompt_template = """You are a medical laboratory unit standardization expert.
 
 Your task: Map (raw_unit, lab_name) pairs to standardized units from a predefined list.
 
@@ -238,12 +240,12 @@ CRITICAL RULES:
 3. Handle symbol variations (e.g., "µ" vs "μ", superscripts)
 4. Handle spacing variations (e.g., "mg / dl" → "mg/dL")
 5. For null/missing units, look up the lab_name in the PRIMARY UNITS MAPPING (if provided)
-6. If NO good match exists or lab not in mapping, use exactly: "{{unknown}}"
+6. If NO good match exists or lab not in mapping, use exactly: "{unknown}"
 7. Return a JSON array with objects: {{"raw_unit": "...", "lab_name": "...", "standardized_unit": "..."}}
 
-STANDARDIZED UNITS LIST ({{num_candidates}} units):
-{{candidates}}
-{primary_units_context}
+STANDARDIZED UNITS LIST ({num_candidates} units):
+{candidates}
+""" + primary_units_context + """
 EXAMPLES:
 - {{"raw_unit": "mg/dl", "lab_name": "Blood - Glucose", "standardized_unit": "mg/dL"}}
 - {{"raw_unit": "U/L", "lab_name": "Blood - AST", "standardized_unit": "IU/L"}}

@@ -252,6 +252,7 @@ def process_single_pdf(
                 logger.info(f"[{pdf_stem}] Standardized {len(set(r.get('unit') for r in all_results))} unique units")
             except Exception as e:
                 logger.error(f"[{pdf_stem}] Unit standardization failed: {e}")
+                logger.exception(f"[{pdf_stem}] Full traceback:")
                 for result in all_results:
                     result["lab_unit_standardized"] = UNKNOWN_VALUE
         else:
