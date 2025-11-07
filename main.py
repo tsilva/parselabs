@@ -721,6 +721,25 @@ def load_standardized_lab_units() -> list:
     logger.info(f"Loaded {len(standardized_units)} standardized lab units")
     return standardized_units
 
+def load_lab_type_mapping() -> dict[str, str]:
+    """Load mapping of standardized lab name -> lab type from config."""
+    config_path = Path("config/lab_specs.json")
+    if not config_path.exists():
+        logger.warning("lab_specs.json not found, lab type lookup will fail")
+        return {}
+
+    with open(config_path, 'r', encoding='utf-8') as f:
+        specs = json.load(f)
+
+    # Build mapping: standardized_lab_name -> lab_type
+    lab_type_map = {}
+    for lab_name, spec in specs.items():
+        lab_type = spec.get('lab_type', 'blood')  # default to blood
+        lab_type_map[lab_name] = lab_type
+
+    logger.info(f"Loaded lab type mappings for {len(lab_type_map)} tests")
+    return lab_type_map
+
 def standardize_lab_names(raw_test_names: list[str], model_id: str, standardized_names: list[str]) -> dict[str, str]:
     """
     Map raw test names to standardized lab names using LLM.
@@ -1302,9 +1321,9 @@ def main():
         merged_df["lab_unit"] = None
 
     config_path = Path("config")
-    paths_exist = all([(config_path / f).exists() for f in ["lab_names_mappings.json", "lab_specs.json"]])
-    if not paths_exist:
-        logger.error(f"Missing config files in '{config_path}'. Normalized columns will be incomplete.")
+    lab_specs_exists = (config_path / "lab_specs.json").exists()
+    if not lab_specs_exists:
+        logger.error(f"Missing lab_specs.json in '{config_path}'. Normalized columns will be incomplete.")
         # Initialize columns to prevent KeyErrors
         derived_cols_to_init = [
             "lab_type", "lab_name", "lab_name_slug",
@@ -1316,46 +1335,32 @@ def main():
             if col_key not in merged_df.columns:
                 merged_df[col_key] = None
     else:
-        with open(config_path / "lab_names_mappings.json", "r", encoding="utf-8") as f:
-            lab_names_mapping = json.load(f)
         with open(config_path / "lab_specs.json", "r", encoding="utf-8") as f:
             lab_specs = json.load(f)
 
-        # Normalize test names
-        def normalize_test_name(raw_test_name: str) -> str:
-            """Map raw test name to standardized lab name using slugification."""
-            if pd.isna(raw_test_name):
-                return UNKNOWN_VALUE
+        # Load lab_type mapping from lab_specs
+        lab_type_map = {name: spec.get('lab_type', 'blood') for name, spec in lab_specs.items()}
 
-            # Try different lab types (default to blood)
-            for lab_type in ['blood', 'urine', 'feces', 'saliva']:
-                slug = f"{lab_type}-{slugify(raw_test_name)}"
-                if slug in lab_names_mapping:
-                    return lab_names_mapping[slug]
+        # Use lab_name_standardized if available (new standardization approach)
+        # Otherwise fall back to empty lab_name column
+        if "lab_name_standardized" in merged_df.columns:
+            merged_df["lab_name"] = merged_df["lab_name_standardized"]
+        elif "test_name" in merged_df.columns:
+            # No standardized names available, just copy test_name
+            merged_df["lab_name"] = merged_df["test_name"]
+        else:
+            merged_df["lab_name"] = None
 
-            # Not found - log and return unknown
-            logger.warning(f"Unmapped test name: '{raw_test_name}' (tried all lab types)")
-            return UNKNOWN_VALUE
-
-        if "test_name" in merged_df.columns:
-            merged_df["lab_name"] = merged_df["test_name"].apply(normalize_test_name)
-
-            # Infer lab_type from normalized name
-            def infer_lab_type(lab_name: str) -> str:
-                """Infer lab type from standardized lab name prefix."""
-                if pd.isna(lab_name) or lab_name == UNKNOWN_VALUE:
-                    return "blood"  # default
-                if lab_name.startswith("Blood - "):
-                    return "blood"
-                elif lab_name.startswith("Urine - "):
-                    return "urine"
-                elif lab_name.startswith("Feces - "):
-                    return "feces"
-                elif lab_name.startswith("Saliva - "):
-                    return "saliva"
+        # Look up lab_type from lab_specs config instead of parsing prefix
+        def lookup_lab_type(lab_name: str) -> str:
+            """Look up lab type from config mapping."""
+            if pd.isna(lab_name) or lab_name == UNKNOWN_VALUE:
                 return "blood"  # default
+            # Look up in lab_type_map
+            return lab_type_map.get(lab_name, "blood")  # default to blood if not found
 
-            merged_df["lab_type"] = merged_df["lab_name"].apply(infer_lab_type)
+        if "lab_name" in merged_df.columns:
+            merged_df["lab_type"] = merged_df["lab_name"].apply(lookup_lab_type)
 
             # Create slug for tracking
             merged_df["lab_name_slug"] = merged_df.apply(
@@ -1492,7 +1497,7 @@ def main():
 
     # --------- Deduplicate by (date, lab_name) keeping best match ---------
     # Only if lab_specs is loaded and required columns exist
-    if paths_exist and "date" in merged_df.columns and "lab_name" in merged_df.columns and "lab_unit" in merged_df.columns:
+    if lab_specs_exists and "date" in merged_df.columns and "lab_name" in merged_df.columns and "lab_unit" in merged_df.columns:
         def pick_best_dupe(group):
             """Pick best duplicate: prefer primary unit if multiple entries exist."""
             lab_name = group.iloc[0]["lab_name"]
