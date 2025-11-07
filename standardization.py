@@ -180,7 +180,8 @@ def standardize_lab_units(
     unit_contexts: list[tuple[str, str]],
     model_id: str,
     standardized_units: list[str],
-    client: OpenAI
+    client: OpenAI,
+    lab_specs_config=None
 ) -> dict[tuple[str, str], str]:
     """
     Map raw lab units to standardized units using LLM with lab name context.
@@ -190,6 +191,7 @@ def standardize_lab_units(
         model_id: Model to use for standardization
         standardized_units: List of valid standardized units
         client: OpenAI client instance
+        lab_specs_config: LabSpecsConfig instance for looking up primary units (optional)
 
     Returns:
         Dictionary mapping (raw_unit, lab_name) -> standardized_unit
@@ -200,11 +202,31 @@ def standardize_lab_units(
     # Get unique (raw_unit, lab_name) pairs
     unique_pairs = list(set(unit_contexts))
 
+    # Build primary units mapping for null unit inference
+    primary_units_map = {}
+    if lab_specs_config and lab_specs_config.exists:
+        for _, lab_name in unique_pairs:
+            if lab_name and lab_name != UNKNOWN_VALUE:
+                primary_unit = lab_specs_config.get_primary_unit(lab_name)
+                if primary_unit:
+                    primary_units_map[lab_name] = primary_unit
+
     # Build items as list of dicts for context
     items = [
         {"raw_unit": raw_unit, "lab_name": lab_name}
         for raw_unit, lab_name in unique_pairs
     ]
+
+    # Build primary units context for prompt
+    primary_units_context = ""
+    if primary_units_map:
+        primary_units_list = [f'  "{lab}": "{unit}"' for lab, unit in sorted(primary_units_map.items())]
+        primary_units_context = f"""
+PRIMARY UNITS MAPPING (use this for null/missing units):
+{{
+{chr(10).join(primary_units_list)}
+}}
+"""
 
     system_prompt_template = """You are a medical laboratory unit standardization expert.
 
@@ -215,24 +237,18 @@ CRITICAL RULES:
 2. Handle case variations (e.g., "mg/dl" → "mg/dL", "u/l" → "IU/L")
 3. Handle symbol variations (e.g., "µ" vs "μ", superscripts)
 4. Handle spacing variations (e.g., "mg / dl" → "mg/dL")
-5. For null/missing units, infer from lab name:
-   - "Urine Type II - Color", "Urine Type II - Density" → "unitless"
-   - "Urine Type II - pH" → "pH"
-   - "Urine Type II - Proteins", "Urine Type II - Glucose", "Urine Type II - Blood", etc. → "boolean"
-   - "Blood - Red Blood Cell Morphology" (qualitative) → "{unknown}"
-6. If NO good match exists, use exactly: "{unknown}"
+5. For null/missing units, look up the lab_name in the PRIMARY UNITS MAPPING (if provided)
+6. If NO good match exists or lab not in mapping, use exactly: "{{unknown}}"
 7. Return a JSON array with objects: {{"raw_unit": "...", "lab_name": "...", "standardized_unit": "..."}}
 
-STANDARDIZED UNITS LIST ({num_candidates} units):
-{candidates}
-
+STANDARDIZED UNITS LIST ({{num_candidates}} units):
+{{candidates}}
+{primary_units_context}
 EXAMPLES:
 - {{"raw_unit": "mg/dl", "lab_name": "Blood - Glucose", "standardized_unit": "mg/dL"}}
 - {{"raw_unit": "U/L", "lab_name": "Blood - AST", "standardized_unit": "IU/L"}}
 - {{"raw_unit": "fl", "lab_name": "Blood - MCV", "standardized_unit": "fL"}}
-- {{"raw_unit": "null", "lab_name": "Urine Type II - Color", "standardized_unit": "unitless"}}
-- {{"raw_unit": "null", "lab_name": "Urine Type II - pH", "standardized_unit": "pH"}}
-- {{"raw_unit": "null", "lab_name": "Urine Type II - Proteins", "standardized_unit": "boolean"}}
+- {{"raw_unit": "null", "lab_name": "Blood - Albumin", "standardized_unit": "g/dL"}} (from PRIMARY UNITS MAPPING)
 """
 
     result_list = standardize_with_llm(
