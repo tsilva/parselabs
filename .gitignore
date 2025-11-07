@@ -178,5 +178,3 @@ user_stats.json
 
 .vscode/*
 !.vscode/settings.json
-
-test/
