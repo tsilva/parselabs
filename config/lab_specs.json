@@ -1,5 +1,6 @@
 {
   " Blood - Very Low-Density Lipoprotein Cholesterol (VLDL)": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -15,6 +16,7 @@
     }
   },
   "Blood - 1,25-OH₂ Vitamin D": {
+    "lab_type": "blood",
     "primary_unit": "pg/mL",
     "alternatives": [
       {
@@ -30,6 +32,7 @@
     }
   },
   "Blood - 17-OH Progesterone": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [],
     "ranges": {
@@ -40,6 +43,7 @@
     }
   },
   "Blood - 25-OH Vitamin D": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [
       {
@@ -59,6 +63,7 @@
     }
   },
   "Blood - 4-Androstenedione": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [],
     "ranges": {
@@ -69,6 +74,7 @@
     }
   },
   "Blood - 5'-Nucleotidase (5'-NT)": {
+    "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -79,6 +85,7 @@
     }
   },
   "Blood - Activated Partial Thromboplastin Time (aPTT)": {
+    "lab_type": "blood",
     "primary_unit": "s",
     "alternatives": [],
     "ranges": {
@@ -89,6 +96,7 @@
     }
   },
   "Blood - Adrenocorticotropic Hormone (ACTH)": {
+    "lab_type": "blood",
     "primary_unit": "pg/mL",
     "alternatives": [],
     "ranges": {
@@ -99,6 +107,7 @@
     }
   },
   "Blood - Alanine Aminotransferase (ALT)": {
+    "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -109,6 +118,7 @@
     }
   },
   "Blood - Albumin": {
+    "lab_type": "blood",
     "primary_unit": "g/dL",
     "alternatives": [
       {
@@ -124,6 +134,7 @@
     }
   },
   "Blood - Albumin (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -134,6 +145,7 @@
     }
   },
   "Blood - Albumin/Globulin Ratio": {
+    "lab_type": "blood",
     "primary_unit": "g/dL",
     "alternatives": [],
     "ranges": {
@@ -144,6 +156,7 @@
     }
   },
   "Blood - Alkaline Phosphatase (ALP)": {
+    "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -154,6 +167,7 @@
     }
   },
   "Blood - Alpha-1 Globulins": {
+    "lab_type": "blood",
     "primary_unit": "g/dL",
     "alternatives": [
       {
@@ -169,6 +183,7 @@
     }
   },
   "Blood - Alpha-1 Globulins (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -179,6 +194,7 @@
     }
   },
   "Blood - Alpha-1-Antitrypsin (AAT)": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
@@ -189,6 +205,7 @@
     }
   },
   "Blood - Alpha-2 Globulins": {
+    "lab_type": "blood",
     "primary_unit": "g/dL",
     "alternatives": [
       {
@@ -204,6 +221,7 @@
     }
   },
   "Blood - Alpha-2 Globulins (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -214,6 +232,7 @@
     }
   },
   "Blood - Alpha-Fetoprotein (AFP)": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [],
     "ranges": {
@@ -224,6 +243,7 @@
     }
   },
   "Blood - Ammonia": {
+    "lab_type": "blood",
     "primary_unit": "µmol/L",
     "alternatives": [],
     "ranges": {
@@ -234,6 +254,7 @@
     }
   },
   "Blood - Amylase (alpha-Amylase)": {
+    "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -244,6 +265,7 @@
     }
   },
   "Blood - Anisocytosis": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -254,6 +276,7 @@
     }
   },
   "Blood - Anti-Cardiolipin IgG": {
+    "lab_type": "blood",
     "primary_unit": "pg",
     "alternatives": [],
     "ranges": {
@@ -264,6 +287,7 @@
     }
   },
   "Blood - Anti-Cardiolipin IgM": {
+    "lab_type": "blood",
     "primary_unit": "pg",
     "alternatives": [],
     "ranges": {
@@ -274,6 +298,7 @@
     }
   },
   "Blood - Anti-Cyclic Citrullinated Peptide Antibody (Anti-CCP Ab)": {
+    "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [],
     "ranges": {
@@ -284,6 +309,7 @@
     }
   },
   "Blood - Anti-Dopamine D2 Receptor Antibody (D2R)": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -294,6 +320,7 @@
     }
   },
   "Blood - Anti-Double-Stranded DNA Antibody IgG (Anti-dsDNA IgG)": {
+    "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [],
     "ranges": {
@@ -304,6 +331,7 @@
     }
   },
   "Blood - Anti-Gliadin IgA": {
+    "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [],
     "ranges": {
@@ -314,6 +342,7 @@
     }
   },
   "Blood - Anti-Gliadin IgG": {
+    "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [],
     "ranges": {
@@ -324,6 +353,7 @@
     }
   },
   "Blood - Anti-HBc (IgG + IgM)": {
+    "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {
@@ -334,6 +364,7 @@
     }
   },
   "Blood - Anti-HBs Antibody": {
+    "lab_type": "blood",
     "primary_unit": "mIU/mL",
     "alternatives": [],
     "ranges": {
@@ -344,6 +375,7 @@
     }
   },
   "Blood - Anti-HCV Total": {
+    "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {
@@ -354,6 +386,7 @@
     }
   },
   "Blood - Anti-Mitochondrial Antibody (AMA), IgG": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -364,6 +397,7 @@
     }
   },
   "Blood - Anti-Neutrophil Cytoplasmic Antibodies IgG (ANCA IgG)": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -374,6 +408,7 @@
     }
   },
   "Blood - Anti-Proteinase 3 Antibody IgG (Anti-PR3 Ab)": {
+    "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {
@@ -384,6 +419,7 @@
     }
   },
   "Blood - Anti-Scleroderma-70 Antibody (Anti-Scl-70 Ab)": {
+    "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -394,6 +430,7 @@
     }
   },
   "Blood - Anti-Sjögren's-Syndrome-Related Antigen A Antibody (Anti-SSA/Ro Ab)": {
+    "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [
       {
@@ -409,6 +446,7 @@
     }
   },
   "Blood - Anti-Sjögren's-Syndrome-Related Antigen B Antibody (Anti-SSB/La Ab)": {
+    "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [],
     "ranges": {
@@ -419,6 +457,7 @@
     }
   },
   "Blood - Anti-Smooth Muscle Antibody (ASMA), IgG": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -429,6 +468,7 @@
     }
   },
   "Blood - Anti-Thyroglobulin Antibody (Anti-Tg Ab)": {
+    "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [
       {
@@ -444,6 +484,7 @@
     }
   },
   "Blood - Anti-Thyroid Peroxidase Antibody (Anti-TPO Ab)": {
+    "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [
       {
@@ -459,6 +500,7 @@
     }
   },
   "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA)": {
+    "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [
       {
@@ -474,6 +516,7 @@
     }
   },
   "Blood - Anti-Tissue Transglutaminase Antibody IgG (Anti-tTG IgG)": {
+    "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [],
     "ranges": {
@@ -484,6 +527,7 @@
     }
   },
   "Blood - Antinuclear Antibodies (ANA)": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -494,6 +538,7 @@
     }
   },
   "Blood - Antistreptolysin O Titre (ASO)": {
+    "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [],
     "ranges": {
@@ -504,6 +549,7 @@
     }
   },
   "Blood - Aspartate Aminotransferase (AST)": {
+    "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -514,6 +560,7 @@
     }
   },
   "Blood - BUN (Blood Urea Nitrogen)": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -529,6 +576,7 @@
     }
   },
   "Blood - Basophils": {
+    "lab_type": "blood",
     "primary_unit": "10⁹/L",
     "alternatives": [
       {
@@ -544,6 +592,7 @@
     }
   },
   "Blood - Basophils (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -554,6 +603,7 @@
     }
   },
   "Blood - Beta Globulins": {
+    "lab_type": "blood",
     "primary_unit": "g/dL",
     "alternatives": [],
     "ranges": {
@@ -564,6 +614,7 @@
     }
   },
   "Blood - Beta Globulins (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -574,6 +625,7 @@
     }
   },
   "Blood - Beta-1 Globulins": {
+    "lab_type": "blood",
     "primary_unit": "g/dL",
     "alternatives": [],
     "ranges": {
@@ -584,6 +636,7 @@
     }
   },
   "Blood - Beta-1 Globulins (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -594,6 +647,7 @@
     }
   },
   "Blood - Beta-2 Globulins": {
+    "lab_type": "blood",
     "primary_unit": "g/dL",
     "alternatives": [],
     "ranges": {
@@ -604,6 +658,7 @@
     }
   },
   "Blood - Beta-2 Globulins (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -614,6 +669,7 @@
     }
   },
   "Blood - Bilirubin Direct": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -629,6 +685,7 @@
     }
   },
   "Blood - Bilirubin Indirect": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -644,6 +701,7 @@
     }
   },
   "Blood - Bilirubin Total": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -659,6 +717,7 @@
     }
   },
   "Blood - Bilirubin, Direct": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
@@ -669,6 +728,7 @@
     }
   },
   "Blood - Bilirubin, Indirect": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
@@ -679,6 +739,7 @@
     }
   },
   "Blood - Bilirubin, Total": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
@@ -689,6 +750,7 @@
     }
   },
   "Blood - C-Reactive Protein (CRP)": {
+    "lab_type": "blood",
     "primary_unit": "mg/L",
     "alternatives": [
       {
@@ -708,6 +770,7 @@
     }
   },
   "Blood - CA 19-9": {
+    "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [],
     "ranges": {
@@ -718,6 +781,7 @@
     }
   },
   "Blood - CEA (Carcino-Embryonic Ag)": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [],
     "ranges": {
@@ -728,6 +792,7 @@
     }
   },
   "Blood - Calcitonin": {
+    "lab_type": "blood",
     "primary_unit": "pg/mL",
     "alternatives": [],
     "ranges": {
@@ -738,6 +803,7 @@
     }
   },
   "Blood - Calcium (ionized)": {
+    "lab_type": "blood",
     "primary_unit": "mmol/L",
     "alternatives": [],
     "ranges": {
@@ -748,6 +814,7 @@
     }
   },
   "Blood - Calcium (total)": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -767,11 +834,13 @@
     }
   },
   "Blood - Cell Morphology": {
+    "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {}
   },
   "Blood - Ceruloplasmin": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
@@ -782,6 +851,7 @@
     }
   },
   "Blood - Chloride": {
+    "lab_type": "blood",
     "primary_unit": "mmol/L",
     "alternatives": [
       {
@@ -797,6 +867,7 @@
     }
   },
   "Blood - Chromium (Cr)": {
+    "lab_type": "blood",
     "primary_unit": "µg/L",
     "alternatives": [],
     "ranges": {
@@ -807,6 +878,7 @@
     }
   },
   "Blood - Circulating Immune Complexes": {
+    "lab_type": "blood",
     "primary_unit": "µg/mL",
     "alternatives": [],
     "ranges": {
@@ -817,6 +889,7 @@
     }
   },
   "Blood - Complement C3": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -832,6 +905,7 @@
     }
   },
   "Blood - Complement C4": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
@@ -842,6 +916,7 @@
     }
   },
   "Blood - Copper": {
+    "lab_type": "blood",
     "primary_unit": "µg/dL",
     "alternatives": [],
     "ranges": {
@@ -852,6 +927,7 @@
     }
   },
   "Blood - Copper (Erythrocytes)": {
+    "lab_type": "blood",
     "primary_unit": "µg/dL",
     "alternatives": [],
     "ranges": {
@@ -862,6 +938,7 @@
     }
   },
   "Blood - Cortisol": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [
       {
@@ -877,6 +954,7 @@
     }
   },
   "Blood - Creatine Kinase (CK)": {
+    "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -887,6 +965,7 @@
     }
   },
   "Blood - Creatinine": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -902,6 +981,7 @@
     }
   },
   "Blood - Cryoglobulins, Qualitative": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -912,6 +992,7 @@
     }
   },
   "Blood - Dehydroepiandrosterone (DHEA)": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [],
     "ranges": {
@@ -922,6 +1003,7 @@
     }
   },
   "Blood - Dehydroepiandrosterone (DHEA)-S": {
+    "lab_type": "blood",
     "primary_unit": "µg/mL",
     "alternatives": [],
     "ranges": {
@@ -932,6 +1014,7 @@
     }
   },
   "Blood - Dihydrotestosterone (DHT)": {
+    "lab_type": "blood",
     "primary_unit": "ng/dL",
     "alternatives": [],
     "ranges": {
@@ -942,6 +1025,7 @@
     }
   },
   "Blood - Eosinophils": {
+    "lab_type": "blood",
     "primary_unit": "10⁹/L",
     "alternatives": [
       {
@@ -957,6 +1041,7 @@
     }
   },
   "Blood - Eosinophils (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -967,6 +1052,7 @@
     }
   },
   "Blood - Erythrocyte Sedimentation Rate (ESR) - 1h": {
+    "lab_type": "blood",
     "primary_unit": "mm/h",
     "alternatives": [],
     "ranges": {
@@ -977,6 +1063,7 @@
     }
   },
   "Blood - Erythrocyte Sedimentation Rate (ESR) - 2h": {
+    "lab_type": "blood",
     "primary_unit": "mm/h",
     "alternatives": [],
     "ranges": {
@@ -987,6 +1074,7 @@
     }
   },
   "Blood - Erythrocyte Sedimentation Rate (ESR, 1 Hour)": {
+    "lab_type": "blood",
     "primary_unit": "mm/h",
     "alternatives": [],
     "ranges": {
@@ -997,6 +1085,7 @@
     }
   },
   "Blood - Erythrocyte Sedimentation Rate (ESR, 2 Hour)": {
+    "lab_type": "blood",
     "primary_unit": "mm/h",
     "alternatives": [],
     "ranges": {
@@ -1007,6 +1096,7 @@
     }
   },
   "Blood - Erythrocytes": {
+    "lab_type": "blood",
     "primary_unit": "10¹²/L",
     "alternatives": [
       {
@@ -1022,10 +1112,12 @@
     }
   },
   "Blood - Erythrocytes - Hypochromic (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": []
   },
   "Blood - Erythropoietin (EPO)": {
+    "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -1036,6 +1128,7 @@
     }
   },
   "Blood - Estimated Average Glucose (eAG)": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
@@ -1046,6 +1139,7 @@
     }
   },
   "Blood - Estradiol (E2)": {
+    "lab_type": "blood",
     "primary_unit": "pg/mL",
     "alternatives": [],
     "ranges": {
@@ -1056,6 +1150,7 @@
     }
   },
   "Blood - Estriol (E3)": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [],
     "ranges": {
@@ -1066,6 +1161,7 @@
     }
   },
   "Blood - Ferritin": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [
       {
@@ -1081,6 +1177,7 @@
     }
   },
   "Blood - Folate": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [],
     "ranges": {
@@ -1091,6 +1188,7 @@
     }
   },
   "Blood - Follicle-Stimulating Hormone (FSH)": {
+    "lab_type": "blood",
     "primary_unit": "mIU/mL",
     "alternatives": [
       {
@@ -1106,6 +1204,7 @@
     }
   },
   "Blood - Free T3": {
+    "lab_type": "blood",
     "primary_unit": "pmol/L",
     "alternatives": [
       {
@@ -1121,6 +1220,7 @@
     }
   },
   "Blood - Free T4": {
+    "lab_type": "blood",
     "primary_unit": "pmol/L",
     "alternatives": [
       {
@@ -1136,6 +1236,7 @@
     }
   },
   "Blood - Free Testosterone": {
+    "lab_type": "blood",
     "primary_unit": "pg/mL",
     "alternatives": [],
     "ranges": {
@@ -1146,6 +1247,7 @@
     }
   },
   "Blood - Gamma Globulins": {
+    "lab_type": "blood",
     "primary_unit": "g/dL",
     "alternatives": [],
     "ranges": {
@@ -1156,6 +1258,7 @@
     }
   },
   "Blood - Gamma Globulins (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1166,6 +1269,7 @@
     }
   },
   "Blood - Gamma-Glutamyl Transferase (GGT)": {
+    "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -1176,6 +1280,7 @@
     }
   },
   "Blood - Glucose (Fasting)": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -1191,6 +1296,7 @@
     }
   },
   "Blood - HDL Cholesterol": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
@@ -1201,6 +1307,7 @@
     }
   },
   "Blood - HIV-1 Proviral DNA": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -1211,6 +1318,7 @@
     }
   },
   "Blood - HIV-2 Proviral DNA": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -1221,6 +1329,7 @@
     }
   },
   "Blood - HLA-B27 Genotyping": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -1231,6 +1340,7 @@
     }
   },
   "Blood - Haematocrit (HCT) (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [
       {
@@ -1246,6 +1356,7 @@
     }
   },
   "Blood - Haemoglobin (Hb)": {
+    "lab_type": "blood",
     "primary_unit": "g/dL",
     "alternatives": [],
     "ranges": {
@@ -1256,6 +1367,7 @@
     }
   },
   "Blood - Haptoglobin": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
@@ -1266,6 +1378,7 @@
     }
   },
   "Blood - Hematocrit (HCT)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1276,6 +1389,7 @@
     }
   },
   "Blood - Hemoglobin A": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1286,6 +1400,7 @@
     }
   },
   "Blood - Hemoglobin A1c": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1296,6 +1411,7 @@
     }
   },
   "Blood - Hemoglobin A1c (IFCC)": {
+    "lab_type": "blood",
     "primary_unit": "mmol/mol creatinine",
     "alternatives": [],
     "ranges": {
@@ -1306,6 +1422,7 @@
     }
   },
   "Blood - Hemoglobin A1c (IFCC) (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1316,6 +1433,7 @@
     }
   },
   "Blood - Hemoglobin A2": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1326,6 +1444,7 @@
     }
   },
   "Blood - Hemoglobin Distribution Width (HDW)": {
+    "lab_type": "blood",
     "primary_unit": "g/dL",
     "alternatives": [],
     "ranges": {
@@ -1336,6 +1455,7 @@
     }
   },
   "Blood - Hemoglobin F (Fetal)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1346,26 +1466,31 @@
     }
   },
   "Blood - Hemolysis (initial, after incubation)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
   "Blood - Hemolysis (initial, immediate)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
   "Blood - Hemolysis (total, after incubation)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
   "Blood - Hemolysis (total, immediate)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
   "Blood - Hepatitis B Surface Antigen (HBsAg)": {
+    "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {
@@ -1376,11 +1501,13 @@
     }
   },
   "Blood - High mRNA Content": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
   "Blood - High-Density Lipoprotein Cholesterol (HDL Cholesterol)": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -1396,6 +1523,7 @@
     }
   },
   "Blood - Homocysteine": {
+    "lab_type": "blood",
     "primary_unit": "µg/mL",
     "alternatives": [
       {
@@ -1411,11 +1539,13 @@
     }
   },
   "Blood - Hypochromic Red Blood Cells": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
   "Blood - IG (Immature Granulocytes %) (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1426,6 +1556,7 @@
     }
   },
   "Blood - INR (Prothrombin Time)": {
+    "lab_type": "blood",
     "primary_unit": "ratio",
     "alternatives": [],
     "ranges": {
@@ -1436,6 +1567,7 @@
     }
   },
   "Blood - Immature Granulocytes": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1446,11 +1578,13 @@
     }
   },
   "Blood - Immature Reticulocyte Fraction (IRF)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
   "Blood - Immunoglobulin A (IgA)": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
@@ -1461,6 +1595,7 @@
     }
   },
   "Blood - Immunoglobulin G (IgG)": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
@@ -1471,6 +1606,7 @@
     }
   },
   "Blood - Immunoglobulin M (IgM)": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
@@ -1481,6 +1617,7 @@
     }
   },
   "Blood - Insulin": {
+    "lab_type": "blood",
     "primary_unit": "pmol/L",
     "alternatives": [
       {
@@ -1496,6 +1633,7 @@
     }
   },
   "Blood - Insulin-Like Growth Factor 1 (IGF-1)": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [],
     "ranges": {
@@ -1506,6 +1644,7 @@
     }
   },
   "Blood - Intrinsic Factor Ab (IgG)": {
+    "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -1516,6 +1655,7 @@
     }
   },
   "Blood - Iron": {
+    "lab_type": "blood",
     "primary_unit": "µg/dL",
     "alternatives": [
       {
@@ -1535,11 +1675,13 @@
     }
   },
   "Blood - Katz Index": {
+    "lab_type": "blood",
     "primary_unit": "ratio",
     "alternatives": [],
     "ranges": {}
   },
   "Blood - LDL/HDL Ratio": {
+    "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [
       {
@@ -1555,6 +1697,7 @@
     }
   },
   "Blood - Lactate Dehydrogenase (LDH)": {
+    "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -1565,6 +1708,7 @@
     }
   },
   "Blood - Leukocytes": {
+    "lab_type": "blood",
     "primary_unit": "10⁹/L",
     "alternatives": [
       {
@@ -1584,6 +1728,7 @@
     }
   },
   "Blood - Lipase": {
+    "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
@@ -1594,6 +1739,7 @@
     }
   },
   "Blood - Lithium": {
+    "lab_type": "blood",
     "primary_unit": "mEq/L",
     "alternatives": [],
     "ranges": {
@@ -1604,11 +1750,13 @@
     }
   },
   "Blood - Low mRNA Content": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
   "Blood - Low-Density Lipoprotein Cholesterol (LDL Cholesterol)": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -1624,6 +1772,7 @@
     }
   },
   "Blood - Lupus Erythematosus Cells Screen (LE Cells)": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -1634,6 +1783,7 @@
     }
   },
   "Blood - Luteinizing Hormone (LH)": {
+    "lab_type": "blood",
     "primary_unit": "mIU/mL",
     "alternatives": [
       {
@@ -1649,6 +1799,7 @@
     }
   },
   "Blood - Lymphocytes": {
+    "lab_type": "blood",
     "primary_unit": "10⁹/L",
     "alternatives": [
       {
@@ -1664,6 +1815,7 @@
     }
   },
   "Blood - Lymphocytes (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1674,6 +1826,7 @@
     }
   },
   "Blood - Macrocytes (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1684,6 +1837,7 @@
     }
   },
   "Blood - Magnesium": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -1703,6 +1857,7 @@
     }
   },
   "Blood - Magnesium (Erythrocytes)": {
+    "lab_type": "blood",
     "primary_unit": "mEq/L",
     "alternatives": [
       {
@@ -1718,6 +1873,7 @@
     }
   },
   "Blood - Mean Corpuscular Hemoglobin (MCH)": {
+    "lab_type": "blood",
     "primary_unit": "pg",
     "alternatives": [],
     "ranges": {
@@ -1728,6 +1884,7 @@
     }
   },
   "Blood - Mean Corpuscular Hemoglobin Concentration (MCHC)": {
+    "lab_type": "blood",
     "primary_unit": "g/dL",
     "alternatives": [],
     "ranges": {
@@ -1738,6 +1895,7 @@
     }
   },
   "Blood - Mean Corpuscular Volume (MCV)": {
+    "lab_type": "blood",
     "primary_unit": "fL",
     "alternatives": [
       {
@@ -1753,6 +1911,7 @@
     }
   },
   "Blood - Mean Platelet Volume (MPV)": {
+    "lab_type": "blood",
     "primary_unit": "fL",
     "alternatives": [
       {
@@ -1768,11 +1927,13 @@
     }
   },
   "Blood - Medium mRNA Content": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
   "Blood - Methylmalonic Acid": {
+    "lab_type": "blood",
     "primary_unit": "nmol/L",
     "alternatives": [],
     "ranges": {
@@ -1783,6 +1944,7 @@
     }
   },
   "Blood - Monocytes": {
+    "lab_type": "blood",
     "primary_unit": "10⁹/L",
     "alternatives": [
       {
@@ -1798,6 +1960,7 @@
     }
   },
   "Blood - Monocytes (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1808,6 +1971,7 @@
     }
   },
   "Blood - Myeloperoxidase Anti-Neutrophil Cytoplasmic Antibodies (MPO-ANCA)": {
+    "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {
@@ -1818,6 +1982,7 @@
     }
   },
   "Blood - Neutrophils": {
+    "lab_type": "blood",
     "primary_unit": "10⁹/L",
     "alternatives": [
       {
@@ -1833,6 +1998,7 @@
     }
   },
   "Blood - Neutrophils (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1843,6 +2009,7 @@
     }
   },
   "Blood - Nucleated Red Blood Cells (nRBC)": {
+    "lab_type": "blood",
     "primary_unit": "/100 WBC",
     "alternatives": [],
     "ranges": {
@@ -1853,6 +2020,7 @@
     }
   },
   "Blood - Osteocalcin": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [],
     "ranges": {
@@ -1863,6 +2031,7 @@
     }
   },
   "Blood - PSA Free/Total Ratio": {
+    "lab_type": "blood",
     "primary_unit": "ratio",
     "alternatives": [],
     "ranges": {
@@ -1873,6 +2042,7 @@
     }
   },
   "Blood - Parathyroid Hormone (Intact) (PTH)": {
+    "lab_type": "blood",
     "primary_unit": "pg/mL",
     "alternatives": [
       {
@@ -1888,6 +2058,7 @@
     }
   },
   "Blood - Phosphate (inorganic)": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
@@ -1898,6 +2069,7 @@
     }
   },
   "Blood - Plasma Cells": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1908,6 +2080,7 @@
     }
   },
   "Blood - Platelet Distribution Width (PDW)": {
+    "lab_type": "blood",
     "primary_unit": "fL",
     "alternatives": [
       {
@@ -1923,6 +2096,7 @@
     }
   },
   "Blood - Platelet Distribution Width (PDW) (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1933,6 +2107,7 @@
     }
   },
   "Blood - Plateletcrit (PCT)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1943,6 +2118,7 @@
     }
   },
   "Blood - Plateletcrit (PCT) (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1953,6 +2129,7 @@
     }
   },
   "Blood - Platelets": {
+    "lab_type": "blood",
     "primary_unit": "10⁹/L",
     "alternatives": [
       {
@@ -1968,6 +2145,7 @@
     }
   },
   "Blood - Platelets - Immature (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -1978,6 +2156,7 @@
     }
   },
   "Blood - Potassium": {
+    "lab_type": "blood",
     "primary_unit": "mmol/L",
     "alternatives": [
       {
@@ -1993,6 +2172,7 @@
     }
   },
   "Blood - Progesterone (PRG)": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [],
     "ranges": {
@@ -2003,6 +2183,7 @@
     }
   },
   "Blood - Prolactin": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [],
     "ranges": {
@@ -2013,6 +2194,7 @@
     }
   },
   "Blood - Prostate-Specific Antigen (PSA), Free": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [],
     "ranges": {
@@ -2023,6 +2205,7 @@
     }
   },
   "Blood - Prostate-Specific Antigen (PSA), Total": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [],
     "ranges": {
@@ -2033,6 +2216,7 @@
     }
   },
   "Blood - Prothrombin Time (%) (PT)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -2043,6 +2227,7 @@
     }
   },
   "Blood - Prothrombin Time (PT)": {
+    "lab_type": "blood",
     "primary_unit": "s",
     "alternatives": [],
     "ranges": {
@@ -2053,6 +2238,7 @@
     }
   },
   "Blood - Quick Time": {
+    "lab_type": "blood",
     "primary_unit": "s",
     "alternatives": [],
     "ranges": {
@@ -2063,11 +2249,13 @@
     }
   },
   "Blood - Red Blood Cell Morphology": {
+    "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {}
   },
   "Blood - Red Cell Distribution Width (RDW)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -2078,6 +2266,7 @@
     }
   },
   "Blood - Red Cell Distribution Width (RDW) (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -2088,6 +2277,7 @@
     }
   },
   "Blood - Red Cell Distribution Width (RDW-CV)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -2098,6 +2288,7 @@
     }
   },
   "Blood - Red Cell Distribution Width - Standard Deviation (%) (RDW-SD)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -2108,6 +2299,7 @@
     }
   },
   "Blood - Red Cell Distribution Width - Standard Deviation (RDW-SD)": {
+    "lab_type": "blood",
     "primary_unit": "fL",
     "alternatives": [
       {
@@ -2123,6 +2315,7 @@
     }
   },
   "Blood - Reticulocyte Count": {
+    "lab_type": "blood",
     "primary_unit": "10⁹/L",
     "alternatives": [
       {
@@ -2138,6 +2331,7 @@
     }
   },
   "Blood - Reticulocyte Count (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -2148,6 +2342,7 @@
     }
   },
   "Blood - Reticulocyte Hemoglobin Content": {
+    "lab_type": "blood",
     "primary_unit": "pg",
     "alternatives": [],
     "ranges": {
@@ -2158,6 +2353,7 @@
     }
   },
   "Blood - Reticulocyte Hemoglobin Content (CHr)": {
+    "lab_type": "blood",
     "primary_unit": "pg",
     "alternatives": [],
     "ranges": {
@@ -2168,6 +2364,7 @@
     }
   },
   "Blood - Reticulocyte Hemoglobin Equivalent": {
+    "lab_type": "blood",
     "primary_unit": "pg",
     "alternatives": [],
     "ranges": {
@@ -2178,6 +2375,7 @@
     }
   },
   "Blood - Reticulocyte Index": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -2188,6 +2386,7 @@
     }
   },
   "Blood - Reticulocytes (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -2198,6 +2397,7 @@
     }
   },
   "Blood - Reticulocytes (absolute)": {
+    "lab_type": "blood",
     "primary_unit": "10⁹/L",
     "alternatives": [],
     "ranges": {
@@ -2208,18 +2408,22 @@
     }
   },
   "Blood - Reticulocytes - High RNA (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": []
   },
   "Blood - Reticulocytes - Low RNA (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": []
   },
   "Blood - Reticulocytes - Medium RNA (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": []
   },
   "Blood - Reverse T3": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [],
     "ranges": {
@@ -2230,6 +2434,7 @@
     }
   },
   "Blood - Rheumatoid Arthritis Test (RA Test)": {
+    "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [],
     "ranges": {
@@ -2240,6 +2445,7 @@
     }
   },
   "Blood - Rheumatoid Factor (RF)": {
+    "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [],
     "ranges": {
@@ -2250,6 +2456,7 @@
     }
   },
   "Blood - Selenium": {
+    "lab_type": "blood",
     "primary_unit": "µg/L",
     "alternatives": [],
     "ranges": {
@@ -2260,6 +2467,7 @@
     }
   },
   "Blood - Sex Hormone-Binding Globulin (SHBG)": {
+    "lab_type": "blood",
     "primary_unit": "nmol/L",
     "alternatives": [],
     "ranges": {
@@ -2270,6 +2478,7 @@
     }
   },
   "Blood - Sodium": {
+    "lab_type": "blood",
     "primary_unit": "mmol/L",
     "alternatives": [
       {
@@ -2285,6 +2494,7 @@
     }
   },
   "Blood - Thyroid Stimulating Hormone (TSH)": {
+    "lab_type": "blood",
     "primary_unit": "µIU/mL",
     "alternatives": [],
     "ranges": {
@@ -2295,6 +2505,7 @@
     }
   },
   "Blood - Thyroid-Stimulating Hormone (TSH)": {
+    "lab_type": "blood",
     "primary_unit": "mIU/mL",
     "alternatives": [
       {
@@ -2318,6 +2529,7 @@
     }
   },
   "Blood - Total Cholesterol": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -2333,6 +2545,7 @@
     }
   },
   "Blood - Total Iron-Binding Capacity (TIBC)": {
+    "lab_type": "blood",
     "primary_unit": "µg/dL",
     "alternatives": [
       {
@@ -2348,6 +2561,7 @@
     }
   },
   "Blood - Total Protein": {
+    "lab_type": "blood",
     "primary_unit": "g/dL",
     "alternatives": [
       {
@@ -2363,6 +2577,7 @@
     }
   },
   "Blood - Total T3": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [
       {
@@ -2378,6 +2593,7 @@
     }
   },
   "Blood - Total T4": {
+    "lab_type": "blood",
     "primary_unit": "µg/dL",
     "alternatives": [
       {
@@ -2393,6 +2609,7 @@
     }
   },
   "Blood - Total Testosterone": {
+    "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [
       {
@@ -2408,6 +2625,7 @@
     }
   },
   "Blood - Transferrin": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -2423,6 +2641,7 @@
     }
   },
   "Blood - Transferrin (%)": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -2433,6 +2652,7 @@
     }
   },
   "Blood - Transferrin Saturation": {
+    "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {
@@ -2443,6 +2663,7 @@
     }
   },
   "Blood - Triglycerides": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -2458,6 +2679,7 @@
     }
   },
   "Blood - Urea": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -2473,6 +2695,7 @@
     }
   },
   "Blood - Uric Acid": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
@@ -2488,6 +2711,7 @@
     }
   },
   "Blood - VDRL": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2498,6 +2722,7 @@
     }
   },
   "Blood - Vitamin A (Retinol)": {
+    "lab_type": "blood",
     "primary_unit": "µg/dL",
     "alternatives": [],
     "ranges": {
@@ -2508,6 +2733,7 @@
     }
   },
   "Blood - Vitamin B12": {
+    "lab_type": "blood",
     "primary_unit": "pmol/L",
     "alternatives": [
       {
@@ -2527,6 +2753,7 @@
     }
   },
   "Blood - Vitamin B6 (PLP)": {
+    "lab_type": "blood",
     "primary_unit": "µg/L",
     "alternatives": [
       {
@@ -2542,6 +2769,7 @@
     }
   },
   "Blood - Vitamin C (Ascorbic Acid)": {
+    "lab_type": "blood",
     "primary_unit": "mg/L",
     "alternatives": [
       {
@@ -2557,6 +2785,7 @@
     }
   },
   "Blood - Vitamin E (Alpha-Tocopherol)": {
+    "lab_type": "blood",
     "primary_unit": "mg/L",
     "alternatives": [],
     "ranges": {
@@ -2567,6 +2796,7 @@
     }
   },
   "Blood - Waaler-Rose Test": {
+    "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [],
     "ranges": {
@@ -2577,6 +2807,7 @@
     }
   },
   "Blood - Widal (S. Paratyphi A H)": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2587,6 +2818,7 @@
     }
   },
   "Blood - Widal (S. Paratyphi A O)": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2597,6 +2829,7 @@
     }
   },
   "Blood - Widal (S. Paratyphi B H)": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2607,6 +2840,7 @@
     }
   },
   "Blood - Widal (S. Paratyphi B O)": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2617,6 +2851,7 @@
     }
   },
   "Blood - Widal (S. Typhi H)": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2627,6 +2862,7 @@
     }
   },
   "Blood - Widal (S. Typhi O)": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2637,6 +2873,7 @@
     }
   },
   "Blood - Wright Reaction": {
+    "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2647,6 +2884,7 @@
     }
   },
   "Blood - Zinc": {
+    "lab_type": "blood",
     "primary_unit": "µmol/L",
     "alternatives": [
       {
@@ -2662,6 +2900,7 @@
     }
   },
   "Blood - eAG (Estimated Average Glucose)": {
+    "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
@@ -2672,6 +2911,7 @@
     }
   },
   "Feces - Calprotectin": {
+    "lab_type": "feces",
     "primary_unit": "mg/L",
     "alternatives": [],
     "ranges": {
@@ -2682,6 +2922,7 @@
     }
   },
   "Feces - Chymotrypsin": {
+    "lab_type": "feces",
     "primary_unit": "µg",
     "alternatives": [],
     "ranges": {
@@ -2692,6 +2933,7 @@
     }
   },
   "Feces - Fecal Occult Blood (FOBT)": {
+    "lab_type": "feces",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2702,6 +2944,7 @@
     }
   },
   "Feces - Gram Bacteria": {
+    "lab_type": "feces",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2712,6 +2955,7 @@
     }
   },
   "Feces - Helicobacter pylori Ag": {
+    "lab_type": "feces",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2722,6 +2966,7 @@
     }
   },
   "Feces - Muscle Fibres (partial digestion)": {
+    "lab_type": "feces",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2732,6 +2977,7 @@
     }
   },
   "Feces - Neutral Fats": {
+    "lab_type": "feces",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2742,6 +2988,7 @@
     }
   },
   "Feces - Ova & Parasites": {
+    "lab_type": "feces",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2752,6 +2999,7 @@
     }
   },
   "Feces - Pancreatic Elastase": {
+    "lab_type": "feces",
     "primary_unit": "μg/g",
     "alternatives": [],
     "ranges": {
@@ -2762,6 +3010,7 @@
     }
   },
   "Feces - Salmonella": {
+    "lab_type": "feces",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2772,6 +3021,7 @@
     }
   },
   "Feces - Shigella": {
+    "lab_type": "feces",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2782,6 +3032,7 @@
     }
   },
   "Feces - Starch Granules": {
+    "lab_type": "feces",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2792,6 +3043,7 @@
     }
   },
   "Feces - Yersinia": {
+    "lab_type": "feces",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2802,6 +3054,7 @@
     }
   },
   "Saliva - SARS-CoV-2 RNA (RT-PCR)": {
+    "lab_type": "saliva",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2812,6 +3065,7 @@
     }
   },
   "Saliva - Secretory IgA": {
+    "lab_type": "saliva",
     "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
@@ -2822,6 +3076,7 @@
     }
   },
   "Urine - Bacteriological - Acid-Fast Bacilli": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2832,10 +3087,12 @@
     }
   },
   "Urine - Bacteriological - Colony Count": {
+    "lab_type": "urine",
     "primary_unit": "UFC/mL",
     "alternatives": []
   },
   "Urine - Bacteriological - Culture": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2846,6 +3103,7 @@
     }
   },
   "Urine - Bacteriological - Cytology": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2856,6 +3114,7 @@
     }
   },
   "Urine - Bacteriological - Gram Bacteria": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2866,6 +3125,7 @@
     }
   },
   "Urine - Bacteriological - Gram Negative Bacteria": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2876,6 +3136,7 @@
     }
   },
   "Urine - Bacteriological - Gram Positive Bacteria": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2886,6 +3147,7 @@
     }
   },
   "Urine - Free Cortisol (24 Hours)": {
+    "lab_type": "urine",
     "primary_unit": "µg/24h",
     "alternatives": [],
     "ranges": {
@@ -2896,6 +3158,7 @@
     }
   },
   "Urine - Free Cortisol (24 Hours) - Volume": {
+    "lab_type": "urine",
     "primary_unit": "mL",
     "alternatives": [],
     "ranges": {
@@ -2906,6 +3169,7 @@
     }
   },
   "Urine Type II - Albumin": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2916,6 +3180,7 @@
     }
   },
   "Urine Type II - Appearance": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2926,6 +3191,7 @@
     }
   },
   "Urine Type II - Bilirubin": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2936,6 +3202,7 @@
     }
   },
   "Urine Type II - Blood": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2946,11 +3213,13 @@
     }
   },
   "Urine Type II - Color": {
+    "lab_type": "urine",
     "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {}
   },
   "Urine Type II - Colour": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2961,6 +3230,7 @@
     }
   },
   "Urine Type II - Density": {
+    "lab_type": "urine",
     "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {
@@ -2971,6 +3241,7 @@
     }
   },
   "Urine Type II - Deposit": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2981,6 +3252,7 @@
     }
   },
   "Urine Type II - Glucose": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -2991,6 +3263,7 @@
     }
   },
   "Urine Type II - Haemoglobin": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -3001,6 +3274,7 @@
     }
   },
   "Urine Type II - Ketones": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -3011,6 +3285,7 @@
     }
   },
   "Urine Type II - Leukocytes": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -3021,6 +3296,7 @@
     }
   },
   "Urine Type II - Nitrites": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -3031,6 +3307,7 @@
     }
   },
   "Urine Type II - Proteins": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -3041,6 +3318,7 @@
     }
   },
   "Urine Type II - Sediment - Casts": {
+    "lab_type": "urine",
     "primary_unit": "/field",
     "alternatives": [
       {
@@ -3051,6 +3329,7 @@
     "ranges": {}
   },
   "Urine Type II - Sediment - Cells": {
+    "lab_type": "urine",
     "primary_unit": "/field",
     "alternatives": [
       {
@@ -3066,6 +3345,7 @@
     }
   },
   "Urine Type II - Sediment - Crystals": {
+    "lab_type": "urine",
     "primary_unit": "/field",
     "alternatives": [
       {
@@ -3081,6 +3361,7 @@
     }
   },
   "Urine Type II - Sediment - Epithelial Cells": {
+    "lab_type": "urine",
     "primary_unit": "/field",
     "alternatives": [
       {
@@ -3091,6 +3372,7 @@
     "ranges": {}
   },
   "Urine Type II - Sediment - Epithelial cells": {
+    "lab_type": "urine",
     "primary_unit": "/field",
     "alternatives": [
       {
@@ -3106,6 +3388,7 @@
     }
   },
   "Urine Type II - Sediment - Erythrocytes": {
+    "lab_type": "urine",
     "primary_unit": "/field",
     "alternatives": [
       {
@@ -3121,6 +3404,7 @@
     }
   },
   "Urine Type II - Sediment - Leukocytes": {
+    "lab_type": "urine",
     "primary_unit": "/field",
     "alternatives": [
       {
@@ -3136,6 +3420,7 @@
     }
   },
   "Urine Type II - Sediment - Small Round Cells": {
+    "lab_type": "urine",
     "primary_unit": "/field",
     "alternatives": [
       {
@@ -3151,6 +3436,7 @@
     }
   },
   "Urine Type II - Sediment - Squamous Epithelial Cells": {
+    "lab_type": "urine",
     "primary_unit": "/field",
     "alternatives": [
       {
@@ -3161,6 +3447,7 @@
     "ranges": {}
   },
   "Urine Type II - Sediment - Squamous epithelial cells": {
+    "lab_type": "urine",
     "primary_unit": "/field",
     "alternatives": [
       {
@@ -3176,6 +3463,7 @@
     }
   },
   "Urine Type II - Sediment - Total Casts": {
+    "lab_type": "urine",
     "primary_unit": "/ul",
     "alternatives": [],
     "ranges": {
@@ -3186,6 +3474,7 @@
     }
   },
   "Urine Type II - Sediment - Transitional epithelial cells": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -3196,6 +3485,7 @@
     }
   },
   "Urine Type II - Sediment - Tubular epithelial cells": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -3206,6 +3496,7 @@
     }
   },
   "Urine Type II - Sediment - Upper tract cells": {
+    "lab_type": "urine",
     "primary_unit": "/ul",
     "alternatives": [],
     "ranges": {
@@ -3216,6 +3507,7 @@
     }
   },
   "Urine Type II - Specific Gravity": {
+    "lab_type": "urine",
     "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {
@@ -3226,6 +3518,7 @@
     }
   },
   "Urine Type II - Turbidity": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -3236,6 +3529,7 @@
     }
   },
   "Urine Type II - Urobilinogen": {
+    "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -3246,6 +3540,7 @@
     }
   },
   "Urine Type II - pH": {
+    "lab_type": "urine",
     "primary_unit": "pH",
     "alternatives": [],
     "ranges": {
