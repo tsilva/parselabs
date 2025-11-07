@@ -2,3 +2,4 @@
 - Review data and add test cases with gitignored folder
 - Add support for multiple user profiles
 - Add medical exam support (or create new repo and merge data in health log parser)
+- Search for unkn
