@@ -233,12 +233,22 @@ def process_single_pdf(
                     unit_contexts,
                     config.self_consistency_model_id,
                     lab_specs.standardized_units,
-                    client
+                    client,
+                    lab_specs
                 )
                 for result in all_results:
                     raw_unit = result.get("unit") if result.get("unit") is not None else "null"
                     lab_name = result.get("lab_name_standardized", "")
-                    result["lab_unit_standardized"] = unit_mapping.get((raw_unit, lab_name), UNKNOWN_VALUE)
+                    standardized_unit = unit_mapping.get((raw_unit, lab_name), UNKNOWN_VALUE)
+
+                    # Post-process: If LLM returned $UNKNOWN$ for a null unit, use lab spec primary unit
+                    if standardized_unit == UNKNOWN_VALUE and raw_unit == "null" and lab_name != UNKNOWN_VALUE:
+                        primary_unit = lab_specs.get_primary_unit(lab_name)
+                        if primary_unit:
+                            standardized_unit = primary_unit
+                            logger.debug(f"[{pdf_stem}] Used primary unit '{primary_unit}' for null unit in '{lab_name}'")
+
+                    result["lab_unit_standardized"] = standardized_unit
                 logger.info(f"[{pdf_stem}] Standardized {len(set(r.get('unit') for r in all_results))} unique units")
             except Exception as e:
                 logger.error(f"[{pdf_stem}] Unit standardization failed: {e}")
@@ -361,21 +371,41 @@ def main():
         logger.warning("No PDF files found. Exiting.")
         return
 
-    # Process PDFs in parallel
-    n_workers = min(config.max_workers, len(pdf_files))
-    logger.info(f"Using {n_workers} worker(s) for PDF processing")
+    # Filter out PDFs that already have their CSV
+    pdfs_to_process = []
+    skipped_count = 0
+    for pdf_path in pdf_files:
+        csv_path = config.output_path / pdf_path.stem / f"{pdf_path.stem}.csv"
+        if csv_path.exists():
+            skipped_count += 1
+        else:
+            pdfs_to_process.append(pdf_path)
 
-    tasks = [(pdf, config.output_path, config, lab_specs) for pdf in pdf_files]
+    logger.info(f"Skipping {skipped_count} already-processed PDF(s)")
+    logger.info(f"Processing {len(pdfs_to_process)} PDF(s)")
 
-    # Use progress bar for PDF processing
-    with Pool(n_workers) as pool:
-        results = []
-        with tqdm(total=len(tasks), desc="Processing PDFs", unit="pdf") as pbar:
-            for result in pool.imap(_process_pdf_wrapper, tasks):
-                results.append(result)
-                pbar.update(1)
+    if not pdfs_to_process:
+        logger.info("All PDFs already processed. Moving to merge step...")
+        # Still need to get CSV paths for merging
+        csv_paths = [config.output_path / pdf.stem / f"{pdf.stem}.csv"
+                     for pdf in pdf_files
+                     if (config.output_path / pdf.stem / f"{pdf.stem}.csv").exists()]
+    else:
+        # Process PDFs in parallel
+        n_workers = min(config.max_workers, len(pdfs_to_process))
+        logger.info(f"Using {n_workers} worker(s) for PDF processing")
 
-    csv_paths = [path for path in results if path and path.exists()]
+        tasks = [(pdf, config.output_path, config, lab_specs) for pdf in pdfs_to_process]
+
+        # Use progress bar for PDF processing
+        with Pool(n_workers) as pool:
+            results = []
+            with tqdm(total=len(tasks), desc="Processing PDFs", unit="pdf") as pbar:
+                for result in pool.imap(_process_pdf_wrapper, tasks):
+                    results.append(result)
+                    pbar.update(1)
+
+        csv_paths = [path for path in results if path and path.exists()]
 
     if not csv_paths:
         logger.error("No PDFs successfully processed. Exiting.")
