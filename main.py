@@ -28,63 +28,61 @@ from openai import OpenAI, APIError
 ########################################
 
 COLUMN_SCHEMA = {
-    # Fields from LabResult, potentially modified or used directly
-    # 'dtype' specifies the target pandas dtype.
-    # 'excel_width' is the default column width in Excel.
-    # 'excel_hidden' flags if the column should be hidden in the main Excel export.
-    # 'final_export' flags if the column is part of the "final" summarized export (no longer used for separate files).
-    # 'plotting_role' identifies columns for specific roles in plotting (date, value, group, unit).
-
+    # Core columns
     "date": {"dtype": "datetime64[ns]", "excel_width": 13, "plotting_role": "date"},
-    "lab_type": {"dtype": "str", "excel_width": 10},
-    "lab_name": {"dtype": "str", "excel_width": 35, "excel_hidden": True},
-    "lab_code": {"dtype": "str", "excel_width": 15},
-    "lab_value": {"dtype": "float64", "excel_width": 12, "excel_hidden": True},
-    "lab_unit": {"dtype": "str", "excel_width": 15, "excel_hidden": True},
-    "lab_method": {"dtype": "str", "excel_width": 20},
-    "lab_range_min": {"dtype": "float64", "excel_width": 12, "excel_hidden": True},
-    "lab_range_max": {"dtype": "float64", "excel_width": 12, "excel_hidden": True},
-    "reference_range_text": {"dtype": "str", "excel_width": 25},
-    "is_flagged": {"dtype": "boolean", "excel_width": 10, "excel_hidden": True},
-    "lab_comments": {"dtype": "str", "excel_width": 40},
-    "confidence": {"dtype": "float64", "excel_width": 10, "excel_hidden": True},
-    "lack_of_confidence_reason": {"dtype": "str", "excel_width": 30},
-    "source_text": {"dtype": "str", "excel_width": 50},
+
+    # === RAW EXTRACTION FIELDS (exactly as in PDF) ===
+    "test_name": {"dtype": "str", "excel_width": 35, "excel_hidden": False},
+    "value": {"dtype": "float64", "excel_width": 12, "excel_hidden": False},
+    "unit": {"dtype": "str", "excel_width": 15, "excel_hidden": False},
+    "reference_range": {"dtype": "str", "excel_width": 25, "excel_hidden": False},
+    "reference_min": {"dtype": "float64", "excel_width": 12, "excel_hidden": True},
+    "reference_max": {"dtype": "float64", "excel_width": 12, "excel_hidden": True},
+    "is_abnormal": {"dtype": "boolean", "excel_width": 10, "excel_hidden": False},
+    "comments": {"dtype": "str", "excel_width": 40, "excel_hidden": False},
+
+    # Traceability
+    "source_text": {"dtype": "str", "excel_width": 50, "excel_hidden": True},
     "page_number": {"dtype": "Int64", "excel_width": 8},
     "source_file": {"dtype": "str", "excel_width": 25},
-    "validation_errors": {"dtype": "str", "excel_width": 60},
 
-    # Derived columns in main()
-    "lab_name_slug": {"dtype": "str", "excel_width": 30, "excel_hidden": True, "derivation_logic": "map_lab_name_slug"},
-    "lab_name_enum": {"dtype": "str", "excel_width": 30, "derivation_logic": "map_lab_name_enum", "plotting_role": "group"},
-    "lab_unit_enum": {"dtype": "str", "excel_width": 15, "derivation_logic": "alias_lab_unit"},
-    "is_valid_unit": {"dtype": "boolean", "excel_width": 12, "derivation_logic": "derive_from_validation_errors"},
+    # === NORMALIZED FIELDS (added in post-processing) ===
+    "lab_type": {"dtype": "str", "excel_width": 10, "derivation_logic": "infer_from_normalized_name"},
+    "lab_name": {"dtype": "str", "excel_width": 35, "derivation_logic": "normalize_test_name", "plotting_role": "group"},
+    "lab_unit": {"dtype": "str", "excel_width": 15, "derivation_logic": "normalize_unit"},
+    "lab_name_slug": {"dtype": "str", "excel_width": 30, "excel_hidden": True, "derivation_logic": "slugify_test_name"},
 
-    "lab_value_final": {"dtype": "float64", "excel_width": 14, "derivation_logic": "convert_to_primary_unit", "plotting_role": "value"},
-    "lab_unit_final": {"dtype": "str", "excel_width": 14, "derivation_logic": "convert_to_primary_unit", "plotting_role": "unit"},
-    "lab_range_min_final": {"dtype": "float64", "excel_width": 14, "derivation_logic": "convert_to_primary_unit"},
-    "lab_range_max_final": {"dtype": "float64", "excel_width": 14, "derivation_logic": "convert_to_primary_unit"},
+    # Unit conversion
+    "value_normalized": {"dtype": "float64", "excel_width": 14, "derivation_logic": "convert_to_primary_unit", "plotting_role": "value"},
+    "unit_normalized": {"dtype": "str", "excel_width": 14, "derivation_logic": "convert_to_primary_unit", "plotting_role": "unit"},
+    "reference_min_normalized": {"dtype": "float64", "excel_width": 14, "derivation_logic": "convert_to_primary_unit"},
+    "reference_max_normalized": {"dtype": "float64", "excel_width": 14, "derivation_logic": "convert_to_primary_unit"},
 
-    "is_flagged_final": {"dtype": "boolean", "excel_width": 14, "derivation_logic": "compute_is_flagged_final"},
+    # Health status
+    "is_out_of_reference": {"dtype": "boolean", "excel_width": 14, "derivation_logic": "compute_vs_reference"},
     "healthy_range_min": {"dtype": "float64", "excel_width": 16, "derivation_logic": "get_healthy_range"},
     "healthy_range_max": {"dtype": "float64", "excel_width": 16, "derivation_logic": "get_healthy_range"},
-    "is_in_healthy_range": {"dtype": "boolean", "excel_width": 18, "derivation_logic": "compute_is_in_healthy_range"},
+    "is_in_healthy_range": {"dtype": "boolean", "excel_width": 18, "derivation_logic": "compute_vs_healthy_range"},
 }
 
 # Helper functions to derive lists/dicts from COLUMN_SCHEMA
 def get_export_columns_from_schema(schema: dict) -> list:
     """Returns an ordered list of columns for the main export."""
     ordered_keys = [
-        "date", "lab_type", "lab_name", "lab_name_enum", "lab_name_slug",
-        "lab_value", "lab_unit", "lab_unit_enum", "is_valid_unit",
-        "lab_range_min", "lab_range_max", "reference_range_text",
-        "lab_value_final", "lab_unit_final",
-        "lab_range_min_final", "lab_range_max_final",
-        "is_flagged", "is_flagged_final",
+        # Core
+        "date",
+        # Raw extraction
+        "test_name", "value", "unit", "reference_range",
+        "reference_min", "reference_max", "is_abnormal", "comments",
+        # Normalized
+        "lab_type", "lab_name", "lab_unit", "lab_name_slug",
+        "value_normalized", "unit_normalized",
+        "reference_min_normalized", "reference_max_normalized",
+        # Health status
+        "is_out_of_reference",
         "healthy_range_min", "healthy_range_max", "is_in_healthy_range",
-        "confidence", "lab_code", "lab_method", "lab_comments",
-        "lack_of_confidence_reason", "source_text", "page_number", "source_file",
-        "validation_errors"
+        # Traceability
+        "source_text", "page_number", "source_file"
     ]
     return [key for key in ordered_keys if key in schema]
 
@@ -212,147 +210,110 @@ def clear_directory(dir_path: Path) -> None:
 # LLM Tools / Pydantic Models
 ########################################
 
-class LabType(str, Enum):
-    BLOOD = "blood"
-    URINE = "urine"
-    SALIVA = "saliva"
-    FECES = "feces"
-    UNKNOWN = "unknown"
-
-class LabUnit(str, Enum):
-    """Standardized laboratory test units of measurement."""
-    PERCENT = "%"
-    PER_CAMPO = "/campo"
-    TEN_CUBED_PER_MICROLITER = "10³/µL"
-    TEN_TWELFTH_PER_LITER = "10¹²/L"
-    TEN_SIXTH_PER_LITER = "10⁶/L"
-    TEN_SIXTH_PER_MM_CUBED = "10⁶/mm³"
-    TEN_SIXTH_PER_MICROLITER = "10⁶/µL"
-    TEN_NINTH_PER_LITER = "10⁹/L"
-    CFU_PER_ML = "CFU/mL"
-    IU_PER_LITER = "IU/L"
-    IU_PER_ML = "IU/mL"
-    KU_PER_LITER = "KU/L"
-    LITER = "L"
-    U_PER_LITER = "U/L"
-    UFC_PER_ML = "UFC/mL"
-    UL_PER_ML = "Ul/mL"
-    BOOLEAN = "boolean"
-    CAMPO = "campo"
-    CELLS_PER_MICROLITER = "cells/µL"
-    FEMTOLITER = "fL"
-    GRAM = "g"
-    GRAM_PER_LITER = "g/L"
-    GRAM_PER_DECILITER = "g/dL"
-    INDEX = "index"
-    MILLIEQ_PER_LITER = "mEq/L"
-    MILLIIU_PER_ML = "mIU/mL"
-    MILLILITER = "mL"
-    MG_PER_LITER = "mg/L"
-    MG_PER_DECILITER = "mg/dL"
-    MILLIMETER = "mm"
-    MM_PER_HOUR = "mm/h"
-    MILLIMOL_PER_LITER = "mmol/L"
-    MILLIMOL_PER_MOL_CREATININE = "mmol/mol creatinine"
-    NG_PER_LITER = "ng/L"
-    NG_PER_DECILITER = "ng/dL"
-    NG_PER_ML = "ng/mL"
-    NANOMOL_PER_LITER = "nmol/L"
-    PH = "pH"
-    PICOGRAM = "pg"
-    PG_PER_LITER = "pg/L"
-    PG_PER_ML = "pg/mL"
-    PICOMOL_PER_LITER = "pmol/L"
-    RATIO = "ratio"
-    SECOND = "s"
-    UNITLESS = "unitless"
-    MICROIU_PER_LITER = "µIU/L"
-    MICROIU_PER_ML = "µIU/mL"
-    MICROLITER = "µL"
-    MICROGRAM = "µg"
-    MICROGRAM_PER_100ML = "µg/100mL"
-    MICROGRAM_PER_LITER = "µg/L"
-    MICROGRAM_PER_DECILITER = "µg/dL"
-    MICROGRAM_PER_GRAM = "µg/g"
-    MICROGRAM_PER_ML = "µg/mL"
-    MICROMOL_PER_LITER = "µmol/L"
-
-# Load valid lab names from config for validation
-def _load_valid_lab_names() -> set[str]:
-    """Load standardized lab names from config file."""
-    config_path = Path("config/lab_names_mappings.json")
-    if config_path.exists():
-        with open(config_path, "r", encoding="utf-8") as f:
-            lab_names_mapping = json.load(f)
-            return set(lab_names_mapping.values())
-    return set()
-
-VALID_LAB_NAMES = _load_valid_lab_names()
+# Enums removed - using plain strings during extraction for simplicity and accuracy
+# Normalization happens in post-processing using mapping files
 
 class LabResult(BaseModel):
-    lab_type: LabType = Field(default=LabType.UNKNOWN, description="Type of laboratory test")
-    lab_name: str = Field(
+    """Single lab test result - optimized for extraction accuracy.
+
+    Primary goal: Extract exactly what appears in the PDF without interpretation.
+    Normalization happens in post-processing.
+    """
+
+    # === RAW EXTRACTION (exactly as shown in PDF) ===
+    test_name: str = Field(
         description=(
-            "Standardized name of the laboratory test with type prefix. "
-            "Format: '{Type} - {Test Name}' (e.g., 'Blood - Glucose', 'Urine - pH'). "
-            f"Use one of {len(VALID_LAB_NAMES)} standardized names when possible. "
-            "Examples: 'Blood - Hemoglobin A1c', 'Blood - Cholesterol Total', "
-            "'Blood - Alanine Aminotransferase (ALT)', 'Urine - Creatinine'. "
-            "Include lab type prefix (Blood, Urine, Feces, Saliva) and use proper capitalization."
+            "Test name EXACTLY as written in the PDF. "
+            "Preserve all spacing, capitalization, symbols, and formatting. "
+            "Examples: 'Hemoglobina A1c', 'ALT (TGP)', 'Vitamina D 25-hidroxi', 'Glicose'. "
+            "Do NOT standardize or translate - copy the exact text."
         )
     )
-    lab_code: Optional[str] = Field(default=None, description="Standardized code for the test")
-    lab_value: Optional[float] = Field(default=None, description="Quantitative result") # Allow string for non-numeric if strictly needed by source
-    lab_unit: Optional[str] = Field(
+    value: Optional[float] = Field(
         default=None,
-        description=f"Unit of measurement. Prefer one of: {', '.join([u.value for u in LabUnit])}"
+        description="Numeric result value. For text results (Positive/Negative), use 1/0 or leave null and put in comments."
     )
-    lab_method: Optional[str] = Field(default=None, description="Method used for the test, if applicable")
-    lab_range_min: Optional[float] = Field(default=None, description="Lower bound of reference range")
-    lab_range_max: Optional[float] = Field(default=None, description="Upper bound of reference range")
-    reference_range_text: Optional[str] = Field(default=None, description="Reference range as text")
-    is_flagged: Optional[bool] = Field(default=None, description="Is result flagged abnormal")
-    lab_comments: Optional[str] = Field(default=None, description="Additional notes")
-    confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="Extraction confidence")
-    lack_of_confidence_reason: Optional[str] = Field(default=None, description="Reason for low confidence")
-    source_text: Optional[str] = Field(default=None, description="Exact source snippet")
-    page_number: Optional[int] = Field(default=None, ge=1, description="Page number in PDF")
-    source_file: Optional[str] = Field(default=None, description="Source file/page identifier")
-    validation_errors: Optional[list[str]] = Field(default=None, description="List of validation errors found")
+    unit: Optional[str] = Field(
+        default=None,
+        description=(
+            "Unit EXACTLY as written in PDF (preserve case, spacing, symbols). "
+            "Examples: '%', 'mg/dL', 'mg/dl', 'U/L', 'g/dL', '10³/µL'. "
+            "Copy exactly - do NOT standardize."
+        )
+    )
+    reference_range: Optional[str] = Field(
+        default=None,
+        description=(
+            "Complete reference range text EXACTLY as shown. "
+            "Examples: '4.5-6.0', '<5.7', '70-100', '≤ 34', '3.5 - 5.5 mg/dL'. "
+            "Include all text, symbols, and units if present."
+        )
+    )
 
-    @model_validator(mode='after')
-    def validate_lab_data(self) -> 'LabResult':
-        """Validate lab_name and lab_unit against standardized values."""
-        # Validate lab_name
-        if self.lab_name and self.lab_name.strip() and VALID_LAB_NAMES:
-            if self.lab_name not in VALID_LAB_NAMES:
-                error_msg = f"Invalid lab_name '{self.lab_name}' - not in standardized list"
-                if self.validation_errors is None:
-                    self.validation_errors = []
-                self.validation_errors.append(error_msg)
+    # === PARSED REFERENCE VALUES ===
+    reference_min: Optional[float] = Field(
+        default=None,
+        description="Minimum reference value (extract number from reference_range if available)"
+    )
+    reference_max: Optional[float] = Field(
+        default=None,
+        description="Maximum reference value (extract number from reference_range if available)"
+    )
 
-        # Validate lab_unit
-        if self.lab_unit and self.lab_unit.strip():
-            valid_units = set(u.value for u in LabUnit)
-            if self.lab_unit not in valid_units:
-                error_msg = f"Invalid unit '{self.lab_unit}' - not in LabUnit enum"
-                if self.validation_errors is None:
-                    self.validation_errors = []
-                self.validation_errors.append(error_msg)
-        return self
+    # === FLAGS & CONTEXT ===
+    is_abnormal: Optional[bool] = Field(
+        default=None,
+        description="Whether result is marked/flagged as abnormal in PDF (H/L, arrows, asterisks, etc.)"
+    )
+    comments: Optional[str] = Field(
+        default=None,
+        description="Any notes, comments, or qualitative results"
+    )
+
+    # === TRACEABILITY ===
+    source_text: str = Field(
+        description="Exact row or section from PDF containing this result (helps verify accuracy)"
+    )
+
+    # Internal fields (added by pipeline, not by LLM)
+    page_number: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Page number in PDF (added by pipeline)"
+    )
+    source_file: Optional[str] = Field(default=None, description="Source file identifier (added by pipeline)")
 
 class HealthLabReport(BaseModel):
-    report_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="Report issue date")
-    collection_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="Specimen collection date")
-    lab_facility: Optional[str] = Field(default=None, description="Performing lab name")
-    lab_facility_address: Optional[str] = Field(default=None, description="Lab address")
-    patient_name: Optional[str] = Field(default=None, description="Patient's full name")
-    patient_id: Optional[str] = Field(default=None, description="Patient ID/MRN")
-    patient_birthdate: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="Patient birthdate")
-    physician_name: Optional[str] = Field(default=None, description="Requesting physician")
-    physician_id: Optional[str] = Field(default=None, description="Physician ID")
-    page_count: Optional[int] = Field(default=None, ge=1, description="Total pages in report")
-    lab_results: List[LabResult] = Field(default_factory=list, description="List of lab results")
+    """Document-level lab report metadata.
+
+    Focus on essential information needed for organizing results.
+    """
+
+    # Essential dates
+    collection_date: Optional[str] = Field(
+        default=None,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Specimen collection date in YYYY-MM-DD format"
+    )
+    report_date: Optional[str] = Field(
+        default=None,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Report issue date in YYYY-MM-DD format"
+    )
+
+    # Lab facility (optional but helpful)
+    lab_facility: Optional[str] = Field(
+        default=None,
+        description="Name of laboratory that performed tests"
+    )
+
+    # The actual results
+    lab_results: List[LabResult] = Field(
+        default_factory=list,
+        description="List of all lab test results extracted from this page/document"
+    )
+
+    # Internal tracking
     source_file: Optional[str] = Field(default=None, description="Source PDF filename")
 
     def normalize_empty_optionals(self):
@@ -510,22 +471,43 @@ Pay special attention to numbers, units (e.g., mg/dL), and reference ranges.
 
 def extract_labs_from_page_transcription(transcription: str, model_id: str, temperature: float = 0.3) -> dict:
     system_prompt = """
-You are a medical lab report analyzer. Your task is to extract information from the provided transcription and structure it according to the 'extract_lab_results' tool schema.
-Follow these strict requirements:
-1. COMPLETENESS: Extract ALL test results from the provided transcription.
-2. ACCURACY: Values and units must match exactly as they appear in the transcription.
-3. SCHEMA ADHERENCE: Populate ALL fields of the `HealthLabReport` and nested `LabResult` models. If information for an optional field is not present, use `null`.
-   - CRITICAL: Use EXACT field names from the schema: `lab_name` (NOT test_name), `lab_unit` (NOT unit), `lab_value`, etc.
-4. DATES: Ensure `report_date` and `collection_date` are in YYYY-MM-DD format or `null`.
-5. LAB VALUES: If a lab value is clearly boolean (e.g., "Positive", "Negative"), convert `lab_value` to 1 or 0 respectively. Otherwise, use the numerical value. If it's purely textual (e.g., "See comments"), `lab_value` should be null and the text captured in `lab_comments` or `source_text`.
-6. THOROUGHNESS: Process the text line by line to ensure nothing is missed.
-7. LAB TYPE (CRITICAL): ALWAYS specify `lab_type` for EVERY test:
-   - Use 'blood' for: CBC, chemistry panels, hormones, enzymes, electrolytes, glucose, cholesterol, liver/kidney function tests
-   - Use 'urine' for: urinalysis, urine microscopy, urine culture
-   - Use 'saliva' for: saliva-based tests
-   - Use 'feces' for: stool tests
-   - DEFAULT to 'blood' if unclear - most lab tests are blood tests
-   - NEVER leave `lab_type` as null or use 'unknown' - always make your best determination
+You are a medical lab report data extractor. Your PRIMARY goal is ACCURACY - extract exactly what you see in the transcription.
+
+CRITICAL RULES:
+1. COPY, DON'T INTERPRET: Extract test names, values, and units EXACTLY as written
+   - Preserve capitalization, spacing, symbols, punctuation
+   - Do NOT standardize, translate, or normalize
+   - Example: If it says "Hemoglobina A1c", write "Hemoglobina A1c" (not "Hemoglobin A1c")
+   - Example: If it says "mg/dl", write "mg/dl" (not "mg/dL")
+
+2. COMPLETENESS: Extract ALL test results from the transcription
+   - Process line by line
+   - Don't skip any tests
+
+3. EXACT VALUES:
+   - `value`: Extract the numeric result
+   - `unit`: Copy the unit exactly as shown
+   - `reference_range`: Copy the complete reference range text (e.g., "4.5-6.0", "<5.7", "70-100 mg/dL")
+   - `reference_min` / `reference_max`: Parse numeric bounds from reference_range if possible
+
+4. FLAGS & CONTEXT:
+   - `is_abnormal`: Set to true if result is marked (H, L, *, ↑, ↓, "HIGH", "LOW", etc.)
+   - `comments`: Capture any notes or qualitative results
+
+5. TRACEABILITY:
+   - `source_text`: Copy the exact row/line containing this result
+
+6. DATES: Format as YYYY-MM-DD or leave null
+
+SCHEMA FIELD NAMES:
+- Use `test_name` (NOT lab_name)
+- Use `value` (NOT lab_value)
+- Use `unit` (NOT lab_unit)
+- Use `reference_range`, `reference_min`, `reference_max`
+- Use `is_abnormal` (NOT is_flagged)
+- Use `comments` (NOT lab_comments)
+
+Remember: Your job is to be a perfect copier, not an interpreter. Accuracy over everything.
 """.strip()
 
     try:
@@ -540,30 +522,17 @@ Follow these strict requirements:
 
     if not completion.choices[0].message.tool_calls:
         logger.warning(f"No tool call by model for lab extraction. Transcription snippet: {transcription[:200]}")
-        return HealthLabReport(lab_results=[]).model_dump()
+        return HealthLabReport(lab_results=[]).model_dump(mode='json')
 
     tool_args_raw = completion.choices[0].message.tool_calls[0].function.arguments
     try: tool_result_dict = json.loads(tool_args_raw)
     except json.JSONDecodeError as e:
         logger.error(f"JSON decode error for tool args: {e}. Raw: '{tool_args_raw[:500]}'")
-        return HealthLabReport(lab_results=[]).model_dump() # Fallback
+        return HealthLabReport(lab_results=[]).model_dump(mode='json') # Fallback
 
     # Pre-process: Fix common LLM issues before Pydantic validation
 
-    # Fix 1: Convert page_count string to int (e.g., "2/2", "2 de 2", "3 de 5")
-    if "page_count" in tool_result_dict and isinstance(tool_result_dict["page_count"], str):
-        try:
-            # Extract first number from string like "2/2" or "2 de 2"
-            import re
-            match = re.search(r'(\d+)', tool_result_dict["page_count"])
-            if match:
-                tool_result_dict["page_count"] = int(match.group(1))
-            else:
-                tool_result_dict["page_count"] = None
-        except:
-            tool_result_dict["page_count"] = None
-
-    # Fix 2: Convert lab_results strings to dicts (LLM sometimes returns JSON strings or Python repr strings)
+    # Fix 1: Convert lab_results strings to dicts (LLM sometimes returns JSON strings or Python repr strings)
     if "lab_results" in tool_result_dict and isinstance(tool_result_dict["lab_results"], list):
         parsed_lab_results = []
         for i, lr_data in enumerate(tool_result_dict["lab_results"]):
@@ -623,24 +592,13 @@ Follow these strict requirements:
                 parsed_lab_results.append(lr_data)
         tool_result_dict["lab_results"] = parsed_lab_results
 
-    # Fix 3: Map common field name mistakes (e.g., test_name -> lab_name)
-    if "lab_results" in tool_result_dict and isinstance(tool_result_dict["lab_results"], list):
-        for lr_data in tool_result_dict["lab_results"]:
-            if isinstance(lr_data, dict):
-                # Map test_name to lab_name
-                if "test_name" in lr_data and "lab_name" not in lr_data:
-                    lr_data["lab_name"] = lr_data.pop("test_name")
-                # Map lab_test_name to lab_name
-                if "lab_test_name" in lr_data and "lab_name" not in lr_data:
-                    lr_data["lab_name"] = lr_data.pop("lab_test_name")
-                # Map unit to lab_unit
-                if "unit" in lr_data and "lab_unit" not in lr_data:
-                    lr_data["lab_unit"] = lr_data.pop("unit")
+    # Field names now match schema directly (test_name, value, unit, etc.)
+    # No mapping needed
 
     try:
         report_model = HealthLabReport(**tool_result_dict)
         report_model.normalize_empty_optionals()
-        return report_model.model_dump()
+        return report_model.model_dump(mode='json')
     except Exception as e: # Pydantic validation or other error
         logger.error(f"Model validation error post-extraction: {e}. Data keys: {tool_result_dict.keys()}, lab_results count: {len(tool_result_dict.get('lab_results', []))}")
         # Attempt to salvage results if main report fails
@@ -653,13 +611,13 @@ Follow these strict requirements:
                         logger.warning(f"lab_result[{i}] is still a string after preprocessing, skipping")
                         continue
                     lr_model = LabResult(**lr_data)
-                    valid_results.append(lr_model.model_dump())
+                    valid_results.append(lr_model.model_dump(mode='json'))
                 except Exception as lr_error:
                     logger.debug(f"Failed to validate lab_result[{i}]: {lr_error}")
                     pass # Ignore individual failures
             logger.info(f"Salvaged {len(valid_results)}/{len(tool_result_dict['lab_results'])} lab results after validation error")
-            return HealthLabReport(lab_results=valid_results).model_dump() # Return with what could be salvaged
-        return HealthLabReport(lab_results=[]).model_dump() # Final fallback
+            return HealthLabReport(lab_results=valid_results).model_dump(mode='json') # Return with what could be salvaged
+        return HealthLabReport(lab_results=[]).model_dump(mode='json') # Final fallback
 
 
 ########################################
@@ -721,18 +679,18 @@ def process_single_pdf(
                     page_json_path.write_text(json.dumps(current_page_json_data, indent=2, ensure_ascii=False), encoding='utf-8')
                 except Exception as e:
                     logger.error(f"[{page_file_name}] Extract. failed: {e}")
-                    current_page_json_data = HealthLabReport(lab_results=[]).model_dump()
+                    current_page_json_data = HealthLabReport(lab_results=[]).model_dump(mode='json')
             else:
                 try:
                     current_page_json_data = json.loads(page_json_path.read_text(encoding='utf-8'))
                 except Exception as e:
                     logger.error(f"[{page_file_name}] Load JSON failed: {e}")
-                    current_page_json_data = HealthLabReport(lab_results=[]).model_dump()
+                    current_page_json_data = HealthLabReport(lab_results=[]).model_dump(mode='json')
 
             # Ensure current_page_json_data is always a dictionary
             if not isinstance(current_page_json_data, dict):
                 logger.error(f"[{page_file_name}] current_page_json_data is not a dict: {type(current_page_json_data)}")
-                current_page_json_data = HealthLabReport(lab_results=[]).model_dump()
+                current_page_json_data = HealthLabReport(lab_results=[]).model_dump(mode='json')
 
             if current_page_json_data:
                 if page_idx == 0: # First page processing for report-level data
@@ -920,143 +878,239 @@ def main():
     else: merged_df = pd.concat(dataframes, ignore_index=True)
     logger.info(f"Merged data: {len(merged_df)} rows.")
 
-    # --------- Add derived columns (slugs, enums, final values) ---------
-    def create_lab_name_slug(row):
-        lab_type = row.get('lab_type', '')
-        # Handle NaN, None, empty string, or 'unknown' -> default to 'blood'
-        if pd.isna(lab_type) or not lab_type or str(lab_type).lower() in ['nan', 'none', 'unknown', '']:
-            lab_type = 'blood'
-        return f"{str(lab_type).lower()}-{slugify(row.get('lab_name', ''))}"
+    # --------- Add normalized columns (post-processing) ---------
 
-    merged_df["lab_name_slug"] = merged_df.apply(create_lab_name_slug, axis=1)
+    # Normalize unit mapping (case-insensitive, symbol normalization)
+    unit_normalization_map = {
+        # Percentage
+        '%': '%', 'percent': '%', 'per cent': '%',
+        # mg/dL variations
+        'mg/dl': 'mg/dL', 'mg/dL': 'mg/dL', 'mg/deciliter': 'mg/dL',
+        # g/dL variations
+        'g/dl': 'g/dL', 'g/dL': 'g/dL',
+        # U/L variations
+        'u/l': 'U/L', 'U/L': 'U/L', 'UI/L': 'U/L',
+        # Add more as needed
+    }
 
-    # Convert validation_errors from list to string for CSV export
-    def format_validation_errors(errors):
-        """Convert validation_errors list to semicolon-separated string."""
-        if pd.isna(errors) or errors is None:
+    def normalize_unit(raw_unit: str) -> str:
+        """Normalize unit to standard form."""
+        if pd.isna(raw_unit):
             return None
-        # Handle if it's already a string or convert list to string
-        if isinstance(errors, str):
-            return errors if errors.strip() else None
-        if isinstance(errors, list) and errors:
-            return "; ".join(str(e) for e in errors)
-        return None
+        normalized = unit_normalization_map.get(str(raw_unit).strip(), str(raw_unit).strip())
+        return normalized
 
-    if "validation_errors" in merged_df.columns:
-        merged_df["validation_errors"] = merged_df["validation_errors"].apply(format_validation_errors)
+    if "unit" in merged_df.columns:
+        merged_df["lab_unit"] = merged_df["unit"].apply(normalize_unit)
     else:
-        merged_df["validation_errors"] = None
-
-    # Derive is_valid_unit from validation_errors (True if no errors, False if errors present)
-    def derive_is_valid_unit(validation_errors) -> bool:
-        """Check if there are validation errors. No errors = valid."""
-        if pd.isna(validation_errors) or validation_errors is None or validation_errors == "":
-            return True
-        return False
-
-    merged_df["is_valid_unit"] = merged_df["validation_errors"].apply(derive_is_valid_unit)
-
-    # lab_unit is already guided by LabUnit enum description, so just alias it
-    lab_unit_col = merged_df.get("lab_unit", pd.Series(dtype="str"))
-    merged_df["lab_unit_enum"] = lab_unit_col
+        merged_df["lab_unit"] = None
 
     config_path = Path("config")
     paths_exist = all([(config_path / f).exists() for f in ["lab_names_mappings.json", "lab_specs.json"]])
     if not paths_exist:
-        logger.error(f"Missing config files in '{config_path}'. Derived columns might be incomplete.")
-        # Initialize columns to prevent KeyErrors if they are used later
+        logger.error(f"Missing config files in '{config_path}'. Normalized columns will be incomplete.")
+        # Initialize columns to prevent KeyErrors
         derived_cols_to_init = [
-            "lab_name_slug", "lab_name_enum", "lab_unit_enum", "is_valid_unit", "lab_value_final",
-            "lab_unit_final", "lab_range_min_final", "lab_range_max_final",
-            "is_flagged_final", "healthy_range_min", "healthy_range_max", "is_in_healthy_range"
+            "lab_type", "lab_name", "lab_name_slug",
+            "value_normalized", "unit_normalized",
+            "reference_min_normalized", "reference_max_normalized",
+            "is_out_of_reference", "healthy_range_min", "healthy_range_max", "is_in_healthy_range"
         ]
         for col_key in derived_cols_to_init:
-            if col_key not in merged_df.columns: merged_df[col_key] = None
+            if col_key not in merged_df.columns:
+                merged_df[col_key] = None
     else:
-        with open(config_path / "lab_names_mappings.json", "r", encoding="utf-8") as f: lab_names_mapping = json.load(f)
-        with open(config_path / "lab_specs.json", "r", encoding="utf-8") as f: lab_specs = json.load(f)
+        with open(config_path / "lab_names_mappings.json", "r", encoding="utf-8") as f:
+            lab_names_mapping = json.load(f)
+        with open(config_path / "lab_specs.json", "r", encoding="utf-8") as f:
+            lab_specs = json.load(f)
 
-        def map_lab_name_enum(slug: str) -> str:
-            mapped = lab_names_mapping.get(slug)
-            if mapped is None:
-                logger.error(f"Unmapped lab name slug '{slug}'")
-                return slug
-            return mapped
+        # Normalize test names
+        def normalize_test_name(raw_test_name: str) -> str:
+            """Map raw test name to standardized lab name using slugification."""
+            if pd.isna(raw_test_name):
+                return UNKNOWN_VALUE
 
-        merged_df["lab_name_enum"] = merged_df["lab_name_slug"].apply(map_lab_name_enum)
+            # Try different lab types (default to blood)
+            for lab_type in ['blood', 'urine', 'feces', 'saliva']:
+                slug = f"{lab_type}-{slugify(raw_test_name)}"
+                if slug in lab_names_mapping:
+                    return lab_names_mapping[slug]
 
+            # Not found - log and return unknown
+            logger.warning(f"Unmapped test name: '{raw_test_name}' (tried all lab types)")
+            return UNKNOWN_VALUE
+
+        if "test_name" in merged_df.columns:
+            merged_df["lab_name"] = merged_df["test_name"].apply(normalize_test_name)
+
+            # Infer lab_type from normalized name
+            def infer_lab_type(lab_name: str) -> str:
+                """Infer lab type from standardized lab name prefix."""
+                if pd.isna(lab_name) or lab_name == UNKNOWN_VALUE:
+                    return "blood"  # default
+                if lab_name.startswith("Blood - "):
+                    return "blood"
+                elif lab_name.startswith("Urine - "):
+                    return "urine"
+                elif lab_name.startswith("Feces - "):
+                    return "feces"
+                elif lab_name.startswith("Saliva - "):
+                    return "saliva"
+                return "blood"  # default
+
+            merged_df["lab_type"] = merged_df["lab_name"].apply(infer_lab_type)
+
+            # Create slug for tracking
+            merged_df["lab_name_slug"] = merged_df.apply(
+                lambda row: f"{row['lab_type']}-{slugify(row.get('test_name', ''))}",
+                axis=1
+            )
+        else:
+            merged_df["lab_name"] = UNKNOWN_VALUE
+            merged_df["lab_type"] = "blood"
+            merged_df["lab_name_slug"] = ""
+
+        # Convert to primary units
         def convert_to_primary_unit(row):
-            name_enum, unit_enum = row.get("lab_name_enum",""), row.get("lab_unit_enum","")
-            val, r_min, r_max = row.get("lab_value"), row.get("lab_range_min"), row.get("lab_range_max")
-            v_f, r_min_f, r_max_f, u_f = val, r_min, r_max, (unit_enum if pd.notna(unit_enum) else None)
-            if not name_enum or pd.isna(name_enum) or name_enum not in lab_specs: return pd.Series([v_f, r_min_f, r_max_f, u_f])
-            spec, prim_unit = lab_specs[name_enum], lab_specs[name_enum].get("primary_unit")
-            if not prim_unit: return pd.Series([v_f, r_min_f, r_max_f, u_f])
-            u_f = prim_unit
-            if unit_enum == prim_unit: return pd.Series([v_f, r_min_f, r_max_f, u_f])
-            factor = next((alt.get("factor") for alt in spec.get("alternatives",[]) if alt.get("unit")==unit_enum), None)
-            if factor:
-                try: v_f = float(val) * float(factor) if pd.notnull(val) else val
-                except: pass
-                try: r_min_f = float(r_min) * float(factor) if pd.notnull(r_min) else r_min
-                except: pass
-                try: r_max_f = float(r_max) * float(factor) if pd.notnull(r_max) else r_max
-                except: pass
-            return pd.Series([v_f, r_min_f, r_max_f, u_f])
-        
-        if all(c in merged_df.columns for c in ["lab_name_enum", "lab_unit_enum", "lab_value", "lab_range_min", "lab_range_max"]):
-            final_cols_df = merged_df.apply(convert_to_primary_unit, axis=1)
-            final_cols_df.columns = ["lab_value_final", "lab_range_min_final", "lab_range_max_final", "lab_unit_final"]
-            merged_df = pd.concat([merged_df, final_cols_df], axis=1)
+            """Convert values to primary unit defined in lab_specs."""
+            lab_name = row.get("lab_name", "")
+            lab_unit = row.get("lab_unit", "")
+            val = row.get("value")
+            r_min = row.get("reference_min")
+            r_max = row.get("reference_max")
 
-        def compute_is_flagged_final(row):
-            val, minv, maxv = row.get("lab_value_final"), row.get("lab_range_min_final"), row.get("lab_range_max_final")
-            if pd.isna(val): return None
-            try: val_f = float(val)
-            except: return None
-            # This logic is reversed, should be val_f < minv_f or val_f > maxv_f
+            # Default: no conversion
+            v_f, r_min_f, r_max_f, u_f = val, r_min, r_max, lab_unit
+
+            # Check if we have a spec for this lab
+            if not lab_name or pd.isna(lab_name) or lab_name not in lab_specs:
+                return pd.Series([v_f, r_min_f, r_max_f, u_f])
+
+            spec = lab_specs[lab_name]
+            prim_unit = spec.get("primary_unit")
+
+            if not prim_unit:
+                return pd.Series([v_f, r_min_f, r_max_f, u_f])
+
+            # If already in primary unit, no conversion needed
+            if lab_unit == prim_unit:
+                return pd.Series([val, r_min, r_max, prim_unit])
+
+            # Find conversion factor
+            factor = next(
+                (alt.get("factor") for alt in spec.get("alternatives", []) if alt.get("unit") == lab_unit),
+                None
+            )
+
+            if factor:
+                try:
+                    v_f = float(val) * float(factor) if pd.notnull(val) else val
+                except:
+                    pass
+                try:
+                    r_min_f = float(r_min) * float(factor) if pd.notnull(r_min) else r_min
+                except:
+                    pass
+                try:
+                    r_max_f = float(r_max) * float(factor) if pd.notnull(r_max) else r_max
+                except:
+                    pass
+                u_f = prim_unit
+
+            return pd.Series([v_f, r_min_f, r_max_f, u_f])
+
+        if all(c in merged_df.columns for c in ["lab_name", "lab_unit", "value", "reference_min", "reference_max"]):
+            final_cols_df = merged_df.apply(convert_to_primary_unit, axis=1)
+            final_cols_df.columns = ["value_normalized", "reference_min_normalized", "reference_max_normalized", "unit_normalized"]
+            merged_df = pd.concat([merged_df, final_cols_df], axis=1)
+        else:
+            merged_df["value_normalized"] = merged_df.get("value")
+            merged_df["unit_normalized"] = merged_df.get("lab_unit")
+            merged_df["reference_min_normalized"] = merged_df.get("reference_min")
+            merged_df["reference_max_normalized"] = merged_df.get("reference_max")
+
+        # Compute if value is outside reference range
+        def compute_is_out_of_reference(row):
+            """Check if value is outside the reference range from PDF."""
+            val = row.get("value_normalized")
+            minv = row.get("reference_min_normalized")
+            maxv = row.get("reference_max_normalized")
+
+            if pd.isna(val):
+                return None
+            try:
+                val_f = float(val)
+            except:
+                return None
+
             is_low = pd.notna(minv) and val_f < float(minv)
             is_high = pd.notna(maxv) and val_f > float(maxv)
-            return is_low or is_high if (pd.notna(minv) or pd.notna(maxv)) else None # Corrected logic
-        if all(c in merged_df.columns for c in ["lab_value_final", "lab_range_min_final", "lab_range_max_final"]):
-            merged_df["is_flagged_final"] = merged_df.apply(compute_is_flagged_final, axis=1)
+            return is_low or is_high if (pd.notna(minv) or pd.notna(maxv)) else None
 
+        if all(c in merged_df.columns for c in ["value_normalized", "reference_min_normalized", "reference_max_normalized"]):
+            merged_df["is_out_of_reference"] = merged_df.apply(compute_is_out_of_reference, axis=1)
+        else:
+            merged_df["is_out_of_reference"] = None
+
+        # Get healthy range from lab specs
         def get_healthy_range(row):
-            name_enum = row.get("lab_name_enum", "")
-            if not name_enum or pd.isna(name_enum) or name_enum not in lab_specs: return pd.Series([None, None])
-            healthy = lab_specs[name_enum].get("ranges",{}).get("healthy")
-            return pd.Series([healthy.get("min"), healthy.get("max")]) if healthy else pd.Series([None,None])
-        if "lab_name_enum" in merged_df.columns:
+            """Get healthy range from lab specs config."""
+            lab_name = row.get("lab_name", "")
+            if not lab_name or pd.isna(lab_name) or lab_name not in lab_specs:
+                return pd.Series([None, None])
+            healthy = lab_specs[lab_name].get("ranges", {}).get("healthy")
+            return pd.Series([healthy.get("min"), healthy.get("max")]) if healthy else pd.Series([None, None])
+
+        if "lab_name" in merged_df.columns:
             merged_df[["healthy_range_min", "healthy_range_max"]] = merged_df.apply(get_healthy_range, axis=1)
-        
+        else:
+            merged_df["healthy_range_min"] = None
+            merged_df["healthy_range_max"] = None
+
+        # Check if value is in healthy range
         def compute_is_in_healthy_range(row):
-            val, min_h, max_h = row.get("lab_value_final"), row.get("healthy_range_min"), row.get("healthy_range_max")
-            if pd.isna(val): return None
-            try: val_f = float(val)
-            except: return None
-            if pd.isna(min_h) and pd.isna(max_h): return None # No healthy range defined
+            """Check if value is within healthy range from lab specs."""
+            val = row.get("value_normalized")
+            min_h = row.get("healthy_range_min")
+            max_h = row.get("healthy_range_max")
+
+            if pd.isna(val):
+                return None
+            try:
+                val_f = float(val)
+            except:
+                return None
+
+            if pd.isna(min_h) and pd.isna(max_h):
+                return None  # No healthy range defined
+
             too_low = pd.notna(min_h) and val_f < float(min_h)
             too_high = pd.notna(max_h) and val_f > float(max_h)
             return not (too_low or too_high)
-        if all(c in merged_df.columns for c in ["lab_value_final", "healthy_range_min", "healthy_range_max"]):
-            merged_df["is_in_healthy_range"] = merged_df.apply(compute_is_in_healthy_range, axis=1)
 
-    # --------- Deduplicate by (date, lab_name_enum) keeping best match ---------
+        if all(c in merged_df.columns for c in ["value_normalized", "healthy_range_min", "healthy_range_max"]):
+            merged_df["is_in_healthy_range"] = merged_df.apply(compute_is_in_healthy_range, axis=1)
+        else:
+            merged_df["is_in_healthy_range"] = None
+
+    # --------- Deduplicate by (date, lab_name) keeping best match ---------
     # Only if lab_specs is loaded and required columns exist
-    if paths_exist and "date" in merged_df.columns and "lab_name_enum" in merged_df.columns and "lab_unit_enum" in merged_df.columns:
+    if paths_exist and "date" in merged_df.columns and "lab_name" in merged_df.columns and "lab_unit" in merged_df.columns:
         def pick_best_dupe(group):
-            # group: DataFrame with same (date, lab_name_enum)
-            name_enum = group.iloc[0]["lab_name_enum"]
+            """Pick best duplicate: prefer primary unit if multiple entries exist."""
+            lab_name = group.iloc[0]["lab_name"]
             primary_unit = None
-            if name_enum and name_enum in lab_specs:
-                primary_unit = lab_specs[name_enum].get("primary_unit")
-            if primary_unit and (group["lab_unit_enum"] == primary_unit).any():
-                return group[group["lab_unit_enum"] == primary_unit].iloc[0]
+            if lab_name and lab_name in lab_specs:
+                primary_unit = lab_specs[lab_name].get("primary_unit")
+            if primary_unit and (group["lab_unit"] == primary_unit).any():
+                return group[group["lab_unit"] == primary_unit].iloc[0]
             else:
                 return group.iloc[0]
+
         merged_df = (
             merged_df
-            .groupby(["date", "lab_name_enum"], dropna=False, as_index=False)
+            .groupby(["date", "lab_name"], dropna=False, as_index=False)
             .apply(pick_best_dupe, include_groups=True)
             .reset_index(drop=True)
         )

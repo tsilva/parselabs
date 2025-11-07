@@ -79,13 +79,12 @@ The centralized `COLUMN_SCHEMA` dictionary defines:
 - Derivation logic for computed columns
 
 Key column categories:
-- **Raw extraction**: lab_name, lab_value, lab_unit (guided by LabUnit enum), lab_range_min/max
+- **Raw extraction**: lab_name (LabName enum), lab_value, lab_unit (LabUnit enum), lab_range_min/max
 - **Mapped/slugified**: lab_name_slug, lab_name_enum, lab_unit_enum (alias of lab_unit)
 - **Data quality**:
-  - `validation_errors`: Semicolon-separated list of Pydantic validation errors
-    - Examples: "Invalid unit 'gr/dL' - not in LabUnit enum", "Invalid lab_name 'Glucose' - not in standardized list"
-  - `is_valid_unit`: Boolean derived from validation_errors (False = needs review)
-    - Note: This covers both lab_name and lab_unit validation errors
+  - Both `lab_name` and `lab_unit` are strictly enforced as enum types at extraction time
+  - Unknown/unmappable values are stored as `$UNKNOWN$` for manual review
+  - Filter by `lab_name == '$UNKNOWN$'` or `lab_unit == '$UNKNOWN$'` to find rows needing review
 - **Normalized**: lab_value_final, lab_unit_final (converted to primary units)
 - **Health status**: is_flagged_final, healthy_range_min/max, is_in_healthy_range
 
@@ -94,18 +93,19 @@ Key column categories:
 - `LabResult`: Single test result with metadata (name, value, unit, range, confidence, etc.)
 - `HealthLabReport`: Document-level metadata + list of LabResult objects
 - `LabType`: Enum for test types (blood, urine, saliva, feces, unknown)
-- `LabUnit`: Enum defining standardized units (%, mg/dL, IU/L, etc.) - 58 values
-  - Values are passed to the LLM via field description to guide extraction
-  - `lab_unit` field accepts strings (not strictly enforced) for graceful handling of unexpected units
-  - `@model_validator` checks lab_unit against LabUnit enum and populates `validation_errors` field
-- `VALID_LAB_NAMES`: Set of 294 standardized lab names (e.g., "Blood - Glucose", "Urine - pH")
-  - Loaded from `lab_names_mappings.json` at module init
-  - Sample names passed to LLM via `lab_name` field description
-  - `@model_validator` checks lab_name against this list and logs validation errors
+- `LabUnit`: Enum defining standardized units (%, mg/dL, IU/L, etc.) - 59 values including $UNKNOWN$
+  - `lab_unit` field is strictly typed as `LabUnit` enum
+  - LLM must select from available enum values during extraction
+  - Unmappable units are stored as `$UNKNOWN$` for manual review
+- `LabName`: Dynamically generated enum from VALID_LAB_NAMES (295 values including $UNKNOWN$)
+  - Created at module init from `lab_names_mappings.json`
+  - `lab_name` field is strictly typed as `LabName` enum
+  - LLM must select from available enum values during extraction
+  - Unmappable lab names are stored as `$UNKNOWN$` for manual review
 - **Validation approach**:
-  - Validation happens at Pydantic level (extraction time), stored in JSON, and carried through to CSV/Excel
-  - Filter by `is_valid_unit==False` or non-empty `validation_errors` to find rows needing review
-  - You can re-run validation on JSON files at any time by re-parsing with Pydantic
+  - Validation is enforced at Pydantic type level (extraction time)
+  - No post-extraction validation needed - LLM must choose valid enum values or $UNKNOWN$
+  - Filter by `lab_name == '$UNKNOWN$'` or `lab_unit == '$UNKNOWN$'` to find rows needing review
 
 ### Output Files
 
@@ -157,32 +157,32 @@ The `slugify` function normalizes text for mapping keys:
 - Remove non-alphanumeric except hyphens
 - Collapse spaces/underscores to hyphens, then remove hyphens
 
-### Re-validating Extracted Data
+### Reviewing Extracted Data
 
-Since validation happens in Pydantic, you can re-validate any JSON file:
+Since lab_name and lab_unit are strictly enforced as enums, you can identify unmapped values by checking for $UNKNOWN$:
 
 ```python
 import json
 from main import LabResult, HealthLabReport
 
-# Re-validate a single page JSON
+# Check for unknown values in a single page JSON
 with open("output/doc_name/doc_name.1.json") as f:
     data = json.load(f)
     report = HealthLabReport(**data)
 
-    # Check for validation errors
-    for result in report.results:
-        if result.validation_errors:
-            print(f"❌ {result.lab_name} ({result.lab_unit})")
-            for error in result.validation_errors:
-                print(f"   - {error}")
+    # Check for unknown lab names or units
+    for result in report.lab_results:
+        if result.lab_name == "$UNKNOWN$":
+            print(f"❌ Unknown lab name in: {result.source_text}")
+        if result.lab_unit == "$UNKNOWN$":
+            print(f"❌ Unknown unit for {result.lab_name}: {result.source_text}")
 ```
 
 This is useful for:
-- Debugging extraction issues without re-running OCR
-- Testing new LabUnit enum values or VALID_LAB_NAMES before re-extracting
+- Finding labs that need to be added to the standardized list
+- Identifying units that need to be mapped
 - Auditing data quality after extraction
-- Finding patterns in extraction errors to improve prompts
+- Improving extraction prompts to better guide the LLM
 
 ## Environment Configuration
 
