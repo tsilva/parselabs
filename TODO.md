@@ -1,13 +1,3 @@
-- Ask claude to describe main algo in file
-- Takes a long time to get to the new labs (existence check is slow)
-- Add support for regular health reports, not only blood tests
-- Review plots and fix the ones that look SUS
-- Review early reports
-- Assert that metadata dates match file name
-- Add validator that runs each page CSV against its image
-- Always grab dates from the first page 
-- Log unmapped: lab names, units
-- Add support for next test recommendation (time elapsed + out of range)
-- Merge mappings to labspecs
-- Add support for conversions that are the same for all units without relying on lab specs
-- Unit mappings should stardadize mentioned unit, not convert it
+- Review data and add test cases with gitignored folder
+- Add support for multiple user profiles
+- Add medical exam support (or create new repo and merge data in health log parser)

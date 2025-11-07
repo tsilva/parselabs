@@ -359,8 +359,46 @@ def extract_labs_from_page_image(
         return _salvage_lab_results(tool_result_dict)
 
 
+def _normalize_date_format(date_str: Optional[str]) -> Optional[str]:
+    """
+    Normalize date strings to YYYY-MM-DD format.
+
+    Handles common formats:
+    - DD/MM/YYYY (e.g., 20/11/2024 -> 2024-11-20)
+    - DD-MM-YYYY (e.g., 20-11-2024 -> 2024-11-20)
+    - YYYY-MM-DD (already correct)
+
+    Args:
+        date_str: Date string in various formats
+
+    Returns:
+        Date string in YYYY-MM-DD format, or None if invalid/null
+    """
+    if not date_str or date_str == "0000-00-00":
+        return None
+
+    # Already in correct format
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+        return date_str
+
+    # DD/MM/YYYY or DD-MM-YYYY format
+    match = re.match(r"^(\d{2})[/-](\d{2})[/-](\d{4})$", date_str)
+    if match:
+        day, month, year = match.groups()
+        return f"{year}-{month}-{day}"
+
+    # If we can't parse it, log and return None
+    logger.warning(f"Unable to normalize date format: {date_str}")
+    return None
+
+
 def _fix_lab_results_format(tool_result_dict: dict) -> dict:
-    """Fix common LLM formatting issues in lab_results."""
+    """Fix common LLM formatting issues in lab_results and dates."""
+    # Fix date formats at report level
+    for date_field in ["collection_date", "report_date"]:
+        if date_field in tool_result_dict:
+            tool_result_dict[date_field] = _normalize_date_format(tool_result_dict[date_field])
+
     if "lab_results" not in tool_result_dict or not isinstance(tool_result_dict["lab_results"], list):
         return tool_result_dict
 

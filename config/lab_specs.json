@@ -582,6 +582,18 @@
       {
         "unit": "10⁶/L",
         "factor": 0.001
+      },
+      {
+        "unit": "x10¹/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "/mm3",
+        "factor": 0.001
+      },
+      {
+        "unit": "cells/mm³",
+        "factor": 0.001
       }
     ],
     "ranges": {
@@ -1031,6 +1043,18 @@
       {
         "unit": "10⁶/L",
         "factor": 0.001
+      },
+      {
+        "unit": "x10¹/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "/mm3",
+        "factor": 0.001
+      },
+      {
+        "unit": "cells/mm³",
+        "factor": 0.001
       }
     ],
     "ranges": {
@@ -1054,7 +1078,16 @@
   "Blood - Erythrocyte Sedimentation Rate (ESR) - 1h": {
     "lab_type": "blood",
     "primary_unit": "mm/h",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "mm",
+        "factor": 1.0
+      },
+      {
+        "unit": "mn",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0,
@@ -1065,7 +1098,16 @@
   "Blood - Erythrocyte Sedimentation Rate (ESR) - 2h": {
     "lab_type": "blood",
     "primary_unit": "mm/h",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "mm",
+        "factor": 1.0
+      },
+      {
+        "unit": "mn",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0,
@@ -1076,7 +1118,12 @@
   "Blood - Erythrocyte Sedimentation Rate (ESR, 1 Hour)": {
     "lab_type": "blood",
     "primary_unit": "mm/h",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "mm",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0.0,
@@ -1102,6 +1149,14 @@
       {
         "unit": "10⁹/L",
         "factor": 1000.0
+      },
+      {
+        "unit": "E6/mm3",
+        "factor": 0.001
+      },
+      {
+        "unit": "10⁶/mm³",
+        "factor": 0.001
       }
     ],
     "ranges": {
@@ -1346,6 +1401,10 @@
       {
         "unit": "L",
         "factor": 100.0
+      },
+      {
+        "unit": "L/L",
+        "factor": 100.0
       }
     ],
     "ranges": {
@@ -1380,7 +1439,12 @@
   "Blood - Hematocrit (HCT)": {
     "lab_type": "blood",
     "primary_unit": "%",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "L/L",
+        "factor": 100.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 37,
@@ -1413,7 +1477,20 @@
   "Blood - Hemoglobin A1c (IFCC)": {
     "lab_type": "blood",
     "primary_unit": "mmol/mol creatinine",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "mmol / mol Hg",
+        "factor": 1.0
+      },
+      {
+        "unit": "mmol/mol Hg",
+        "factor": 1.0
+      },
+      {
+        "unit": "mmol/mol",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 20.0,
@@ -1718,6 +1795,18 @@
       {
         "unit": "cells/µL",
         "factor": 0.001
+      },
+      {
+        "unit": "x10¹/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "/mm3",
+        "factor": 0.001
+      },
+      {
+        "unit": "cells/mm³",
+        "factor": 0.001
       }
     ],
     "ranges": {
@@ -1804,6 +1893,18 @@
     "alternatives": [
       {
         "unit": "10⁶/L",
+        "factor": 0.001
+      },
+      {
+        "unit": "x10¹/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "/mm3",
+        "factor": 0.001
+      },
+      {
+        "unit": "cells/mm³",
         "factor": 0.001
       }
     ],
@@ -1950,6 +2051,18 @@
       {
         "unit": "10⁶/L",
         "factor": 0.001
+      },
+      {
+        "unit": "x10¹/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "/mm3",
+        "factor": 0.001
+      },
+      {
+        "unit": "cells/mm³",
+        "factor": 0.001
       }
     ],
     "ranges": {
@@ -1987,6 +2100,18 @@
     "alternatives": [
       {
         "unit": "10⁶/L",
+        "factor": 0.001
+      },
+      {
+        "unit": "x10¹/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "/mm3",
+        "factor": 0.001
+      },
+      {
+        "unit": "cells/mm³",
         "factor": 0.001
       }
     ],
@@ -2135,6 +2260,14 @@
       {
         "unit": "10⁶/L",
         "factor": 0.001
+      },
+      {
+        "unit": "/mm3",
+        "factor": 0.001
+      },
+      {
+        "unit": "10³/mm³",
+        "factor": 1.0
       }
     ],
     "ranges": {
@@ -2496,7 +2629,16 @@
   "Blood - Thyroid Stimulating Hormone (TSH)": {
     "lab_type": "blood",
     "primary_unit": "µIU/mL",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "mUI/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "mIU/L",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0.4,
@@ -3549,5 +3691,271 @@
         "max": 8.0
       }
     }
+  },
+  "Blood - Hepatitis B e Antigen (HBeAg)": {
+    "lab_type": "blood",
+    "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Hepatitis A Antibody Total": {
+    "lab_type": "blood",
+    "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Hepatitis A Antibody (IgM)": {
+    "lab_type": "blood",
+    "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Hepatitis B e Antibody (Anti-HBe)": {
+    "lab_type": "blood",
+    "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Glucose-6-Phosphate Dehydrogenase (G6PD)": {
+    "lab_type": "blood",
+    "primary_unit": "IU/g Hb",
+    "alternatives": [
+      {
+        "unit": "UI/g Hb",
+        "factor": 1.0
+      },
+      {
+        "unit": "U/g Hb",
+        "factor": 1.0
+      }
+    ],
+    "ranges": {}
+  },
+  "Blood - Pyruvate Kinase": {
+    "lab_type": "blood",
+    "primary_unit": "IU/g Hb",
+    "alternatives": [
+      {
+        "unit": "UI/g Hb",
+        "factor": 1.0
+      },
+      {
+        "unit": "U/g Hb",
+        "factor": 1.0
+      }
+    ],
+    "ranges": {}
+  },
+  "Blood - Anti-Cytomegalovirus IgG": {
+    "lab_type": "blood",
+    "primary_unit": "IU/mL",
+    "alternatives": [
+      {
+        "unit": "UI/ml",
+        "factor": 1.0
+      },
+      {
+        "unit": "Indice",
+        "factor": 1.0
+      }
+    ],
+    "ranges": {}
+  },
+  "Blood - Anti-Cytomegalovirus IgM": {
+    "lab_type": "blood",
+    "primary_unit": "index",
+    "alternatives": [
+      {
+        "unit": "Indice",
+        "factor": 1.0
+      }
+    ],
+    "ranges": {}
+  },
+  "Blood - Anti-Epstein-Barr Virus (EBV) VCA IgG": {
+    "lab_type": "blood",
+    "primary_unit": "index",
+    "alternatives": [
+      {
+        "unit": "Indice",
+        "factor": 1.0
+      }
+    ],
+    "ranges": {}
+  },
+  "Blood - Anti-Epstein-Barr Virus (EBV) VCA IgM": {
+    "lab_type": "blood",
+    "primary_unit": "index",
+    "alternatives": [
+      {
+        "unit": "Indice",
+        "factor": 1.0
+      }
+    ],
+    "ranges": {}
+  },
+  "Blood - Anti-Endomysial Antibody (IgA)": {
+    "lab_type": "blood",
+    "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Anti-Endomysial Antibody (IgG)": {
+    "lab_type": "blood",
+    "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - HIV (Antibody + p24 Antigen)": {
+    "lab_type": "blood",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Treponema pallidum Hemagglutination (TPHA)": {
+    "lab_type": "blood",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Leukocyte Morphology": {
+    "lab_type": "blood",
+    "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Platelet Morphology": {
+    "lab_type": "blood",
+    "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Direct Antiglobulin Test (DAT)": {
+    "lab_type": "blood",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Hemoglobin HPLC Comment": {
+    "lab_type": "blood",
+    "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - PNH Monocytes CD14 Negative": {
+    "lab_type": "blood",
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - PNH Monocytes CD157 Negative": {
+    "lab_type": "blood",
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - PNH Monocytes FLAER Negative": {
+    "lab_type": "blood",
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - PNH Monocytes Clone": {
+    "lab_type": "blood",
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - PNH Neutrophils CD16 Negative": {
+    "lab_type": "blood",
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - PNH Neutrophils CD66b Negative": {
+    "lab_type": "blood",
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - PNH Neutrophils CD157 Negative": {
+    "lab_type": "blood",
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - PNH Neutrophils FLAER Negative": {
+    "lab_type": "blood",
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - PNH Neutrophils Clone": {
+    "lab_type": "blood",
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Osmotic Resistance Initial (Immediate)": {
+    "lab_type": "blood",
+    "primary_unit": "g/dL NaCl",
+    "alternatives": [
+      {
+        "unit": "g/dl NaCl",
+        "factor": 1.0
+      }
+    ],
+    "ranges": {}
+  },
+  "Blood - Osmotic Resistance Total (Immediate)": {
+    "lab_type": "blood",
+    "primary_unit": "g/dL NaCl",
+    "alternatives": [
+      {
+        "unit": "g/dl NaCl",
+        "factor": 1.0
+      }
+    ],
+    "ranges": {}
+  },
+  "Blood - Osmotic Resistance Initial (After Incubation)": {
+    "lab_type": "blood",
+    "primary_unit": "g/dL NaCl",
+    "alternatives": [
+      {
+        "unit": "g/dl NaCl",
+        "factor": 1.0
+      }
+    ],
+    "ranges": {}
+  },
+  "Blood - Osmotic Resistance Total (After Incubation)": {
+    "lab_type": "blood",
+    "primary_unit": "g/dL NaCl",
+    "alternatives": [
+      {
+        "unit": "g/dl NaCl",
+        "factor": 1.0
+      }
+    ],
+    "ranges": {}
+  },
+  "Blood - Lymphoplasmacytic Cells": {
+    "lab_type": "blood",
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Urine - Hemosiderin": {
+    "lab_type": "urine",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Sample - Product Type": {
+    "lab_type": "blood",
+    "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {}
   }
 }
