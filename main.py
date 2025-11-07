@@ -157,13 +157,11 @@ def load_env_config():
     input_file_regex = os.getenv("INPUT_FILE_REGEX")
     output_path = os.getenv("OUTPUT_PATH")
     self_consistency_model_id = os.getenv("SELF_CONSISTENCY_MODEL_ID")
-    transcribe_model_id = os.getenv("TRANSCRIBE_MODEL_ID")
-    n_transcriptions = int(os.getenv("N_TRANSCRIPTIONS", 1)) # Default to 1 if not set
     extract_model_id = os.getenv("EXTRACT_MODEL_ID")
     n_extractions = int(os.getenv("N_EXTRACTIONS", 1)) # Default to 1 if not set
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
     max_workers_str = os.getenv("MAX_WORKERS", "1") # Default to "1" as string
-    
+
     # Ensure max_workers is correctly parsed as int
     try:
         max_workers = int(max_workers_str)
@@ -174,7 +172,6 @@ def load_env_config():
 
 
     if not self_consistency_model_id: raise ValueError("SELF_CONSISTENCY_MODEL_ID not set")
-    if not transcribe_model_id: raise ValueError("TRANSCRIBE_MODEL_ID not set")
     if not extract_model_id: raise ValueError("EXTRACT_MODEL_ID not set")
     if not input_path or not Path(input_path).exists(): raise ValueError(f"INPUT_PATH ('{input_path}') not set or does not exist.")
     if not input_file_regex: raise ValueError("INPUT_FILE_REGEX not set")
@@ -189,8 +186,6 @@ def load_env_config():
         "input_file_regex" : input_file_regex,
         "output_path" : output_path_obj,
         "self_consistency_model_id" : self_consistency_model_id,
-        "transcribe_model_id" : transcribe_model_id,
-        "n_transcriptions": n_transcriptions,
         "extract_model_id" : extract_model_id,
         "n_extractions": n_extractions,
         "openrouter_api_key": openrouter_api_key,
@@ -413,7 +408,7 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
 
         # TODO: hack
         # Try to parse the voted result back to the expected type
-        if fn.__name__ == 'extract_labs_from_page_transcription':
+        if fn.__name__ == 'extract_labs_from_page_image':
             # For extract function, we expect a dictionary
             try:
                 # Strip markdown code fences if present
@@ -433,14 +428,14 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
                 logger.error(f"Failed to parse voted result as JSON for extract function. Raw: '{voted_raw[:200]}...'")
                 return results[0], results  # Fallback to first result
         else:
-            # For other functions (like transcription), return the string as-is
+            # For other functions, return the string as-is
             return voted_raw, results
             
     except Exception as e:
         logger.error(f"Error during self-consistency voting logic. Raw: '{voted_raw if voted_raw else 'N/A'}'. Error: {e}")
 
         # Fallback: Pick result with highest average confidence if available
-        if fn.__name__ == 'extract_labs_from_page_transcription':
+        if fn.__name__ == 'extract_labs_from_page_image':
             try:
                 best_result = max(results, key=lambda r:
                     sum(lr.get('confidence', 0.5) for lr in r.get('lab_results', [])) /
@@ -452,48 +447,21 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
                 logger.error(f"Confidence-based fallback also failed: {fallback_error}")
                 return results[0], results
 
-        # For transcription or other functions, return first result
+        # For other functions, return first result
         return results[0], results
 
-def transcription_from_page_image(image_path: Path, model_id: str, temperature: float = 0.3) -> str:
+def extract_labs_from_page_image(image_path: Path, model_id: str, temperature: float = 0.3) -> dict:
     system_prompt = """
-You are a precise document transcriber for medical lab reports. Your task is to:
-1. Write out ALL text visible in the image exactly as it appears
-2. Preserve the document's layout and formatting as much as possible; use markdown tables for lab results.
-3. Include ALL numbers, units, and reference ranges exactly as shown
-4. Use the exact same text case (uppercase/lowercase) as the document
-5. Do not interpret, summarize, or structure the content - just transcribe it
-""".strip()
-    
-    user_prompt = """
-Please transcribe this lab report exactly as it appears, preserving layout and all details. 
-Pay special attention to numbers, units (e.g., mg/dL), and reference ranges.
-""".strip()
-    
-    with open(image_path, "rb") as img_file: img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
-    try:
-        completion = client.chat.completions.create(
-            model=model_id,
-            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": [{"type": "text", "text": user_prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_data}"}}]}],
-            temperature=temperature, max_tokens=4096
-        )
-        return completion.choices[0].message.content.strip()
-    except APIError as e:
-        logger.error(f"API Error during transcription for {image_path.name}: {e}")
-        raise RuntimeError(f"Transcription failed for {image_path.name}: {e}")
-
-def extract_labs_from_page_transcription(transcription: str, model_id: str, temperature: float = 0.3) -> dict:
-    system_prompt = """
-You are a medical lab report data extractor. Your PRIMARY goal is ACCURACY - extract exactly what you see in the transcription.
+You are a medical lab report data extractor. Your PRIMARY goal is ACCURACY - extract exactly what you see in the lab report image.
 
 CRITICAL RULES:
-1. COPY, DON'T INTERPRET: Extract test names, values, and units EXACTLY as written
+1. COPY, DON'T INTERPRET: Extract test names, values, and units EXACTLY as written in the image
    - Preserve capitalization, spacing, symbols, punctuation
    - Do NOT standardize, translate, or normalize
    - Example: If it says "Hemoglobina A1c", write "Hemoglobina A1c" (not "Hemoglobin A1c")
    - Example: If it says "mg/dl", write "mg/dl" (not "mg/dL")
 
-2. COMPLETENESS: Extract ALL test results from the transcription
+2. COMPLETENESS: Extract ALL test results from the image
    - Process line by line
    - Don't skip any tests, including qualitative results
    - If a row has MULTIPLE numeric values with different units, extract each as a SEPARATE result
@@ -561,15 +529,30 @@ EXAMPLES:
 Remember: Your job is to be a perfect copier, not an interpreter. Extract EVERYTHING, even qualitative results.
 """.strip()
 
+    user_prompt = """
+Please extract all lab test results from this medical lab report image.
+Extract test names, values, units, and reference ranges exactly as they appear.
+Pay special attention to preserving the exact formatting and symbols.
+""".strip()
+
+    with open(image_path, "rb") as img_file:
+        img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
+
     try:
         completion = client.chat.completions.create(
             model=model_id,
-            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": transcription}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": [
+                    {"type": "text", "text": user_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_data}"}}
+                ]}
+            ],
             temperature=temperature, max_tokens=8000, tools=TOOLS, tool_choice={"type": "function", "function": {"name": "extract_lab_results"}}
         )
     except APIError as e:
-        logger.error(f"API Error during lab extraction: {e}")
-        raise RuntimeError(f"Lab extraction failed: {e}")
+        logger.error(f"API Error during lab extraction from {image_path.name}: {e}")
+        raise RuntimeError(f"Lab extraction failed for {image_path.name}: {e}")
 
     # Check for valid response structure
     if not completion or not completion.choices or len(completion.choices) == 0:
@@ -577,7 +560,7 @@ Remember: Your job is to be a perfect copier, not an interpreter. Extract EVERYT
         return HealthLabReport(lab_results=[]).model_dump(mode='json')
 
     if not completion.choices[0].message.tool_calls:
-        logger.warning(f"No tool call by model for lab extraction. Transcription snippet: {transcription[:200]}")
+        logger.warning(f"No tool call by model for lab extraction from {image_path.name}")
         return HealthLabReport(lab_results=[]).model_dump(mode='json')
 
     tool_args_raw = completion.choices[0].message.tool_calls[0].function.arguments
@@ -924,7 +907,7 @@ Return a JSON array with the standardized_unit added to each object."""
 
         if not completion or not completion.choices or len(completion.choices) == 0:
             logger.error("Invalid completion response for unit standardization")
-            return {unit: UNKNOWN_VALUE for unit in raw_units}
+            return {pair: UNKNOWN_VALUE for pair in unique_pairs}
 
         response_text = completion.choices[0].message.content.strip()
 
@@ -979,7 +962,7 @@ Return a JSON array with the standardized_unit added to each object."""
 
 def process_single_pdf(
     pdf_path: Path, output_dir: Path, self_consistency_model_id: str,
-    transcribe_model_id: str, n_transcribe: int, extract_model_id: str, n_extract: int
+    extract_model_id: str, n_extract: int
 ) -> Optional[Path]:
     pdf_stem = pdf_path.stem
     doc_out_dir = output_dir / pdf_stem
@@ -1012,25 +995,13 @@ def process_single_pdf(
                 processed_image = preprocess_page_image(page_image)
                 processed_image.save(page_jpg_path, "JPEG", quality=95)
 
-            page_txt_path = doc_out_dir / f"{page_file_name}.txt"
-            page_txt = ""
-            if not page_txt_path.exists():
-                try:
-                    voted_txt, _ = self_consistency(
-                        transcription_from_page_image, self_consistency_model_id, n_transcribe,
-                        page_jpg_path, transcribe_model_id # fn, model_id, n, *args for fn
-                    )
-                    page_txt_path.write_text(voted_txt, encoding='utf-8'); page_txt = voted_txt
-                except Exception as e: logger.error(f"[{page_file_name}] Transcr. failed: {e}"); continue
-            else: page_txt = page_txt_path.read_text(encoding='utf-8')
-
             page_json_path = doc_out_dir / f"{page_file_name}.json"
             current_page_json_data = None
             if not page_json_path.exists():
                 try:
                     page_json_dict, _ = self_consistency(
-                        extract_labs_from_page_transcription, self_consistency_model_id, n_extract,
-                        page_txt, extract_model_id # fn, model_id, n, *args for fn
+                        extract_labs_from_page_image, self_consistency_model_id, n_extract,
+                        page_jpg_path, extract_model_id # fn, model_id, n, *args for fn
                     )
                     current_page_json_data = page_json_dict # Already validated dict from extract_labs
                     page_json_path.write_text(json.dumps(current_page_json_data, indent=2, ensure_ascii=False), encoding='utf-8')
@@ -1268,8 +1239,8 @@ def main():
 
     n_workers = min(config["max_workers"], len(pdf_files))
     logger.info(f"Using up to {n_workers} worker(s) for PDF processing.")
-    tasks = [(pdf, output_dir, config["self_consistency_model_id"], config["transcribe_model_id"], 
-              config["n_transcriptions"], config["extract_model_id"], config["n_extractions"]) for pdf in pdf_files]
+    tasks = [(pdf, output_dir, config["self_consistency_model_id"],
+              config["extract_model_id"], config["n_extractions"]) for pdf in pdf_files]
 
     processed_pdf_csv_paths = []
     with Pool(n_workers) as pool:
