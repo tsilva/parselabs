@@ -282,6 +282,8 @@ class LabResult(BaseModel):
         description="Page number in PDF (added by pipeline)"
     )
     source_file: Optional[str] = Field(default=None, description="Source file identifier (added by pipeline)")
+    lab_name_standardized: Optional[str] = Field(default=None, description="Standardized lab name (added by standardization step)")
+    lab_unit_standardized: Optional[str] = Field(default=None, description="Standardized lab unit (added by standardization step)")
 
 class HealthLabReport(BaseModel):
     """Document-level lab report metadata.
@@ -408,12 +410,23 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}]
         )
         voted_raw = completion.choices[0].message.content.strip()
-        
+
         # TODO: hack
         # Try to parse the voted result back to the expected type
         if fn.__name__ == 'extract_labs_from_page_transcription':
             # For extract function, we expect a dictionary
             try:
+                # Strip markdown code fences if present
+                if voted_raw.startswith("```"):
+                    # Remove opening fence (```json or just ```)
+                    lines = voted_raw.split('\n')
+                    if lines[0].startswith("```"):
+                        lines = lines[1:]
+                    # Remove closing fence
+                    if lines and lines[-1].strip() == "```":
+                        lines = lines[:-1]
+                    voted_raw = '\n'.join(lines).strip()
+
                 voted_result = json.loads(voted_raw)
                 return voted_result, results
             except json.JSONDecodeError:
@@ -482,22 +495,39 @@ CRITICAL RULES:
 
 2. COMPLETENESS: Extract ALL test results from the transcription
    - Process line by line
-   - Don't skip any tests
+   - Don't skip any tests, including qualitative results
+   - If a row has MULTIPLE numeric values with different units, extract each as a SEPARATE result
+   - Example: "Neutrofilos  73.0  4.307  2.1 a 7.6" should create TWO results:
+     * "Neutrofilos (%)" with value 73.0, unit "%"
+     * "Neutrofilos (absolute)" with value 4.307, unit "10^9/L", reference "2.1 a 7.6"
 
-3. EXACT VALUES:
-   - `value`: Extract the numeric result
-   - `unit`: Copy the unit exactly as shown
+3. TEST NAMES WITH CONTEXT:
+   - Include section headers as prefixes for clarity
+   - Example: If you see "BILIRRUBINAS" as header and "Total" below it, use "BILIRRUBINAS - Total"
+   - Example: If you see "URINA" header and "Cor" below, use "URINA - Cor"
+
+4. NUMERIC vs QUALITATIVE VALUES:
+   - `value`: ONLY for numeric results (e.g., 5.0, 14.2, 1.74)
+   - For TEXT-ONLY results (e.g., "AMARELA", "NAO CONTEM", "NORMAL", "POSITIVE", "NEGATIVE"):
+     * Set `value` to null (None)
+     * Put the text result in `comments`
+   - For RANGE results (e.g., "1 a 2/campo", "0 a 1/campo"):
+     * Set `value` to null (None)
+     * Put the full text in `comments`
+   - `unit`: Copy the unit exactly as shown (or null if no unit)
+
+5. REFERENCE RANGES:
    - `reference_range`: Copy the complete reference range text (e.g., "4.5-6.0", "<5.7", "70-100 mg/dL")
    - `reference_min` / `reference_max`: Parse numeric bounds from reference_range if possible
 
-4. FLAGS & CONTEXT:
+6. FLAGS & CONTEXT:
    - `is_abnormal`: Set to true if result is marked (H, L, *, ↑, ↓, "HIGH", "LOW", etc.)
-   - `comments`: Capture any notes or qualitative results
+   - `comments`: Capture any notes, qualitative results, or text values
 
-5. TRACEABILITY:
+7. TRACEABILITY:
    - `source_text`: Copy the exact row/line containing this result
 
-6. DATES: Format as YYYY-MM-DD or leave null
+8. DATES: Format as YYYY-MM-DD or leave null
 
 SCHEMA FIELD NAMES:
 - Use `test_name` (NOT lab_name)
@@ -507,18 +537,34 @@ SCHEMA FIELD NAMES:
 - Use `is_abnormal` (NOT is_flagged)
 - Use `comments` (NOT lab_comments)
 
-Remember: Your job is to be a perfect copier, not an interpreter. Accuracy over everything.
+EXAMPLES:
+✅ CORRECT:
+  {"test_name": "URINA - Cor", "value": null, "unit": null, "comments": "AMARELA"}
+  {"test_name": "URINA - Proteinas", "value": null, "unit": null, "comments": "NAO CONTEM"}
+  {"test_name": "Hemoglobina", "value": 14.2, "unit": "g/dl", "comments": null}
+  {"test_name": "EXAME MICROSCOPICO - CELULAS EPITELIAIS", "value": null, "unit": null, "comments": "1 a 2/campo"}
+
+❌ WRONG:
+  {"test_name": "Cor", "value": "AMARELA", ...}  # Text in value field!
+  {"test_name": "Total", ...}  # Missing context (should be "BILIRRUBINAS - Total")
+
+Remember: Your job is to be a perfect copier, not an interpreter. Extract EVERYTHING, even qualitative results.
 """.strip()
 
     try:
         completion = client.chat.completions.create(
             model=model_id,
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": transcription}],
-            temperature=temperature, max_tokens=4000, tools=TOOLS, tool_choice={"type": "function", "function": {"name": "extract_lab_results"}}
+            temperature=temperature, max_tokens=8000, tools=TOOLS, tool_choice={"type": "function", "function": {"name": "extract_lab_results"}}
         )
     except APIError as e:
         logger.error(f"API Error during lab extraction: {e}")
         raise RuntimeError(f"Lab extraction failed: {e}")
+
+    # Check for valid response structure
+    if not completion or not completion.choices or len(completion.choices) == 0:
+        logger.error(f"Invalid completion response structure. Completion: {completion}")
+        return HealthLabReport(lab_results=[]).model_dump(mode='json')
 
     if not completion.choices[0].message.tool_calls:
         logger.warning(f"No tool call by model for lab extraction. Transcription snippet: {transcription[:200]}")
@@ -621,6 +667,270 @@ Remember: Your job is to be a perfect copier, not an interpreter. Accuracy over 
 
 
 ########################################
+# Lab Name Standardization
+########################################
+
+def load_standardized_lab_names() -> list:
+    """Load the list of valid standardized lab names from config."""
+    config_path = Path("config/lab_specs.json")
+    if not config_path.exists():
+        logger.warning("lab_specs.json not found, standardization will return $UNKNOWN$")
+        return []
+
+    with open(config_path, 'r', encoding='utf-8') as f:
+        specs = json.load(f)
+
+    # Extract standardized names from the keys
+    standardized_names = sorted(specs.keys())
+    logger.info(f"Loaded {len(standardized_names)} standardized lab names from lab_specs.json")
+    return standardized_names
+
+def load_standardized_lab_units() -> list:
+    """Load the list of valid standardized lab units from config."""
+    config_path = Path("config/lab_specs.json")
+    if not config_path.exists():
+        logger.warning("lab_specs.json not found, unit standardization will return $UNKNOWN$")
+        return []
+
+    with open(config_path, 'r', encoding='utf-8') as f:
+        specs = json.load(f)
+
+    # Collect all unique units from primary_unit and alternatives
+    all_units = set()
+    for lab_name, spec in specs.items():
+        primary = spec.get('primary_unit')
+        if primary:
+            all_units.add(primary)
+
+        for alt in spec.get('alternatives', []):
+            unit = alt.get('unit')
+            if unit:
+                all_units.add(unit)
+
+    standardized_units = sorted(all_units)
+    logger.info(f"Loaded {len(standardized_units)} standardized lab units")
+    return standardized_units
+
+def standardize_lab_names(raw_test_names: list[str], model_id: str, standardized_names: list[str]) -> dict[str, str]:
+    """
+    Map raw test names to standardized lab names using LLM.
+
+    Args:
+        raw_test_names: List of raw test names from extraction
+        model_id: Model to use for standardization
+        standardized_names: List of valid standardized lab names
+
+    Returns:
+        Dictionary mapping raw_test_name -> standardized_name
+    """
+    if not raw_test_names:
+        return {}
+
+    if not standardized_names:
+        logger.warning("No standardized names available, returning $UNKNOWN$ for all")
+        return {name: UNKNOWN_VALUE for name in raw_test_names}
+
+    # Build the prompt
+    system_prompt = f"""You are a medical lab test name standardization expert.
+
+Your task: Map raw test names from lab reports to standardized lab names from a predefined list.
+
+CRITICAL RULES:
+1. Choose the BEST MATCH from the standardized names list
+2. Consider semantic similarity and medical terminology
+3. Account for language variations (Portuguese/English)
+4. If NO good match exists, use exactly: "{UNKNOWN_VALUE}"
+5. Return a JSON object mapping each raw name to its standardized name
+
+STANDARDIZED NAMES LIST ({len(standardized_names)} names):
+{json.dumps(standardized_names, ensure_ascii=False, indent=2)}
+
+EXAMPLES:
+- "Hemoglobina" → "Blood - Hemoglobin"
+- "GLICOSE -jejum-" → "Blood - Glucose"
+- "URINA - pH" → "Urine Type II - pH"
+- "Some Unknown Test" → "{UNKNOWN_VALUE}"
+"""
+
+    user_prompt = f"""Map these raw test names to standardized names:
+
+RAW TEST NAMES:
+{json.dumps(raw_test_names, ensure_ascii=False, indent=2)}
+
+Return a JSON object with the mapping:
+{{
+  "raw_name_1": "Standardized Name 1",
+  "raw_name_2": "Standardized Name 2",
+  ...
+}}
+"""
+
+    try:
+        completion = client.chat.completions.create(
+            model=model_id,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.1,  # Low temperature for consistency
+            max_tokens=4000
+        )
+
+        if not completion or not completion.choices or len(completion.choices) == 0:
+            logger.error("Invalid completion response for standardization")
+            return {name: UNKNOWN_VALUE for name in raw_test_names}
+
+        response_text = completion.choices[0].message.content.strip()
+
+        # Strip markdown code fences if present
+        if response_text.startswith("```"):
+            lines = response_text.split('\n')
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            response_text = '\n'.join(lines).strip()
+
+        # Parse the JSON mapping
+        mapping = json.loads(response_text)
+
+        # Validate that all raw names are in the mapping
+        result = {}
+        for raw_name in raw_test_names:
+            if raw_name in mapping:
+                standardized = mapping[raw_name]
+                # Validate it's either $UNKNOWN$ or in the list
+                if standardized == UNKNOWN_VALUE or standardized in standardized_names:
+                    result[raw_name] = standardized
+                else:
+                    logger.warning(f"LLM returned invalid standardized name: '{standardized}' for '{raw_name}', using $UNKNOWN$")
+                    result[raw_name] = UNKNOWN_VALUE
+            else:
+                logger.warning(f"LLM didn't return mapping for '{raw_name}', using $UNKNOWN$")
+                result[raw_name] = UNKNOWN_VALUE
+
+        return result
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse standardization response as JSON: {e}")
+        return {name: UNKNOWN_VALUE for name in raw_test_names}
+    except Exception as e:
+        logger.error(f"Error during standardization: {e}")
+        return {name: UNKNOWN_VALUE for name in raw_test_names}
+
+def standardize_lab_units(raw_units: list[str], model_id: str, standardized_units: list[str]) -> dict[str, str]:
+    """
+    Map raw lab units to standardized units using LLM.
+
+    Args:
+        raw_units: List of raw units from extraction
+        model_id: Model to use for standardization
+        standardized_units: List of valid standardized units
+
+    Returns:
+        Dictionary mapping raw_unit -> standardized_unit
+    """
+    if not raw_units:
+        return {}
+
+    if not standardized_units:
+        logger.warning("No standardized units available, returning $UNKNOWN$ for all")
+        return {unit: UNKNOWN_VALUE for unit in raw_units}
+
+    # Build the prompt
+    system_prompt = f"""You are a medical laboratory unit standardization expert.
+
+Your task: Map raw lab units to standardized units from a predefined list.
+
+CRITICAL RULES:
+1. Choose the BEST MATCH from the standardized units list
+2. Handle case variations (e.g., "mg/dl" → "mg/dL", "u/l" → "IU/L")
+3. Handle symbol variations (e.g., "µ" vs "μ", superscripts)
+4. Handle spacing variations (e.g., "mg / dl" → "mg/dL")
+5. If NO good match exists, use exactly: "{UNKNOWN_VALUE}"
+6. Return a JSON object mapping each raw unit to its standardized unit
+
+STANDARDIZED UNITS LIST ({len(standardized_units)} units):
+{json.dumps(standardized_units, ensure_ascii=False, indent=2)}
+
+EXAMPLES:
+- "mg/dl" → "mg/dL"
+- "u/l" → "IU/L"
+- "U/L" → "IU/L"
+- "x10^12/L" → "10¹²/L"
+- "x10^9/L" → "10⁹/L"
+- "percent" → "%"
+- "Some Unknown Unit" → "{UNKNOWN_VALUE}"
+"""
+
+    user_prompt = f"""Map these raw lab units to standardized units:
+
+RAW UNITS:
+{json.dumps(raw_units, ensure_ascii=False, indent=2)}
+
+Return a JSON object with the mapping:
+{{
+  "raw_unit_1": "Standardized Unit 1",
+  "raw_unit_2": "Standardized Unit 2",
+  ...
+}}
+"""
+
+    try:
+        completion = client.chat.completions.create(
+            model=model_id,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.1,  # Low temperature for consistency
+            max_tokens=2000
+        )
+
+        if not completion or not completion.choices or len(completion.choices) == 0:
+            logger.error("Invalid completion response for unit standardization")
+            return {unit: UNKNOWN_VALUE for unit in raw_units}
+
+        response_text = completion.choices[0].message.content.strip()
+
+        # Strip markdown code fences if present
+        if response_text.startswith("```"):
+            lines = response_text.split('\n')
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            response_text = '\n'.join(lines).strip()
+
+        # Parse the JSON mapping
+        mapping = json.loads(response_text)
+
+        # Validate that all raw units are in the mapping
+        result = {}
+        for raw_unit in raw_units:
+            if raw_unit in mapping:
+                standardized = mapping[raw_unit]
+                # Validate it's either $UNKNOWN$ or in the list
+                if standardized == UNKNOWN_VALUE or standardized in standardized_units:
+                    result[raw_unit] = standardized
+                else:
+                    logger.warning(f"LLM returned invalid standardized unit: '{standardized}' for '{raw_unit}', using $UNKNOWN$")
+                    result[raw_unit] = UNKNOWN_VALUE
+            else:
+                logger.warning(f"LLM didn't return mapping for '{raw_unit}', using $UNKNOWN$")
+                result[raw_unit] = UNKNOWN_VALUE
+
+        return result
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse unit standardization response as JSON: {e}")
+        return {unit: UNKNOWN_VALUE for unit in raw_units}
+    except Exception as e:
+        logger.error(f"Error during unit standardization: {e}")
+        return {unit: UNKNOWN_VALUE for unit in raw_units}
+
+
+########################################
 # The Single-PDF Processor
 ########################################
 
@@ -632,6 +942,10 @@ def process_single_pdf(
     doc_out_dir = output_dir / pdf_stem
     doc_out_dir.mkdir(exist_ok=True, parents=True)
     pdf_level_csv_path = doc_out_dir / f"{pdf_stem}.csv"
+
+    # Load standardized lab names and units for this PDF processing
+    standardized_names = load_standardized_lab_names()
+    standardized_units = load_standardized_lab_units()
 
     try:
         logger.info(f"[{pdf_stem}] - processing...")
@@ -709,6 +1023,60 @@ def process_single_pdf(
 
         if not all_page_lab_results:
             logger.warning(f"[{pdf_stem}] - No lab results extracted."); pd.DataFrame().to_csv(pdf_level_csv_path, index=False); return pdf_level_csv_path
+
+        # Standardize lab names
+        logger.info(f"[{pdf_stem}] - Standardizing lab names...")
+        raw_test_names = [result.get("test_name") for result in all_page_lab_results if result.get("test_name")]
+        if raw_test_names and standardized_names:
+            try:
+                # Get unique raw names to avoid duplicate API calls
+                unique_raw_names = list(set(raw_test_names))
+                name_mapping = standardize_lab_names(unique_raw_names, self_consistency_model_id, standardized_names)
+
+                # Apply standardized names to all results
+                for result in all_page_lab_results:
+                    raw_name = result.get("test_name")
+                    if raw_name:
+                        result["lab_name_standardized"] = name_mapping.get(raw_name, UNKNOWN_VALUE)
+                    else:
+                        result["lab_name_standardized"] = UNKNOWN_VALUE
+
+                logger.info(f"[{pdf_stem}] - Standardized {len(unique_raw_names)} unique test names")
+            except Exception as e:
+                logger.error(f"[{pdf_stem}] - Standardization failed: {e}, using $UNKNOWN$ for all")
+                for result in all_page_lab_results:
+                    result["lab_name_standardized"] = UNKNOWN_VALUE
+        else:
+            logger.warning(f"[{pdf_stem}] - Skipping standardization (no raw names or standardized names unavailable)")
+            for result in all_page_lab_results:
+                result["lab_name_standardized"] = UNKNOWN_VALUE
+
+        # Standardize lab units
+        logger.info(f"[{pdf_stem}] - Standardizing lab units...")
+        raw_units = [result.get("unit") for result in all_page_lab_results if result.get("unit")]
+        if raw_units and standardized_units:
+            try:
+                # Get unique raw units to avoid duplicate API calls
+                unique_raw_units = list(set(raw_units))
+                unit_mapping = standardize_lab_units(unique_raw_units, self_consistency_model_id, standardized_units)
+
+                # Apply standardized units to all results
+                for result in all_page_lab_results:
+                    raw_unit = result.get("unit")
+                    if raw_unit:
+                        result["lab_unit_standardized"] = unit_mapping.get(raw_unit, UNKNOWN_VALUE)
+                    else:
+                        result["lab_unit_standardized"] = UNKNOWN_VALUE
+
+                logger.info(f"[{pdf_stem}] - Standardized {len(unique_raw_units)} unique units")
+            except Exception as e:
+                logger.error(f"[{pdf_stem}] - Unit standardization failed: {e}, using $UNKNOWN$ for all")
+                for result in all_page_lab_results:
+                    result["lab_unit_standardized"] = UNKNOWN_VALUE
+        else:
+            logger.warning(f"[{pdf_stem}] - Skipping unit standardization (no raw units or standardized units unavailable)")
+            for result in all_page_lab_results:
+                result["lab_unit_standardized"] = UNKNOWN_VALUE
 
         pdf_df = pd.DataFrame(all_page_lab_results)
         if resolved_doc_date_for_pdf: pdf_df["date"] = resolved_doc_date_for_pdf

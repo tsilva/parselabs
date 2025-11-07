@@ -1,4 +1,19 @@
 {
+  " Blood - Very Low-Density Lipoprotein Cholesterol (VLDL)": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 5.0,
+        "max": 30.0
+      }
+    }
+  },
   "Blood - 1,25-OH₂ Vitamin D": {
     "primary_unit": "pg/mL",
     "alternatives": [
@@ -20,7 +35,7 @@
     "ranges": {
       "healthy": {
         "min": 0.15,
-        "max": 2.90
+        "max": 2.9
       }
     }
   },
@@ -63,6 +78,16 @@
       }
     }
   },
+  "Blood - Activated Partial Thromboplastin Time (aPTT)": {
+    "primary_unit": "s",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 25.0,
+        "max": 35.0
+      }
+    }
+  },
   "Blood - Adrenocorticotropic Hormone (ACTH)": {
     "primary_unit": "pg/mL",
     "alternatives": [],
@@ -73,16 +98,6 @@
       }
     }
   },
-  "Blood - Alkaline Phosphatase (ALP)": {
-    "primary_unit": "IU/L",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 30.0,
-        "max": 120.0
-      }
-    }
-  },
   "Blood - Alanine Aminotransferase (ALT)": {
     "primary_unit": "IU/L",
     "alternatives": [],
@@ -90,56 +105,6 @@
       "healthy": {
         "min": 7,
         "max": 35
-      }
-    }
-  },
-  "Blood - Anti-Dopamine D2 Receptor Antibody (D2R)": {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  },
-  "Blood - Antinuclear Antibodies (ANA)": {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  },
-  "Blood - Anti-Neutrophil Cytoplasmic Antibodies IgG (ANCA IgG)": {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  },
-  "Blood - Antistreptolysin O Titre (ASO)": {
-    "primary_unit": "IU/mL",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0.0,
-        "max": 200.0
-      }
-    }
-  },
-  "Blood - Aspartate Aminotransferase (AST)": {
-    "primary_unit": "IU/L",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 10.0,
-        "max": 35.0
       }
     }
   },
@@ -178,6 +143,16 @@
       }
     }
   },
+  "Blood - Alkaline Phosphatase (ALP)": {
+    "primary_unit": "IU/L",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 30.0,
+        "max": 120.0
+      }
+    }
+  },
   "Blood - Alpha-1 Globulins": {
     "primary_unit": "g/dL",
     "alternatives": [
@@ -200,6 +175,16 @@
       "healthy": {
         "min": 2.9,
         "max": 4.9
+      }
+    }
+  },
+  "Blood - Alpha-1-Antitrypsin (AAT)": {
+    "primary_unit": "mg/dL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 90,
+        "max": 200
       }
     }
   },
@@ -268,16 +253,6 @@
       }
     }
   },
-  "Blood - Anti-Cyclic Citrullinated Peptide Antibody (Anti-CCP Ab)": {
-    "primary_unit": "IU/mL",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0.0,
-        "max": 17.0
-      }
-    }
-  },
   "Blood - Anti-Cardiolipin IgG": {
     "primary_unit": "pg",
     "alternatives": [],
@@ -295,6 +270,36 @@
       "healthy": {
         "min": 0.0,
         "max": 120.0
+      }
+    }
+  },
+  "Blood - Anti-Cyclic Citrullinated Peptide Antibody (Anti-CCP Ab)": {
+    "primary_unit": "IU/mL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 17.0
+      }
+    }
+  },
+  "Blood - Anti-Dopamine D2 Receptor Antibody (D2R)": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Blood - Anti-Double-Stranded DNA Antibody IgG (Anti-dsDNA IgG)": {
+    "primary_unit": "IU/mL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 30.0
       }
     }
   },
@@ -348,17 +353,17 @@
       }
     }
   },
-  "Blood - Myeloperoxidase Anti-Neutrophil Cytoplasmic Antibodies (MPO-ANCA)": {
-    "primary_unit": "unitless",
+  "Blood - Anti-Mitochondrial Antibody (AMA), IgG": {
+    "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 0.0,
-        "max": 20
+        "min": 0,
+        "max": 0
       }
     }
   },
-  "Blood - Anti-Mitochondrial Antibody (AMA), IgG": {
+  "Blood - Anti-Neutrophil Cytoplasmic Antibodies IgG (ANCA IgG)": {
     "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
@@ -370,6 +375,16 @@
   },
   "Blood - Anti-Proteinase 3 Antibody IgG (Anti-PR3 Ab)": {
     "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 20.0
+      }
+    }
+  },
+  "Blood - Anti-Scleroderma-70 Antibody (Anti-Scl-70 Ab)": {
+    "primary_unit": "IU/L",
     "alternatives": [],
     "ranges": {
       "healthy": {
@@ -403,16 +418,6 @@
       }
     }
   },
-  "Blood - Anti-Scleroderma-70 Antibody (Anti-Scl-70 Ab)": {
-    "primary_unit": "IU/L",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0.0,
-        "max": 20.0
-      }
-    }
-  },
   "Blood - Anti-Smooth Muscle Antibody (ASMA), IgG": {
     "primary_unit": "boolean",
     "alternatives": [],
@@ -420,21 +425,6 @@
       "healthy": {
         "min": 0,
         "max": 0
-      }
-    }
-  },
-  "Blood - Anti-Thyroid Peroxidase Antibody (Anti-TPO Ab)": {
-    "primary_unit": "IU/mL",
-    "alternatives": [
-      {
-        "unit": "KU/L",
-        "factor": 1.0
-      }
-    ],
-    "ranges": {
-      "healthy": {
-        "min": 0.0,
-        "max": 60.0
       }
     }
   },
@@ -453,13 +443,18 @@
       }
     }
   },
-  "Blood - Anti-Double-Stranded DNA Antibody IgG (Anti-dsDNA IgG)": {
+  "Blood - Anti-Thyroid Peroxidase Antibody (Anti-TPO Ab)": {
     "primary_unit": "IU/mL",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "KU/L",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0.0,
-        "max": 30.0
+        "max": 60.0
       }
     }
   },
@@ -485,6 +480,36 @@
       "healthy": {
         "min": 0.0,
         "max": 7.0
+      }
+    }
+  },
+  "Blood - Antinuclear Antibodies (ANA)": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Blood - Antistreptolysin O Titre (ASO)": {
+    "primary_unit": "IU/mL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 200.0
+      }
+    }
+  },
+  "Blood - Aspartate Aminotransferase (AST)": {
+    "primary_unit": "IU/L",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 10.0,
+        "max": 35.0
       }
     }
   },
@@ -633,43 +658,33 @@
       }
     }
   },
-  "Blood - CA 19-9": {
-    "primary_unit": "IU/mL",
+  "Blood - Bilirubin, Direct": {
+    "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 0.0,
-        "max": 37.0
+        "min": 0,
+        "max": 0.3
       }
     }
   },
-  "Blood - CEA (Carcino-Embryonic Ag)": {
-    "primary_unit": "ng/mL",
+  "Blood - Bilirubin, Indirect": {
+    "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 0.0,
-        "max": 3.0
+        "min": 0.2,
+        "max": 0.8
       }
     }
   },
-  "Blood - Reticulocyte Hemoglobin Content (CHr)": {
-    "primary_unit": "pg",
+  "Blood - Bilirubin, Total": {
+    "primary_unit": "mg/dL",
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 28.0,
-        "max": 35.0
-      }
-    }
-  },
-  "Blood - Creatine Kinase (CK)": {
-    "primary_unit": "IU/L",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 26.0,
-        "max": 140.0
+        "min": 0.2,
+        "max": 1.2
       }
     }
   },
@@ -689,6 +704,26 @@
       "healthy": {
         "min": 0.0,
         "max": 5.0
+      }
+    }
+  },
+  "Blood - CA 19-9": {
+    "primary_unit": "IU/mL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 37.0
+      }
+    }
+  },
+  "Blood - CEA (Carcino-Embryonic Ag)": {
+    "primary_unit": "ng/mL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 3.0
       }
     }
   },
@@ -730,6 +765,11 @@
         "max": 10.5
       }
     }
+  },
+  "Blood - Cell Morphology": {
+    "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {}
   },
   "Blood - Ceruloplasmin": {
     "primary_unit": "mg/dL",
@@ -836,6 +876,16 @@
       }
     }
   },
+  "Blood - Creatine Kinase (CK)": {
+    "primary_unit": "IU/L",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 26.0,
+        "max": 140.0
+      }
+    }
+  },
   "Blood - Creatinine": {
     "primary_unit": "mg/dL",
     "alternatives": [
@@ -877,7 +927,7 @@
     "ranges": {
       "healthy": {
         "min": 0.35,
-        "max": 4.30
+        "max": 4.3
       }
     }
   },
@@ -888,26 +938,6 @@
       "healthy": {
         "min": 4.0,
         "max": 22.0
-      }
-    }
-  },
-  "Blood - Erythrocyte Sedimentation Rate (ESR, 1 Hour)": {
-    "primary_unit": "mm/h",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0.0,
-        "max": 30.0
-      }
-    }
-  },
-  "Blood - Erythrocyte Sedimentation Rate (ESR, 2 Hour)": {
-    "primary_unit": "mm/h",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0.0,
-        "max": 30.0
       }
     }
   },
@@ -936,6 +966,65 @@
       }
     }
   },
+  "Blood - Erythrocyte Sedimentation Rate (ESR) - 1h": {
+    "primary_unit": "mm/h",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 20
+      }
+    }
+  },
+  "Blood - Erythrocyte Sedimentation Rate (ESR) - 2h": {
+    "primary_unit": "mm/h",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 30
+      }
+    }
+  },
+  "Blood - Erythrocyte Sedimentation Rate (ESR, 1 Hour)": {
+    "primary_unit": "mm/h",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 30.0
+      }
+    }
+  },
+  "Blood - Erythrocyte Sedimentation Rate (ESR, 2 Hour)": {
+    "primary_unit": "mm/h",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 30.0
+      }
+    }
+  },
+  "Blood - Erythrocytes": {
+    "primary_unit": "10¹²/L",
+    "alternatives": [
+      {
+        "unit": "10⁹/L",
+        "factor": 1000.0
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 3.8,
+        "max": 5.1
+      }
+    }
+  },
+  "Blood - Erythrocytes - Hypochromic (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
   "Blood - Erythropoietin (EPO)": {
     "primary_unit": "IU/L",
     "alternatives": [],
@@ -943,6 +1032,16 @@
       "healthy": {
         "min": 3.7,
         "max": 31.5
+      }
+    }
+  },
+  "Blood - Estimated Average Glucose (eAG)": {
+    "primary_unit": "mg/dL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 70,
+        "max": 126
       }
     }
   },
@@ -963,21 +1062,6 @@
       "healthy": {
         "min": 0,
         "max": 0.21
-      }
-    }
-  },
-  "Blood - Follicle-Stimulating Hormone (FSH)": {
-    "primary_unit": "mIU/mL",
-    "alternatives": [
-      {
-        "unit": "IU/L",
-        "factor": 1.0
-      }
-    ],
-    "ranges": {
-      "healthy": {
-        "min": 25.8,
-        "max": 134.8
       }
     }
   },
@@ -1003,6 +1087,21 @@
       "healthy": {
         "min": 7.0,
         "max": 45.3
+      }
+    }
+  },
+  "Blood - Follicle-Stimulating Hormone (FSH)": {
+    "primary_unit": "mIU/mL",
+    "alternatives": [
+      {
+        "unit": "IU/L",
+        "factor": 1.0
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 25.8,
+        "max": 134.8
       }
     }
   },
@@ -1046,16 +1145,6 @@
       }
     }
   },
-  "Blood - Gamma-Glutamyl Transferase (GGT)": {
-    "primary_unit": "IU/L",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 5.0,
-        "max": 36.0
-      }
-    }
-  },
   "Blood - Gamma Globulins": {
     "primary_unit": "g/dL",
     "alternatives": [],
@@ -1076,6 +1165,16 @@
       }
     }
   },
+  "Blood - Gamma-Glutamyl Transferase (GGT)": {
+    "primary_unit": "IU/L",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 5.0,
+        "max": 36.0
+      }
+    }
+  },
   "Blood - Glucose (Fasting)": {
     "primary_unit": "mg/dL",
     "alternatives": [
@@ -1091,38 +1190,13 @@
       }
     }
   },
-  "Blood - Hepatitis B Surface Antigen (HBsAg)": {
-    "primary_unit": "unitless",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0.0,
-        "max": 1.0
-      }
-    }
-  },
-  "Blood - High-Density Lipoprotein Cholesterol (HDL Cholesterol)": {
+  "Blood - HDL Cholesterol": {
     "primary_unit": "mg/dL",
-    "alternatives": [
-      {
-        "unit": "mmol/L",
-        "factor": 38.67
-      }
-    ],
-    "ranges": {
-      "healthy": {
-        "min": 50.0,
-        "max": 99.0
-      }
-    }
-  },
-  "Blood - Hemoglobin Distribution Width (HDW)": {
-    "primary_unit": "g/dL",
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 1.8,
-        "max": 2.6
+        "min": 40,
+        "max": 100
       }
     }
   },
@@ -1191,6 +1265,36 @@
       }
     }
   },
+  "Blood - Hematocrit (HCT)": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 37,
+        "max": 47
+      }
+    }
+  },
+  "Blood - Hemoglobin A": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 95,
+        "max": 98
+      }
+    }
+  },
+  "Blood - Hemoglobin A1c": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 4.0,
+        "max": 5.6
+      }
+    }
+  },
   "Blood - Hemoglobin A1c (IFCC)": {
     "primary_unit": "mmol/mol creatinine",
     "alternatives": [],
@@ -1211,6 +1315,86 @@
       }
     }
   },
+  "Blood - Hemoglobin A2": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 2.0,
+        "max": 3.5
+      }
+    }
+  },
+  "Blood - Hemoglobin Distribution Width (HDW)": {
+    "primary_unit": "g/dL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 1.8,
+        "max": 2.6
+      }
+    }
+  },
+  "Blood - Hemoglobin F (Fetal)": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 2
+      }
+    }
+  },
+  "Blood - Hemolysis (initial, after incubation)": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Hemolysis (initial, immediate)": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Hemolysis (total, after incubation)": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Hemolysis (total, immediate)": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Hepatitis B Surface Antigen (HBsAg)": {
+    "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 1.0
+      }
+    }
+  },
+  "Blood - High mRNA Content": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - High-Density Lipoprotein Cholesterol (HDL Cholesterol)": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 50.0,
+        "max": 99.0
+      }
+    }
+  },
   "Blood - Homocysteine": {
     "primary_unit": "µg/mL",
     "alternatives": [
@@ -1226,6 +1410,11 @@
       }
     }
   },
+  "Blood - Hypochromic Red Blood Cells": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
   "Blood - IG (Immature Granulocytes %) (%)": {
     "primary_unit": "%",
     "alternatives": [],
@@ -1233,16 +1422,6 @@
       "healthy": {
         "min": 0.0,
         "max": 0.6
-      }
-    }
-  },
-  "Blood - Insulin-Like Growth Factor 1 (IGF-1)": {
-    "primary_unit": "ng/mL",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 44.0,
-        "max": 215.0
       }
     }
   },
@@ -1255,6 +1434,21 @@
         "max": 1.2
       }
     }
+  },
+  "Blood - Immature Granulocytes": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0.5
+      }
+    }
+  },
+  "Blood - Immature Reticulocyte Fraction (IRF)": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
   },
   "Blood - Immunoglobulin A (IgA)": {
     "primary_unit": "mg/dL",
@@ -1301,6 +1495,16 @@
       }
     }
   },
+  "Blood - Insulin-Like Growth Factor 1 (IGF-1)": {
+    "primary_unit": "ng/mL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 44.0,
+        "max": 215.0
+      }
+    }
+  },
   "Blood - Intrinsic Factor Ab (IgG)": {
     "primary_unit": "IU/L",
     "alternatives": [],
@@ -1330,30 +1534,10 @@
       }
     }
   },
-  "Blood - Lactate Dehydrogenase (LDH)": {
-    "primary_unit": "IU/L",
+  "Blood - Katz Index": {
+    "primary_unit": "ratio",
     "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 140.0,
-        "max": 280.0
-      }
-    }
-  },
-  "Blood - Low-Density Lipoprotein Cholesterol (LDL Cholesterol)": {
-    "primary_unit": "mg/dL",
-    "alternatives": [
-      {
-        "unit": "mmol/L",
-        "factor": 38.67
-      }
-    ],
-    "ranges": {
-      "healthy": {
-        "min": 0.0,
-        "max": 99.0
-      }
-    }
+    "ranges": {}
   },
   "Blood - LDL/HDL Ratio": {
     "primary_unit": "unitless",
@@ -1367,6 +1551,75 @@
       "healthy": {
         "min": 1.0,
         "max": 3.5
+      }
+    }
+  },
+  "Blood - Lactate Dehydrogenase (LDH)": {
+    "primary_unit": "IU/L",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 140.0,
+        "max": 280.0
+      }
+    }
+  },
+  "Blood - Leukocytes": {
+    "primary_unit": "10⁹/L",
+    "alternatives": [
+      {
+        "unit": "10⁶/L",
+        "factor": 0.001
+      },
+      {
+        "unit": "cells/µL",
+        "factor": 0.001
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 4.0,
+        "max": 11.0
+      }
+    }
+  },
+  "Blood - Lipase": {
+    "primary_unit": "IU/L",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 10.0,
+        "max": 60.0
+      }
+    }
+  },
+  "Blood - Lithium": {
+    "primary_unit": "mEq/L",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0.333
+      }
+    }
+  },
+  "Blood - Low mRNA Content": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Low-Density Lipoprotein Cholesterol (LDL Cholesterol)": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 38.67
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 99.0
       }
     }
   },
@@ -1395,26 +1648,6 @@
       }
     }
   },
-  "Blood - Lipase": {
-    "primary_unit": "IU/L",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 10.0,
-        "max": 60.0
-      }
-    }
-  },
-  "Blood - Lithium": {
-    "primary_unit": "mEq/L",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0.333
-      }
-    }
-  },
   "Blood - Lymphocytes": {
     "primary_unit": "10⁹/L",
     "alternatives": [
@@ -1437,6 +1670,50 @@
       "healthy": {
         "min": 20.0,
         "max": 40.0
+      }
+    }
+  },
+  "Blood - Macrocytes (%)": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 1.5,
+        "max": 8.5
+      }
+    }
+  },
+  "Blood - Magnesium": {
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mmol/L",
+        "factor": 2.43
+      },
+      {
+        "unit": "mEq/L",
+        "factor": 1.215
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 1.6,
+        "max": 2.6
+      }
+    }
+  },
+  "Blood - Magnesium (Erythrocytes)": {
+    "primary_unit": "mEq/L",
+    "alternatives": [
+      {
+        "unit": "mg/dL",
+        "factor": 0.823
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 4.2,
+        "max": 6.8
       }
     }
   },
@@ -1480,47 +1757,18 @@
       }
     }
   },
-  "Blood - Plateletcrit (PCT) (%)": {
+  "Blood - Medium mRNA Content": {
     "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Methylmalonic Acid": {
+    "primary_unit": "nmol/L",
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 0.13,
-        "max": 0.32
-      }
-    }
-  },
-  "Blood - Magnesium": {
-    "primary_unit": "mg/dL",
-    "alternatives": [
-      {
-        "unit": "mmol/L",
-        "factor": 2.43
-      },
-      {
-        "unit": "mEq/L",
-        "factor": 1.215
-      }
-    ],
-    "ranges": {
-      "healthy": {
-        "min": 1.6,
-        "max": 2.6
-      }
-    }
-  },
-  "Blood - Magnesium (Erythrocytes)": {
-    "primary_unit": "mEq/L",
-    "alternatives": [
-      {
-        "unit": "mg/dL",
-        "factor": 0.823
-      }
-    ],
-    "ranges": {
-      "healthy": {
-        "min": 4.2,
-        "max": 6.8
+        "min": 0,
+        "max": 400
       }
     }
   },
@@ -1549,13 +1797,13 @@
       }
     }
   },
-  "Blood - Macrocytes (%)": {
-    "primary_unit": "%",
+  "Blood - Myeloperoxidase Anti-Neutrophil Cytoplasmic Antibodies (MPO-ANCA)": {
+    "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 1.5,
-        "max": 8.5
+        "min": 0.0,
+        "max": 20
       }
     }
   },
@@ -1584,6 +1832,16 @@
       }
     }
   },
+  "Blood - Nucleated Red Blood Cells (nRBC)": {
+    "primary_unit": "/100 WBC",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
   "Blood - Osteocalcin": {
     "primary_unit": "ng/mL",
     "alternatives": [],
@@ -1594,43 +1852,13 @@
       }
     }
   },
-  "Blood - Platelet Distribution Width (PDW)": {
-    "primary_unit": "fL",
+  "Blood - PSA Free/Total Ratio": {
+    "primary_unit": "ratio",
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 9.0,
-        "max": 17.0
-      }
-    }
-  },
-  "Blood - Platelet Distribution Width (PDW) (%)": {
-    "primary_unit": "%",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 25,
-        "max": 65
-      }
-    }
-  },
-  "Blood - Prothrombin Time (PT)": {
-    "primary_unit": "s",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 11.0,
-        "max": 13.5
-      }
-    }
-  },
-  "Blood - Prothrombin Time (%) (PT)": {
-    "primary_unit": "%",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 70.0,
-        "max": 130.0
+        "min": 0.15,
+        "max": 1.0
       }
     }
   },
@@ -1656,6 +1884,56 @@
       "healthy": {
         "min": 2.5,
         "max": 4.5
+      }
+    }
+  },
+  "Blood - Plasma Cells": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 1
+      }
+    }
+  },
+  "Blood - Platelet Distribution Width (PDW)": {
+    "primary_unit": "fL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 9.0,
+        "max": 17.0
+      }
+    }
+  },
+  "Blood - Platelet Distribution Width (PDW) (%)": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 25,
+        "max": 65
+      }
+    }
+  },
+  "Blood - Plateletcrit (PCT)": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0.15,
+        "max": 0.4
+      }
+    }
+  },
+  "Blood - Plateletcrit (PCT) (%)": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0.13,
+        "max": 0.32
       }
     }
   },
@@ -1719,6 +1997,46 @@
       }
     }
   },
+  "Blood - Prostate-Specific Antigen (PSA), Free": {
+    "primary_unit": "ng/mL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 4
+      }
+    }
+  },
+  "Blood - Prostate-Specific Antigen (PSA), Total": {
+    "primary_unit": "ng/mL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 4
+      }
+    }
+  },
+  "Blood - Prothrombin Time (%) (PT)": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 70.0,
+        "max": 130.0
+      }
+    }
+  },
+  "Blood - Prothrombin Time (PT)": {
+    "primary_unit": "s",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 11.0,
+        "max": 13.5
+      }
+    }
+  },
   "Blood - Quick Time": {
     "primary_unit": "s",
     "alternatives": [],
@@ -1729,34 +2047,20 @@
       }
     }
   },
-  "Blood - Rheumatoid Arthritis Test (RA Test)": {
-    "primary_unit": "IU/mL",
+  "Blood - Red Blood Cell Morphology": {
+    "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {}
+  },
+  "Blood - Red Cell Distribution Width (RDW)": {
+    "primary_unit": "%",
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 0.0,
-        "max": 14.0
+        "min": 11.5,
+        "max": 14.5
       }
     }
-  },
-  "Blood - Erythrocytes": {
-    "primary_unit": "10¹²/L",
-    "alternatives": [
-      {
-        "unit": "10⁹/L",
-        "factor": 1000.0
-      }
-    ],
-    "ranges": {
-      "healthy": {
-        "min": 3.8,
-        "max": 5.1
-      }
-    }
-  },
-  "Blood - Erythrocytes - Hypochromic (%)": {
-    "primary_unit": "%",
-    "alternatives": []
   },
   "Blood - Red Cell Distribution Width (RDW) (%)": {
     "primary_unit": "%",
@@ -1768,13 +2072,13 @@
       }
     }
   },
-  "Blood - Red Cell Distribution Width - Standard Deviation (RDW-SD)": {
-    "primary_unit": "fL",
+  "Blood - Red Cell Distribution Width (RDW-CV)": {
+    "primary_unit": "%",
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 39.0,
-        "max": 46.0
+        "min": 11.5,
+        "max": 14.5
       }
     }
   },
@@ -1785,6 +2089,16 @@
       "healthy": {
         "min": 37.0,
         "max": 54.0
+      }
+    }
+  },
+  "Blood - Red Cell Distribution Width - Standard Deviation (RDW-SD)": {
+    "primary_unit": "fL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 39.0,
+        "max": 46.0
       }
     }
   },
@@ -1813,15 +2127,75 @@
       }
     }
   },
+  "Blood - Reticulocyte Hemoglobin Content": {
+    "primary_unit": "pg",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 28,
+        "max": 35
+      }
+    }
+  },
+  "Blood - Reticulocyte Hemoglobin Content (CHr)": {
+    "primary_unit": "pg",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 28.0,
+        "max": 35.0
+      }
+    }
+  },
+  "Blood - Reticulocyte Hemoglobin Equivalent": {
+    "primary_unit": "pg",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 28,
+        "max": 35
+      }
+    }
+  },
+  "Blood - Reticulocyte Index": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0.5,
+        "max": 2.5
+      }
+    }
+  },
+  "Blood - Reticulocytes (%)": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0.5,
+        "max": 2.5
+      }
+    }
+  },
+  "Blood - Reticulocytes (absolute)": {
+    "primary_unit": "10⁹/L",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 25,
+        "max": 75
+      }
+    }
+  },
+  "Blood - Reticulocytes - High RNA (%)": {
+    "primary_unit": "%",
+    "alternatives": []
+  },
   "Blood - Reticulocytes - Low RNA (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
   "Blood - Reticulocytes - Medium RNA (%)": {
-    "primary_unit": "%",
-    "alternatives": []
-  },
-  "Blood - Reticulocytes - High RNA (%)": {
     "primary_unit": "%",
     "alternatives": []
   },
@@ -1835,6 +2209,16 @@
       }
     }
   },
+  "Blood - Rheumatoid Arthritis Test (RA Test)": {
+    "primary_unit": "IU/mL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 14.0
+      }
+    }
+  },
   "Blood - Rheumatoid Factor (RF)": {
     "primary_unit": "IU/mL",
     "alternatives": [],
@@ -1845,16 +2229,6 @@
       }
     }
   },
-  "Blood - Sex Hormone-Binding Globulin (SHBG)": {
-    "primary_unit": "nmol/L",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 18.0,
-        "max": 114.0
-      }
-    }
-  },
   "Blood - Selenium": {
     "primary_unit": "µg/L",
     "alternatives": [],
@@ -1862,6 +2236,16 @@
       "healthy": {
         "min": 70.0,
         "max": 150.0
+      }
+    }
+  },
+  "Blood - Sex Hormone-Binding Globulin (SHBG)": {
+    "primary_unit": "nmol/L",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 18.0,
+        "max": 114.0
       }
     }
   },
@@ -1880,18 +2264,13 @@
       }
     }
   },
-  "Blood - Total Iron-Binding Capacity (TIBC)": {
-    "primary_unit": "µg/dL",
-    "alternatives": [
-      {
-        "unit": "µg/L",
-        "factor": 0.01
-      }
-    ],
+  "Blood - Thyroid Stimulating Hormone (TSH)": {
+    "primary_unit": "µIU/mL",
+    "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 250.0,
-        "max": 450.0
+        "min": 0.4,
+        "max": 4.0
       }
     }
   },
@@ -1908,7 +2287,7 @@
       },
       {
         "unit": "µIU/L",
-        "factor": 0.000001
+        "factor": 1e-06
       }
     ],
     "ranges": {
@@ -1930,6 +2309,21 @@
       "healthy": {
         "min": 125.0,
         "max": 200.0
+      }
+    }
+  },
+  "Blood - Total Iron-Binding Capacity (TIBC)": {
+    "primary_unit": "µg/dL",
+    "alternatives": [
+      {
+        "unit": "µg/L",
+        "factor": 0.01
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 250.0,
+        "max": 450.0
       }
     }
   },
@@ -2018,6 +2412,16 @@
       }
     }
   },
+  "Blood - Transferrin Saturation": {
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 20,
+        "max": 50
+      }
+    }
+  },
   "Blood - Triglycerides": {
     "primary_unit": "mg/dL",
     "alternatives": [
@@ -2070,21 +2474,6 @@
       "healthy": {
         "min": 0,
         "max": 0
-      }
-    }
-  },
-  " Blood - Very Low-Density Lipoprotein Cholesterol (VLDL)": {
-    "primary_unit": "mg/dL",
-    "alternatives": [
-      {
-        "unit": "mmol/L",
-        "factor": 38.67
-      }
-    ],
-    "ranges": {
-      "healthy": {
-        "min": 5.0,
-        "max": 30.0
       }
     }
   },
@@ -2154,25 +2543,6 @@
       "healthy": {
         "min": 5.5,
         "max": 17.0
-      }
-    }
-  },
-  "Blood - Leukocytes": {
-    "primary_unit": "10⁹/L",
-    "alternatives": [
-      {
-        "unit": "10⁶/L",
-        "factor": 0.001
-      },
-      {
-        "unit": "cells/µL",
-        "factor": 0.001
-      }
-    ],
-    "ranges": {
-      "healthy": {
-        "min": 4.0,
-        "max": 11.0
       }
     }
   },
@@ -2268,16 +2638,6 @@
       "healthy": {
         "min": 10.7,
         "max": 22.9
-      }
-    }
-  },
-  "Blood - Activated Partial Thromboplastin Time (aPTT)": {
-    "primary_unit": "s",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 25.0,
-        "max": 35.0
       }
     }
   },
@@ -2565,6 +2925,11 @@
       }
     }
   },
+  "Urine Type II - Color": {
+    "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {}
+  },
   "Urine Type II - Colour": {
     "primary_unit": "boolean",
     "alternatives": [],
@@ -2580,7 +2945,7 @@
     "alternatives": [],
     "ranges": {
       "healthy": {
-        "min": 1.010,
+        "min": 1.01,
         "max": 1.025
       }
     }
@@ -2655,35 +3020,10 @@
       }
     }
   },
-  "Urine Type II - Turbidity": {
-    "primary_unit": "boolean",
+  "Urine Type II - Sediment - Casts": {
+    "primary_unit": "/field",
     "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  },
-  "Urine Type II - Urobilinogen": {
-    "primary_unit": "boolean",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0,
-        "max": 0
-      }
-    }
-  },
-  "Urine Type II - pH": {
-    "primary_unit": "pH",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 4.6,
-        "max": 8.0
-      }
-    }
+    "ranges": {}
   },
   "Urine Type II - Sediment - Cells": {
     "primary_unit": "/field",
@@ -2704,6 +3044,11 @@
         "max": 1.0
       }
     }
+  },
+  "Urine Type II - Sediment - Epithelial Cells": {
+    "primary_unit": "/field",
+    "alternatives": [],
+    "ranges": {}
   },
   "Urine Type II - Sediment - Epithelial cells": {
     "primary_unit": "/field",
@@ -2744,6 +3089,11 @@
         "max": 2.0
       }
     }
+  },
+  "Urine Type II - Sediment - Squamous Epithelial Cells": {
+    "primary_unit": "/field",
+    "alternatives": [],
+    "ranges": {}
   },
   "Urine Type II - Sediment - Squamous epithelial cells": {
     "primary_unit": "/field",
@@ -2792,6 +3142,46 @@
       "healthy": {
         "min": 0.0,
         "max": 2.0
+      }
+    }
+  },
+  "Urine Type II - Specific Gravity": {
+    "primary_unit": "unitless",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 1.003,
+        "max": 1.03
+      }
+    }
+  },
+  "Urine Type II - Turbidity": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine Type II - Urobilinogen": {
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  "Urine Type II - pH": {
+    "primary_unit": "pH",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 4.6,
+        "max": 8.0
       }
     }
   }
