@@ -6,7 +6,7 @@
 
 > 🔬 Extract structured lab test results from medical documents with AI precision
 
-Labs Parser is a Python tool that uses Claude AI to extract laboratory test results from medical documents, converting them into structured data for analysis and visualization. It processes images of lab reports, transcribes the text, and extracts standardized test results with high accuracy.
+Labs Parser is a Python tool that uses AI (via OpenRouter API) to extract laboratory test results from medical documents, converting them into structured data for analysis and visualization. It processes images of lab reports and extracts standardized test results with high accuracy.
 
 ## 🚀 Installation
 
@@ -24,15 +24,12 @@ cd labs-parser
 1. Configure your environment variables in a `.env` file:
 
 ```
-SELF_CONSISTENCY_MODEL_ID=openai/gpt-4.1
-TRANSCRIBE_MODEL_ID=google/gemini-2.0-flash-001
-EXTRACT_MODEL_ID=openai/gpt-4.1
-MAPPING_MODEL_ID=openai/gpt-4.1
+SELF_CONSISTENCY_MODEL_ID=google/gemini-2.5-flash
+EXTRACT_MODEL_ID=google/gemini-2.5-flash
 INPUT_PATH=./path/to/lab/reports
-INPUT_FILE_REGEX=.*\.jpg
+INPUT_FILE_REGEX=.*\.pdf
 OUTPUT_PATH=./output
 OPENROUTER_API_KEY=your_api_key_here
-N_TRANSCRIPTIONS=3
 N_EXTRACTIONS=3
 MAX_WORKERS=1
 ```
@@ -44,10 +41,10 @@ python main.py
 ```
 
 3. The tool will:
-   - Process each lab report image
-   - Transcribe the text content
-   - Extract structured lab results
-   - Save results as CSV files
+   - Process each lab report PDF
+   - Extract structured lab results directly from images
+   - Standardize lab names and units
+   - Save results as CSV and Excel files
 
 ## ✨ Features
 
@@ -61,10 +58,10 @@ python main.py
 
 For each processed document, the tool generates:
 - Preprocessed images (JPG)
-- Text transcriptions (TXT)
 - Structured data (JSON)
 - Tabular data (CSV)
-- A merged CSV with all results
+- A merged CSV and Excel file with all results
+- Time-series plots for each lab test
 
 ## 📄 License
 

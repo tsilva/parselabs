@@ -12,6 +12,7 @@ import pdf2image
 from pathlib import Path
 from multiprocessing import Pool
 from openai import OpenAI
+from tqdm import tqdm
 
 # Local imports
 from config import ExtractionConfig, LabSpecsConfig, UNKNOWN_VALUE
@@ -138,18 +139,23 @@ def process_single_pdf(
         all_results = []
         doc_date = None
 
+        logger.info(f"[{pdf_stem}] Processing {len(pil_pages)} page(s)...")
         for page_idx, page_image in enumerate(pil_pages):
             page_name = f"{pdf_stem}.{page_idx+1:03d}"
             jpg_path = doc_out_dir / f"{page_name}.jpg"
             json_path = doc_out_dir / f"{page_name}.json"
 
+            logger.info(f"[{page_name}] Processing page {page_idx+1}/{len(pil_pages)}...")
+
             # Preprocess and save image
             if not jpg_path.exists():
                 processed = preprocess_page_image(page_image)
                 processed.save(jpg_path, "JPEG", quality=95)
+                logger.info(f"[{page_name}] Image preprocessed and saved")
 
             # Extract or load results
             if not json_path.exists():
+                logger.info(f"[{page_name}] Extracting data from image...")
                 try:
                     page_data, _ = self_consistency(
                         extract_labs_from_page_image,
@@ -160,10 +166,12 @@ def process_single_pdf(
                         client
                     )
                     json_path.write_text(json.dumps(page_data, indent=2, ensure_ascii=False), encoding='utf-8')
+                    logger.info(f"[{page_name}] Extraction completed")
                 except Exception as e:
                     logger.error(f"[{page_name}] Extraction failed: {e}")
                     page_data = HealthLabReport(lab_results=[]).model_dump(mode='json')
             else:
+                logger.info(f"[{page_name}] Loading cached extraction data")
                 page_data = json.loads(json_path.read_text(encoding='utf-8'))
 
             # Extract date from first page
@@ -327,6 +335,11 @@ def export_excel_with_sheets(
 # Main Pipeline
 # ========================================
 
+def _process_pdf_wrapper(args):
+    """Wrapper function for multiprocessing with progress tracking."""
+    return process_single_pdf(*args)
+
+
 def main():
     """Main pipeline orchestration."""
     # Clear logs at start of run
@@ -354,8 +367,13 @@ def main():
 
     tasks = [(pdf, config.output_path, config, lab_specs) for pdf in pdf_files]
 
+    # Use progress bar for PDF processing
     with Pool(n_workers) as pool:
-        results = pool.starmap(process_single_pdf, tasks)
+        results = []
+        with tqdm(total=len(tasks), desc="Processing PDFs", unit="pdf") as pbar:
+            for result in pool.imap(_process_pdf_wrapper, tasks):
+                results.append(result)
+                pbar.update(1)
 
     csv_paths = [path for path in results if path and path.exists()]
 
@@ -366,6 +384,7 @@ def main():
     logger.info(f"Successfully processed {len(csv_paths)} PDFs")
 
     # Merge all CSVs
+    logger.info("Merging CSV files...")
     merged_df = merge_csv_files(csv_paths)
     logger.info(f"Merged data: {len(merged_df)} rows")
 
@@ -374,26 +393,33 @@ def main():
         return
 
     # Apply normalizations
+    logger.info("Applying normalizations...")
     merged_df = apply_normalizations(merged_df, lab_specs)
 
     # Deduplicate
     if lab_specs.exists:
+        logger.info("Deduplicating results...")
         merged_df = deduplicate_results(merged_df, lab_specs)
+        logger.info(f"After deduplication: {len(merged_df)} rows")
 
     # Reorder columns
+    logger.info("Finalizing column order...")
     final_cols = [col for col in export_cols if col in merged_df.columns]
     final_cols += [col for col in merged_df.columns if col not in export_cols]
     merged_df = merged_df[final_cols]
 
     # Apply dtype conversions
+    logger.info("Applying data type conversions...")
     merged_df = apply_dtype_conversions(merged_df, dtypes)
 
     # Save merged CSV
+    logger.info("Saving merged CSV...")
     csv_path = config.output_path / "all.csv"
     merged_df.to_csv(csv_path, index=False, encoding='utf-8')
     logger.info(f"Saved merged CSV: {csv_path}")
 
     # Export Excel
+    logger.info("Exporting to Excel...")
     excel_path = config.output_path / "all.xlsx"
     export_excel_with_sheets(
         merged_df, excel_path, export_cols, hidden_cols, widths,
@@ -403,6 +429,7 @@ def main():
     logger.info("All data processing and file exports finished")
 
     # Generate plots
+    logger.info("Generating plots...")
     plots_base_dir = Path("plots")
     plots_base_dir.mkdir(exist_ok=True)
     clear_directory(plots_base_dir)
