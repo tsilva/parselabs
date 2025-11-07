@@ -228,7 +228,7 @@ PRIMARY UNITS MAPPING (use this for null/missing units):
 }}
 """
 
-    system_prompt_template = """You are a medical laboratory unit standardization expert.
+    system_prompt_template = f"""You are a medical laboratory unit standardization expert.
 
 Your task: Map (raw_unit, lab_name) pairs to standardized units from a predefined list.
 
