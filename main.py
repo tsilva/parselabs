@@ -411,7 +411,10 @@ def main():
                     results.append(result)
                     pbar.update(1)
 
-        csv_paths = [path for path in results if path and path.exists()]
+        # Collect CSV paths from ALL PDF files, not just the ones processed in this run
+        csv_paths = [config.output_path / pdf.stem / f"{pdf.stem}.csv"
+                     for pdf in pdf_files
+                     if (config.output_path / pdf.stem / f"{pdf.stem}.csv").exists()]
 
     if not csv_paths:
         logger.error("No PDFs successfully processed. Exiting.")
