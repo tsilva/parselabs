@@ -53,6 +53,14 @@
       {
         "unit": "µg/L",
         "factor": 1.0
+      },
+      {
+        "unit": "µg/dL",
+        "factor": 10.0
+      },
+      {
+        "unit": "ug/dL",
+        "factor": 10.0
       }
     ],
     "ranges": {
@@ -1436,7 +1444,7 @@
       }
     }
   },
-  "Blood - Hematocrit (HCT)": {
+  "Blood - Hematocrit (HCT) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [
@@ -1452,7 +1460,7 @@
       }
     }
   },
-  "Blood - Hemoglobin A": {
+  "Blood - Hemoglobin A (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -1463,7 +1471,7 @@
       }
     }
   },
-  "Blood - Hemoglobin A1c": {
+  "Blood - Hemoglobin A1c (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -1509,7 +1517,7 @@
       }
     }
   },
-  "Blood - Hemoglobin A2": {
+  "Blood - Hemoglobin A2 (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -1531,7 +1539,7 @@
       }
     }
   },
-  "Blood - Hemoglobin F (Fetal)": {
+  "Blood - Hemoglobin F (Fetal) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -1542,25 +1550,25 @@
       }
     }
   },
-  "Blood - Hemolysis (initial, after incubation)": {
+  "Blood - Hemolysis (initial, after incubation) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
-  "Blood - Hemolysis (initial, immediate)": {
+  "Blood - Hemolysis (initial, immediate) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
-  "Blood - Hemolysis (total, after incubation)": {
+  "Blood - Hemolysis (total, after incubation) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
-  "Blood - Hemolysis (total, immediate)": {
+  "Blood - Hemolysis (total, immediate) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -1577,7 +1585,7 @@
       }
     }
   },
-  "Blood - High mRNA Content": {
+  "Blood - High mRNA Content (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -1615,7 +1623,7 @@
       }
     }
   },
-  "Blood - Hypochromic Red Blood Cells": {
+  "Blood - Hypochromic Red Blood Cells (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -1643,7 +1651,7 @@
       }
     }
   },
-  "Blood - Immature Granulocytes": {
+  "Blood - Immature Granulocytes (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -1654,7 +1662,7 @@
       }
     }
   },
-  "Blood - Immature Reticulocyte Fraction (IRF)": {
+  "Blood - Immature Reticulocyte Fraction (IRF) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -1838,7 +1846,7 @@
       }
     }
   },
-  "Blood - Low mRNA Content": {
+  "Blood - Low mRNA Content (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -2027,7 +2035,7 @@
       }
     }
   },
-  "Blood - Medium mRNA Content": {
+  "Blood - Medium mRNA Content (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -2193,7 +2201,7 @@
       }
     }
   },
-  "Blood - Plasma Cells": {
+  "Blood - Plasma Cells (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -2228,17 +2236,6 @@
       "healthy": {
         "min": 25,
         "max": 65
-      }
-    }
-  },
-  "Blood - Plateletcrit (PCT)": {
-    "lab_type": "blood",
-    "primary_unit": "%",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 0.15,
-        "max": 0.4
       }
     }
   },
@@ -2348,7 +2345,7 @@
       }
     }
   },
-  "Blood - Prothrombin Time (%) (PT)": {
+  "Blood - Prothrombin Time (%) (PT) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -2387,17 +2384,6 @@
     "alternatives": [],
     "ranges": {}
   },
-  "Blood - Red Cell Distribution Width (RDW)": {
-    "lab_type": "blood",
-    "primary_unit": "%",
-    "alternatives": [],
-    "ranges": {
-      "healthy": {
-        "min": 11.5,
-        "max": 14.5
-      }
-    }
-  },
   "Blood - Red Cell Distribution Width (RDW) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
@@ -2409,7 +2395,7 @@
       }
     }
   },
-  "Blood - Red Cell Distribution Width (RDW-CV)": {
+  "Blood - Red Cell Distribution Width (RDW-CV) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -2420,7 +2406,7 @@
       }
     }
   },
-  "Blood - Red Cell Distribution Width - Standard Deviation (%) (RDW-SD)": {
+  "Blood - Red Cell Distribution Width - Standard Deviation (%) (RDW-SD) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -2507,7 +2493,7 @@
       }
     }
   },
-  "Blood - Reticulocyte Index": {
+  "Blood - Reticulocyte Index (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -2793,7 +2779,7 @@
       }
     }
   },
-  "Blood - Transferrin Saturation": {
+  "Blood - Transferrin Saturation (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -3673,7 +3659,16 @@
   "Urine Type II - Urobilinogen": {
     "lab_type": "urine",
     "primary_unit": "boolean",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "mg/dL",
+        "factor": 1.0
+      },
+      {
+        "unit": "mg/dl",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0,
@@ -3842,55 +3837,55 @@
     "alternatives": [],
     "ranges": {}
   },
-  "Blood - PNH Monocytes CD14 Negative": {
+  "Blood - PNH Monocytes CD14 Negative (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
-  "Blood - PNH Monocytes CD157 Negative": {
+  "Blood - PNH Monocytes CD157 Negative (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
-  "Blood - PNH Monocytes FLAER Negative": {
+  "Blood - PNH Monocytes FLAER Negative (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
-  "Blood - PNH Monocytes Clone": {
+  "Blood - PNH Monocytes Clone (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
-  "Blood - PNH Neutrophils CD16 Negative": {
+  "Blood - PNH Neutrophils CD16 Negative (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
-  "Blood - PNH Neutrophils CD66b Negative": {
+  "Blood - PNH Neutrophils CD66b Negative (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
-  "Blood - PNH Neutrophils CD157 Negative": {
+  "Blood - PNH Neutrophils CD157 Negative (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
-  "Blood - PNH Neutrophils FLAER Negative": {
+  "Blood - PNH Neutrophils FLAER Negative (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
     "ranges": {}
   },
-  "Blood - PNH Neutrophils Clone": {
+  "Blood - PNH Neutrophils Clone (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -3940,7 +3935,7 @@
     ],
     "ranges": {}
   },
-  "Blood - Lymphoplasmacytic Cells": {
+  "Blood - Lymphoplasmacytic Cells (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
@@ -3957,5 +3952,137 @@
     "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {}
+  },
+  "Blood - Erythrocytes (RBC)": {
+    "lab_type": "blood",
+    "primary_unit": "10¹²/L",
+    "alternatives": [
+      {
+        "unit": "10^12/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "x10¹²/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "x10^12/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "M/µL",
+        "factor": 1.0
+      },
+      {
+        "unit": "M/uL",
+        "factor": 1.0
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 4.5,
+        "max": 5.5
+      }
+    }
+  },
+  "Blood - Hemoglobin (Hgb)": {
+    "lab_type": "blood",
+    "primary_unit": "g/dL",
+    "alternatives": [
+      {
+        "unit": "g/L",
+        "factor": 0.1
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 13.0,
+        "max": 17.0
+      }
+    }
+  },
+  "Blood - AST (SGOT)": {
+    "lab_type": "blood",
+    "primary_unit": "U/L",
+    "alternatives": [
+      {
+        "unit": "IU/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "U/L a 37°",
+        "factor": 1.0
+      },
+      {
+        "unit": "U/L a 37º",
+        "factor": 1.0
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 10.0,
+        "max": 40.0
+      }
+    }
+  },
+  "Blood - eGFR (CKD-EPI)": {
+    "lab_type": "blood",
+    "primary_unit": "mL/min/1.73m²",
+    "alternatives": [
+      {
+        "unit": "mL/min",
+        "factor": 1.0
+      },
+      {
+        "unit": "ml/min/1.73 m²",
+        "factor": 1.0
+      },
+      {
+        "unit": "ml/min/1,73 m²",
+        "factor": 1.0
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 90.0,
+        "max": 120.0
+      }
+    }
+  },
+  "Blood - Apolipoprotein B": {
+    "lab_type": "blood",
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "g/L",
+        "factor": 100.0
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 60.0,
+        "max": 120.0
+      }
+    }
+  },
+  "Blood - Erythrocyte Sedimentation Rate (ESR)": {
+    "lab_type": "blood",
+    "primary_unit": "mm/h",
+    "alternatives": [
+      {
+        "unit": "mm/hora",
+        "factor": 1.0
+      },
+      {
+        "unit": "mm/hr",
+        "factor": 1.0
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 0.0,
+        "max": 20.0
+      }
+    }
   }
 }

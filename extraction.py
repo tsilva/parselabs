@@ -41,11 +41,11 @@ class LabResult(BaseModel):
     )
     reference_min_raw: Optional[float] = Field(
         default=None,
-        description="Minimum reference value (extract number from reference_range if available)"
+        description="Minimum reference value - ALWAYS parse from reference_range. Examples: '< 40' → null, '150 - 400' → 150, '26.5-32.6' → 26.5"
     )
     reference_max_raw: Optional[float] = Field(
         default=None,
-        description="Maximum reference value (extract number from reference_range if available)"
+        description="Maximum reference value - ALWAYS parse from reference_range. Examples: '< 40' → 40, '150 - 400' → 400, '26.5-32.6' → 32.6"
     )
     is_abnormal: Optional[bool] = Field(
         default=None,
@@ -157,9 +157,19 @@ CRITICAL RULES:
      * If NO unit is visible or implied in the document → use null
      * Do NOT infer or normalize units - just extract what you see
 
-5. REFERENCE RANGES:
-   - `reference_range`: Copy the complete reference range text
-   - `reference_min` / `reference_max`: Parse numeric bounds from reference_range if possible
+5. REFERENCE RANGES - ALWAYS PARSE INTO NUMBERS:
+   - `reference_range`: Copy the complete reference range text EXACTLY as shown
+   - `reference_min_raw` / `reference_max_raw`: ALWAYS extract numeric bounds when present
+
+   Parsing rules and examples:
+   - "< 40" or "< 0.3" → reference_min_raw=null, reference_max_raw=40 (or 0.3)
+   - "> 150" → reference_min_raw=150, reference_max_raw=null
+   - "150 - 400" → reference_min_raw=150, reference_max_raw=400
+   - "26.5-32.6" → reference_min_raw=26.5, reference_max_raw=32.6
+   - "0.2 a 1.0" → reference_min_raw=0.2, reference_max_raw=1.0 ("a" means "to" in Portuguese)
+   - "4.0 - 10.0" → reference_min_raw=4.0, reference_max_raw=10.0
+   - "39-117;Criança<400" → reference_min_raw=39, reference_max_raw=117 (ignore additional notes)
+   - If no numeric values can be extracted → both null
 
 6. FLAGS & CONTEXT:
    - `is_abnormal`: Set to true if result is marked (H, L, *, ↑, ↓, "HIGH", "LOW", etc.)
@@ -179,9 +189,20 @@ Remember: Your job is to be a perfect copier, not an interpreter. Extract EVERYT
 """.strip()
 
 EXTRACTION_USER_PROMPT = """
-Please extract all lab test results from this medical lab report image.
+Please extract ALL lab test results from this medical lab report image.
+
+CRITICAL: For EACH lab test you find, you MUST extract:
+1. lab_name_raw - The test name (required)
+2. value_raw - The numeric result value (REQUIRED - do not leave as null unless truly not present)
+3. lab_unit_raw - The unit of measurement (REQUIRED - extract exactly as shown)
+4. reference_range - The reference range text (if visible)
+5. reference_min_raw and reference_max_raw - Parse the numeric bounds from the reference range
+
 Extract test names, values, units, and reference ranges exactly as they appear.
 Pay special attention to preserving the exact formatting and symbols.
+
+IMPORTANT: Do NOT output lab results with null values unless the value is truly absent from the image.
+If you see a numeric value next to a lab name, you MUST extract it into value_raw.
 """.strip()
 
 
@@ -321,7 +342,7 @@ def extract_labs_from_page_image(
                 ]}
             ],
             temperature=temperature,
-            max_tokens=8000,
+            max_tokens=16384,
             tools=TOOLS,
             tool_choice={"type": "function", "function": {"name": "extract_lab_results"}}
         )
@@ -352,6 +373,20 @@ def extract_labs_from_page_image(
     try:
         report_model = HealthLabReport(**tool_result_dict)
         report_model.normalize_empty_optionals()
+
+        # Check for extraction quality - warn if most values are null
+        if report_model.lab_results:
+            null_count = sum(1 for r in report_model.lab_results if r.value_raw is None)
+            total_count = len(report_model.lab_results)
+            null_pct = (null_count / total_count * 100) if total_count > 0 else 0
+
+            if null_pct > 50:
+                logger.warning(
+                    f"Extraction quality issue for {image_path.name}: "
+                    f"{null_count}/{total_count} ({null_pct:.0f}%) lab results have null values. "
+                    f"This suggests the model failed to extract numeric values from the image."
+                )
+
         return report_model.model_dump(mode='json')
     except Exception as e:
         num_results = len(tool_result_dict.get("lab_results", []))
