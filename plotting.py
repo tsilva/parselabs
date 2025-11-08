@@ -18,9 +18,9 @@ class LabPlotter:
     def __init__(
         self,
         date_col: str = "date",
-        value_col: str = "value_normalized",
-        group_col: str = "lab_name",
-        unit_col: str = "unit_normalized"
+        value_col: str = "value_primary",
+        group_col: str = "lab_name_standardized",
+        unit_col: str = "lab_unit_primary"
     ):
         """
         Initialize plotter with column names.

@@ -48,14 +48,14 @@ def test_lab_unit_percent_vs_lab_name(report):
     errors = []
     try:
         df = pd.read_csv(file)
-        if 'unit_normalized' in df.columns and 'lab_name_standardized' in df.columns:
-            mask = (df['unit_normalized'] == "%") & (~df['lab_name_standardized'].astype(str).str.endswith("(%)"))
+        if 'lab_unit_primary' in df.columns and 'lab_name_standardized' in df.columns:
+            mask = (df['lab_unit_primary'] == "%") & (~df['lab_name_standardized'].astype(str).str.endswith("(%)"))
             for idx in df[mask].index:
                 row = df.loc[idx]
                 source_file = row.get('source_file', 'unknown')
                 lab_name_standardized = row.get('lab_name_standardized', '')
                 report.setdefault(source_file, []).append(
-                    f'Row at index {idx} (lab_name_standardized="{lab_name_standardized}") has unit_normalized="%" but lab_name_standardized="{lab_name_standardized}"'
+                    f'Row at index {idx} (lab_name_standardized="{lab_name_standardized}") has lab_unit_primary="%" but lab_name_standardized="{lab_name_standardized}"'
                 )
     except Exception as e:
         errors.append(f"Exception: {e}")
@@ -76,17 +76,17 @@ def test_lab_unit_percent_value_range(report):
     errors = []
     try:
         df = pd.read_csv(file)
-        if 'unit_normalized' in df.columns and 'value_normalized' in df.columns:
-            mask = (df['unit_normalized'] == "%") & (
-                (df['value_normalized'] < 0) | (df['value_normalized'] > 100)
+        if 'lab_unit_primary' in df.columns and 'value_primary' in df.columns:
+            mask = (df['lab_unit_primary'] == "%") & (
+                (df['value_primary'] < 0) | (df['value_primary'] > 100)
             )
             for idx in df[mask].index:
                 row = df.loc[idx]
                 source_file = row.get('source_file', 'unknown')
-                val = row.get('value_normalized')
+                val = row.get('value_primary')
                 lab_name_standardized = row.get('lab_name_standardized', '')
                 report.setdefault(source_file, []).append(
-                    f'Row at index {idx} (lab_name_standardized="{lab_name_standardized}") has unit_normalized="%" but value_normalized={val} (should be between 0 and 100)'
+                    f'Row at index {idx} (lab_name_standardized="{lab_name_standardized}") has lab_unit_primary="%" but value_primary={val} (should be between 0 and 100)'
                 )
     except Exception as e:
         errors.append(f"Exception: {e}")
@@ -98,15 +98,15 @@ def test_lab_unit_boolean_value(report):
     errors = []
     try:
         df = pd.read_csv(file)
-        if 'unit_normalized' in df.columns and 'value_normalized' in df.columns:
-            mask = (df['unit_normalized'] == "boolean") & (~df['value_normalized'].isin([0, 1]))
+        if 'lab_unit_primary' in df.columns and 'value_primary' in df.columns:
+            mask = (df['lab_unit_primary'] == "boolean") & (~df['value_primary'].isin([0, 1]))
             for idx in df[mask].index:
                 row = df.loc[idx]
                 source_file = row.get('source_file', 'unknown')
-                val = row.get('value_normalized')
+                val = row.get('value_primary')
                 lab_name_standardized = row.get('lab_name_standardized', '')
                 report.setdefault(source_file, []).append(
-                    f'Row at index {idx} (lab_name_standardized="{lab_name_standardized}") has unit_normalized="boolean" but value_normalized={val} (should be 0 or 1)'
+                    f'Row at index {idx} (lab_name_standardized="{lab_name_standardized}") has lab_unit_primary="boolean" but value_primary={val} (should be 0 or 1)'
                 )
     except Exception as e:
         errors.append(f"Exception: {e}")
@@ -118,15 +118,15 @@ def test_lab_name_enum_unit_consistency(report):
     errors = []
     try:
         df = pd.read_csv(file)
-        if 'lab_name_standardized' in df.columns and 'unit_normalized' in df.columns:
+        if 'lab_name_standardized' in df.columns and 'lab_unit_primary' in df.columns:
             # Group by lab_name_standardized and collect unique units
-            grouped = df.groupby('lab_name_standardized')['unit_normalized'].unique()
+            grouped = df.groupby('lab_name_standardized')['lab_unit_primary'].unique()
             for lab_name_standardized, units in grouped.items():
                 units = [u for u in units if pd.notnull(u)]
                 if len(units) > 1:
                     indices = df[df['lab_name_standardized'] == lab_name_standardized].index.tolist()
                     report.setdefault(file, []).append(
-                        f'lab_name_standardized="{lab_name_standardized}" has inconsistent unit_normalized values: {units} (rows: {indices})'
+                        f'lab_name_standardized="{lab_name_standardized}" has inconsistent lab_unit_primary values: {units} (rows: {indices})'
                     )
     except Exception as e:
         errors.append(f"Exception: {e}")
@@ -138,20 +138,20 @@ def test_lab_value_outliers_by_lab_name_enum(report):
     errors = []
     try:
         df = pd.read_csv(file)
-        if 'value_normalized' not in df.columns or 'lab_name_standardized' not in df.columns:
+        if 'value_primary' not in df.columns or 'lab_name_standardized' not in df.columns:
             return
-        # Only consider rows with non-null value_normalized
-        df = df[pd.notnull(df['value_normalized'])]
+        # Only consider rows with non-null value_primary
+        df = df[pd.notnull(df['value_primary'])]
         for lab_name_standardized, group in df.groupby('lab_name_standardized'):
-            # Find the most frequent unit_normalized
-            if 'unit_normalized' in group.columns:
-                unit_counts = group['unit_normalized'].value_counts()
+            # Find the most frequent lab_unit_primary
+            if 'lab_unit_primary' in group.columns:
+                unit_counts = group['lab_unit_primary'].value_counts()
                 if unit_counts.empty:
                     continue
                 most_freq_unit = unit_counts.idxmax()
-                values = group[group['unit_normalized'] == most_freq_unit]['value_normalized']
+                values = group[group['lab_unit_primary'] == most_freq_unit]['value_primary']
             else:
-                values = group['value_normalized']
+                values = group['value_primary']
                 most_freq_unit = 'N/A'
 
             # Only consider numeric values
@@ -163,30 +163,30 @@ def test_lab_value_outliers_by_lab_name_enum(report):
             if std == 0 or pd.isnull(std):
                 continue
 
-            if 'unit_normalized' in group.columns:
+            if 'lab_unit_primary' in group.columns:
                 outliers = group[
-                    (group['unit_normalized'] == most_freq_unit) &
+                    (group['lab_unit_primary'] == most_freq_unit) &
                     (
-                        (group['value_normalized'] > mean + 3 * std) |
-                        (group['value_normalized'] < mean - 3 * std)
+                        (group['value_primary'] > mean + 3 * std) |
+                        (group['value_primary'] < mean - 3 * std)
                     )
                 ]
             else:
                 outliers = group[
-                    (group['value_normalized'] > mean + 3 * std) |
-                    (group['value_normalized'] < mean - 3 * std)
+                    (group['value_primary'] > mean + 3 * std) |
+                    (group['value_primary'] < mean - 3 * std)
                 ]
 
             if not outliers.empty:
                 source_files = set(outliers['source_file'].dropna().astype(str))
-                outlier_values = outliers['value_normalized'].tolist()
+                outlier_values = outliers['value_primary'].tolist()
                 # Use "page_number" column for page numbers
                 if 'page_number' in outliers.columns:
                     page_numbers = outliers['page_number'].tolist()
                 else:
                     page_numbers = ['unknown'] * len(outlier_values)
                 report.setdefault(file, []).append(
-                    f'lab_name_standardized="{lab_name_standardized}", unit_normalized="{most_freq_unit}" has outlier value_normalized (>3 std from mean {mean:.2f}±{std:.2f}) '
+                    f'lab_name_standardized="{lab_name_standardized}", lab_unit_primary="{most_freq_unit}" has outlier value_primary (>3 std from mean {mean:.2f}±{std:.2f}) '
                     f'in files: {list(sorted(source_files))} outlier values: {outlier_values} page numbers: {page_numbers}'
                 )
     except Exception as e:

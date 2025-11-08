@@ -25,8 +25,8 @@ print("="*80)
 reference_indicators = []
 actual_tests = []
 
-for lab_name in unknown_names['lab_name'].unique():
-    test_lower = lab_name.lower()
+for lab_name_raw in unknown_names['lab_name_raw'].unique():
+    test_lower = lab_name_raw.lower()
 
     # Check if it's a reference indicator
     if any(keyword in test_lower for keyword in [
@@ -34,14 +34,14 @@ for lab_name in unknown_names['lab_name'].unique():
         'ferropenia', 'alto risco', 'baixo risco',
         'avaliação de risco'
     ]):
-        reference_indicators.append(lab_name)
+        reference_indicators.append(lab_name_raw)
     else:
-        actual_tests.append(lab_name)
+        actual_tests.append(lab_name_raw)
 
 print(f"\n📊 CATEGORY 1: REFERENCE INDICATORS ({len(reference_indicators)})")
 print("These are NOT lab tests, but interpretation thresholds:")
 for name in sorted(reference_indicators):
-    count = len(unknown_names[unknown_names['lab_name'] == name])
+    count = len(unknown_names[unknown_names['lab_name_raw'] == name])
     print(f"  - {name} ({count} occurrences)")
 
 print(f"\n🔬 CATEGORY 2: ACTUAL LAB TESTS ({len(actual_tests)})")
@@ -51,7 +51,7 @@ print("These ARE real lab tests that need to be added to config:")
 by_category = defaultdict(list)
 
 for name in sorted(actual_tests):
-    count = len(unknown_names[unknown_names['lab_name'] == name])
+    count = len(unknown_names[unknown_names['lab_name_raw'] == name])
 
     # Determine category
     name_lower = name.lower()
@@ -125,13 +125,13 @@ print("MISSING UNITS ANALYSIS")
 print("="*80)
 
 unknown_units = df[df['lab_unit_standardized'] == '$UNKNOWN$']
-unit_combos = unknown_units.groupby(['unit']).size().reset_index(name='count')
+unit_combos = unknown_units.groupby(['lab_unit_raw']).size().reset_index(name='count')
 unit_combos = unit_combos.sort_values('count', ascending=False)
 
 print("\nUnits that need to be added to lab_specs.json:")
 for _, row in unit_combos.iterrows():
-    if pd.notna(row['unit']):
-        print(f"  - '{row['unit']}' ({row['count']} occurrences)")
+    if pd.notna(row['lab_unit_raw']):
+        print(f"  - '{row['lab_unit_raw']}' ({row['count']} occurrences)")
 
 print("\n" + "="*80)
 print("ACTION ITEMS")
