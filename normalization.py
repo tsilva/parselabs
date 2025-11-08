@@ -28,7 +28,7 @@ def apply_normalizations(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Data
         return df
 
     # Ensure required columns exist
-    ensure_columns(df, ["lab_name_standardized", "lab_unit_standardized", "lab_name"], default=None)
+    ensure_columns(df, ["lab_name_standardized", "lab_unit_standardized", "lab_name_raw"], default=None)
 
     # Look up lab_type from config (vectorized)
     if lab_specs.exists:
@@ -39,9 +39,9 @@ def apply_normalizations(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Data
         df["lab_type"] = "blood"
 
     # Create lab_name_slug (vectorized)
-    if "lab_name" in df.columns:
+    if "lab_name_raw" in df.columns:
         df["lab_name_slug"] = df.apply(
-            lambda row: f"{row.get('lab_type', 'blood')}-{slugify(row.get('lab_name', ''))}",
+            lambda row: f"{row.get('lab_type', 'blood')}-{slugify(row.get('lab_name_raw', ''))}",
             axis=1
         )
     else:
@@ -52,10 +52,10 @@ def apply_normalizations(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Data
         df = apply_unit_conversions(df, lab_specs)
     else:
         # No conversions, just copy values
-        df["value_normalized"] = df.get("value")
-        df["unit_normalized"] = df.get("lab_unit_standardized")
-        df["reference_min_normalized"] = df.get("reference_min")
-        df["reference_max_normalized"] = df.get("reference_max")
+        df["value_primary"] = df.get("value_raw")
+        df["lab_unit_primary"] = df.get("lab_unit_standardized")
+        df["reference_min_primary"] = df.get("reference_min_raw")
+        df["reference_max_primary"] = df.get("reference_max_raw")
 
     # Compute health status columns (vectorized where possible)
     if lab_specs.exists:
@@ -75,11 +75,11 @@ def apply_unit_conversions(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Da
 
     This function applies unit conversions in a vectorized manner where possible.
     """
-    # Initialize normalized columns
-    df["value_normalized"] = df["value"]
-    df["unit_normalized"] = df["lab_unit_standardized"]
-    df["reference_min_normalized"] = df["reference_min"]
-    df["reference_max_normalized"] = df["reference_max"]
+    # Initialize primary unit columns
+    df["value_primary"] = df["value_raw"]
+    df["lab_unit_primary"] = df["lab_unit_standardized"]
+    df["reference_min_primary"] = df["reference_min_raw"]
+    df["reference_max_primary"] = df["reference_max_raw"]
 
     # Group by lab_name_standardized to apply conversions efficiently
     for lab_name_standardized in df["lab_name_standardized"].unique():
@@ -100,9 +100,9 @@ def apply_unit_conversions(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Da
 
             unit_mask = mask & (df["lab_unit_standardized"] == unit)
 
-            # If already in primary unit, just update unit_normalized
+            # If already in primary unit, just update lab_unit_primary
             if unit == primary_unit:
-                df.loc[unit_mask, "unit_normalized"] = primary_unit
+                df.loc[unit_mask, "lab_unit_primary"] = primary_unit
                 continue
 
             # Get conversion factor
@@ -111,10 +111,10 @@ def apply_unit_conversions(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Da
                 continue
 
             # Apply conversion to all matching rows (vectorized)
-            df.loc[unit_mask, "value_normalized"] = df.loc[unit_mask, "value"] * factor
-            df.loc[unit_mask, "reference_min_normalized"] = df.loc[unit_mask, "reference_min"] * factor
-            df.loc[unit_mask, "reference_max_normalized"] = df.loc[unit_mask, "reference_max"] * factor
-            df.loc[unit_mask, "unit_normalized"] = primary_unit
+            df.loc[unit_mask, "value_primary"] = df.loc[unit_mask, "value_raw"] * factor
+            df.loc[unit_mask, "reference_min_primary"] = df.loc[unit_mask, "reference_min_raw"] * factor
+            df.loc[unit_mask, "reference_max_primary"] = df.loc[unit_mask, "reference_max_raw"] * factor
+            df.loc[unit_mask, "lab_unit_primary"] = primary_unit
 
     return df
 
@@ -137,9 +137,9 @@ def compute_health_status(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Dat
     df["healthy_range_max"] = df["lab_name_standardized"].map(lambda name: healthy_ranges.get(name, (None, None))[1])
 
     # Compute is_out_of_reference (vectorized)
-    value_series = pd.to_numeric(df["value_normalized"], errors='coerce')
-    ref_min_series = pd.to_numeric(df["reference_min_normalized"], errors='coerce')
-    ref_max_series = pd.to_numeric(df["reference_max_normalized"], errors='coerce')
+    value_series = pd.to_numeric(df["value_primary"], errors='coerce')
+    ref_min_series = pd.to_numeric(df["reference_min_primary"], errors='coerce')
+    ref_max_series = pd.to_numeric(df["reference_max_primary"], errors='coerce')
 
     is_low = value_series < ref_min_series
     is_high = value_series > ref_max_series
