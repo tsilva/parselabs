@@ -70,21 +70,15 @@ COLUMN_SCHEMA = {
 def get_column_lists(schema: dict):
     """Extract ordered lists from schema."""
     ordered = [
-        # Metadata (when/where)
-        "date", "source_file", "page_number",
-
-        # Standardized lab data (main data people care about)
-        "lab_name_standardized", "lab_unit_standardized", "lab_type",
-        "value_primary", "lab_unit_primary",
-        "is_in_healthy_range", "is_out_of_reference",
-
-        # Reference/healthy ranges (for primary values)
-        "healthy_range_min", "healthy_range_max",
-        "reference_min_primary", "reference_max_primary",
-
-        # Raw extraction (what was in PDF)
-        "lab_name_raw", "value_raw", "lab_unit_raw",
-        "reference_range", "is_abnormal", "comments",
+        # Primary columns in user-specified order
+        "source_file", "page_number", "date",
+        "lab_name_raw", "lab_name_standardized", "lab_type",
+        "lab_unit_raw", "lab_unit_standardized", "lab_unit_primary",
+        "value_raw", "value_primary",
+        "reference_range", "reference_min_primary", "reference_max_primary",
+        "is_out_of_reference",
+        "healthy_range_min", "healthy_range_max", "is_in_healthy_range",
+        "is_abnormal", "comments",
 
         # Technical/internal fields
         "reference_min_raw", "reference_max_raw",
