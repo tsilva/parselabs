@@ -90,7 +90,7 @@ The centralized `COLUMN_SCHEMA` dictionary defines:
 
 Key column categories:
 - **Raw extraction**:
-  - `test_name`: Raw test name from PDF (e.g., "HEMATOLOGIA - HEMOGRAMA - Eritrocitos")
+  - `lab_name`: Raw test name from PDF (e.g., "HEMATOLOGIA - HEMOGRAMA - Eritrocitos")
   - `value`: Numeric or text value
   - `unit`: Raw unit from PDF (e.g., "mg/dl", "x10^9/L")
   - `reference_range`, `reference_min`, `reference_max`: Reference ranges from PDF
@@ -105,7 +105,7 @@ Key column categories:
 ### Pydantic Models
 
 - `LabResult`: Single test result with metadata including:
-  - Raw fields: `test_name`, `value`, `unit`, `reference_range`, etc.
+  - Raw fields: `lab_name`, `value`, `unit`, `reference_range`, etc.
   - Standardized fields: `lab_name_standardized`, `lab_unit_standardized` (added post-extraction)
 - `HealthLabReport`: Document-level metadata + list of LabResult objects
 - `LabType`: Enum for test types (blood, urine, saliva, feces, unknown)
@@ -190,14 +190,14 @@ unknown_names = df[df['lab_name_standardized'] == '$UNKNOWN$']
 if len(unknown_names) > 0:
     print(f"❌ {len(unknown_names)} tests need standardization:")
     for _, row in unknown_names.iterrows():
-        print(f"  - {row['test_name']}")
+        print(f"  - {row['lab_name']}")
 
 # Check for unknown standardized units
 unknown_units = df[df['lab_unit_standardized'] == '$UNKNOWN$']
 if len(unknown_units) > 0:
     print(f"❌ {len(unknown_units)} units need standardization:")
-    for _, row in unknown_units[['test_name', 'unit']].drop_duplicates().iterrows():
-        print(f"  - {row['test_name']}: {row['unit']}")
+    for _, row in unknown_units[['lab_name', 'unit']].drop_duplicates().iterrows():
+        print(f"  - {row['lab_name']}: {row['unit']}")
 ```
 
 This is useful for:
