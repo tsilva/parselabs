@@ -48,14 +48,14 @@ def test_lab_unit_percent_vs_lab_name(report):
     errors = []
     try:
         df = pd.read_csv(file)
-        if 'unit_normalized' in df.columns and 'lab_name' in df.columns:
-            mask = (df['unit_normalized'] == "%") & (~df['lab_name'].astype(str).str.endswith("(%)"))
+        if 'unit_normalized' in df.columns and 'lab_name_standardized' in df.columns:
+            mask = (df['unit_normalized'] == "%") & (~df['lab_name_standardized'].astype(str).str.endswith("(%)"))
             for idx in df[mask].index:
                 row = df.loc[idx]
                 source_file = row.get('source_file', 'unknown')
-                lab_name = row.get('lab_name', '')
+                lab_name_standardized = row.get('lab_name_standardized', '')
                 report.setdefault(source_file, []).append(
-                    f'Row at index {idx} (lab_name="{lab_name}") has unit_normalized="%" but lab_name="{lab_name}"'
+                    f'Row at index {idx} (lab_name_standardized="{lab_name_standardized}") has unit_normalized="%" but lab_name_standardized="{lab_name_standardized}"'
                 )
     except Exception as e:
         errors.append(f"Exception: {e}")
@@ -84,9 +84,9 @@ def test_lab_unit_percent_value_range(report):
                 row = df.loc[idx]
                 source_file = row.get('source_file', 'unknown')
                 val = row.get('value_normalized')
-                lab_name = row.get('lab_name', '')
+                lab_name_standardized = row.get('lab_name_standardized', '')
                 report.setdefault(source_file, []).append(
-                    f'Row at index {idx} (lab_name="{lab_name}") has unit_normalized="%" but value_normalized={val} (should be between 0 and 100)'
+                    f'Row at index {idx} (lab_name_standardized="{lab_name_standardized}") has unit_normalized="%" but value_normalized={val} (should be between 0 and 100)'
                 )
     except Exception as e:
         errors.append(f"Exception: {e}")
@@ -104,9 +104,9 @@ def test_lab_unit_boolean_value(report):
                 row = df.loc[idx]
                 source_file = row.get('source_file', 'unknown')
                 val = row.get('value_normalized')
-                lab_name = row.get('lab_name', '')
+                lab_name_standardized = row.get('lab_name_standardized', '')
                 report.setdefault(source_file, []).append(
-                    f'Row at index {idx} (lab_name="{lab_name}") has unit_normalized="boolean" but value_normalized={val} (should be 0 or 1)'
+                    f'Row at index {idx} (lab_name_standardized="{lab_name_standardized}") has unit_normalized="boolean" but value_normalized={val} (should be 0 or 1)'
                 )
     except Exception as e:
         errors.append(f"Exception: {e}")
@@ -118,15 +118,15 @@ def test_lab_name_enum_unit_consistency(report):
     errors = []
     try:
         df = pd.read_csv(file)
-        if 'lab_name' in df.columns and 'unit_normalized' in df.columns:
-            # Group by lab_name and collect unique units
-            grouped = df.groupby('lab_name')['unit_normalized'].unique()
-            for lab_name, units in grouped.items():
+        if 'lab_name_standardized' in df.columns and 'unit_normalized' in df.columns:
+            # Group by lab_name_standardized and collect unique units
+            grouped = df.groupby('lab_name_standardized')['unit_normalized'].unique()
+            for lab_name_standardized, units in grouped.items():
                 units = [u for u in units if pd.notnull(u)]
                 if len(units) > 1:
-                    indices = df[df['lab_name'] == lab_name].index.tolist()
+                    indices = df[df['lab_name_standardized'] == lab_name_standardized].index.tolist()
                     report.setdefault(file, []).append(
-                        f'lab_name="{lab_name}" has inconsistent unit_normalized values: {units} (rows: {indices})'
+                        f'lab_name_standardized="{lab_name_standardized}" has inconsistent unit_normalized values: {units} (rows: {indices})'
                     )
     except Exception as e:
         errors.append(f"Exception: {e}")
@@ -138,11 +138,11 @@ def test_lab_value_outliers_by_lab_name_enum(report):
     errors = []
     try:
         df = pd.read_csv(file)
-        if 'value_normalized' not in df.columns or 'lab_name' not in df.columns:
+        if 'value_normalized' not in df.columns or 'lab_name_standardized' not in df.columns:
             return
         # Only consider rows with non-null value_normalized
         df = df[pd.notnull(df['value_normalized'])]
-        for lab_name, group in df.groupby('lab_name'):
+        for lab_name_standardized, group in df.groupby('lab_name_standardized'):
             # Find the most frequent unit_normalized
             if 'unit_normalized' in group.columns:
                 unit_counts = group['unit_normalized'].value_counts()
@@ -186,7 +186,7 @@ def test_lab_value_outliers_by_lab_name_enum(report):
                 else:
                     page_numbers = ['unknown'] * len(outlier_values)
                 report.setdefault(file, []).append(
-                    f'lab_name="{lab_name}", unit_normalized="{most_freq_unit}" has outlier value_normalized (>3 std from mean {mean:.2f}±{std:.2f}) '
+                    f'lab_name_standardized="{lab_name_standardized}", unit_normalized="{most_freq_unit}" has outlier value_normalized (>3 std from mean {mean:.2f}±{std:.2f}) '
                     f'in files: {list(sorted(source_files))} outlier values: {outlier_values} page numbers: {page_numbers}'
                 )
     except Exception as e:
@@ -207,15 +207,15 @@ def test_unique_date_lab_name_enum(report):
     errors = []
     try:
         df = pd.read_csv(file)
-        if 'date' in df.columns and 'lab_name' in df.columns:
-            # Check for duplicate (date, lab_name) pairs
-            duplicates = df.duplicated(subset=['date', 'lab_name'], keep=False)
+        if 'date' in df.columns and 'lab_name_standardized' in df.columns:
+            # Check for duplicate (date, lab_name_standardized) pairs
+            duplicates = df.duplicated(subset=['date', 'lab_name_standardized'], keep=False)
             if duplicates.any():
-                dup_rows = df[duplicates][['date', 'lab_name']]
+                dup_rows = df[duplicates][['date', 'lab_name_standardized']]
                 for idx, row in dup_rows.iterrows():
                     source_file = df.loc[idx].get('source_file', 'unknown')
                     report.setdefault(source_file, []).append(
-                        f"Duplicate (date, lab_name) at index {idx}: date={row['date']}, lab_name={row['lab_name']}"
+                        f"Duplicate (date, lab_name_standardized) at index {idx}: date={row['date']}, lab_name_standardized={row['lab_name_standardized']}"
                     )
     except Exception as e:
         errors.append(f"Exception: {e}")

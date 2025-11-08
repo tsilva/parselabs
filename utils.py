@@ -94,12 +94,13 @@ def setup_logging(log_dir: Path, clear_logs: bool = False) -> logging.Logger:
             if log_file.exists():
                 log_file.write_text("", encoding="utf-8")
 
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
+    # Configure root logger so all modules inherit the same level
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
 
-    # Remove existing handlers
-    for handler in list(logger.handlers):
-        logger.removeHandler(handler)
+    # Remove existing handlers from root logger
+    for handler in list(root_logger.handlers):
+        root_logger.removeHandler(handler)
         handler.close()
 
     # Formatters
@@ -120,10 +121,12 @@ def setup_logging(log_dir: Path, clear_logs: bool = False) -> logging.Logger:
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(console_formatter)
 
-    logger.addHandler(info_handler)
-    logger.addHandler(error_handler)
-    logger.addHandler(console_handler)
+    root_logger.addHandler(info_handler)
+    root_logger.addHandler(error_handler)
+    root_logger.addHandler(console_handler)
 
+    # Return a logger for the calling module
+    logger = logging.getLogger(__name__)
     return logger
 
 

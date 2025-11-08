@@ -53,8 +53,7 @@ COLUMN_SCHEMA = {
     "page_number": {"dtype": "Int64", "excel_width": 8},
     "source_file": {"dtype": "str", "excel_width": 25},
     "lab_type": {"dtype": "str", "excel_width": 10},
-    "lab_name": {"dtype": "str", "excel_width": 35, "plotting_role": "group"},
-    "lab_unit": {"dtype": "str", "excel_width": 15},
+    "lab_name_standardized": {"dtype": "str", "excel_width": 35, "plotting_role": "group"},
     "lab_name_slug": {"dtype": "str", "excel_width": 30, "excel_hidden": True},
     "value_normalized": {"dtype": "float64", "excel_width": 14, "plotting_role": "value"},
     "unit_normalized": {"dtype": "str", "excel_width": 14, "plotting_role": "unit"},
@@ -70,13 +69,25 @@ COLUMN_SCHEMA = {
 def get_column_lists(schema: dict):
     """Extract ordered lists from schema."""
     ordered = [
-        "date", "test_name", "value", "unit", "reference_range",
-        "reference_min", "reference_max", "is_abnormal", "comments",
-        "lab_type", "lab_name", "lab_unit", "lab_name_slug",
+        # Metadata (when/where)
+        "date", "source_file", "page_number",
+
+        # Standardized lab data (main data people care about)
+        "lab_name_standardized", "lab_type",
         "value_normalized", "unit_normalized",
+        "is_in_healthy_range", "is_out_of_reference",
+
+        # Reference/healthy ranges (for standardized values)
+        "healthy_range_min", "healthy_range_max",
         "reference_min_normalized", "reference_max_normalized",
-        "is_out_of_reference", "healthy_range_min", "healthy_range_max",
-        "is_in_healthy_range", "source_text", "page_number", "source_file"
+
+        # Raw extraction (what was in PDF)
+        "test_name", "value", "unit",
+        "reference_range", "is_abnormal", "comments",
+
+        # Technical/internal fields
+        "reference_min", "reference_max",
+        "lab_name_slug", "source_text"
     ]
     export_cols = [k for k in ordered if k in schema]
     hidden_cols = [col for col, props in schema.items() if props.get("excel_hidden")]
