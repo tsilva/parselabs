@@ -89,15 +89,20 @@ The centralized `COLUMN_SCHEMA` dictionary defines:
 - Derivation logic for computed columns
 
 Key column categories:
-- **Raw extraction**:
-  - `lab_name`: Raw test name from PDF (e.g., "HEMATOLOGIA - HEMOGRAMA - Eritrocitos")
-  - `value`: Numeric or text value
-  - `unit`: Raw unit from PDF (e.g., "mg/dl", "x10^9/L")
-  - `reference_range`, `reference_min`, `reference_max`: Reference ranges from PDF
-- **Standardized** (added by post-extraction LLM standardization):
+- **Raw extraction** (suffix: `_raw`):
+  - `lab_name_raw`: Raw test name from PDF (e.g., "HEMATOLOGIA - HEMOGRAMA - Eritrocitos")
+  - `value_raw`: Numeric or text value from PDF
+  - `lab_unit_raw`: Raw unit from PDF (e.g., "mg/dl", "x10^9/L")
+  - `reference_range`: Reference range text (not converted)
+  - `reference_min_raw`, `reference_max_raw`: Reference range bounds from PDF
+- **Standardized** (via LLM, cleans up spelling/format):
   - `lab_name_standardized`: Standardized test name (e.g., "Blood - Erythrocytes")
-  - `lab_unit_standardized`: Standardized unit (e.g., "mg/dL", "10⁹/L")
+  - `lab_unit_standardized`: Standardized unit with proper capitalization (e.g., "mg/dl" → "mg/dL", "x10^9/L" → "10⁹/L")
   - Unknown/unmappable values are stored as `$UNKNOWN$` for manual review
+- **Primary** (suffix: `_primary`, after unit conversion):
+  - `value_primary`: Value converted to primary unit from lab_specs.json
+  - `lab_unit_primary`: Primary unit for this test (e.g., all glucose in "mg/dL" regardless of source unit)
+  - `reference_min_primary`, `reference_max_primary`: Reference ranges converted to primary unit
 - **Data quality**:
   - Filter by `lab_name_standardized == '$UNKNOWN$'` to find tests needing config updates
   - Filter by `lab_unit_standardized == '$UNKNOWN$'` to find units needing config updates
@@ -105,8 +110,8 @@ Key column categories:
 ### Pydantic Models
 
 - `LabResult`: Single test result with metadata including:
-  - Raw fields: `lab_name`, `value`, `unit`, `reference_range`, etc.
-  - Standardized fields: `lab_name_standardized`, `lab_unit_standardized` (added post-extraction)
+  - Raw fields (suffix `_raw`): `lab_name_raw`, `value_raw`, `lab_unit_raw`, `reference_min_raw`, `reference_max_raw`
+  - Standardized fields (added post-extraction): `lab_name_standardized`, `lab_unit_standardized`
 - `HealthLabReport`: Document-level metadata + list of LabResult objects
 - `LabType`: Enum for test types (blood, urine, saliva, feces, unknown)
 
@@ -190,14 +195,14 @@ unknown_names = df[df['lab_name_standardized'] == '$UNKNOWN$']
 if len(unknown_names) > 0:
     print(f"❌ {len(unknown_names)} tests need standardization:")
     for _, row in unknown_names.iterrows():
-        print(f"  - {row['lab_name']}")
+        print(f"  - {row['lab_name_raw']}")
 
 # Check for unknown standardized units
 unknown_units = df[df['lab_unit_standardized'] == '$UNKNOWN$']
 if len(unknown_units) > 0:
     print(f"❌ {len(unknown_units)} units need standardization:")
-    for _, row in unknown_units[['lab_name', 'unit']].drop_duplicates().iterrows():
-        print(f"  - {row['lab_name']}: {row['unit']}")
+    for _, row in unknown_units[['lab_name_raw', 'lab_unit_raw']].drop_duplicates().iterrows():
+        print(f"  - {row['lab_name_raw']}: {row['lab_unit_raw']}")
 ```
 
 This is useful for:

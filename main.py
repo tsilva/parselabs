@@ -41,12 +41,12 @@ client = OpenAI(
 
 COLUMN_SCHEMA = {
     "date": {"dtype": "datetime64[ns]", "excel_width": 13, "plotting_role": "date"},
-    "lab_name": {"dtype": "str", "excel_width": 35, "excel_hidden": False},
-    "value": {"dtype": "float64", "excel_width": 12, "excel_hidden": False},
-    "unit": {"dtype": "str", "excel_width": 15, "excel_hidden": False},
+    "lab_name_raw": {"dtype": "str", "excel_width": 35, "excel_hidden": False},
+    "value_raw": {"dtype": "float64", "excel_width": 12, "excel_hidden": False},
+    "lab_unit_raw": {"dtype": "str", "excel_width": 15, "excel_hidden": False},
     "reference_range": {"dtype": "str", "excel_width": 25, "excel_hidden": False},
-    "reference_min": {"dtype": "float64", "excel_width": 12, "excel_hidden": True},
-    "reference_max": {"dtype": "float64", "excel_width": 12, "excel_hidden": True},
+    "reference_min_raw": {"dtype": "float64", "excel_width": 12, "excel_hidden": True},
+    "reference_max_raw": {"dtype": "float64", "excel_width": 12, "excel_hidden": True},
     "is_abnormal": {"dtype": "boolean", "excel_width": 10, "excel_hidden": False},
     "comments": {"dtype": "str", "excel_width": 40, "excel_hidden": False},
     "source_text": {"dtype": "str", "excel_width": 50, "excel_hidden": True},
@@ -54,11 +54,12 @@ COLUMN_SCHEMA = {
     "source_file": {"dtype": "str", "excel_width": 25},
     "lab_type": {"dtype": "str", "excel_width": 10},
     "lab_name_standardized": {"dtype": "str", "excel_width": 35, "plotting_role": "group"},
+    "lab_unit_standardized": {"dtype": "str", "excel_width": 15},
     "lab_name_slug": {"dtype": "str", "excel_width": 30, "excel_hidden": True},
-    "value_normalized": {"dtype": "float64", "excel_width": 14, "plotting_role": "value"},
-    "unit_normalized": {"dtype": "str", "excel_width": 14, "plotting_role": "unit"},
-    "reference_min_normalized": {"dtype": "float64", "excel_width": 14},
-    "reference_max_normalized": {"dtype": "float64", "excel_width": 14},
+    "value_primary": {"dtype": "float64", "excel_width": 14, "plotting_role": "value"},
+    "lab_unit_primary": {"dtype": "str", "excel_width": 14, "plotting_role": "unit"},
+    "reference_min_primary": {"dtype": "float64", "excel_width": 14},
+    "reference_max_primary": {"dtype": "float64", "excel_width": 14},
     "is_out_of_reference": {"dtype": "boolean", "excel_width": 14},
     "healthy_range_min": {"dtype": "float64", "excel_width": 16},
     "healthy_range_max": {"dtype": "float64", "excel_width": 16},
@@ -73,20 +74,20 @@ def get_column_lists(schema: dict):
         "date", "source_file", "page_number",
 
         # Standardized lab data (main data people care about)
-        "lab_name_standardized", "lab_type",
-        "value_normalized", "unit_normalized",
+        "lab_name_standardized", "lab_unit_standardized", "lab_type",
+        "value_primary", "lab_unit_primary",
         "is_in_healthy_range", "is_out_of_reference",
 
-        # Reference/healthy ranges (for standardized values)
+        # Reference/healthy ranges (for primary values)
         "healthy_range_min", "healthy_range_max",
-        "reference_min_normalized", "reference_max_normalized",
+        "reference_min_primary", "reference_max_primary",
 
         # Raw extraction (what was in PDF)
-        "lab_name", "value", "unit",
+        "lab_name_raw", "value_raw", "lab_unit_raw",
         "reference_range", "is_abnormal", "comments",
 
         # Technical/internal fields
-        "reference_min", "reference_max",
+        "reference_min_raw", "reference_max_raw",
         "lab_name_slug", "source_text"
     ]
     export_cols = [k for k in ordered if k in schema]
@@ -210,7 +211,7 @@ def process_single_pdf(
 
         # Standardize lab names
         logger.info(f"[{pdf_stem}] Standardizing lab names...")
-        raw_names = [r.get("lab_name") for r in all_results if r.get("lab_name")]
+        raw_names = [r.get("lab_name_raw") for r in all_results if r.get("lab_name_raw")]
         if raw_names and lab_specs.exists:
             try:
                 unique_names = list(set(raw_names))
@@ -221,7 +222,7 @@ def process_single_pdf(
                     client
                 )
                 for result in all_results:
-                    raw_name = result.get("lab_name")
+                    raw_name = result.get("lab_name_raw")
                     result["lab_name_standardized"] = name_mapping.get(raw_name, UNKNOWN_VALUE) if raw_name else UNKNOWN_VALUE
                 logger.info(f"[{pdf_stem}] Standardized {len(unique_names)} unique test names")
             except Exception as e:
@@ -235,7 +236,7 @@ def process_single_pdf(
         # Standardize units (with lab name context)
         logger.info(f"[{pdf_stem}] Standardizing units...")
         unit_contexts = [
-            (r.get("unit") if r.get("unit") is not None else "null", r.get("lab_name_standardized", ""))
+            (r.get("lab_unit_raw") if r.get("lab_unit_raw") is not None else "null", r.get("lab_name_standardized", ""))
             for r in all_results
         ]
         if unit_contexts and lab_specs.exists:
@@ -248,7 +249,7 @@ def process_single_pdf(
                     lab_specs
                 )
                 for result in all_results:
-                    raw_unit = result.get("unit") if result.get("unit") is not None else "null"
+                    raw_unit = result.get("lab_unit_raw") if result.get("lab_unit_raw") is not None else "null"
                     lab_name = result.get("lab_name_standardized", "")
                     standardized_unit = unit_mapping.get((raw_unit, lab_name), UNKNOWN_VALUE)
 
@@ -260,7 +261,7 @@ def process_single_pdf(
                             logger.debug(f"[{pdf_stem}] Used primary unit '{primary_unit}' for null unit in '{lab_name}'")
 
                     result["lab_unit_standardized"] = standardized_unit
-                logger.info(f"[{pdf_stem}] Standardized {len(set(r.get('unit') for r in all_results))} unique units")
+                logger.info(f"[{pdf_stem}] Standardized {len(set(r.get('lab_unit_raw') for r in all_results))} unique units")
             except Exception as e:
                 logger.error(f"[{pdf_stem}] Unit standardization failed: {e}")
                 for result in all_results:

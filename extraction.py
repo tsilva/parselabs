@@ -24,14 +24,14 @@ class LabResult(BaseModel):
     """Single lab test result - optimized for extraction accuracy."""
 
     # Raw extraction (exactly as shown in PDF)
-    lab_name: str = Field(
+    lab_name_raw: str = Field(
         description="Test name EXACTLY as written in the PDF. Preserve all spacing, capitalization, symbols, and formatting."
     )
-    value: Optional[float] = Field(
+    value_raw: Optional[float] = Field(
         default=None,
         description="Numeric result value. For text results (Positive/Negative), use 1/0 or leave null and put in comments."
     )
-    unit: Optional[str] = Field(
+    lab_unit_raw: Optional[str] = Field(
         default=None,
         description="Unit EXACTLY as written in PDF (preserve case, spacing, symbols)."
     )
@@ -39,11 +39,11 @@ class LabResult(BaseModel):
         default=None,
         description="Complete reference range text EXACTLY as shown."
     )
-    reference_min: Optional[float] = Field(
+    reference_min_raw: Optional[float] = Field(
         default=None,
         description="Minimum reference value (extract number from reference_range if available)"
     )
-    reference_max: Optional[float] = Field(
+    reference_max_raw: Optional[float] = Field(
         default=None,
         description="Maximum reference value (extract number from reference_range if available)"
     )
@@ -171,9 +171,9 @@ CRITICAL RULES:
 8. DATES: Format as YYYY-MM-DD or leave null
 
 SCHEMA FIELD NAMES:
-- Use `lab_name` (raw test name from PDF)
-- Use `value` (NOT lab_value)
-- Use `unit` (NOT lab_unit)
+- Use `lab_name_raw` (raw test name from PDF)
+- Use `value_raw` (raw numeric value)
+- Use `lab_unit_raw` (raw unit from PDF)
 
 Remember: Your job is to be a perfect copier, not an interpreter. Extract EVERYTHING, even qualitative results.
 """.strip()
@@ -476,12 +476,12 @@ def _parse_string_results_with_llm(string_results: List[str], client: OpenAI, mo
     prompt = f"""You are parsing lab test result strings into structured format.
 
 For each string below, extract:
-- lab_name: The name of the lab test
-- value: Numeric value (null if text-only result like "Negative")
-- unit: Unit of measurement (null if none)
+- lab_name_raw: The name of the lab test
+- value_raw: Numeric value (null if text-only result like "Negative")
+- lab_unit_raw: Unit of measurement (null if none)
 - reference_range: Reference range text (null if none)
-- reference_min: Min reference value (null if not available)
-- reference_max: Max reference value (null if not available)
+- reference_min_raw: Min reference value (null if not available)
+- reference_max_raw: Max reference value (null if not available)
 - comments: Any qualitative results or notes
 - source_text: The original string
 
@@ -489,7 +489,7 @@ Input strings:
 {json.dumps(string_results, indent=2, ensure_ascii=False)}
 
 Return a JSON array of parsed lab results matching the LabResult schema.
-Each result must have at minimum: lab_name, value, unit, and source_text fields."""
+Each result must have at minimum: lab_name_raw, value_raw, lab_unit_raw, and source_text fields."""
 
     try:
         completion = client.chat.completions.create(
