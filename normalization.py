@@ -5,7 +5,7 @@ import pandas as pd
 from typing import Optional
 
 from config import LabSpecsConfig, UNKNOWN_VALUE
-from utils import slugify, normalize_unit, ensure_columns
+from utils import slugify, ensure_columns
 
 logger = logging.getLogger(__name__)
 
@@ -28,25 +28,11 @@ def apply_normalizations(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Data
         return df
 
     # Ensure required columns exist
-    ensure_columns(df, ["lab_name_standardized", "unit", "test_name"], default=None)
-
-    # Use lab_name_standardized as lab_name (already populated by standardization)
-    if "lab_name_standardized" in df.columns:
-        df["lab_name"] = df["lab_name_standardized"]
-    elif "test_name" in df.columns:
-        df["lab_name"] = df["test_name"]
-    else:
-        df["lab_name"] = UNKNOWN_VALUE
-
-    # Normalize units using vectorized map
-    if "unit" in df.columns:
-        df["lab_unit"] = df["unit"].apply(normalize_unit)
-    else:
-        df["lab_unit"] = None
+    ensure_columns(df, ["lab_name_standardized", "lab_unit_standardized", "test_name"], default=None)
 
     # Look up lab_type from config (vectorized)
     if lab_specs.exists:
-        df["lab_type"] = df["lab_name"].apply(
+        df["lab_type"] = df["lab_name_standardized"].apply(
             lambda name: lab_specs.get_lab_type(name) if pd.notna(name) and name != UNKNOWN_VALUE else "blood"
         )
     else:
@@ -67,7 +53,7 @@ def apply_normalizations(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Data
     else:
         # No conversions, just copy values
         df["value_normalized"] = df.get("value")
-        df["unit_normalized"] = df.get("lab_unit")
+        df["unit_normalized"] = df.get("lab_unit_standardized")
         df["reference_min_normalized"] = df.get("reference_min")
         df["reference_max_normalized"] = df.get("reference_max")
 
@@ -91,28 +77,28 @@ def apply_unit_conversions(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Da
     """
     # Initialize normalized columns
     df["value_normalized"] = df["value"]
-    df["unit_normalized"] = df["lab_unit"]
+    df["unit_normalized"] = df["lab_unit_standardized"]
     df["reference_min_normalized"] = df["reference_min"]
     df["reference_max_normalized"] = df["reference_max"]
 
-    # Group by lab_name to apply conversions efficiently
-    for lab_name in df["lab_name"].unique():
-        if pd.isna(lab_name) or lab_name == UNKNOWN_VALUE:
+    # Group by lab_name_standardized to apply conversions efficiently
+    for lab_name_standardized in df["lab_name_standardized"].unique():
+        if pd.isna(lab_name_standardized) or lab_name_standardized == UNKNOWN_VALUE:
             continue
 
-        primary_unit = lab_specs.get_primary_unit(lab_name)
+        primary_unit = lab_specs.get_primary_unit(lab_name_standardized)
         if not primary_unit:
             continue
 
         # Get rows for this lab
-        mask = df["lab_name"] == lab_name
+        mask = df["lab_name_standardized"] == lab_name_standardized
 
         # For each unique unit in this lab
-        for unit in df.loc[mask, "lab_unit"].unique():
+        for unit in df.loc[mask, "lab_unit_standardized"].unique():
             if pd.isna(unit):
                 continue
 
-            unit_mask = mask & (df["lab_unit"] == unit)
+            unit_mask = mask & (df["lab_unit_standardized"] == unit)
 
             # If already in primary unit, just update unit_normalized
             if unit == primary_unit:
@@ -120,7 +106,7 @@ def apply_unit_conversions(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Da
                 continue
 
             # Get conversion factor
-            factor = lab_specs.get_conversion_factor(lab_name, unit)
+            factor = lab_specs.get_conversion_factor(lab_name_standardized, unit)
             if factor is None:
                 continue
 
@@ -140,15 +126,15 @@ def compute_health_status(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Dat
     Uses vectorized operations where possible.
     """
     # Get healthy ranges for all unique lab names
-    lab_names = df["lab_name"].unique()
+    lab_names = df["lab_name_standardized"].unique()
     healthy_ranges = {}
-    for lab_name in lab_names:
-        if pd.notna(lab_name) and lab_name != UNKNOWN_VALUE:
-            healthy_ranges[lab_name] = lab_specs.get_healthy_range(lab_name)
+    for lab_name_standardized in lab_names:
+        if pd.notna(lab_name_standardized) and lab_name_standardized != UNKNOWN_VALUE:
+            healthy_ranges[lab_name_standardized] = lab_specs.get_healthy_range(lab_name_standardized)
 
     # Apply healthy ranges (vectorized lookup)
-    df["healthy_range_min"] = df["lab_name"].map(lambda name: healthy_ranges.get(name, (None, None))[0])
-    df["healthy_range_max"] = df["lab_name"].map(lambda name: healthy_ranges.get(name, (None, None))[1])
+    df["healthy_range_min"] = df["lab_name_standardized"].map(lambda name: healthy_ranges.get(name, (None, None))[0])
+    df["healthy_range_max"] = df["lab_name_standardized"].map(lambda name: healthy_ranges.get(name, (None, None))[1])
 
     # Compute is_out_of_reference (vectorized)
     value_series = pd.to_numeric(df["value_normalized"], errors='coerce')
@@ -178,7 +164,7 @@ def compute_health_status(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Dat
 
 def deduplicate_results(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
     """
-    Deduplicate by (date, lab_name), keeping best match (prefer primary unit).
+    Deduplicate by (date, lab_name_standardized), keeping best match (prefer primary unit).
 
     Args:
         df: DataFrame with lab results
@@ -187,17 +173,17 @@ def deduplicate_results(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataF
     Returns:
         Deduplicated DataFrame
     """
-    if df.empty or "date" not in df.columns or "lab_name" not in df.columns:
+    if df.empty or "date" not in df.columns or "lab_name_standardized" not in df.columns:
         return df
 
     def pick_best_dupe(group):
         """Pick best duplicate: prefer primary unit if multiple entries exist."""
-        # Get lab_name from first row (grouping columns are included)
-        lab_name = group.iloc[0]["lab_name"]
-        primary_unit = lab_specs.get_primary_unit(lab_name) if lab_specs.exists else None
+        # Get lab_name_standardized from first row (grouping columns are included)
+        lab_name_standardized = group.iloc[0]["lab_name_standardized"]
+        primary_unit = lab_specs.get_primary_unit(lab_name_standardized) if lab_specs.exists else None
 
-        if primary_unit and "lab_unit" in group.columns and (group["lab_unit"] == primary_unit).any():
-            return group[group["lab_unit"] == primary_unit].iloc[0]
+        if primary_unit and "lab_unit_standardized" in group.columns and (group["lab_unit_standardized"] == primary_unit).any():
+            return group[group["lab_unit_standardized"] == primary_unit].iloc[0]
         else:
             return group.iloc[0]
 
@@ -207,7 +193,7 @@ def deduplicate_results(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataF
         warnings.filterwarnings('ignore', category=FutureWarning)
         deduplicated = (
             df
-            .groupby(["date", "lab_name"], dropna=False, as_index=False, group_keys=False)
+            .groupby(["date", "lab_name_standardized"], dropna=False, as_index=False, group_keys=False)
             .apply(pick_best_dupe)
             .reset_index(drop=True)
         )

@@ -345,8 +345,8 @@ def extract_labs_from_page_image(
         logger.error(f"JSON decode error for tool args: {e}")
         return HealthLabReport(lab_results=[]).model_dump(mode='json')
 
-    # Pre-process: Fix common LLM issues before Pydantic validation
-    tool_result_dict = _fix_lab_results_format(tool_result_dict)
+    # Pre-process: Fix common LLM issues before Pydantic validation (using LLM for soft parsing)
+    tool_result_dict = _fix_lab_results_format(tool_result_dict, client, model_id)
 
     # Validate with Pydantic
     try:
@@ -393,8 +393,8 @@ def _normalize_date_format(date_str: Optional[str]) -> Optional[str]:
     return None
 
 
-def _fix_lab_results_format(tool_result_dict: dict) -> dict:
-    """Fix common LLM formatting issues in lab_results and dates."""
+def _fix_lab_results_format(tool_result_dict: dict, client: OpenAI, model_id: str) -> dict:
+    """Fix common LLM formatting issues in lab_results and dates using LLM-based parsing."""
     # Fix date formats at report level
     for date_field in ["collection_date", "report_date"]:
         if date_field in tool_result_dict:
@@ -403,10 +403,14 @@ def _fix_lab_results_format(tool_result_dict: dict) -> dict:
     if "lab_results" not in tool_result_dict or not isinstance(tool_result_dict["lab_results"], list):
         return tool_result_dict
 
+    # Collect all string-based lab results that need parsing
+    string_results = []
+    string_indices = []
     parsed_lab_results = []
+
     for i, lr_data in enumerate(tool_result_dict["lab_results"]):
         if isinstance(lr_data, str):
-            # Try to parse JSON string
+            # Try to parse as JSON first (simple case)
             try:
                 parsed_lr = json.loads(lr_data)
                 parsed_lab_results.append(parsed_lr)
@@ -414,150 +418,117 @@ def _fix_lab_results_format(tool_result_dict: dict) -> dict:
             except json.JSONDecodeError:
                 pass
 
-            # Try to parse Python repr string
-            if lr_data.startswith("LabResult("):
-                parsed_dict = _parse_repr_string(lr_data)
-                if parsed_dict:
-                    parsed_lab_results.append(parsed_dict)
-                    continue
-
-            # Try to parse plain text format (e.g., "TEST - NAME: value (reference_range: min-max)")
-            parsed_dict = _parse_plain_text_format(lr_data)
-            if parsed_dict:
-                parsed_lab_results.append(parsed_dict)
-                continue
-
-            # Log first 200 chars of malformed data for debugging
-            preview = lr_data[:200] if len(lr_data) > 200 else lr_data
-            logger.warning(f"Failed to parse lab_result[{i}], skipping. Data preview: {preview}")
+            # Collect for LLM-based parsing
+            string_results.append(lr_data)
+            string_indices.append(i)
+            parsed_lab_results.append(None)  # Placeholder
         else:
             parsed_lab_results.append(lr_data)
+
+    # If we have string results, use LLM to parse them
+    if string_results:
+        logger.info(f"Found {len(string_results)} lab results as strings, using LLM to parse them")
+        parsed = _parse_string_results_with_llm(string_results, client, model_id)
+
+        # Insert parsed results back
+        skipped_count = 0
+        for idx, parsed_result in zip(string_indices, parsed):
+            if parsed_result:
+                parsed_lab_results[idx] = parsed_result
+            else:
+                # Failed to parse, remove from results
+                logger.debug(f"Failed to parse lab_result[{idx}], skipping. Data: {string_results[string_indices.index(idx)][:200]}")
+                skipped_count += 1
+
+        # Log summary if any failed
+        if skipped_count > 0:
+            logger.info(
+                f"Skipped {skipped_count}/{len(string_results)} unparseable lab results. "
+                f"This is normal during self-consistency voting - other extraction attempts may have proper structure."
+            )
+
+    # Remove None placeholders
+    parsed_lab_results = [r for r in parsed_lab_results if r is not None]
 
     tool_result_dict["lab_results"] = parsed_lab_results
     return tool_result_dict
 
 
-def _parse_repr_string(repr_str: str) -> Optional[dict]:
-    """Parse LabResult(key=value, ...) format."""
-    try:
-        content = repr_str[len("LabResult("):-1]
-        parsed_dict = {}
-        pattern = r"(\w+)=(?:'([^']*)'|\"([^\"]*)\"|(\d+\.?\d*)|(\w+))"
-        matches = re.findall(pattern, content)
-
-        for match in matches:
-            key = match[0]
-            value = match[1] or match[2] or match[3] or match[4]
-
-            if value in ('null', 'None'):
-                parsed_dict[key] = None
-            elif value == 'True':
-                parsed_dict[key] = True
-            elif value == 'False':
-                parsed_dict[key] = False
-            elif match[3]:  # Numeric match
-                parsed_dict[key] = float(value) if '.' in value else int(value)
-            else:
-                parsed_dict[key] = value
-
-        return parsed_dict if parsed_dict else None
-    except Exception:
-        return None
-
-
-def _parse_plain_text_format(text: str) -> Optional[dict]:
+def _parse_string_results_with_llm(string_results: List[str], client: OpenAI, model_id: str) -> List[Optional[dict]]:
     """
-    Parse plain text format like:
-    'QUÍMICA CLÍNICA - URINA - URINA-TIPO II - pH: 7,0 (reference_range: 5,0-8,0)'
-    'HEMATOLOGIA - HEMOGRAMA - Eritrócitos: 3,72 x10E6/μ1 (Reference Range: 4,5-5,9)'
+    Use LLM to parse string-formatted lab results into structured format.
 
-    Returns a dict that can be validated by LabResult model.
+    This is a soft parser that uses AI to extract structure from any text format,
+    avoiding hardcoded regex patterns.
+
+    Args:
+        string_results: List of lab result strings to parse
+        client: OpenAI client instance
+        model_id: Model to use for parsing
+
+    Returns:
+        List of parsed dictionaries (None for unparseable results)
     """
-    try:
-        # Extract reference_range if present (in parentheses at the end)
-        # Make it case-insensitive to handle both "reference_range" and "Reference Range"
-        reference_range = None
-        reference_min = None
-        reference_max = None
+    if not string_results:
+        return []
 
-        # First try format: (reference_range: min-max) or (Reference Range: min-max)
-        ref_match = re.search(r'\((?:reference[_\s]range):\s*([^)]+)\)\s*$', text, re.IGNORECASE)
-        if ref_match:
-            reference_range = ref_match.group(1).strip()
-            text = text[:ref_match.start()].strip()
+    # Build prompt for LLM to parse the strings
+    prompt = f"""You are parsing lab test result strings into structured format.
+
+For each string below, extract:
+- test_name: The name of the lab test
+- value: Numeric value (null if text-only result like "Negative")
+- unit: Unit of measurement (null if none)
+- reference_range: Reference range text (null if none)
+- reference_min: Min reference value (null if not available)
+- reference_max: Max reference value (null if not available)
+- comments: Any qualitative results or notes
+- source_text: The original string
+
+Input strings:
+{json.dumps(string_results, indent=2, ensure_ascii=False)}
+
+Return a JSON array of parsed lab results matching the LabResult schema.
+Each result must have at minimum: test_name, value, unit, and source_text fields."""
+
+    try:
+        completion = client.chat.completions.create(
+            model=model_id,
+            messages=[
+                {"role": "system", "content": "You are a medical data parser. Parse lab result strings into structured JSON format."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.0,
+            response_format={"type": "json_object"}
+        )
+
+        response_text = completion.choices[0].message.content
+        parsed_json = json.loads(response_text)
+
+        # Handle different possible response formats
+        if isinstance(parsed_json, dict) and "results" in parsed_json:
+            results = parsed_json["results"]
+        elif isinstance(parsed_json, dict) and "lab_results" in parsed_json:
+            results = parsed_json["lab_results"]
+        elif isinstance(parsed_json, list):
+            results = parsed_json
         else:
-            # Try format: (min-max) - direct numeric range without prefix
-            ref_match = re.search(r'\(([^)]+)\)\s*$', text)
-            if ref_match:
-                potential_range = ref_match.group(1).strip()
-                # Check if it looks like a numeric range (e.g., "3.0 - 4.5" or "136 - 146")
-                if re.match(r'^\d+[.,]?\d*\s*[-a]\s*\d+[.,]?\d*$', potential_range):
-                    reference_range = potential_range
-                    text = text[:ref_match.start()].strip()
+            logger.error(f"Unexpected LLM response format for string parsing: {parsed_json}")
+            return [None] * len(string_results)
 
-        # Try to parse min/max from reference_range
-        if reference_range:
-            range_match = re.search(r'(\d+[.,]?\d*)\s*[-a]\s*(\d+[.,]?\d*)', reference_range)
-            if range_match:
-                try:
-                    reference_min = float(range_match.group(1).replace(',', '.'))
-                    reference_max = float(range_match.group(2).replace(',', '.'))
-                except ValueError:
-                    pass
+        # Validate we got the right number of results
+        if len(results) != len(string_results):
+            logger.warning(f"LLM returned {len(results)} results but expected {len(string_results)}")
+            # Pad or trim to match
+            while len(results) < len(string_results):
+                results.append(None)
+            results = results[:len(string_results)]
 
-        # Split on last colon to separate test_name from value
-        if ':' not in text:
-            return None
+        return results
 
-        last_colon_idx = text.rfind(':')
-        test_name = text[:last_colon_idx].strip()
-        value_part = text[last_colon_idx + 1:].strip()
-
-        # Try to extract unit and numeric value
-        # Pattern: number (with comma or dot as decimal), optional space, then unit
-        value = None
-        unit = None
-
-        # Try to match: numeric value followed by optional space and unit
-        value_unit_match = re.match(r'^\s*(\d+[.,]?\d*)\s*(.*)$', value_part)
-        if value_unit_match:
-            try:
-                value_str = value_unit_match.group(1).replace(',', '.')
-                value = float(value_str)
-                unit_candidate = value_unit_match.group(2).strip()
-                unit = unit_candidate if unit_candidate else None
-            except ValueError:
-                # Not a numeric value
-                pass
-
-        # If we couldn't parse a numeric value, treat it as qualitative
-        if value is None:
-            # Try one more time with just the first token as the value
-            tokens = value_part.split()
-            if tokens:
-                try:
-                    value = float(tokens[0].replace(',', '.'))
-                    unit = ' '.join(tokens[1:]) if len(tokens) > 1 else None
-                except ValueError:
-                    pass
-
-        # Build the result dict
-        result = {
-            "test_name": test_name,
-            "value": value,
-            "unit": unit,
-            "reference_range": reference_range,
-            "reference_min": reference_min,
-            "reference_max": reference_max,
-            "is_abnormal": None,
-            "comments": value_part if value is None else None,
-            "source_text": text if not reference_range else f"{text} ({reference_range})"
-        }
-
-        return result
     except Exception as e:
-        logger.debug(f"Failed to parse plain text format: {e}")
-        return None
+        logger.error(f"Failed to parse string results with LLM: {e}")
+        return [None] * len(string_results)
 
 
 def _salvage_lab_results(tool_result_dict: dict) -> dict:
