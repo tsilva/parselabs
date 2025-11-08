@@ -24,7 +24,7 @@ class LabResult(BaseModel):
     """Single lab test result - optimized for extraction accuracy."""
 
     # Raw extraction (exactly as shown in PDF)
-    test_name: str = Field(
+    lab_name: str = Field(
         description="Test name EXACTLY as written in the PDF. Preserve all spacing, capitalization, symbols, and formatting."
     )
     value: Optional[float] = Field(
@@ -171,7 +171,7 @@ CRITICAL RULES:
 8. DATES: Format as YYYY-MM-DD or leave null
 
 SCHEMA FIELD NAMES:
-- Use `test_name` (NOT lab_name)
+- Use `lab_name` (raw test name from PDF)
 - Use `value` (NOT lab_value)
 - Use `unit` (NOT lab_unit)
 
@@ -476,7 +476,7 @@ def _parse_string_results_with_llm(string_results: List[str], client: OpenAI, mo
     prompt = f"""You are parsing lab test result strings into structured format.
 
 For each string below, extract:
-- test_name: The name of the lab test
+- lab_name: The name of the lab test
 - value: Numeric value (null if text-only result like "Negative")
 - unit: Unit of measurement (null if none)
 - reference_range: Reference range text (null if none)
@@ -489,7 +489,7 @@ Input strings:
 {json.dumps(string_results, indent=2, ensure_ascii=False)}
 
 Return a JSON array of parsed lab results matching the LabResult schema.
-Each result must have at minimum: test_name, value, unit, and source_text fields."""
+Each result must have at minimum: lab_name, value, unit, and source_text fields."""
 
     try:
         completion = client.chat.completions.create(

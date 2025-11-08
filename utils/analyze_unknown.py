@@ -22,7 +22,7 @@ print("="*80)
 unknown_names = df[df['lab_name_standardized'] == '$UNKNOWN$']
 if len(unknown_names) > 0:
     for _, row in unknown_names.iterrows():
-        print(f"\nRaw test_name: {row['test_name']}")
+        print(f"\nRaw lab_name: {row['lab_name']}")
         print(f"  Lab type: {row['lab_type']}")
         print(f"  Unit: {row['unit']}")
         print(f"  Value: {row['value']}")
@@ -35,10 +35,10 @@ print("="*80)
 unknown_units = df[df['lab_unit_standardized'] == '$UNKNOWN$']
 if len(unknown_units) > 0:
     # Get unique combinations
-    unique_combos = unknown_units[['test_name', 'unit', 'lab_type', 'lab_name_standardized']].drop_duplicates()
+    unique_combos = unknown_units[['lab_name', 'unit', 'lab_type', 'lab_name_standardized']].drop_duplicates()
 
     for _, row in unique_combos.iterrows():
-        print(f"\nTest: {row['test_name']}")
+        print(f"\nTest: {row['lab_name']}")
         print(f"  Standardized as: {row['lab_name_standardized']}")
         print(f"  Raw unit: {row['unit']}")
         print(f"  Lab type: {row['lab_type']}")
