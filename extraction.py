@@ -480,12 +480,23 @@ def _parse_plain_text_format(text: str) -> Optional[dict]:
         reference_min = None
         reference_max = None
 
+        # First try format: (reference_range: min-max) or (Reference Range: min-max)
         ref_match = re.search(r'\((?:reference[_\s]range):\s*([^)]+)\)\s*$', text, re.IGNORECASE)
         if ref_match:
             reference_range = ref_match.group(1).strip()
             text = text[:ref_match.start()].strip()
+        else:
+            # Try format: (min-max) - direct numeric range without prefix
+            ref_match = re.search(r'\(([^)]+)\)\s*$', text)
+            if ref_match:
+                potential_range = ref_match.group(1).strip()
+                # Check if it looks like a numeric range (e.g., "3.0 - 4.5" or "136 - 146")
+                if re.match(r'^\d+[.,]?\d*\s*[-a]\s*\d+[.,]?\d*$', potential_range):
+                    reference_range = potential_range
+                    text = text[:ref_match.start()].strip()
 
-            # Try to parse min/max from reference_range
+        # Try to parse min/max from reference_range
+        if reference_range:
             range_match = re.search(r'(\d+[.,]?\d*)\s*[-a]\s*(\d+[.,]?\d*)', reference_range)
             if range_match:
                 try:
