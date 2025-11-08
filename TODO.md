@@ -1,3 +1,4 @@
+- Implement architecture review
 - Run main.py until it runs without errors
 - Review data and add test cases with gitignored folder
 - Add support for multiple user profiles
