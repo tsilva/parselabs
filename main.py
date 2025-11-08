@@ -41,7 +41,7 @@ client = OpenAI(
 
 COLUMN_SCHEMA = {
     "date": {"dtype": "datetime64[ns]", "excel_width": 13, "plotting_role": "date"},
-    "test_name": {"dtype": "str", "excel_width": 35, "excel_hidden": False},
+    "lab_name": {"dtype": "str", "excel_width": 35, "excel_hidden": False},
     "value": {"dtype": "float64", "excel_width": 12, "excel_hidden": False},
     "unit": {"dtype": "str", "excel_width": 15, "excel_hidden": False},
     "reference_range": {"dtype": "str", "excel_width": 25, "excel_hidden": False},
@@ -82,7 +82,7 @@ def get_column_lists(schema: dict):
         "reference_min_normalized", "reference_max_normalized",
 
         # Raw extraction (what was in PDF)
-        "test_name", "value", "unit",
+        "lab_name", "value", "unit",
         "reference_range", "is_abnormal", "comments",
 
         # Technical/internal fields
@@ -210,7 +210,7 @@ def process_single_pdf(
 
         # Standardize lab names
         logger.info(f"[{pdf_stem}] Standardizing lab names...")
-        raw_names = [r.get("test_name") for r in all_results if r.get("test_name")]
+        raw_names = [r.get("lab_name") for r in all_results if r.get("lab_name")]
         if raw_names and lab_specs.exists:
             try:
                 unique_names = list(set(raw_names))
@@ -221,7 +221,7 @@ def process_single_pdf(
                     client
                 )
                 for result in all_results:
-                    raw_name = result.get("test_name")
+                    raw_name = result.get("lab_name")
                     result["lab_name_standardized"] = name_mapping.get(raw_name, UNKNOWN_VALUE) if raw_name else UNKNOWN_VALUE
                 logger.info(f"[{pdf_stem}] Standardized {len(unique_names)} unique test names")
             except Exception as e:

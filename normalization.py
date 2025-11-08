@@ -28,7 +28,7 @@ def apply_normalizations(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Data
         return df
 
     # Ensure required columns exist
-    ensure_columns(df, ["lab_name_standardized", "lab_unit_standardized", "test_name"], default=None)
+    ensure_columns(df, ["lab_name_standardized", "lab_unit_standardized", "lab_name"], default=None)
 
     # Look up lab_type from config (vectorized)
     if lab_specs.exists:
@@ -39,9 +39,9 @@ def apply_normalizations(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Data
         df["lab_type"] = "blood"
 
     # Create lab_name_slug (vectorized)
-    if "test_name" in df.columns:
+    if "lab_name" in df.columns:
         df["lab_name_slug"] = df.apply(
-            lambda row: f"{row.get('lab_type', 'blood')}-{slugify(row.get('test_name', ''))}",
+            lambda row: f"{row.get('lab_type', 'blood')}-{slugify(row.get('lab_name', ''))}",
             axis=1
         )
     else:

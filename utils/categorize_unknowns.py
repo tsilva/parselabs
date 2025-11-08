@@ -25,8 +25,8 @@ print("="*80)
 reference_indicators = []
 actual_tests = []
 
-for test_name in unknown_names['test_name'].unique():
-    test_lower = test_name.lower()
+for lab_name in unknown_names['lab_name'].unique():
+    test_lower = lab_name.lower()
 
     # Check if it's a reference indicator
     if any(keyword in test_lower for keyword in [
@@ -34,14 +34,14 @@ for test_name in unknown_names['test_name'].unique():
         'ferropenia', 'alto risco', 'baixo risco',
         'avaliação de risco'
     ]):
-        reference_indicators.append(test_name)
+        reference_indicators.append(lab_name)
     else:
-        actual_tests.append(test_name)
+        actual_tests.append(lab_name)
 
 print(f"\n📊 CATEGORY 1: REFERENCE INDICATORS ({len(reference_indicators)})")
 print("These are NOT lab tests, but interpretation thresholds:")
 for name in sorted(reference_indicators):
-    count = len(unknown_names[unknown_names['test_name'] == name])
+    count = len(unknown_names[unknown_names['lab_name'] == name])
     print(f"  - {name} ({count} occurrences)")
 
 print(f"\n🔬 CATEGORY 2: ACTUAL LAB TESTS ({len(actual_tests)})")
@@ -51,7 +51,7 @@ print("These ARE real lab tests that need to be added to config:")
 by_category = defaultdict(list)
 
 for name in sorted(actual_tests):
-    count = len(unknown_names[unknown_names['test_name'] == name])
+    count = len(unknown_names[unknown_names['lab_name'] == name])
 
     # Determine category
     name_lower = name.lower()
