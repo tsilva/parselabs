@@ -3,3 +3,4 @@
 - Add support for multiple user profiles
 - Add medical exam support (or create new repo and merge data in health log parser)
 - Search for unkn
+- User profiles must also generate healthy ranges for each lab test
