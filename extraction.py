@@ -27,9 +27,9 @@ class LabResult(BaseModel):
     lab_name_raw: str = Field(
         description="Test name EXACTLY as written in the PDF. Preserve all spacing, capitalization, symbols, and formatting."
     )
-    value_raw: Optional[float] = Field(
+    value_raw: Optional[str] = Field(
         default=None,
-        description="Numeric result value. For text results (Positive/Negative), use 1/0 or leave null and put in comments."
+        description="Result value EXACTLY as shown. Can be numeric (5.2, 14.8, 0.5) or text (NEGATIVO, POSITIVO, NORMAL, AMARELA, NAO CONTEM, Raras, 1 a 2)."
     )
     lab_unit_raw: Optional[str] = Field(
         default=None,
@@ -55,7 +55,8 @@ class LabResult(BaseModel):
         default=None,
         description="Any notes, comments, or qualitative results"
     )
-    source_text: str = Field(
+    source_text: Optional[str] = Field(
+        default="",
         description="Exact row or section from PDF containing this result"
     )
 
@@ -144,17 +145,21 @@ CRITICAL RULES:
    - Example: If you see "BILIRRUBINAS" as header and "Total" below it, use "BILIRRUBINAS - Total"
 
 4. NUMERIC vs QUALITATIVE VALUES:
-   - `value`: ONLY for numeric results (e.g., 5.0, 14.2, 1.74)
-   - For TEXT-ONLY results (e.g., "AMARELA", "NAO CONTEM", "NORMAL", "POSITIVE", "NEGATIVE"):
-     * Set `value` to null (None)
-     * Put the text result in `comments`
-   - For RANGE results (e.g., "1 a 2/campo"):
-     * Set `value` to null (None)
-     * Put the full text in `comments`
-     * Extract any unit visible in the text (e.g., "/campo" from "1 a 2/campo")
-   - `unit`: Extract the unit EXACTLY as shown in the document
+   - `value_raw`: Extract EXACTLY as shown - can be numeric OR text
+   - For NUMERIC results: Put the exact number as a string (e.g., "5.0", "14.2", "1.74")
+   - For TEXT-ONLY results: Put the exact text (e.g., "AMARELA", "NAO CONTEM", "NORMAL", "POSITIVE", "NEGATIVE")
+   - For RANGE results: Put the exact text (e.g., "1 a 2", "1-5 / campo", "0-3 / campo")
+
+   CRITICAL FOR TEXT VALUES - COMMON EXAMPLES YOU WILL SEE:
+   Portuguese: NEGATIVO, POSITIVO, NORMAL, AMARELA, AUSENTE, PRESENTE, NAO CONTEM, RAROS, RARAS, ABUNDANTES, NEGATIVA, POSITIVA
+   English: NEGATIVE, POSITIVE, NORMAL, ABSENT, PRESENT, RARE, ABUNDANT
+   Ranges: "1 a 2", "1-5 / campo", "0-3 / campo", "< 5", "> 100"
+
+   When you see ANY of these text values, put the EXACT TEXT in the value_raw field.
+
+   - `lab_unit_raw`: Extract the unit EXACTLY as shown in the document
      * Copy the unit symbol or abbreviation exactly
-     * If NO unit is visible or implied in the document → use null
+     * If NO unit is visible or implied in the document → use null or empty string
      * Do NOT infer or normalize units - just extract what you see
 
 5. REFERENCE RANGES - ALWAYS PARSE INTO NUMBERS:
@@ -170,6 +175,15 @@ CRITICAL RULES:
    - "4.0 - 10.0" → reference_min_raw=4.0, reference_max_raw=10.0
    - "39-117;Criança<400" → reference_min_raw=39, reference_max_raw=117 (ignore additional notes)
    - If no numeric values can be extracted → both null
+
+   SPECIAL CASE - Multiple values with shared reference ranges:
+   - Some tests show BOTH percentage AND absolute count (e.g., Neutrophils: "65%" and "4.2 x10^9/L")
+   - These often share ONE reference range that applies to only ONE of the values
+   - When extracting, carefully identify which reference range applies to which value:
+     * Look for visual alignment (which range is closest to which value)
+     * Check if the reference range units match the test value units
+     * If uncertain, copy the reference_range text but leave min/max as null
+   - Example: "Neutrophils 65% (40-80)" and "4.2 x10^9/L" → the "(40-80)" applies ONLY to the % value, NOT the absolute count
 
 6. FLAGS & CONTEXT:
    - `is_abnormal`: Set to true if result is marked (H, L, *, ↑, ↓, "HIGH", "LOW", etc.)
@@ -192,17 +206,21 @@ EXTRACTION_USER_PROMPT = """
 Please extract ALL lab test results from this medical lab report image.
 
 CRITICAL: For EACH lab test you find, you MUST extract:
-1. lab_name_raw - The test name (required)
-2. value_raw - The numeric result value (REQUIRED - do not leave as null unless truly not present)
-3. lab_unit_raw - The unit of measurement (REQUIRED - extract exactly as shown)
+1. lab_name_raw - The test name EXACTLY as shown (required)
+2. value_raw - The result value EXACTLY as shown (can be numeric like "5.2" OR text like "NEGATIVO", "NORMAL")
+3. lab_unit_raw - The unit EXACTLY as shown (extract what you see, can be null if no unit)
 4. reference_range - The reference range text (if visible)
 5. reference_min_raw and reference_max_raw - Parse the numeric bounds from the reference range
 
-Extract test names, values, units, and reference ranges exactly as they appear.
+Extract test names, values, units, and reference ranges EXACTLY as they appear.
 Pay special attention to preserving the exact formatting and symbols.
 
-IMPORTANT: Do NOT output lab results with null values unless the value is truly absent from the image.
-If you see a numeric value next to a lab name, you MUST extract it into value_raw.
+CRITICAL: Extract EVERY lab test you see, including:
+- Numeric results (e.g., "5.2", "14.8", "0.75")
+- Text-based qualitative results (e.g., "NEGATIVO", "POSITIVO", "NORMAL", "AMARELA", "NAO CONTEM")
+- Range results (e.g., "1 a 2", "1-5 / campo", "0-3 / campo")
+
+For text results, put the exact text you see in the value_raw field. Do NOT skip or omit text-based results.
 """.strip()
 
 
@@ -228,12 +246,22 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
         return result, [result]
 
     results = []
-    effective_kwargs = kwargs.copy()
-    if 'temperature' in fn.__code__.co_varnames and 'temperature' not in effective_kwargs:
-        effective_kwargs['temperature'] = 0.5
+
+    # Variable temperature strategy: use different temperatures for diversity
+    # Lower temps = more deterministic (good for clear values)
+    # Higher temps = more creative (good for ambiguous/unclear text)
+    temperatures = [0.0, 0.3, 0.5]
 
     with ThreadPoolExecutor(max_workers=n) as executor:
-        futures = [executor.submit(fn, *args, **effective_kwargs) for _ in range(n)]
+        futures = []
+        for i in range(n):
+            effective_kwargs = kwargs.copy()
+            # Use temperature if function accepts it and not already set
+            if 'temperature' in fn.__code__.co_varnames and 'temperature' not in kwargs:
+                # Cycle through temperature values
+                effective_kwargs['temperature'] = temperatures[i % len(temperatures)]
+            futures.append(executor.submit(fn, *args, **effective_kwargs))
+
         for future in as_completed(futures):
             try:
                 results.append(future.result())
