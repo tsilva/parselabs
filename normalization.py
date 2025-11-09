@@ -76,7 +76,8 @@ def apply_unit_conversions(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Da
     This function applies unit conversions in a vectorized manner where possible.
     """
     # Initialize primary unit columns
-    df["value_primary"] = df["value_raw"]
+    # Convert value_raw to numeric for calculations (text values will become NaN)
+    df["value_primary"] = pd.to_numeric(df["value_raw"], errors='coerce')
     df["lab_unit_primary"] = df["lab_unit_standardized"]
     df["reference_min_primary"] = df["reference_min_raw"]
     df["reference_max_primary"] = df["reference_max_raw"]
@@ -111,7 +112,9 @@ def apply_unit_conversions(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Da
                 continue
 
             # Apply conversion to all matching rows (vectorized)
-            df.loc[unit_mask, "value_primary"] = df.loc[unit_mask, "value_raw"] * factor
+            # Convert to numeric first (text values will stay as NaN and won't be converted)
+            numeric_values = pd.to_numeric(df.loc[unit_mask, "value_raw"], errors='coerce')
+            df.loc[unit_mask, "value_primary"] = numeric_values * factor
             df.loc[unit_mask, "reference_min_primary"] = df.loc[unit_mask, "reference_min_raw"] * factor
             df.loc[unit_mask, "reference_max_primary"] = df.loc[unit_mask, "reference_max_raw"] * factor
             df.loc[unit_mask, "lab_unit_primary"] = primary_unit
