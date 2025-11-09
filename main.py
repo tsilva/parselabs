@@ -23,6 +23,7 @@ from extraction import (
 from standardization import standardize_lab_names, standardize_lab_units
 from normalization import apply_normalizations, deduplicate_results, apply_dtype_conversions
 from plotting import LabPlotter
+from edge_case_detection import EdgeCaseDetector
 
 # Setup logging
 LOG_DIR = Path("./logs")
@@ -64,6 +65,9 @@ COLUMN_SCHEMA = {
     "healthy_range_min": {"dtype": "float64", "excel_width": 16},
     "healthy_range_max": {"dtype": "float64", "excel_width": 16},
     "is_in_healthy_range": {"dtype": "boolean", "excel_width": 18},
+    "needs_review": {"dtype": "boolean", "excel_width": 12},
+    "review_reason": {"dtype": "str", "excel_width": 40},
+    "confidence_score": {"dtype": "float64", "excel_width": 14},
 }
 
 
@@ -79,6 +83,9 @@ def get_column_lists(schema: dict):
         "is_out_of_reference",
         "healthy_range_min", "healthy_range_max", "is_in_healthy_range",
         "is_abnormal", "comments",
+
+        # Review/quality columns
+        "needs_review", "review_reason", "confidence_score",
 
         # Technical/internal fields
         "reference_min_raw", "reference_max_raw",
@@ -434,6 +441,20 @@ def main():
     # Apply normalizations
     logger.info("Applying normalizations...")
     merged_df = apply_normalizations(merged_df, lab_specs)
+
+    # Detect edge cases for review
+    logger.info("Detecting edge cases for review...")
+    detector = EdgeCaseDetector()
+    merged_df = detector.identify_edge_cases(merged_df)
+
+    # Log edge case statistics
+    needs_review_count = merged_df['needs_review'].sum()
+    low_confidence_count = (merged_df['confidence_score'] < 0.7).sum()
+    if needs_review_count > 0:
+        logger.info(f"Found {needs_review_count} edge cases ({needs_review_count/len(merged_df)*100:.1f}%)")
+        logger.info(f"  - {low_confidence_count} items with confidence < 0.7 ({low_confidence_count/len(merged_df)*100:.1f}%)")
+    else:
+        logger.info("No edge cases detected")
 
     # Deduplicate
     if lab_specs.exists:
