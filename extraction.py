@@ -29,7 +29,7 @@ class LabResult(BaseModel):
     )
     value_raw: Optional[str] = Field(
         default=None,
-        description="Result value EXACTLY as shown. Can be numeric (5.2, 14.8, 0.5) or text (NEGATIVO, POSITIVO, NORMAL, AMARELA, NAO CONTEM, Raras, 1 a 2)."
+        description="Result value EXACTLY as shown - ALWAYS use this field for ALL results. Numeric examples: 5.2, 14.8, 0.5. Text examples: NEGATIVO, POSITIVO, NORMAL, AMARELA, NAO CONTEM, Raras, Ausente. Range examples: 1 a 2, 1-5 / campo, 0-3 / campo. IMPORTANT: Put the actual test result here, whether it's a number or text."
     )
     lab_unit_raw: Optional[str] = Field(
         default=None,
@@ -53,7 +53,7 @@ class LabResult(BaseModel):
     )
     comments: Optional[str] = Field(
         default=None,
-        description="Any notes, comments, or qualitative results"
+        description="Additional notes or remarks about the test (NOT the test result itself). Only use for extra information like methodology notes or special conditions."
     )
     source_text: Optional[str] = Field(
         default="",
@@ -196,8 +196,36 @@ CRITICAL RULES:
 
 SCHEMA FIELD NAMES:
 - Use `lab_name_raw` (raw test name from PDF)
-- Use `value_raw` (raw numeric value)
+- Use `value_raw` (raw result value - numeric OR text)
 - Use `lab_unit_raw` (raw unit from PDF)
+
+COMMON COMPLEX SCENARIOS (generic patterns to handle):
+
+A) Tests with BOTH qualitative AND quantitative results:
+   Example: "Anticorpo Anti-HBs: POSITIVO - 864 UI/L"
+   → Extract as TWO separate results:
+     1) lab_name="Anticorpo Anti-HBs (qualitative)", value="POSITIVO", unit=null
+     2) lab_name="Anticorpo Anti-HBs (quantitative)", value="864", unit="UI/L"
+
+B) Tests with visual markers/flags:
+   Example: "Glucose ↑ 142 mg/dL"
+   → lab_name="Glucose", value="142", unit="mg/dL", is_abnormal=true
+   → The arrow/marker indicates abnormal, don't include in value
+
+C) Tests with conditional/multi-part reference ranges:
+   Example: "Colesterol < 200 (desejável); 200-239 (limite); ≥240 (alto)"
+   → reference_range="< 200 (desejável); 200-239 (limite); ≥240 (alto)" (copy all)
+   → reference_min_raw=null, reference_max_raw=200 (use the primary/desirable range)
+
+D) Tests where result appears in different locations:
+   Some formats show: "Test Name        Result        Reference        Unit"
+   Others show: "Test Name: Result Unit (Reference)"
+   → Always extract all components regardless of visual layout
+
+E) Tests with NO visible unit but result is text:
+   Example: "Urine Color: AMARELA"
+   → lab_name="Urine Color", value="AMARELA", unit=null
+   → Don't invent or assume units - only extract what you see
 
 Remember: Your job is to be a perfect copier, not an interpreter. Extract EVERYTHING, even qualitative results.
 """.strip()
@@ -207,7 +235,7 @@ Please extract ALL lab test results from this medical lab report image.
 
 CRITICAL: For EACH lab test you find, you MUST extract:
 1. lab_name_raw - The test name EXACTLY as shown (required)
-2. value_raw - The result value EXACTLY as shown (can be numeric like "5.2" OR text like "NEGATIVO", "NORMAL")
+2. value_raw - The result value EXACTLY as shown (ALWAYS PUT THE RESULT HERE - whether numeric or text)
 3. lab_unit_raw - The unit EXACTLY as shown (extract what you see, can be null if no unit)
 4. reference_range - The reference range text (if visible)
 5. reference_min_raw and reference_max_raw - Parse the numeric bounds from the reference range
@@ -216,11 +244,13 @@ Extract test names, values, units, and reference ranges EXACTLY as they appear.
 Pay special attention to preserving the exact formatting and symbols.
 
 CRITICAL: Extract EVERY lab test you see, including:
-- Numeric results (e.g., "5.2", "14.8", "0.75")
-- Text-based qualitative results (e.g., "NEGATIVO", "POSITIVO", "NORMAL", "AMARELA", "NAO CONTEM")
-- Range results (e.g., "1 a 2", "1-5 / campo", "0-3 / campo")
+- Numeric results → Put in value_raw (examples: "5.2", "14.8", "0.75")
+- Text-based qualitative results → Put in value_raw (examples: "NEGATIVO", "POSITIVO", "NORMAL", "AMARELA", "NAO CONTEM", "AUSENTE", "PRESENTE")
+- Range results → Put in value_raw (examples: "1 a 2", "1-5 / campo", "0-3 / campo")
 
-For text results, put the exact text you see in the value_raw field. Do NOT skip or omit text-based results.
+IMPORTANT: The value_raw field should contain the ACTUAL TEST RESULT, whether it's a number or text.
+Do NOT put test results in the comments field - that's only for additional notes.
+Do NOT skip or omit text-based results - they are just as important as numeric results.
 """.strip()
 
 
