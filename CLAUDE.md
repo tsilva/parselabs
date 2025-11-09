@@ -106,6 +106,10 @@ Key column categories:
 - **Data quality**:
   - Filter by `lab_name_standardized == '$UNKNOWN$'` to find tests needing config updates
   - Filter by `lab_unit_standardized == '$UNKNOWN$'` to find units needing config updates
+- **Review/quality flags** (automatically added by edge case detection):
+  - `needs_review`: Boolean flag indicating result needs human review
+  - `review_reason`: Semicolon-separated reasons (e.g., "INEQUALITY_IN_VALUE; DUPLICATE_TEST_NAME;")
+  - `confidence_score`: 0-1 score (values < 0.7 are high priority for review)
 
 ### Pydantic Models
 
@@ -182,14 +186,41 @@ The `slugify` function normalizes text for mapping keys:
 
 ### Reviewing Extracted Data
 
-You can identify unmapped values by checking for $UNKNOWN$ in the CSV:
+The pipeline automatically detects edge cases and adds review flags to the output CSV. You can filter results that need attention:
 
 ```python
 import pandas as pd
 
 # Load CSV
-df = pd.read_csv("output/doc_name/doc_name.csv")
+df = pd.read_csv("output/all.csv")
 
+# Get all items flagged for review
+needs_review = df[df['needs_review'] == True]
+print(f"Found {len(needs_review)} items needing review")
+
+# Get high-priority items (low confidence)
+high_priority = df[df['confidence_score'] < 0.7]
+print(f"Found {len(high_priority)} high-priority items")
+
+# Filter by specific issues
+inequality_issues = df[df['review_reason'].str.contains('INEQUALITY_IN_VALUE', na=False)]
+duplicate_tests = df[df['review_reason'].str.contains('DUPLICATE_TEST_NAME', na=False)]
+
+# Exclude flagged items for analysis
+clean_data = df[df['needs_review'] == False]
+```
+
+**Edge Case Categories:**
+- `NULL_VALUE_WITH_SOURCE` - Value is null but source text suggests data exists
+- `QUALITATIVE_IN_COMMENTS` - Text result in comments instead of value_raw
+- `NUMERIC_NO_UNIT` - Numeric value without unit (excluding pH, ratios)
+- `INEQUALITY_IN_VALUE` - Value contains <, >, ≤, ≥ (might be reference range)
+- `COMPLEX_REFERENCE_RANGE` - Multi-condition ranges not parsed into min/max
+- `DUPLICATE_TEST_NAME` - Same test appears multiple times on page
+
+You can also identify unmapped values by checking for $UNKNOWN$ in the CSV:
+
+```python
 # Check for unknown standardized lab names
 unknown_names = df[df['lab_name_standardized'] == '$UNKNOWN$']
 if len(unknown_names) > 0:

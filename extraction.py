@@ -66,6 +66,14 @@ class LabResult(BaseModel):
     lab_name_standardized: Optional[str] = Field(default=None, description="Standardized lab name")
     lab_unit_standardized: Optional[str] = Field(default=None, description="Standardized lab unit")
 
+    # Review tracking fields
+    needs_review: Optional[bool] = Field(default=False, description="Whether this result needs human review")
+    review_reason: Optional[str] = Field(default=None, description="Reason why review is needed")
+    confidence_score: Optional[float] = Field(default=1.0, description="Confidence score (0-1)")
+    human_verified: Optional[bool] = Field(default=False, description="Whether verified by human")
+    human_corrected: Optional[bool] = Field(default=False, description="Whether corrected by human")
+    should_delete: Optional[bool] = Field(default=False, description="Whether marked for deletion")
+
 
 class HealthLabReport(BaseModel):
     """Document-level lab report metadata."""
