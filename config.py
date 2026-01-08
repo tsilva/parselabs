@@ -24,6 +24,13 @@ class ExtractionConfig:
     openrouter_api_key: str
     max_workers: int
 
+    # Verification settings
+    enable_verification: bool = True
+    verification_model_id: Optional[str] = None  # Auto-selected if None
+    arbitration_model_id: Optional[str] = None   # Auto-selected if None
+    enable_completeness_check: bool = True
+    enable_character_verification: bool = True
+
     @classmethod
     def from_env(cls) -> 'ExtractionConfig':
         """Load configuration from environment variables."""
@@ -35,6 +42,13 @@ class ExtractionConfig:
         n_extractions = int(os.getenv("N_EXTRACTIONS", 1))
         openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
         max_workers_str = os.getenv("MAX_WORKERS", "1")
+
+        # Verification settings
+        enable_verification = os.getenv("ENABLE_VERIFICATION", "true").lower() == "true"
+        verification_model_id = os.getenv("VERIFICATION_MODEL_ID") or None
+        arbitration_model_id = os.getenv("ARBITRATION_MODEL_ID") or None
+        enable_completeness_check = os.getenv("ENABLE_COMPLETENESS_CHECK", "true").lower() == "true"
+        enable_character_verification = os.getenv("ENABLE_CHARACTER_VERIFICATION", "true").lower() == "true"
 
         # Validate required fields
         if not self_consistency_model_id:
@@ -68,7 +82,12 @@ class ExtractionConfig:
             extract_model_id=extract_model_id,
             n_extractions=n_extractions,
             openrouter_api_key=openrouter_api_key,
-            max_workers=max_workers
+            max_workers=max_workers,
+            enable_verification=enable_verification,
+            verification_model_id=verification_model_id,
+            arbitration_model_id=arbitration_model_id,
+            enable_completeness_check=enable_completeness_check,
+            enable_character_verification=enable_character_verification,
         )
 
 
