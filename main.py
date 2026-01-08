@@ -68,6 +68,13 @@ COLUMN_SCHEMA = {
     "needs_review": {"dtype": "boolean", "excel_width": 12},
     "review_reason": {"dtype": "str", "excel_width": 40},
     "confidence_score": {"dtype": "float64", "excel_width": 14},
+    # Verification columns
+    "verification_status": {"dtype": "str", "excel_width": 14, "excel_hidden": False},
+    "verification_confidence": {"dtype": "float64", "excel_width": 16, "excel_hidden": False},
+    "verification_method": {"dtype": "str", "excel_width": 20, "excel_hidden": True},
+    "cross_model_verified": {"dtype": "boolean", "excel_width": 14, "excel_hidden": True},
+    "verification_corrected": {"dtype": "boolean", "excel_width": 14, "excel_hidden": True},
+    "value_raw_original": {"dtype": "str", "excel_width": 14, "excel_hidden": True},
 }
 
 
@@ -86,6 +93,10 @@ def get_column_lists(schema: dict):
 
         # Review/quality columns
         "needs_review", "review_reason", "confidence_score",
+
+        # Verification columns
+        "verification_status", "verification_confidence", "verification_method",
+        "cross_model_verified", "verification_corrected", "value_raw_original",
 
         # Technical/internal fields
         "reference_min_raw", "reference_max_raw",
@@ -178,8 +189,32 @@ def process_single_pdf(
                         config.extract_model_id,
                         client
                     )
-                    json_path.write_text(json.dumps(page_data, indent=2, ensure_ascii=False), encoding='utf-8')
                     logger.info(f"[{page_name}] Extraction completed")
+
+                    # Post-extraction verification
+                    if config.enable_verification and page_data.get("lab_results"):
+                        logger.info(f"[{page_name}] Running post-extraction verification...")
+                        try:
+                            from verification import verify_page_extraction
+                            page_data, verification_summary = verify_page_extraction(
+                                image_path=jpg_path,
+                                extracted_data=page_data,
+                                client=client,
+                                primary_model=config.extract_model_id,
+                                verification_model=config.verification_model_id,
+                                enable_completeness_check=config.enable_completeness_check,
+                                enable_character_verification=config.enable_character_verification,
+                            )
+                            logger.info(
+                                f"[{page_name}] Verification: {verification_summary.get('verified', 0)} verified, "
+                                f"{verification_summary.get('corrected', 0)} corrected, "
+                                f"{verification_summary.get('uncertain', 0)} uncertain, "
+                                f"avg confidence: {verification_summary.get('avg_confidence', 0):.2f}"
+                            )
+                        except Exception as ve:
+                            logger.error(f"[{page_name}] Verification failed: {ve}")
+
+                    json_path.write_text(json.dumps(page_data, indent=2, ensure_ascii=False), encoding='utf-8')
                 except Exception as e:
                     logger.error(f"[{page_name}] Extraction failed: {e}")
                     page_data = HealthLabReport(lab_results=[]).model_dump(mode='json')
@@ -368,6 +403,94 @@ def _process_pdf_wrapper(args):
     return process_single_pdf(*args)
 
 
+def _find_empty_extractions(output_path: Path) -> list[tuple[Path, list[Path]]]:
+    """
+    Find all PDFs that have empty extraction JSONs.
+
+    Returns:
+        List of tuples: (pdf_dir, list of empty JSON paths)
+    """
+    empty_by_pdf = []
+
+    for pdf_dir in output_path.iterdir():
+        if not pdf_dir.is_dir():
+            continue
+
+        empty_jsons = []
+        for json_path in pdf_dir.glob("*.json"):
+            try:
+                data = json.loads(json_path.read_text(encoding='utf-8'))
+                if isinstance(data, dict) and not data.get("lab_results"):
+                    empty_jsons.append(json_path)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                pass
+
+        if empty_jsons:
+            empty_by_pdf.append((pdf_dir, sorted(empty_jsons)))
+
+    return sorted(empty_by_pdf, key=lambda x: x[0].name)
+
+
+def _prompt_reprocess_empty(output_path: Path) -> list[Path]:
+    """
+    Check for empty extractions and prompt user to reprocess each one.
+
+    Returns:
+        List of PDF directories that need reprocessing
+    """
+    empty_extractions = _find_empty_extractions(output_path)
+
+    if not empty_extractions:
+        return []
+
+    print(f"\nFound {len(empty_extractions)} PDF(s) with empty extraction pages:")
+    for pdf_dir, empty_jsons in empty_extractions:
+        print(f"  - {pdf_dir.name}: {len(empty_jsons)} empty page(s)")
+
+    pdfs_to_reprocess = []
+
+    for pdf_dir, empty_jsons in empty_extractions:
+        print(f"\n{pdf_dir.name}:")
+        for json_path in empty_jsons:
+            print(f"  - {json_path.name}")
+
+        response = input(f"Reprocess {pdf_dir.name}? [y/N/a(ll)/q(uit)]: ").strip().lower()
+
+        if response == 'q':
+            print("Skipping remaining files.")
+            break
+        elif response == 'a':
+            # Reprocess all remaining
+            pdfs_to_reprocess.append(pdf_dir)
+            for remaining_pdf_dir, remaining_jsons in empty_extractions[empty_extractions.index((pdf_dir, empty_jsons)) + 1:]:
+                pdfs_to_reprocess.append(remaining_pdf_dir)
+            break
+        elif response == 'y':
+            pdfs_to_reprocess.append(pdf_dir)
+
+    # Delete empty JSONs and CSVs for PDFs to reprocess
+    if pdfs_to_reprocess:
+        print(f"\nDeleting empty extractions for {len(pdfs_to_reprocess)} PDF(s)...")
+        for pdf_dir in pdfs_to_reprocess:
+            # Find and delete empty JSONs in this directory
+            for json_path in pdf_dir.glob("*.json"):
+                try:
+                    data = json.loads(json_path.read_text(encoding='utf-8'))
+                    if isinstance(data, dict) and not data.get("lab_results"):
+                        json_path.unlink()
+                        logger.info(f"Deleted empty JSON: {json_path.name}")
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    pass
+
+            # Delete the CSV to force full reprocessing
+            csv_path = pdf_dir / f"{pdf_dir.name}.csv"
+            if csv_path.exists():
+                csv_path.unlink()
+                logger.info(f"Deleted CSV: {csv_path.name}")
+
+    return pdfs_to_reprocess
+
+
 def main():
     """Main pipeline orchestration."""
     # Clear logs at start of run
@@ -389,6 +512,9 @@ def main():
         logger.warning("No PDF files found. Exiting.")
         return
 
+    # Check for empty extractions and prompt user to reprocess
+    _prompt_reprocess_empty(config.output_path)
+
     # Filter out PDFs that already have their CSV
     pdfs_to_process = []
     skipped_count = 0
@@ -405,6 +531,7 @@ def main():
         logger.info("All PDFs already processed. Moving to merge step...")
         # Still need to get CSV paths for merging
         csv_paths = [p for pdf in pdf_files if (p := _get_csv_path(pdf, config.output_path)).exists()]
+        pdfs_failed = 0
     else:
         # Process PDFs in parallel
         n_workers = min(config.max_workers, len(pdfs_to_process))
@@ -420,6 +547,9 @@ def main():
                     results.append(result)
                     pbar.update(1)
 
+        # Track failed PDFs
+        pdfs_failed = sum(1 for r in results if r is None)
+
         # Collect CSV paths from ALL PDF files, not just the ones processed in this run
         csv_paths = [p for pdf in pdf_files if (p := _get_csv_path(pdf, config.output_path)).exists()]
 
@@ -432,7 +562,8 @@ def main():
     # Merge all CSVs
     logger.info("Merging CSV files...")
     merged_df = merge_csv_files(csv_paths)
-    logger.info(f"Merged data: {len(merged_df)} rows")
+    rows_after_merge = len(merged_df)
+    logger.info(f"Merged data: {rows_after_merge} rows")
 
     if merged_df.empty:
         logger.error("No data to process")
@@ -506,6 +637,24 @@ def main():
     )
 
     plotter.generate_all_plots(merged_df, [plots_base_dir, output_plots_dir])
+
+    # Generate end-of-run report
+    logger.info("Generating run report...")
+    from reporting import generate_run_report
+
+    report_path = generate_run_report(
+        df=merged_df,
+        output_path=config.output_path,
+        pdfs_found=len(pdf_files),
+        pdfs_skipped=skipped_count,
+        pdfs_processed=len(csv_paths),
+        pdfs_failed=pdfs_failed,
+        rows_after_merge=rows_after_merge,
+        rows_after_dedup=len(merged_df),
+        csv_path=csv_path,
+        excel_path=excel_path,
+    )
+    logger.info(f"Report saved to: {report_path}")
 
     logger.info("Pipeline completed successfully")
 
