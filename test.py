@@ -39,10 +39,6 @@ def test_all_rows_have_dates_and_no_duplicates(report):
     if errors:
         report.setdefault(file, []).extend(errors)
 
-def test_lab_name_mappings_prefixes(report):
-    # Skip - refactored code uses LLM standardization, not static mappings
-    pass
-
 def test_lab_unit_percent_vs_lab_name(report):
     file = ALL_FINAL_CSV
     errors = []
@@ -61,15 +57,6 @@ def test_lab_unit_percent_vs_lab_name(report):
         errors.append(f"Exception: {e}")
     if errors:
         report.setdefault(file, []).extend(errors)
-
-def test_lab_names_mapping_percent_suffix(report):
-    # Skip - refactored code uses LLM standardization, not static mappings
-    pass
-
-def test_lab_unit_not_empty(report):
-    # Skip - Some tests legitimately don't have units (qualitative tests, text results, etc.)
-    # This is now expected behavior in the refactored code
-    pass
 
 def test_lab_unit_percent_value_range(report):
     file = ALL_FINAL_CSV
@@ -194,14 +181,6 @@ def test_lab_value_outliers_by_lab_name_enum(report):
     if errors:
         report.setdefault(file, []).extend(errors)
 
-def test_lab_specs_keys_exist_in_lab_name_mappings(report):
-    # Skip - refactored code uses LLM standardization, not static mappings
-    pass
-
-def test_lab_name_mappings_values_exist_in_lab_specs(report):
-    # Skip - refactored code uses LLM standardization, not static mappings
-    pass
-
 def test_unique_date_lab_name_enum(report):
     file = ALL_FINAL_CSV
     errors = []
@@ -225,16 +204,11 @@ def test_unique_date_lab_name_enum(report):
 def main():
     report = {}
     test_all_rows_have_dates_and_no_duplicates(report)
-    test_lab_name_mappings_prefixes(report)
     test_lab_unit_percent_vs_lab_name(report)
-    test_lab_names_mapping_percent_suffix(report)
-    test_lab_unit_not_empty(report)
-    #test_lab_unit_percent_value_range(report)
+    test_lab_unit_percent_value_range(report)
     test_lab_unit_boolean_value(report)
     test_lab_name_enum_unit_consistency(report)
     test_lab_value_outliers_by_lab_name_enum(report)
-    test_lab_specs_keys_exist_in_lab_name_mappings(report)
-    test_lab_name_mappings_values_exist_in_lab_specs(report)
     test_unique_date_lab_name_enum(report)
     print("\n=== Integrity Report ===")
     if not report:

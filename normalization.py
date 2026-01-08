@@ -112,9 +112,8 @@ def apply_unit_conversions(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Da
                 continue
 
             # Apply conversion to all matching rows (vectorized)
-            # Convert to numeric first (text values will stay as NaN and won't be converted)
-            numeric_values = pd.to_numeric(df.loc[unit_mask, "value_raw"], errors='coerce')
-            df.loc[unit_mask, "value_primary"] = numeric_values * factor
+            # Use already-converted value_primary (text values are already NaN)
+            df.loc[unit_mask, "value_primary"] = df.loc[unit_mask, "value_primary"] * factor
             df.loc[unit_mask, "reference_min_primary"] = df.loc[unit_mask, "reference_min_raw"] * factor
             df.loc[unit_mask, "reference_max_primary"] = df.loc[unit_mask, "reference_max_raw"] * factor
             df.loc[unit_mask, "lab_unit_primary"] = primary_unit

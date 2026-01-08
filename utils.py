@@ -7,7 +7,7 @@ import re
 import shutil
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from PIL import Image, ImageEnhance
 import pandas as pd
 
@@ -128,21 +128,3 @@ def setup_logging(log_dir: Path, clear_logs: bool = False) -> logging.Logger:
     # Return a logger for the calling module
     logger = logging.getLogger(__name__)
     return logger
-
-
-def normalize_unit(raw_unit: str, normalization_map: Optional[dict] = None) -> str:
-    """Normalize unit to standard form using provided mapping."""
-    if pd.isna(raw_unit):
-        return None
-
-    if normalization_map is None:
-        # Default normalization map
-        normalization_map = {
-            '%': '%', 'percent': '%', 'per cent': '%',
-            'mg/dl': 'mg/dL', 'mg/dL': 'mg/dL', 'mg/deciliter': 'mg/dL',
-            'g/dl': 'g/dL', 'g/dL': 'g/dL',
-            'u/l': 'U/L', 'U/L': 'U/L', 'UI/L': 'U/L',
-        }
-
-    normalized = normalization_map.get(str(raw_unit).strip(), str(raw_unit).strip())
-    return normalized
