@@ -358,6 +358,11 @@ def export_excel_with_sheets(
 # Main Pipeline
 # ========================================
 
+def _get_csv_path(pdf_path: Path, output_path: Path) -> Path:
+    """Get the output CSV path for a given PDF file."""
+    return output_path / pdf_path.stem / f"{pdf_path.stem}.csv"
+
+
 def _process_pdf_wrapper(args):
     """Wrapper function for multiprocessing with progress tracking."""
     return process_single_pdf(*args)
@@ -388,8 +393,7 @@ def main():
     pdfs_to_process = []
     skipped_count = 0
     for pdf_path in pdf_files:
-        csv_path = config.output_path / pdf_path.stem / f"{pdf_path.stem}.csv"
-        if csv_path.exists():
+        if _get_csv_path(pdf_path, config.output_path).exists():
             skipped_count += 1
         else:
             pdfs_to_process.append(pdf_path)
@@ -400,9 +404,7 @@ def main():
     if not pdfs_to_process:
         logger.info("All PDFs already processed. Moving to merge step...")
         # Still need to get CSV paths for merging
-        csv_paths = [config.output_path / pdf.stem / f"{pdf.stem}.csv"
-                     for pdf in pdf_files
-                     if (config.output_path / pdf.stem / f"{pdf.stem}.csv").exists()]
+        csv_paths = [p for pdf in pdf_files if (p := _get_csv_path(pdf, config.output_path)).exists()]
     else:
         # Process PDFs in parallel
         n_workers = min(config.max_workers, len(pdfs_to_process))
@@ -419,9 +421,7 @@ def main():
                     pbar.update(1)
 
         # Collect CSV paths from ALL PDF files, not just the ones processed in this run
-        csv_paths = [config.output_path / pdf.stem / f"{pdf.stem}.csv"
-                     for pdf in pdf_files
-                     if (config.output_path / pdf.stem / f"{pdf.stem}.csv").exists()]
+        csv_paths = [p for pdf in pdf_files if (p := _get_csv_path(pdf, config.output_path)).exists()]
 
     if not csv_paths:
         logger.error("No PDFs successfully processed. Exiting.")
