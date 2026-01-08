@@ -1,7 +1,0 @@
-- Implement architecture review
-- Run main.py until it runs without errors
-- Review data and add test cases with gitignored folder
-- Add support for multiple user profiles
-- Add medical exam support (or create new repo and merge data in health log parser)
-- Search for unkn
-- User profiles must also generate healthy ranges for each lab test
