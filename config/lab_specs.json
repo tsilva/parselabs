@@ -1436,7 +1436,12 @@
   "Blood - Haptoglobin": {
     "lab_type": "blood",
     "primary_unit": "mg/dL",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "g/L",
+        "factor": 100.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 30.0,
@@ -1835,6 +1840,26 @@
       }
     }
   },
+  "Blood - Lipoprotein(a)": {
+    "lab_type": "blood",
+    "primary_unit": "nmol/L",
+    "alternatives": [
+      {
+        "unit": "mg/dL",
+        "factor": 2.5
+      },
+      {
+        "unit": "mg/L",
+        "factor": 0.25
+      }
+    ],
+    "ranges": {
+      "healthy": {
+        "min": 0,
+        "max": 75
+      }
+    }
+  },
   "Blood - Lithium": {
     "lab_type": "blood",
     "primary_unit": "mEq/L",
@@ -1956,6 +1981,10 @@
       {
         "unit": "mEq/L",
         "factor": 1.215
+      },
+      {
+        "unit": "mg/L",
+        "factor": 0.1
       }
     ],
     "ranges": {
@@ -1995,6 +2024,17 @@
   "Blood - Mean Corpuscular Hemoglobin Concentration (MCHC)": {
     "lab_type": "blood",
     "primary_unit": "g/dL",
+    "alternatives": [],
+    "ranges": {
+      "healthy": {
+        "min": 32.0,
+        "max": 36.0
+      }
+    }
+  },
+  "Blood - Mean Corpuscular Hemoglobin Concentration (MCHC) (%)": {
+    "lab_type": "blood",
+    "primary_unit": "%",
     "alternatives": [],
     "ranges": {
       "healthy": {
