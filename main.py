@@ -121,6 +121,36 @@ def get_column_lists(schema: dict):
 # PDF Processing
 # ========================================
 
+def correct_percentage_lab_names(results: list[dict], lab_specs: LabSpecsConfig) -> list[dict]:
+    """Correct lab names when unit is % but name doesn't end with (%).
+
+    If a (%) variant exists in lab_specs, update the standardized name.
+
+    Args:
+        results: List of result dictionaries with lab_name_standardized and lab_unit_standardized
+        lab_specs: Lab specifications configuration
+
+    Returns:
+        The same results list with corrected lab names
+    """
+    corrected_count = 0
+    for result in results:
+        std_name = result.get("lab_name_standardized")
+        std_unit = result.get("lab_unit_standardized")
+
+        if std_unit == "%" and std_name and not std_name.endswith("(%)"):
+            percentage_variant = lab_specs.get_percentage_variant(std_name)
+            if percentage_variant:
+                logger.debug(f"Correcting lab name '{std_name}' -> '{percentage_variant}' (unit is %)")
+                result["lab_name_standardized"] = percentage_variant
+                corrected_count += 1
+
+    if corrected_count > 0:
+        logger.info(f"Corrected {corrected_count} percentage lab names")
+
+    return results
+
+
 def process_single_pdf(
     pdf_path: Path,
     output_dir: Path,
@@ -271,8 +301,18 @@ def process_single_pdf(
 
         # Standardize units (with lab name context)
         logger.info(f"[{pdf_stem}] Standardizing units...")
+
+        def normalize_raw_unit(raw_unit):
+            """Normalize raw unit to handle null/nan/None values."""
+            if raw_unit is None:
+                return "null"
+            raw_str = str(raw_unit).strip().lower()
+            if raw_str in ("nan", "none", ""):
+                return "null"
+            return raw_unit
+
         unit_contexts = [
-            (r.get("lab_unit_raw") if r.get("lab_unit_raw") is not None else "null", r.get("lab_name_standardized", ""))
+            (normalize_raw_unit(r.get("lab_unit_raw")), r.get("lab_name_standardized", ""))
             for r in all_results
         ]
         if unit_contexts and lab_specs.exists:
@@ -285,7 +325,7 @@ def process_single_pdf(
                     lab_specs
                 )
                 for result in all_results:
-                    raw_unit = result.get("lab_unit_raw") if result.get("lab_unit_raw") is not None else "null"
+                    raw_unit = normalize_raw_unit(result.get("lab_unit_raw"))
                     lab_name = result.get("lab_name_standardized", "")
                     standardized_unit = unit_mapping.get((raw_unit, lab_name), UNKNOWN_VALUE)
 
@@ -305,6 +345,10 @@ def process_single_pdf(
         else:
             for result in all_results:
                 result["lab_unit_standardized"] = UNKNOWN_VALUE
+
+        # Post-process: Correct percentage lab names
+        if lab_specs.exists:
+            all_results = correct_percentage_lab_names(all_results, lab_specs)
 
         # Create DataFrame and save
         df = pd.DataFrame(all_results)
@@ -420,7 +464,9 @@ def _find_empty_extractions(output_path: Path) -> list[tuple[Path, list[Path]]]:
         for json_path in pdf_dir.glob("*.json"):
             try:
                 data = json.loads(json_path.read_text(encoding='utf-8'))
-                if isinstance(data, dict) and not data.get("lab_results"):
+                # Only consider empty if no lab_results AND page_has_lab_data is not False
+                # (page_has_lab_data=False means the page intentionally has no lab data)
+                if isinstance(data, dict) and not data.get("lab_results") and data.get("page_has_lab_data") is not False:
                     empty_jsons.append(json_path)
             except (json.JSONDecodeError, UnicodeDecodeError):
                 pass
@@ -472,11 +518,11 @@ def _prompt_reprocess_empty(output_path: Path) -> list[Path]:
     if pdfs_to_reprocess:
         print(f"\nDeleting empty extractions for {len(pdfs_to_reprocess)} PDF(s)...")
         for pdf_dir in pdfs_to_reprocess:
-            # Find and delete empty JSONs in this directory
+            # Find and delete empty JSONs in this directory (but not pages with page_has_lab_data=False)
             for json_path in pdf_dir.glob("*.json"):
                 try:
                     data = json.loads(json_path.read_text(encoding='utf-8'))
-                    if isinstance(data, dict) and not data.get("lab_results"):
+                    if isinstance(data, dict) and not data.get("lab_results") and data.get("page_has_lab_data") is not False:
                         json_path.unlink()
                         logger.info(f"Deleted empty JSON: {json_path.name}")
                 except (json.JSONDecodeError, UnicodeDecodeError):

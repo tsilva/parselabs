@@ -196,3 +196,20 @@ class LabSpecsConfig:
         if healthy:
             return (healthy.get('min'), healthy.get('max'))
         return (None, None)
+
+    def get_percentage_variant(self, lab_name: str) -> Optional[str]:
+        """Get the (%) variant of a lab name if it exists.
+
+        Args:
+            lab_name: The standardized lab name (e.g., "Blood - Basophils")
+
+        Returns:
+            The (%) variant if it exists (e.g., "Blood - Basophils (%)"), else None
+        """
+        if lab_name.endswith("(%)"):
+            return None  # Already a percentage variant
+
+        percentage_variant = f"{lab_name} (%)"
+        if percentage_variant in self._specs:
+            return percentage_variant
+        return None

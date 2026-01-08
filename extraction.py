@@ -100,6 +100,10 @@ class HealthLabReport(BaseModel):
         default=None,
         description="Name of laboratory that performed tests"
     )
+    page_has_lab_data: Optional[bool] = Field(
+        default=None,
+        description="True if page contains lab test results, False if page is cover/instructions/administrative with no lab data"
+    )
     lab_results: List[LabResult] = Field(
         default_factory=list,
         description="List of all lab test results extracted from this page/document"
@@ -243,6 +247,11 @@ E) Tests with NO visible unit but result is text:
    → lab_name="Urine Color", value="AMARELA", unit=null
    → Don't invent or assume units - only extract what you see
 
+9. PAGE CLASSIFICATION:
+   - `page_has_lab_data`: Set to true if this page contains ANY lab test results
+   - Set to false if this is a cover page, instructions, administrative content, or has no lab tests
+   - This helps distinguish empty pages from extraction failures
+
 Remember: Your job is to be a perfect copier, not an interpreter. Extract EVERYTHING, even qualitative results.
 """.strip()
 
@@ -267,6 +276,10 @@ CRITICAL: Extract EVERY lab test you see, including:
 IMPORTANT: The value_raw field should contain the ACTUAL TEST RESULT, whether it's a number or text.
 Do NOT put test results in the comments field - that's only for additional notes.
 Do NOT skip or omit text-based results - they are just as important as numeric results.
+
+Also set page_has_lab_data:
+- true if this page contains lab test results
+- false if this is a cover page, instructions, or administrative content with no lab tests
 """.strip()
 
 
@@ -454,15 +467,19 @@ def extract_labs_from_page_image(
 
             if null_pct > 50:
                 logger.warning(
-                    f"Extraction quality issue for {image_path.name}: "
-                    f"{null_count}/{total_count} ({null_pct:.0f}%) lab results have null values. "
-                    f"This suggests the model failed to extract numeric values from the image."
+                    f"Extraction quality issue: {null_count}/{total_count} ({null_pct:.0f}%) lab results have null values. "
+                    f"This suggests the model failed to extract numeric values from the image.\n"
+                    f"\t- {image_path}"
                 )
         else:
-            logger.warning(
-                f"Extraction returned 0 lab results for {image_path.name}. "
-                f"This may indicate a model extraction failure - image should be manually reviewed."
-            )
+            if report_model.page_has_lab_data is False:
+                logger.debug(f"Page confirmed to have no lab data:\n\t- {image_path}")
+            else:
+                logger.warning(
+                    f"Extraction returned 0 lab results. "
+                    f"This may indicate a model extraction failure - image should be manually reviewed.\n"
+                    f"\t- {image_path}"
+                )
 
         return report_model.model_dump(mode='json')
     except Exception as e:
