@@ -74,6 +74,14 @@ class LabResult(BaseModel):
     human_corrected: Optional[bool] = Field(default=False, description="Whether corrected by human")
     should_delete: Optional[bool] = Field(default=False, description="Whether marked for deletion")
 
+    # Verification fields (added by post-extraction verification)
+    verification_status: Optional[str] = Field(default=None, description="Verification status: verified, corrected, uncertain, not_verified")
+    verification_confidence: Optional[float] = Field(default=None, description="Verification confidence score (0-1)")
+    verification_method: Optional[str] = Field(default=None, description="Method used for verification")
+    cross_model_verified: Optional[bool] = Field(default=None, description="Whether verified by cross-model extraction")
+    verification_corrected: Optional[bool] = Field(default=None, description="Whether value was corrected by verification")
+    value_raw_original: Optional[str] = Field(default=None, description="Original value before verification correction")
+
 
 class HealthLabReport(BaseModel):
     """Document-level lab report metadata."""
@@ -285,19 +293,17 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
 
     results = []
 
-    # Variable temperature strategy: use different temperatures for diversity
-    # Lower temps = more deterministic (good for clear values)
-    # Higher temps = more creative (good for ambiguous/unclear text)
-    temperatures = [0.0, 0.3, 0.5]
+    # Fixed temperature for i.i.d. sampling (aligned with self-consistency research)
+    # T=0.5 provides good diversity without being too creative
+    SELF_CONSISTENCY_TEMPERATURE = 0.5
 
     with ThreadPoolExecutor(max_workers=n) as executor:
         futures = []
         for i in range(n):
             effective_kwargs = kwargs.copy()
-            # Use temperature if function accepts it and not already set
+            # Use fixed temperature if function accepts it and not already set
             if 'temperature' in fn.__code__.co_varnames and 'temperature' not in kwargs:
-                # Cycle through temperature values
-                effective_kwargs['temperature'] = temperatures[i % len(temperatures)]
+                effective_kwargs['temperature'] = SELF_CONSISTENCY_TEMPERATURE
             futures.append(executor.submit(fn, *args, **effective_kwargs))
 
         for future in as_completed(futures):
@@ -452,6 +458,11 @@ def extract_labs_from_page_image(
                     f"{null_count}/{total_count} ({null_pct:.0f}%) lab results have null values. "
                     f"This suggests the model failed to extract numeric values from the image."
                 )
+        else:
+            logger.warning(
+                f"Extraction returned 0 lab results for {image_path.name}. "
+                f"This may indicate a model extraction failure - image should be manually reviewed."
+            )
 
         return report_model.model_dump(mode='json')
     except Exception as e:

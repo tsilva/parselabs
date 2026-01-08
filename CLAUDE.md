@@ -49,6 +49,49 @@ The `self_consistency` function is critical for accuracy:
 - If outputs differ, uses an LLM to vote on the most consistent result
 - Applied to the extraction step to ensure accuracy
 
+### Post-Extraction Verification (verification.py)
+
+After extraction, an optional multi-model verification pipeline validates extracted values against the source image:
+
+**6-Stage Verification Pipeline:**
+
+1. **Cross-Model Extraction** - Re-extract with a different model family (e.g., if primary is Gemini, verify with Claude)
+2. **Comparison** - Compare primary vs verification extractions, identify matches and disagreements
+3. **Batch Verification** - For disagreements, ask verification model to confirm each value
+4. **Character-Level Verification** - For uncertain values, read digit-by-digit with arbitration model
+5. **Arbitration** - For unresolved disagreements, use third model to determine correct value
+6. **Completeness Check** - Detect any results missed by primary extraction
+
+**Model Selection Strategy:**
+- Automatically selects verification model from different provider than primary
+- Arbitration model selected from third provider when possible
+- Cross-provider verification catches provider-specific biases
+
+**Supported Models (January 2026):**
+| Provider | Models | Notes |
+|----------|--------|-------|
+| Anthropic | `claude-opus-4.5`, `claude-sonnet-4`, `claude-haiku-4.5` | Opus 4.5 is frontier model |
+| Google | `gemini-3-flash-preview`, `gemini-2.5-flash`, `gemini-2.5-pro` | Gemini 3 is latest |
+| OpenAI | `gpt-5.2`, `gpt-4.1`, `gpt-4.1-mini` | GPT-5.2 is latest (400K context) |
+| Qwen | `qwen3-max`, `qwen3-vl-32b-instruct`, `qwen3-vl-8b-instruct` | Qwen3-Max is SOTA (256K context) |
+
+**Verification Columns Added:**
+- `verification_status`: "verified", "corrected", "uncertain", "not_verified", "recovered"
+- `verification_confidence`: 0-1 confidence score from verification
+- `verification_method`: Method used (cross_model_match, batch_verification, character_level, arbitration)
+- `cross_model_verified`: Boolean - whether cross-model extraction agreed
+- `verification_corrected`: Boolean - whether value was corrected
+- `value_raw_original`: Original value if corrected
+
+**Configuration:**
+```env
+ENABLE_VERIFICATION=true
+VERIFICATION_MODEL_ID=anthropic/claude-sonnet-4  # Optional, auto-selected if not set
+ARBITRATION_MODEL_ID=openai/gpt-4o              # Optional, auto-selected if not set
+ENABLE_COMPLETENESS_CHECK=true
+ENABLE_CHARACTER_VERIFICATION=true
+```
+
 ### Configuration System
 
 One JSON config file in `config/` drives the standardization and normalization:
@@ -253,6 +296,13 @@ Required `.env` variables:
 - `OPENROUTER_API_KEY` - API key for OpenRouter
 - `N_EXTRACTIONS` - Number of extraction attempts for self-consistency (default: 1)
 - `MAX_WORKERS` - Parallel workers for PDF processing (default: 1)
+
+Optional verification `.env` variables:
+- `ENABLE_VERIFICATION` - Enable post-extraction verification (default: true)
+- `VERIFICATION_MODEL_ID` - Model for cross-model verification (auto-selected from different provider if not set)
+- `ARBITRATION_MODEL_ID` - Model for resolving disagreements (auto-selected if not set)
+- `ENABLE_COMPLETENESS_CHECK` - Check for missed results (default: true)
+- `ENABLE_CHARACTER_VERIFICATION` - Do character-level verification for uncertain values (default: true)
 
 ## Validation (test.py)
 
