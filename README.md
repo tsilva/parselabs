@@ -54,6 +54,43 @@ python main.py
 - Caches results to avoid reprocessing
 - Generates clean, structured CSV output
 
+## 🔍 Review UI
+
+A Streamlit-based interface for reviewing extracted lab results against source documents.
+
+### Installation
+
+```bash
+pip install -r review_ui/requirements.txt
+```
+
+### Running the Review UI
+
+```bash
+streamlit run review_ui/app.py
+```
+
+The UI reads from your `OUTPUT_PATH` (configured in `.env` or via environment variable).
+
+### Features
+
+- **Side-by-side view**: Source document image alongside extracted data
+- **Keyboard shortcuts**: Y=Accept, N=Reject, S=Skip, Arrow keys=Navigate
+- **Filter modes**: Unreviewed, All, Low Confidence, Needs Review, Accepted, Rejected
+- **Progress tracking**: Shows review progress with accept/reject counts
+- **Persistent storage**: Review status saved directly to extraction JSON files
+
+### Workflow
+
+1. Run `python main.py` to extract lab results
+2. Launch the review UI with `streamlit run review_ui/app.py`
+3. Review each extraction:
+   - Compare extracted values against the source image
+   - Press **Y** to accept correct extractions
+   - Press **N** to reject incorrect ones
+   - Press **S** to skip and return later
+4. Use filters to focus on low-confidence or flagged items
+
 ## 🏗️ Architecture
 
 For detailed pipeline documentation, see [docs/pipeline.md](docs/pipeline.md).
