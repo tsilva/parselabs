@@ -88,9 +88,8 @@ Contains all original columns plus:
 
 ### Reviewed CSV
 After interactive review, contains additional columns:
-- `human_verified` (bool): Verified by human
-- `human_corrected` (bool): Corrected by human
-- `should_delete` (bool): Marked for deletion
+- `review_status` (str): "accepted" or "rejected"
+- `reviewed_at` (str): ISO timestamp when reviewed
 
 ### Review Audit Trail (`human_reviews.json`)
 JSON file tracking all review decisions:
@@ -131,11 +130,11 @@ import pandas as pd
 # Load reviewed data
 df = pd.read_csv("output/2024-11-20/2024-11-20_reviewed.csv")
 
-# Filter to verified results only
-verified = df[df['human_verified'] == True]
+# Filter to accepted results only
+accepted = df[df['review_status'] == 'accepted']
 
-# Exclude deleted results
-valid = df[df['should_delete'] != True]
+# Exclude rejected results
+valid = df[df['review_status'] != 'rejected']
 ```
 
 ## Customizing Edge Case Detection

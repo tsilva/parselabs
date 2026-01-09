@@ -247,16 +247,18 @@ class ReviewInterface:
             # Apply decision
             if decision['action'] == 'accept':
                 reviewed_df.loc[idx, 'needs_review'] = False
-                reviewed_df.loc[idx, 'human_verified'] = True
+                reviewed_df.loc[idx, 'review_status'] = 'accepted'
+                reviewed_df.loc[idx, 'reviewed_at'] = datetime.now().isoformat() + 'Z'
             elif decision['action'] == 'correct':
                 # Apply corrections
                 for field, value in decision['corrections'].items():
                     reviewed_df.loc[idx, field] = value
                 reviewed_df.loc[idx, 'needs_review'] = False
-                reviewed_df.loc[idx, 'human_verified'] = True
-                reviewed_df.loc[idx, 'human_corrected'] = True
+                reviewed_df.loc[idx, 'review_status'] = 'accepted'
+                reviewed_df.loc[idx, 'reviewed_at'] = datetime.now().isoformat() + 'Z'
             elif decision['action'] == 'delete':
-                reviewed_df.loc[idx, 'should_delete'] = True
+                reviewed_df.loc[idx, 'review_status'] = 'rejected'
+                reviewed_df.loc[idx, 'reviewed_at'] = datetime.now().isoformat() + 'Z'
                 reviewed_df.loc[idx, 'needs_review'] = False
 
             # Save review
@@ -408,14 +410,12 @@ def run_review_session(csv_path: str, output_path: str, max_items: int = 20, rep
     print(f"\n💾 Reviewed data saved to: {reviewed_path}")
 
     # Show statistics
-    verified_count = reviewed_df.get('human_verified', pd.Series([False])).sum()
-    corrected_count = reviewed_df.get('human_corrected', pd.Series([False])).sum()
-    deleted_count = reviewed_df.get('should_delete', pd.Series([False])).sum()
+    accepted_count = (reviewed_df.get('review_status', pd.Series()) == 'accepted').sum()
+    rejected_count = (reviewed_df.get('review_status', pd.Series()) == 'rejected').sum()
 
     print(f"\n📊 Review Statistics:")
-    print(f"   Verified as correct: {verified_count}")
-    print(f"   Corrected: {corrected_count}")
-    print(f"   Marked for deletion: {deleted_count}")
+    print(f"   Accepted: {accepted_count}")
+    print(f"   Rejected: {rejected_count}")
     print(f"   Still need review: {reviewed_df['needs_review'].sum()}")
 
 
