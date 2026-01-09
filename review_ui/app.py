@@ -197,38 +197,78 @@ def display_entry_details(entry: dict, reviews: dict):
     elif status == 'rejected':
         st.error("Rejected")
 
-    # Main extraction fields
-    st.markdown(f"**Lab Name:** {entry.get('lab_name_raw', 'N/A')}")
-    st.markdown(f"**Value:** {entry.get('value_raw', 'N/A')}")
-    st.markdown(f"**Unit:** {entry.get('lab_unit_raw', 'N/A')}")
-    st.markdown(f"**Reference:** {entry.get('reference_range', 'N/A')}")
-
-    # Standardized values (if different)
-    std_name = entry.get('lab_name_standardized', '')
-    if std_name and std_name != entry.get('lab_name_raw'):
-        st.markdown(f"**Standardized:** {std_name}")
-
-    # Comments if present
-    comments = entry.get('comments')
-    if comments and pd.notna(comments):
-        st.markdown(f"**Comments:** {comments}")
+    # Review reason if flagged
+    review_reason = entry.get('review_reason')
+    if review_reason and pd.notna(review_reason) and review_reason.strip():
+        st.warning(f"review_reason: {review_reason}")
 
     # Confidence indicator
     confidence = entry.get('confidence_score')
     if confidence is not None and pd.notna(confidence):
         conf_val = float(confidence)
         if conf_val < 0.7:
-            st.warning(f"Low confidence: {conf_val:.2f}")
+            st.warning(f"confidence_score: {conf_val:.2f}")
         else:
-            st.caption(f"Confidence: {conf_val:.2f}")
+            st.info(f"confidence_score: {conf_val:.2f}")
 
-    # Review reason if flagged
-    review_reason = entry.get('review_reason')
-    if review_reason and pd.notna(review_reason) and review_reason.strip():
-        st.info(f"Flagged: {review_reason}")
+    # Define paired fields: (label, raw_field, standardized_field)
+    paired_fields = [
+        ('lab_name', 'lab_name_raw', 'lab_name_standardized'),
+        ('value', 'value_raw', 'value_primary'),
+        ('unit', 'lab_unit_raw', 'lab_unit_standardized'),
+        ('unit_primary', None, 'lab_unit_primary'),
+        ('reference_range', 'reference_range', None),
+        ('reference_min', 'reference_min_raw', 'reference_min_primary'),
+        ('reference_max', 'reference_max_raw', 'reference_max_primary'),
+        ('comments', 'comments', None),
+    ]
+
+    verification_fields = [
+        'verification_status',
+        'verification_confidence',
+        'verification_method',
+        'cross_model_verified',
+        'verification_corrected',
+        'value_raw_original',
+    ]
+
+    def get_val(field: str) -> str:
+        if not field:
+            return ""
+        val = entry.get(field)
+        if val is not None and pd.notna(val) and str(val).strip():
+            return str(val)
+        return ""
+
+    # Build table rows
+    table_rows = []
+    for label, raw_field, std_field in paired_fields:
+        raw_val = get_val(raw_field)
+        std_val = get_val(std_field)
+        if raw_val or std_val:
+            table_rows.append((label, raw_val, std_val))
+
+    # Render as markdown table
+    if table_rows:
+        table_md = "| Field | Raw | Standardized |\n|-------|-----|---------------|\n"
+        for label, raw_val, std_val in table_rows:
+            table_md += f"| {label} | {raw_val} | {std_val} |\n"
+        st.markdown(table_md)
+
+    # Verification (collapsible if has data)
+    has_verification = any(
+        entry.get(f) is not None and pd.notna(entry.get(f))
+        for f in verification_fields
+    )
+    if has_verification:
+        with st.expander("Verification"):
+            for field in verification_fields:
+                val = entry.get(field)
+                if val is not None and pd.notna(val) and str(val).strip():
+                    st.markdown(f"`{field}`: {val}")
 
     # Source text for verification
-    with st.expander("Source Text"):
+    with st.expander("source_text"):
         st.code(entry.get('source_text', 'N/A'))
 
 
