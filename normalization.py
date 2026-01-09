@@ -4,13 +4,20 @@ import logging
 import pandas as pd
 from typing import Optional
 
+from openai import OpenAI
+
 from config import LabSpecsConfig, UNKNOWN_VALUE
 from utils import slugify, ensure_columns
 
 logger = logging.getLogger(__name__)
 
 
-def apply_normalizations(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+def apply_normalizations(
+    df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+    client: Optional[OpenAI] = None,
+    model_id: Optional[str] = None
+) -> pd.DataFrame:
     """
     Apply all normalization transformations to the DataFrame in batched operations.
 
@@ -20,6 +27,8 @@ def apply_normalizations(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Data
     Args:
         df: DataFrame with raw lab results
         lab_specs: Lab specifications configuration
+        client: OpenAI client for qualitative value standardization
+        model_id: Model ID for qualitative value standardization
 
     Returns:
         DataFrame with normalized columns added
@@ -49,7 +58,7 @@ def apply_normalizations(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Data
 
     # Convert to primary units (batched)
     if lab_specs.exists:
-        df = apply_unit_conversions(df, lab_specs)
+        df = apply_unit_conversions(df, lab_specs, client, model_id)
     else:
         # No conversions, just copy values
         df["value_primary"] = df.get("value_raw")
@@ -69,11 +78,18 @@ def apply_normalizations(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Data
     return df
 
 
-def apply_unit_conversions(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+def apply_unit_conversions(
+    df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+    client: Optional[OpenAI] = None,
+    model_id: Optional[str] = None
+) -> pd.DataFrame:
     """
     Convert values to primary units defined in lab specs.
 
     This function applies unit conversions in a vectorized manner where possible.
+    Handles boolean tests by converting qualitative text values (e.g., "negativo", "positivo")
+    to 0/1 using LLM-based classification with caching.
     """
     # Initialize primary unit columns
     # Convert value_raw to numeric for calculations (text values will become NaN)
@@ -81,6 +97,80 @@ def apply_unit_conversions(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Da
     df["lab_unit_primary"] = df["lab_unit_standardized"]
     df["reference_min_primary"] = df["reference_min_raw"]
     df["reference_max_primary"] = df["reference_max_raw"]
+
+    # Handle boolean tests: convert qualitative values to 0/1
+    if client and model_id:
+        # Import here to avoid circular imports
+        from standardization import standardize_qualitative_values
+
+        # Find labs with boolean primary unit
+        boolean_labs = [
+            lab_name for lab_name in df["lab_name_standardized"].unique()
+            if pd.notna(lab_name) and lab_name != UNKNOWN_VALUE
+            and lab_specs.get_primary_unit(lab_name) == "boolean"
+        ]
+
+        if boolean_labs:
+            # First pass: convert qualitative text in value_raw
+            value_raw_mask = (
+                df["lab_name_standardized"].isin(boolean_labs) &
+                df["value_primary"].isna() &
+                df["value_raw"].notna()
+            )
+
+            if value_raw_mask.any():
+                raw_values = df.loc[value_raw_mask, "value_raw"].tolist()
+                qual_map = standardize_qualitative_values(raw_values, model_id, client)
+
+                # Apply converted values
+                df.loc[value_raw_mask, "value_primary"] = df.loc[value_raw_mask, "value_raw"].map(
+                    lambda v: qual_map.get(v)
+                )
+                df.loc[value_raw_mask, "lab_unit_primary"] = "boolean"
+                logger.info(f"[normalization] Converted {value_raw_mask.sum()} qualitative values from value_raw")
+
+            # Second pass: use comments field for boolean tests where value_raw is NaN
+            comments_mask = (
+                df["lab_name_standardized"].isin(boolean_labs) &
+                df["value_primary"].isna() &
+                df["value_raw"].isna() &
+                df["comments"].notna()
+            )
+
+            if comments_mask.any():
+                comment_values = df.loc[comments_mask, "comments"].tolist()
+                qual_map = standardize_qualitative_values(comment_values, model_id, client)
+
+                # Apply converted values from comments
+                df.loc[comments_mask, "value_primary"] = df.loc[comments_mask, "comments"].map(
+                    lambda v: qual_map.get(v)
+                )
+                df.loc[comments_mask, "lab_unit_primary"] = "boolean"
+                logger.info(f"[normalization] Converted {comments_mask.sum()} qualitative values from comments")
+
+        # Third pass: for ANY test (not just boolean), convert negative-like comments to 0
+        # This handles presence/absence tests where "Negativo"/"Normal" means "not detected" = 0
+        negative_comments_mask = (
+            df["value_primary"].isna() &
+            df["value_raw"].isna() &
+            df["comments"].notna()
+        )
+
+        if negative_comments_mask.any():
+            comment_values = df.loc[negative_comments_mask, "comments"].tolist()
+            qual_map = standardize_qualitative_values(comment_values, model_id, client)
+
+            # Only apply 0 for negative results (qual_map returns 0 for negative)
+            # Keep NaN for positive (1) or unknown (None) since we don't have a numeric value
+            for idx in df.loc[negative_comments_mask].index:
+                comment = df.at[idx, "comments"]
+                converted = qual_map.get(comment)
+                if converted == 0:
+                    df.at[idx, "value_primary"] = 0.0
+
+            converted_count = sum(1 for c in comment_values if qual_map.get(c) == 0)
+            if converted_count > 0:
+                logger.info(f"[normalization] Converted {converted_count} negative-like comments to 0 for numeric tests")
 
     # Group by lab_name_standardized to apply conversions efficiently
     for lab_name_standardized in df["lab_name_standardized"].unique():
