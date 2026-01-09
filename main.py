@@ -65,9 +65,12 @@ COLUMN_SCHEMA = {
     "healthy_range_min": {"dtype": "float64", "excel_width": 16},
     "healthy_range_max": {"dtype": "float64", "excel_width": 16},
     "is_in_healthy_range": {"dtype": "boolean", "excel_width": 18},
+    "result_index": {"dtype": "Int64", "excel_width": 10, "excel_hidden": True},
     "needs_review": {"dtype": "boolean", "excel_width": 12},
     "review_reason": {"dtype": "str", "excel_width": 40},
     "confidence_score": {"dtype": "float64", "excel_width": 14},
+    "review_status": {"dtype": "str", "excel_width": 12},
+    "reviewed_at": {"dtype": "str", "excel_width": 20, "excel_hidden": True},
     # Verification columns
     "verification_status": {"dtype": "str", "excel_width": 14, "excel_hidden": False},
     "verification_confidence": {"dtype": "float64", "excel_width": 16, "excel_hidden": False},
@@ -92,7 +95,8 @@ def get_column_lists(schema: dict):
         "is_abnormal", "comments",
 
         # Review/quality columns
-        "needs_review", "review_reason", "confidence_score",
+        "result_index", "needs_review", "review_reason", "confidence_score",
+        "review_status", "reviewed_at",
 
         # Verification columns
         "verification_status", "verification_confidence", "verification_method",
@@ -264,8 +268,9 @@ def process_single_pdf(
                     if match:
                         doc_date = match.group(1)
 
-            # Add page metadata to results
-            for result in page_data.get("lab_results", []):
+            # Add page metadata and result index to results
+            for result_idx, result in enumerate(page_data.get("lab_results", [])):
+                result["result_index"] = result_idx
                 result["page_number"] = page_idx + 1
                 result["source_file"] = page_name
                 all_results.append(result)

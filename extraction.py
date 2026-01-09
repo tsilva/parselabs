@@ -67,12 +67,12 @@ class LabResult(BaseModel):
     lab_unit_standardized: Optional[str] = Field(default=None, description="Standardized lab unit")
 
     # Review tracking fields
-    needs_review: Optional[bool] = Field(default=False, description="Whether this result needs human review")
-    review_reason: Optional[str] = Field(default=None, description="Reason why review is needed")
-    confidence_score: Optional[float] = Field(default=1.0, description="Confidence score (0-1)")
-    human_verified: Optional[bool] = Field(default=False, description="Whether verified by human")
-    human_corrected: Optional[bool] = Field(default=False, description="Whether corrected by human")
-    should_delete: Optional[bool] = Field(default=False, description="Whether marked for deletion")
+    result_index: Optional[int] = Field(default=None, description="Index of this result in the source JSON lab_results array")
+    needs_review: Optional[bool] = Field(default=False, description="Whether this result needs human review (auto-flagged)")
+    review_reason: Optional[str] = Field(default=None, description="Reason why review is needed (auto-generated)")
+    confidence_score: Optional[float] = Field(default=1.0, description="Confidence score 0-1 (auto-generated)")
+    review_status: Optional[str] = Field(default=None, description="Human review status: 'accepted', 'rejected', or null")
+    reviewed_at: Optional[str] = Field(default=None, description="ISO timestamp when review was completed")
 
     # Verification fields (added by post-extraction verification)
     verification_status: Optional[str] = Field(default=None, description="Verification status: verified, corrected, uncertain, not_verified")
