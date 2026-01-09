@@ -395,12 +395,12 @@
   },
   "Blood - Anti-Mitochondrial Antibody (AMA), IgG": {
     "lab_type": "blood",
-    "primary_unit": "boolean",
+    "primary_unit": "U/mL",
     "alternatives": [],
     "ranges": {
       "healthy": {
         "min": 0,
-        "max": 0
+        "max": 10
       }
     }
   },
@@ -536,12 +536,12 @@
   },
   "Blood - Antinuclear Antibodies (ANA)": {
     "lab_type": "blood",
-    "primary_unit": "boolean",
+    "primary_unit": "index",
     "alternatives": [],
     "ranges": {
       "healthy": {
         "min": 0,
-        "max": 0
+        "max": 0.7
       }
     }
   },
@@ -1242,7 +1242,12 @@
   "Blood - Folate": {
     "lab_type": "blood",
     "primary_unit": "ng/mL",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "nmol/L",
+        "factor": 0.4413
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 7.0,
@@ -3360,12 +3365,17 @@
   },
   "Urine Type II - Bilirubin": {
     "lab_type": "urine",
-    "primary_unit": "boolean",
-    "alternatives": [],
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mg/dl",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0,
-        "max": 0
+        "max": 0.2
       }
     }
   },
@@ -3421,12 +3431,17 @@
   },
   "Urine Type II - Glucose": {
     "lab_type": "urine",
-    "primary_unit": "boolean",
-    "alternatives": [],
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mg/dl",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0,
-        "max": 0
+        "max": 15
       }
     }
   },
@@ -3443,8 +3458,13 @@
   },
   "Urine Type II - Ketones": {
     "lab_type": "urine",
-    "primary_unit": "boolean",
-    "alternatives": [],
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mg/dl",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0,
@@ -3476,12 +3496,17 @@
   },
   "Urine Type II - Proteins": {
     "lab_type": "urine",
-    "primary_unit": "boolean",
-    "alternatives": [],
+    "primary_unit": "mg/dL",
+    "alternatives": [
+      {
+        "unit": "mg/dl",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "healthy": {
         "min": 0,
-        "max": 0
+        "max": 15
       }
     }
   },
@@ -3698,12 +3723,8 @@
   },
   "Urine Type II - Urobilinogen": {
     "lab_type": "urine",
-    "primary_unit": "boolean",
+    "primary_unit": "mg/dL",
     "alternatives": [
-      {
-        "unit": "mg/dL",
-        "factor": 1.0
-      },
       {
         "unit": "mg/dl",
         "factor": 1.0
@@ -3712,7 +3733,7 @@
     "ranges": {
       "healthy": {
         "min": 0,
-        "max": 0
+        "max": 1.0
       }
     }
   },
