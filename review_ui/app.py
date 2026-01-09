@@ -4,11 +4,12 @@ Fast Lab Extraction Review UI
 Streamlit app for rapidly reviewing lab extraction accuracy.
 Shows source page image side-by-side with extracted data.
 Keyboard-driven: Y=Accept, N=Reject, S=Skip
+
+Review status is stored directly in the extraction JSON files.
 """
 
 import os
 import json
-import hashlib
 import pandas as pd
 import streamlit as st
 from pathlib import Path
@@ -43,67 +44,92 @@ def get_output_path() -> Path:
 
 
 # =============================================================================
-# Hash & State Management
+# JSON File Operations
 # =============================================================================
 
-def compute_content_hash(entry: dict) -> str:
-    """Compute hash of raw extraction fields for change detection."""
-    fields = ['lab_name_raw', 'value_raw', 'lab_unit_raw',
-              'reference_range', 'source_text']
-    hash_input = '|'.join(str(entry.get(f, '')) for f in fields)
-    return hashlib.sha256(hash_input.encode('utf-8')).hexdigest()[:16]
+def get_json_path(entry: dict, output_path: Path) -> Path:
+    """Get the JSON file path for an entry.
+
+    source_file in the CSV is the CSV filename like "2001-12-27 - analises.csv"
+    page_number is the page index (1-based)
+    The JSON is at output_path/{stem}/{stem}.{page:03d}.json
+    """
+    source_file = entry.get('source_file', '')
+    page_number = entry.get('page_number')
+
+    if not source_file:
+        return Path()
+
+    # source_file = "2001-12-27 - analises.csv" -> stem = "2001-12-27 - analises"
+    stem = source_file.rsplit('.', 1)[0] if '.' in source_file else source_file
+
+    # page_number = 1 -> "001"
+    if page_number is not None and pd.notna(page_number):
+        page_str = f"{int(page_number):03d}"
+    else:
+        page_str = "001"  # fallback
+
+    return output_path / stem / f"{stem}.{page_str}.json"
 
 
-def get_entry_key(entry: dict) -> str:
-    """Generate unique key for an entry."""
-    return f"{entry['source_file']}|{entry['_row_idx']}"
+def save_review_to_json(entry: dict, status: str, output_path: Path) -> bool:
+    """Save review status directly to the source JSON file.
 
+    Args:
+        entry: The entry dict containing source_file and result_index
+        status: 'accepted' or 'rejected'
+        output_path: Base output directory
 
-def load_review_state(output_path: Path) -> dict:
-    """Load existing review state from JSON."""
-    state_file = output_path / "review_state.json"
-    if state_file.exists():
-        try:
-            data = json.loads(state_file.read_text())
-            return data.get('reviews', {})
-        except (json.JSONDecodeError, KeyError):
-            return {}
-    return {}
+    Returns:
+        True if save succeeded, False otherwise
+    """
+    json_path = get_json_path(entry, output_path)
+    result_index = entry.get('result_index')
 
-
-def save_review_state(output_path: Path, reviews: dict):
-    """Save review state to JSON."""
-    state_file = output_path / "review_state.json"
-    data = {
-        'version': '1.0',
-        'last_updated': datetime.utcnow().isoformat() + 'Z',
-        'reviews': reviews
-    }
-    state_file.write_text(json.dumps(data, indent=2))
-
-
-def is_reviewed(entry: dict, reviews: dict) -> bool:
-    """Check if entry is reviewed AND content unchanged."""
-    key = get_entry_key(entry)
-    if key not in reviews:
+    if not json_path.exists():
+        st.error(f"JSON file not found: {json_path}")
         return False
-    return reviews[key].get('content_hash') == compute_content_hash(entry)
 
+    if result_index is None or pd.isna(result_index):
+        st.error(
+            "Missing result_index for entry. "
+            "Please re-run main.py to regenerate the CSV with result_index column, "
+            "or run: python -c \"from review_ui.backfill import backfill_result_index; backfill_result_index()\""
+        )
+        return False
 
-def get_review_status(entry: dict, reviews: dict) -> Optional[str]:
-    """Get review status for an entry (accepted/rejected/None)."""
-    key = get_entry_key(entry)
-    review = reviews.get(key)
-    if review and review.get('content_hash') == compute_content_hash(entry):
-        return review.get('status')
-    return None
+    result_index = int(result_index)
+
+    try:
+        # Load the JSON file
+        data = json.loads(json_path.read_text(encoding='utf-8'))
+
+        # Update the specific lab result
+        if 'lab_results' not in data:
+            st.error(f"No lab_results in JSON file")
+            return False
+
+        if result_index >= len(data['lab_results']):
+            st.error(f"result_index {result_index} out of range (max: {len(data['lab_results'])-1})")
+            return False
+
+        # Update the review fields
+        data['lab_results'][result_index]['review_status'] = status
+        data['lab_results'][result_index]['reviewed_at'] = datetime.utcnow().isoformat() + 'Z'
+
+        # Save back to file
+        json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
+        return True
+
+    except Exception as e:
+        st.error(f"Failed to save review: {e}")
+        return False
 
 
 # =============================================================================
 # Data Loading
 # =============================================================================
 
-@st.cache_data
 def load_entries(output_path: str) -> list:
     """Load all lab results from all.csv."""
     csv_path = Path(output_path) / "all.csv"
@@ -143,42 +169,60 @@ def get_image_path(entry: dict, output_path: Path) -> Path:
 
 
 # =============================================================================
+# Review Status Helpers
+# =============================================================================
+
+def is_reviewed(entry: dict) -> bool:
+    """Check if entry has been reviewed."""
+    status = entry.get('review_status')
+    return status is not None and pd.notna(status) and str(status).strip() != ''
+
+
+def get_review_status(entry: dict) -> Optional[str]:
+    """Get review status for an entry (accepted/rejected/None)."""
+    status = entry.get('review_status')
+    if status is not None and pd.notna(status) and str(status).strip():
+        return str(status).strip()
+    return None
+
+
+# =============================================================================
 # Filtering
 # =============================================================================
 
-def filter_entries(entries: list, reviews: dict, filter_mode: str) -> list:
+def filter_entries(entries: list, filter_mode: str) -> list:
     """Filter entries based on selected mode."""
     if filter_mode == 'All':
         return entries
 
     elif filter_mode == 'Unreviewed':
-        return [e for e in entries if not is_reviewed(e, reviews)]
+        return [e for e in entries if not is_reviewed(e)]
 
     elif filter_mode == 'Low Confidence':
         return [
             e for e in entries
             if e.get('confidence_score', 1.0) is not None
             and float(e.get('confidence_score', 1.0)) < 0.7
-            and not is_reviewed(e, reviews)
+            and not is_reviewed(e)
         ]
 
     elif filter_mode == 'Needs Review':
         return [
             e for e in entries
             if e.get('needs_review', False) == True
-            and not is_reviewed(e, reviews)
+            and not is_reviewed(e)
         ]
 
     elif filter_mode == 'Rejected':
         return [
             e for e in entries
-            if get_review_status(e, reviews) == 'rejected'
+            if get_review_status(e) == 'rejected'
         ]
 
     elif filter_mode == 'Accepted':
         return [
             e for e in entries
-            if get_review_status(e, reviews) == 'accepted'
+            if get_review_status(e) == 'accepted'
         ]
 
     return entries
@@ -188,10 +232,10 @@ def filter_entries(entries: list, reviews: dict, filter_mode: str) -> list:
 # UI Components
 # =============================================================================
 
-def display_entry_details(entry: dict, reviews: dict):
+def display_entry_details(entry: dict):
     """Display lab result details."""
     # Current review status
-    status = get_review_status(entry, reviews)
+    status = get_review_status(entry)
     if status == 'accepted':
         st.success("Accepted")
     elif status == 'rejected':
@@ -300,16 +344,13 @@ def main():
     output_path = get_output_path()
 
     # Initialize session state
-    if 'reviews' not in st.session_state:
-        st.session_state.reviews = load_review_state(output_path)
-
     if 'current_index' not in st.session_state:
         st.session_state.current_index = 0
 
     if 'filter_mode' not in st.session_state:
         st.session_state.filter_mode = 'Unreviewed'
 
-    # Load entries
+    # Load entries (without caching to see review updates)
     entries = load_entries(str(output_path))
 
     if not entries:
@@ -334,13 +375,13 @@ def main():
         st.session_state.current_index = 0
 
     # Get filtered entries
-    filtered = filter_entries(entries, st.session_state.reviews, filter_mode)
+    filtered = filter_entries(entries, filter_mode)
 
     # Progress stats
     total_entries = len(entries)
-    reviewed_count = sum(1 for e in entries if is_reviewed(e, st.session_state.reviews))
-    accepted_count = sum(1 for e in entries if get_review_status(e, st.session_state.reviews) == 'accepted')
-    rejected_count = sum(1 for e in entries if get_review_status(e, st.session_state.reviews) == 'rejected')
+    reviewed_count = sum(1 for e in entries if is_reviewed(e))
+    accepted_count = sum(1 for e in entries if get_review_status(e) == 'accepted')
+    rejected_count = sum(1 for e in entries if get_review_status(e) == 'rejected')
 
     display_progress(total_entries, reviewed_count, accepted_count, rejected_count)
 
@@ -387,7 +428,7 @@ def main():
 
     with data_col:
         st.subheader("Extracted Data")
-        display_entry_details(current_entry, st.session_state.reviews)
+        display_entry_details(current_entry)
 
         st.divider()
 
@@ -419,18 +460,15 @@ def main():
 
         # Handle actions
         def mark_reviewed(status: str):
-            key = get_entry_key(current_entry)
-            st.session_state.reviews[key] = {
-                'content_hash': compute_content_hash(current_entry),
-                'status': status,
-                'reviewed_at': datetime.utcnow().isoformat() + 'Z'
-            }
-            save_review_state(output_path, st.session_state.reviews)
+            success = save_review_to_json(current_entry, status, output_path)
+            if success:
+                # Clear the cache so we reload fresh data
+                st.cache_data.clear()
 
-            # Auto-advance
-            if st.session_state.current_index < len(filtered) - 1:
-                st.session_state.current_index += 1
-            st.rerun()
+                # Auto-advance
+                if st.session_state.current_index < len(filtered) - 1:
+                    st.session_state.current_index += 1
+                st.rerun()
 
         def skip_entry():
             if st.session_state.current_index < len(filtered) - 1:
