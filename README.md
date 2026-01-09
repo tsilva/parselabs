@@ -54,6 +54,10 @@ python main.py
 - Caches results to avoid reprocessing
 - Generates clean, structured CSV output
 
+## 🏗️ Architecture
+
+For detailed pipeline documentation, see [docs/pipeline.md](docs/pipeline.md).
+
 ## 📊 Output
 
 For each processed document, the tool generates:

@@ -24,6 +24,8 @@ The `utils/` directory contains helper scripts for building and maintaining conf
 
 ## Architecture
 
+> **Maintenance Note:** When modifying the pipeline, update `docs/pipeline.md` to reflect the changes.
+
 ### Core Pipeline (main.py)
 
 The processing pipeline has 3 main stages:
