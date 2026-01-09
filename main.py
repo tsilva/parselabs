@@ -615,9 +615,16 @@ def main():
         logger.error("No data to process")
         return
 
-    # Apply normalizations
+    # Apply normalizations (pass client and model_id for qualitative value conversion)
     logger.info("Applying normalizations...")
-    merged_df = apply_normalizations(merged_df, lab_specs)
+    merged_df = apply_normalizations(merged_df, lab_specs, client, config.self_consistency_model_id)
+
+    # Filter out non-lab-test rows (where LLM couldn't map to a known lab name)
+    unknown_mask = merged_df["lab_name_standardized"] == UNKNOWN_VALUE
+    if unknown_mask.any():
+        unknown_count = unknown_mask.sum()
+        logger.info(f"Filtering {unknown_count} rows with unknown lab names (non-tests)")
+        merged_df = merged_df[~unknown_mask].reset_index(drop=True)
 
     # Detect edge cases for review
     logger.info("Detecting edge cases for review...")
