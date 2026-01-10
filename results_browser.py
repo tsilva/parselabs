@@ -203,7 +203,8 @@ def apply_filters(
     df: pd.DataFrame,
     lab_names: list,
     abnormal_only: bool,
-    search_text: str
+    search_text: str,
+    latest_only: bool = False
 ) -> pd.DataFrame:
     """Apply filters to DataFrame and sort by date descending."""
     if df.empty:
@@ -234,6 +235,11 @@ def apply_filters(
     # Sort by date descending (most recent first)
     if 'date' in filtered.columns:
         filtered = filtered.sort_values('date', ascending=False, na_position='last')
+
+    # Latest only: keep only the most recent value per lab test
+    if latest_only and 'lab_name_standardized' in filtered.columns and 'date' in filtered.columns:
+        # Already sorted by date desc, so first occurrence per lab is the latest
+        filtered = filtered.drop_duplicates(subset=['lab_name_standardized'], keep='first')
 
     return filtered
 
@@ -404,10 +410,11 @@ def handle_filter_change(
     lab_names: list,
     abnormal_only: bool,
     search_text: str,
+    latest_only: bool,
     full_df: pd.DataFrame
 ):
     """Handle filter changes and update display."""
-    filtered_df = apply_filters(full_df, lab_names, abnormal_only, search_text)
+    filtered_df = apply_filters(full_df, lab_names, abnormal_only, search_text, latest_only)
     display_df = prepare_display_df(filtered_df)
     summary = get_summary_stats(filtered_df)
 
@@ -549,6 +556,12 @@ def create_app():
                     value=False,
                     info="Show only out-of-reference results"
                 )
+            with gr.Column(scale=1):
+                latest_filter = gr.Checkbox(
+                    label="Latest Only",
+                    value=False,
+                    info="Show only the most recent value per test"
+                )
             with gr.Column(scale=2):
                 text_search = gr.Textbox(
                     label="Search",
@@ -596,7 +609,7 @@ def create_app():
         gr.Markdown("*Keyboard: ← / k = Previous, → / j = Next*", elem_id="footer")
 
         # Wire up filter events
-        filter_inputs = [lab_name_filter, abnormal_filter, text_search, full_df_state]
+        filter_inputs = [lab_name_filter, abnormal_filter, text_search, latest_filter, full_df_state]
         filter_outputs = [data_table, summary_display, plot_display, filtered_df_state, current_idx_state, position_display]
 
         lab_name_filter.change(
@@ -606,6 +619,12 @@ def create_app():
         )
 
         abnormal_filter.change(
+            fn=handle_filter_change,
+            inputs=filter_inputs,
+            outputs=filter_outputs
+        )
+
+        latest_filter.change(
             fn=handle_filter_change,
             inputs=filter_inputs,
             outputs=filter_outputs
