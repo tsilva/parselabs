@@ -24,7 +24,7 @@ The `utils/` directory contains helper scripts for building and maintaining conf
 
 ## Architecture
 
-> **Maintenance Note:** When modifying the pipeline, update `docs/pipeline.md` to reflect the changes.
+> **Maintenance Note:** When modifying the pipeline (adding/changing/removing stages, changing data flow, modifying key functions), update `docs/pipeline.md` to reflect the changes. That file provides a succinct step-by-step overview of all 12 pipeline stages.
 
 ### Core Pipeline (main.py)
 
