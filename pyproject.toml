@@ -32,10 +32,8 @@ dependencies = [
     "pydantic",
     "numpy",
     "tqdm",
+    "gradio>=5.0.0",
 ]
-
-[project.optional-dependencies]
-ui = ["gradio>=5.0.0"]
 
 [project.urls]
 Homepage = "https://github.com/tsilva/labs-parser"
