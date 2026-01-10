@@ -226,9 +226,8 @@ def get_summary_stats(df: pd.DataFrame) -> str:
 
 def apply_filters(
     df: pd.DataFrame,
-    lab_names: list,
+    lab_name: Optional[str],
     abnormal_only: bool,
-    search_text: str,
     latest_only: bool = False
 ) -> pd.DataFrame:
     """Apply filters to DataFrame and sort by date descending."""
@@ -237,25 +236,13 @@ def apply_filters(
 
     filtered = df.copy()
 
-    # Filter by lab name(s)
-    if lab_names and len(lab_names) > 0:
-        filtered = filtered[filtered['lab_name_standardized'].isin(lab_names)]
+    # Filter by lab name (single selection)
+    if lab_name:
+        filtered = filtered[filtered['lab_name_standardized'] == lab_name]
 
     # Filter abnormal only
     if abnormal_only and 'is_out_of_reference' in filtered.columns:
         filtered = filtered[filtered['is_out_of_reference'] == True]
-
-    # Text search (case-insensitive across all string columns)
-    if search_text and search_text.strip():
-        search_lower = search_text.lower().strip()
-        mask = pd.Series([False] * len(filtered), index=filtered.index)
-
-        for col in filtered.columns:
-            if filtered[col].dtype == 'object':
-                col_mask = filtered[col].astype(str).str.lower().str.contains(search_lower, na=False)
-                mask = mask | col_mask
-
-        filtered = filtered[mask]
 
     # Sort by date descending (most recent first)
     if 'date' in filtered.columns:
@@ -434,14 +421,13 @@ def create_interactive_plot(df: pd.DataFrame, lab_name: Optional[str]) -> go.Fig
 # =============================================================================
 
 def handle_filter_change(
-    lab_names: list,
+    lab_name: Optional[str],
     abnormal_only: bool,
-    search_text: str,
     latest_only: bool,
     full_df: pd.DataFrame
 ):
     """Handle filter changes and update display."""
-    filtered_df = apply_filters(full_df, lab_names, abnormal_only, search_text, latest_only)
+    filtered_df = apply_filters(full_df, lab_name, abnormal_only, latest_only)
     display_df = prepare_display_df(filtered_df)
     summary = get_summary_stats(filtered_df)
 
@@ -579,31 +565,23 @@ def create_app():
 
         # Filters Row
         with gr.Row():
-            with gr.Column(scale=2):
+            with gr.Column(scale=3):
                 lab_name_filter = gr.Dropdown(
                     choices=lab_name_choices,
-                    multiselect=True,
+                    multiselect=False,
                     label="Lab Name",
-                    info="Select one or more lab tests to filter",
+                    info="Filter by specific lab test",
                     allow_custom_value=False
                 )
             with gr.Column(scale=1):
+                gr.Markdown("**Filters**")
                 abnormal_filter = gr.Checkbox(
                     label="Abnormal Only",
-                    value=False,
-                    info="Show only out-of-reference results"
+                    value=False
                 )
-            with gr.Column(scale=1):
                 latest_filter = gr.Checkbox(
                     label="Latest Only",
-                    value=False,
-                    info="Show only the most recent value per test"
-                )
-            with gr.Column(scale=2):
-                text_search = gr.Textbox(
-                    label="Search",
-                    placeholder="Search across all columns...",
-                    info="Case-insensitive substring match"
+                    value=False
                 )
 
         # Summary statistics
@@ -655,7 +633,7 @@ def create_app():
         gr.Markdown("*Keyboard: ← / k = Previous, → / j = Next*", elem_id="footer")
 
         # Wire up filter events
-        filter_inputs = [lab_name_filter, abnormal_filter, text_search, latest_filter, full_df_state]
+        filter_inputs = [lab_name_filter, abnormal_filter, latest_filter, full_df_state]
         filter_outputs = [data_table, summary_display, plot_display, filtered_df_state, current_idx_state, position_display, source_image]
 
         lab_name_filter.change(
@@ -671,12 +649,6 @@ def create_app():
         )
 
         latest_filter.change(
-            fn=handle_filter_change,
-            inputs=filter_inputs,
-            outputs=filter_outputs
-        )
-
-        text_search.change(
             fn=handle_filter_change,
             inputs=filter_inputs,
             outputs=filter_outputs
