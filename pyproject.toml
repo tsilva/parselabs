@@ -28,6 +28,7 @@ dependencies = [
     "pdf2image",
     "xlsxwriter",
     "matplotlib",
+    "plotly",
     "python-dotenv",
     "pydantic",
     "numpy",
