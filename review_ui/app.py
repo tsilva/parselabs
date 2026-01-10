@@ -131,17 +131,51 @@ def save_review_to_json(entry: dict, status: str, output_path: Path) -> bool:
 # =============================================================================
 
 def load_entries(output_path: str) -> list:
-    """Load all lab results from all.csv."""
-    csv_path = Path(output_path) / "all.csv"
+    """Load all lab results from all.csv and sync review status from JSON files."""
+    output_path = Path(output_path)
+    csv_path = output_path / "all.csv"
     if not csv_path.exists():
         return []
 
     df = pd.read_csv(csv_path)
     entries = []
 
+    # Cache JSON data to avoid repeated file reads
+    json_cache = {}
+
     for idx, row in df.iterrows():
         entry = row.to_dict()
         entry['_row_idx'] = idx
+
+        # Sync review status from JSON file
+        result_index = entry.get('result_index')
+        if result_index is not None and pd.notna(result_index):
+            json_path = get_json_path(entry, output_path)
+            json_path_str = str(json_path)
+
+            # Load JSON (with caching)
+            if json_path_str not in json_cache:
+                if json_path.exists():
+                    try:
+                        json_cache[json_path_str] = json.loads(
+                            json_path.read_text(encoding='utf-8')
+                        )
+                    except Exception:
+                        json_cache[json_path_str] = None
+                else:
+                    json_cache[json_path_str] = None
+
+            json_data = json_cache.get(json_path_str)
+            if json_data and 'lab_results' in json_data:
+                result_idx = int(result_index)
+                if result_idx < len(json_data['lab_results']):
+                    json_entry = json_data['lab_results'][result_idx]
+                    # Sync review fields from JSON
+                    if 'review_status' in json_entry:
+                        entry['review_status'] = json_entry['review_status']
+                    if 'reviewed_at' in json_entry:
+                        entry['reviewed_at'] = json_entry['reviewed_at']
+
         entries.append(entry)
 
     return entries
