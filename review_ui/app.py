@@ -1,7 +1,7 @@
 """
 Fast Lab Extraction Review UI
 
-Streamlit app for rapidly reviewing lab extraction accuracy.
+Gradio app for rapidly reviewing lab extraction accuracy.
 Shows source page image side-by-side with extracted data.
 Keyboard-driven: Y=Accept, N=Reject, S=Skip
 
@@ -11,35 +11,67 @@ Review status is stored directly in the extraction JSON files.
 import os
 import json
 import pandas as pd
-import streamlit as st
+import gradio as gr
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Tuple
 from dotenv import load_dotenv
 
 # Load .env from parent directory (repo root)
 load_dotenv(Path(__file__).parent.parent / '.env')
 
-# Try to import keyboard shortcuts, fall back gracefully
-try:
-    from streamlit_shortcuts import add_keyboard_shortcuts
-    HAS_SHORTCUTS = True
-except ImportError:
-    HAS_SHORTCUTS = False
+# =============================================================================
+# Keyboard Shortcuts (JavaScript)
+# =============================================================================
+
+KEYBOARD_JS = """
+<script>
+document.addEventListener('keydown', function(event) {
+    // Skip if user is typing in an input field
+    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+        return;
+    }
+
+    switch(event.key.toLowerCase()) {
+        case 'y':
+            document.querySelector('#accept-btn')?.click();
+            break;
+        case 'n':
+            document.querySelector('#reject-btn')?.click();
+            break;
+        case 's':
+            document.querySelector('#skip-btn')?.click();
+            break;
+        case 'arrowright':
+            document.querySelector('#next-btn')?.click();
+            break;
+        case 'arrowleft':
+            document.querySelector('#prev-btn')?.click();
+            break;
+    }
+});
+</script>
+"""
+
+# =============================================================================
+# Custom CSS
+# =============================================================================
+
+CUSTOM_CSS = """
+.status-accepted { background-color: #198754; color: #ffffff; padding: 10px; border-radius: 5px; margin-bottom: 10px; font-weight: 600; }
+.status-rejected { background-color: #dc3545; color: #ffffff; padding: 10px; border-radius: 5px; margin-bottom: 10px; font-weight: 600; }
+.status-warning { background-color: #fd7e14; color: #ffffff; padding: 10px; border-radius: 5px; margin-bottom: 10px; font-weight: 600; }
+.status-info { background-color: #0d6efd; color: #ffffff; padding: 10px; border-radius: 5px; margin-bottom: 10px; font-weight: 600; }
+.entry-counter { text-align: center; }
+.footer { text-align: center; color: #666; }
+"""
 
 # =============================================================================
 # Configuration
 # =============================================================================
 
 def get_output_path() -> Path:
-    """Get output path from environment or secrets."""
-    # Try streamlit secrets first (with safe check)
-    try:
-        if 'OUTPUT_PATH' in st.secrets:
-            return Path(st.secrets['OUTPUT_PATH'])
-    except Exception:
-        pass  # No secrets file, fall through
-    # Fall back to environment variable
+    """Get output path from environment."""
     return Path(os.getenv('OUTPUT_PATH', './output'))
 
 
@@ -72,7 +104,7 @@ def get_json_path(entry: dict, output_path: Path) -> Path:
     return output_path / stem / f"{stem}.{page_str}.json"
 
 
-def save_review_to_json(entry: dict, status: str, output_path: Path) -> bool:
+def save_review_to_json(entry: dict, status: str, output_path: Path) -> Tuple[bool, str]:
     """Save review status directly to the source JSON file.
 
     Args:
@@ -81,22 +113,20 @@ def save_review_to_json(entry: dict, status: str, output_path: Path) -> bool:
         output_path: Base output directory
 
     Returns:
-        True if save succeeded, False otherwise
+        Tuple of (success, error_message)
     """
     json_path = get_json_path(entry, output_path)
     result_index = entry.get('result_index')
 
     if not json_path.exists():
-        st.error(f"JSON file not found: {json_path}")
-        return False
+        return False, f"JSON file not found: {json_path}"
 
     if result_index is None or pd.isna(result_index):
-        st.error(
+        return False, (
             "Missing result_index for entry. "
             "Please re-run main.py to regenerate the CSV with result_index column, "
             "or run: python -c \"from review_ui.backfill import backfill_result_index; backfill_result_index()\""
         )
-        return False
 
     result_index = int(result_index)
 
@@ -106,12 +136,10 @@ def save_review_to_json(entry: dict, status: str, output_path: Path) -> bool:
 
         # Update the specific lab result
         if 'lab_results' not in data:
-            st.error(f"No lab_results in JSON file")
-            return False
+            return False, "No lab_results in JSON file"
 
         if result_index >= len(data['lab_results']):
-            st.error(f"result_index {result_index} out of range (max: {len(data['lab_results'])-1})")
-            return False
+            return False, f"result_index {result_index} out of range (max: {len(data['lab_results'])-1})"
 
         # Update the review fields
         data['lab_results'][result_index]['review_status'] = status
@@ -119,11 +147,10 @@ def save_review_to_json(entry: dict, status: str, output_path: Path) -> bool:
 
         # Save back to file
         json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
-        return True
+        return True, ""
 
     except Exception as e:
-        st.error(f"Failed to save review: {e}")
-        return False
+        return False, f"Failed to save review: {e}"
 
 
 # =============================================================================
@@ -263,33 +290,11 @@ def filter_entries(entries: list, filter_mode: str) -> list:
 
 
 # =============================================================================
-# UI Components
+# Display Helpers
 # =============================================================================
 
-def display_entry_details(entry: dict):
-    """Display lab result details."""
-    # Current review status
-    status = get_review_status(entry)
-    if status == 'accepted':
-        st.success("Accepted")
-    elif status == 'rejected':
-        st.error("Rejected")
-
-    # Review reason if flagged
-    review_reason = entry.get('review_reason')
-    if review_reason and pd.notna(review_reason) and review_reason.strip():
-        st.warning(f"review_reason: {review_reason}")
-
-    # Confidence indicator
-    confidence = entry.get('confidence_score')
-    if confidence is not None and pd.notna(confidence):
-        conf_val = float(confidence)
-        if conf_val < 0.7:
-            st.warning(f"confidence_score: {conf_val:.2f}")
-        else:
-            st.info(f"confidence_score: {conf_val:.2f}")
-
-    # Define paired fields: (label, raw_field, standardized_field)
+def build_details_table(entry: dict) -> str:
+    """Build markdown table for entry details."""
     paired_fields = [
         ('lab_name', 'lab_name_raw', 'lab_name_standardized'),
         ('value', 'value_raw', 'value_primary'),
@@ -299,15 +304,6 @@ def display_entry_details(entry: dict):
         ('reference_min', 'reference_min_raw', 'reference_min_primary'),
         ('reference_max', 'reference_max_raw', 'reference_max_primary'),
         ('comments', 'comments', None),
-    ]
-
-    verification_fields = [
-        'verification_status',
-        'verification_confidence',
-        'verification_method',
-        'cross_model_verified',
-        'verification_corrected',
-        'value_raw_original',
     ]
 
     def get_val(field: str) -> str:
@@ -326,226 +322,430 @@ def display_entry_details(entry: dict):
         if raw_val or std_val:
             table_rows.append((label, raw_val, std_val))
 
+    if not table_rows:
+        return "No data available"
+
     # Render as markdown table
-    if table_rows:
-        table_md = "| Field | Raw | Standardized |\n|-------|-----|---------------|\n"
-        for label, raw_val, std_val in table_rows:
-            table_md += f"| {label} | {raw_val} | {std_val} |\n"
-        st.markdown(table_md)
+    table_md = "| Field | Raw | Standardized |\n|-------|-----|---------------|\n"
+    for label, raw_val, std_val in table_rows:
+        table_md += f"| {label} | {raw_val} | {std_val} |\n"
 
-    # Verification (collapsible if has data)
-    has_verification = any(
-        entry.get(f) is not None and pd.notna(entry.get(f))
-        for f in verification_fields
-    )
-    if has_verification:
-        with st.expander("Verification"):
-            for field in verification_fields:
-                val = entry.get(field)
-                if val is not None and pd.notna(val) and str(val).strip():
-                    st.markdown(f"`{field}`: {val}")
-
-    # Source text for verification
-    with st.expander("source_text"):
-        st.code(entry.get('source_text', 'N/A'))
+    return table_md
 
 
-def display_progress(total: int, reviewed: int, accepted: int, rejected: int):
-    """Display progress metrics."""
-    if total > 0:
-        pct = reviewed / total
-        st.progress(pct)
-        st.caption(
-            f"Reviewed: {reviewed}/{total} ({pct*100:.1f}%) | "
-            f"Accepted: {accepted} | Rejected: {rejected}"
+def build_verification_display(entry: dict) -> str:
+    """Build verification section content."""
+    verification_fields = [
+        'verification_status',
+        'verification_confidence',
+        'verification_method',
+        'cross_model_verified',
+        'verification_corrected',
+        'value_raw_original',
+    ]
+
+    lines = []
+    for field in verification_fields:
+        val = entry.get(field)
+        if val is not None and pd.notna(val) and str(val).strip():
+            lines.append(f"`{field}`: {val}")
+
+    return "\n\n".join(lines) if lines else "No verification data"
+
+
+def get_display_updates(state: dict):
+    """Generate all display component updates from current state."""
+    if state is None:
+        return (
+            "Loading...",      # progress_display
+            "**Loading...**",  # entry_counter
+            None,              # source_image
+            "",                # image_caption
+            "",                # status_display
+            "",                # review_reason_display
+            "",                # confidence_display
+            "",                # details_table
+            "",                # verification_display
+            "",                # source_text_display
+            gr.update(interactive=False),  # prev_btn
+            gr.update(interactive=False),  # next_btn
         )
+
+    output_path = Path(state["output_path"])
+    entries = state["entries"]
+    filter_mode = state["filter_mode"]
+    current_index = state["current_index"]
+
+    filtered = filter_entries(entries, filter_mode)
+
+    # Calculate stats
+    total = len(entries)
+    reviewed = sum(1 for e in entries if is_reviewed(e))
+    accepted = sum(1 for e in entries if get_review_status(e) == 'accepted')
+    rejected = sum(1 for e in entries if get_review_status(e) == 'rejected')
+
+    # Progress display
+    pct = reviewed / total * 100 if total > 0 else 0
+    progress_md = f"Reviewed: {reviewed}/{total} ({pct:.1f}%) | Accepted: {accepted} | Rejected: {rejected}"
+
+    if not filtered:
+        return (
+            progress_md,                  # progress_display
+            "**All done!**",              # entry_counter
+            None,                         # source_image
+            "",                           # image_caption
+            "",                           # status_display
+            "",                           # review_reason_display
+            "",                           # confidence_display
+            "All entries in this filter have been reviewed!",  # details_table
+            "",                           # verification_display
+            "",                           # source_text_display
+            gr.update(interactive=False), # prev_btn
+            gr.update(interactive=False), # next_btn
+        )
+
+    # Ensure valid index
+    if current_index >= len(filtered):
+        current_index = 0
+
+    entry = filtered[current_index]
+
+    # Entry counter
+    counter_md = f"**Entry {current_index + 1} of {len(filtered)}**"
+
+    # Image
+    image_path = get_image_path(entry, output_path)
+    image_value = str(image_path) if image_path.exists() else None
+    caption = f"Page: {entry.get('source_file', 'Unknown')}"
+
+    # Status badge
+    status = get_review_status(entry)
+    if status == "accepted":
+        status_md = '<div class="status-accepted">Accepted</div>'
+    elif status == "rejected":
+        status_md = '<div class="status-rejected">Rejected</div>'
     else:
-        st.progress(0.0)
-        st.caption("No entries to review")
+        status_md = ""
+
+    # Review reason
+    review_reason = entry.get("review_reason")
+    if review_reason and pd.notna(review_reason) and str(review_reason).strip():
+        reason_md = f'<div class="status-warning">review_reason: {review_reason}</div>'
+    else:
+        reason_md = ""
+
+    # Confidence
+    confidence = entry.get("confidence_score")
+    if confidence is not None and pd.notna(confidence):
+        conf_val = float(confidence)
+        css_class = "status-warning" if conf_val < 0.7 else "status-info"
+        conf_md = f'<div class="{css_class}">confidence_score: {conf_val:.2f}</div>'
+    else:
+        conf_md = ""
+
+    # Details table
+    details_md = build_details_table(entry)
+
+    # Verification
+    verification_md = build_verification_display(entry)
+
+    # Source text
+    source_text = entry.get("source_text", "N/A")
+    if source_text is None or (isinstance(source_text, float) and pd.isna(source_text)):
+        source_text = "N/A"
+
+    # Button states
+    prev_interactive = current_index > 0
+    next_interactive = current_index < len(filtered) - 1
+
+    return (
+        progress_md,
+        counter_md,
+        image_value,
+        caption,
+        status_md,
+        reason_md,
+        conf_md,
+        details_md,
+        verification_md,
+        str(source_text),
+        gr.update(interactive=prev_interactive),
+        gr.update(interactive=next_interactive),
+    )
+
+
+# =============================================================================
+# Event Handlers
+# =============================================================================
+
+def initialize_state():
+    """Load entries and create initial state."""
+    output_path = get_output_path()
+    entries = load_entries(str(output_path))
+
+    return {
+        "current_index": 0,
+        "filter_mode": "Unreviewed",
+        "entries": entries,
+        "output_path": str(output_path),
+    }
+
+
+def handle_filter_change(filter_mode: str, state: dict):
+    """Handle filter mode change."""
+    if state is None:
+        state = initialize_state()
+    state = state.copy()
+    state["filter_mode"] = filter_mode
+    state["current_index"] = 0  # Reset to first entry
+    return state, *get_display_updates(state)
+
+
+def handle_previous(state: dict):
+    """Navigate to previous entry."""
+    if state is None:
+        return state, *get_display_updates(state)
+
+    state = state.copy()
+    if state["current_index"] > 0:
+        state["current_index"] -= 1
+    return state, *get_display_updates(state)
+
+
+def handle_next(state: dict):
+    """Navigate to next entry."""
+    if state is None:
+        return state, *get_display_updates(state)
+
+    state = state.copy()
+    filtered = filter_entries(state["entries"], state["filter_mode"])
+    if state["current_index"] < len(filtered) - 1:
+        state["current_index"] += 1
+    return state, *get_display_updates(state)
+
+
+def handle_review_action(state: dict, status: str):
+    """Generic review action handler."""
+    if state is None:
+        return state, *get_display_updates(state)
+
+    state = state.copy()
+    output_path = Path(state["output_path"])
+    filtered = filter_entries(state["entries"], state["filter_mode"])
+
+    if not filtered:
+        return state, *get_display_updates(state)
+
+    current_index = state["current_index"]
+    if current_index >= len(filtered):
+        current_index = 0
+
+    current_entry = filtered[current_index]
+
+    # Save to JSON
+    success, error = save_review_to_json(current_entry, status, output_path)
+
+    if success:
+        # Update entry in state
+        for i, e in enumerate(state["entries"]):
+            if e.get("_row_idx") == current_entry.get("_row_idx"):
+                state["entries"][i] = state["entries"][i].copy()
+                state["entries"][i]["review_status"] = status
+                state["entries"][i]["reviewed_at"] = datetime.utcnow().isoformat() + 'Z'
+                break
+
+        # Re-filter after update (entry may leave current filter)
+        new_filtered = filter_entries(state["entries"], state["filter_mode"])
+
+        # Adjust index if needed
+        if len(new_filtered) == 0:
+            state["current_index"] = 0
+        elif state["current_index"] >= len(new_filtered):
+            state["current_index"] = max(0, len(new_filtered) - 1)
+        # If not at end, stay at same index (next item slides into position)
+
+    return state, *get_display_updates(state)
+
+
+def handle_accept(state: dict):
+    """Mark current entry as accepted."""
+    return handle_review_action(state, "accepted")
+
+
+def handle_reject(state: dict):
+    """Mark current entry as rejected."""
+    return handle_review_action(state, "rejected")
+
+
+def handle_skip(state: dict):
+    """Skip to next entry without marking."""
+    return handle_next(state)
 
 
 # =============================================================================
 # Main App
 # =============================================================================
 
-def main():
-    st.set_page_config(
-        layout="wide",
-        page_title="Lab Review",
-        page_icon="🔬"
-    )
+def create_app():
+    """Create and configure the Gradio app."""
 
-    output_path = get_output_path()
+    with gr.Blocks(title="Lab Review") as demo:
 
-    # Initialize session state
-    if 'current_index' not in st.session_state:
-        st.session_state.current_index = 0
+        # State
+        app_state = gr.State(value=None)
 
-    if 'filter_mode' not in st.session_state:
-        st.session_state.filter_mode = 'Unreviewed'
+        # Header
+        gr.Markdown("# Lab Extraction Review")
 
-    # Load entries (without caching to see review updates)
-    entries = load_entries(str(output_path))
+        # Filter radio
+        filter_radio = gr.Radio(
+            choices=['Unreviewed', 'All', 'Low Confidence', 'Needs Review', 'Accepted', 'Rejected'],
+            value='Unreviewed',
+            label="Filter:",
+            interactive=True
+        )
 
-    if not entries:
-        st.error(f"No data found. Check OUTPUT_PATH: {output_path}")
-        st.info("Set OUTPUT_PATH environment variable or configure in .streamlit/secrets.toml")
-        return
+        # Progress display
+        progress_display = gr.Markdown("Loading...")
 
-    # Header
-    st.title("Lab Extraction Review")
+        # Navigation row
+        with gr.Row():
+            prev_btn = gr.Button("Previous", elem_id="prev-btn", scale=1)
+            entry_counter = gr.Markdown("**Entry 0 of 0**", elem_classes=["entry-counter"])
+            next_btn = gr.Button("Next", elem_id="next-btn", scale=1)
 
-    # Filter selection
-    filter_mode = st.radio(
-        "Filter:",
-        ['Unreviewed', 'All', 'Low Confidence', 'Needs Review', 'Accepted', 'Rejected'],
-        horizontal=True,
-        key='filter_radio'
-    )
+        gr.HTML("<hr>")
 
-    # Update filter mode and reset index if changed
-    if filter_mode != st.session_state.filter_mode:
-        st.session_state.filter_mode = filter_mode
-        st.session_state.current_index = 0
+        # Main content: Image left, Data right
+        with gr.Row():
+            with gr.Column(scale=1):
+                gr.Markdown("### Source Document")
+                source_image = gr.Image(
+                    type="filepath",
+                    label="Page Image",
+                    show_label=False,
+                    interactive=False
+                )
+                image_caption = gr.Markdown("")
 
-    # Get filtered entries
-    filtered = filter_entries(entries, filter_mode)
+            with gr.Column(scale=1):
+                gr.Markdown("### Extracted Data")
+                status_display = gr.HTML("")
+                review_reason_display = gr.HTML("")
+                confidence_display = gr.HTML("")
+                details_table = gr.Markdown("")
 
-    # Progress stats
-    total_entries = len(entries)
-    reviewed_count = sum(1 for e in entries if is_reviewed(e))
-    accepted_count = sum(1 for e in entries if get_review_status(e) == 'accepted')
-    rejected_count = sum(1 for e in entries if get_review_status(e) == 'rejected')
+                # Verification accordion
+                with gr.Accordion("Verification", open=False):
+                    verification_display = gr.Markdown("")
 
-    display_progress(total_entries, reviewed_count, accepted_count, rejected_count)
+                # Source text accordion
+                with gr.Accordion("source_text", open=False):
+                    source_text_display = gr.Code(label="", language=None)
 
-    # Check if done
-    if not filtered:
-        st.success("All entries in this filter have been reviewed!")
-        if filter_mode == 'Unreviewed':
-            st.balloons()
-        return
+                gr.HTML("<hr>")
 
-    # Ensure index is valid
-    if st.session_state.current_index >= len(filtered):
-        st.session_state.current_index = 0
+                # Action buttons
+                with gr.Row():
+                    accept_btn = gr.Button(
+                        "Accept [Y]",
+                        variant="primary",
+                        elem_id="accept-btn",
+                        scale=1
+                    )
+                    reject_btn = gr.Button(
+                        "Reject [N]",
+                        variant="secondary",
+                        elem_id="reject-btn",
+                        scale=1
+                    )
+                    skip_btn = gr.Button(
+                        "Skip [S]",
+                        elem_id="skip-btn",
+                        scale=1
+                    )
 
-    current_entry = filtered[st.session_state.current_index]
+        gr.HTML("<hr>")
+        gr.Markdown("Keyboard: Y=Accept, N=Reject, S=Skip, Arrow keys=Navigate", elem_classes=["footer"])
 
-    # Navigation
-    nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
-    with nav_col1:
-        if st.button("Previous", disabled=st.session_state.current_index == 0):
-            st.session_state.current_index -= 1
-            st.rerun()
-    with nav_col2:
-        st.markdown(f"**Entry {st.session_state.current_index + 1} of {len(filtered)}**")
-    with nav_col3:
-        if st.button("Next", disabled=st.session_state.current_index >= len(filtered) - 1):
-            st.session_state.current_index += 1
-            st.rerun()
+        # Define all output components
+        all_outputs = [
+            app_state,
+            progress_display,
+            entry_counter,
+            source_image,
+            image_caption,
+            status_display,
+            review_reason_display,
+            confidence_display,
+            details_table,
+            verification_display,
+            source_text_display,
+            prev_btn,
+            next_btn,
+        ]
 
-    st.divider()
+        # Initialize on load
+        demo.load(
+            fn=lambda: (initialize_state(), *get_display_updates(initialize_state())),
+            outputs=all_outputs
+        )
 
-    # Main layout: image left, details right
-    img_col, data_col = st.columns([1, 1])
+        # Filter change
+        filter_radio.change(
+            fn=handle_filter_change,
+            inputs=[filter_radio, app_state],
+            outputs=all_outputs
+        )
 
-    with img_col:
-        st.subheader("Source Document")
-        image_path = get_image_path(current_entry, output_path)
+        # Navigation
+        prev_btn.click(
+            fn=handle_previous,
+            inputs=[app_state],
+            outputs=all_outputs
+        )
+        next_btn.click(
+            fn=handle_next,
+            inputs=[app_state],
+            outputs=all_outputs
+        )
 
-        if image_path.exists():
-            st.image(str(image_path), use_container_width=True)
-            st.caption(f"Page: {current_entry.get('source_file', 'Unknown')}")
-        else:
-            st.warning(f"Image not found: {image_path}")
+        # Actions
+        accept_btn.click(
+            fn=handle_accept,
+            inputs=[app_state],
+            outputs=all_outputs
+        )
+        reject_btn.click(
+            fn=handle_reject,
+            inputs=[app_state],
+            outputs=all_outputs
+        )
+        skip_btn.click(
+            fn=handle_skip,
+            inputs=[app_state],
+            outputs=all_outputs
+        )
 
-    with data_col:
-        st.subheader("Extracted Data")
-        display_entry_details(current_entry)
-
-        st.divider()
-
-        # Action buttons
-        btn_col1, btn_col2, btn_col3 = st.columns(3)
-
-        with btn_col1:
-            accept_clicked = st.button(
-                "Accept [Y]",
-                type="primary",
-                use_container_width=True,
-                key="accept_btn"
-            )
-
-        with btn_col2:
-            reject_clicked = st.button(
-                "Reject [N]",
-                type="secondary",
-                use_container_width=True,
-                key="reject_btn"
-            )
-
-        with btn_col3:
-            skip_clicked = st.button(
-                "Skip [S]",
-                use_container_width=True,
-                key="skip_btn"
-            )
-
-        # Handle actions
-        def mark_reviewed(status: str):
-            success = save_review_to_json(current_entry, status, output_path)
-            if success:
-                # Clear the cache so we reload fresh data
-                st.cache_data.clear()
-
-                # Auto-advance
-                if st.session_state.current_index < len(filtered) - 1:
-                    st.session_state.current_index += 1
-                st.rerun()
-
-        def skip_entry():
-            if st.session_state.current_index < len(filtered) - 1:
-                st.session_state.current_index += 1
-            st.rerun()
-
-        if accept_clicked:
-            mark_reviewed('accepted')
-        elif reject_clicked:
-            mark_reviewed('rejected')
-        elif skip_clicked:
-            skip_entry()
-
-    # Keyboard shortcuts (if available)
-    if HAS_SHORTCUTS:
-        shortcuts = add_keyboard_shortcuts({
-            'y': 'Accept',
-            'n': 'Reject',
-            's': 'Skip',
-            'ArrowRight': 'Next',
-            'ArrowLeft': 'Previous',
-        })
-
-        if shortcuts == 'Accept':
-            mark_reviewed('accepted')
-        elif shortcuts == 'Reject':
-            mark_reviewed('rejected')
-        elif shortcuts == 'Skip':
-            skip_entry()
-        elif shortcuts == 'Next' and st.session_state.current_index < len(filtered) - 1:
-            st.session_state.current_index += 1
-            st.rerun()
-        elif shortcuts == 'Previous' and st.session_state.current_index > 0:
-            st.session_state.current_index -= 1
-            st.rerun()
-
-    # Footer with instructions
-    st.divider()
-    if HAS_SHORTCUTS:
-        st.caption("Keyboard: Y=Accept, N=Reject, S=Skip, Arrow keys=Navigate")
-    else:
-        st.caption("Install streamlit-shortcuts for keyboard navigation: pip install streamlit-shortcuts")
+    return demo
 
 
 if __name__ == "__main__":
-    main()
+    demo = create_app()
+    output_path = get_output_path()
+
+    # Build list of allowed paths for serving images
+    # Include output_path and its parent to handle various output locations
+    allowed_paths = [str(output_path)]
+    if output_path.parent != output_path:
+        allowed_paths.append(str(output_path.parent))
+
+    # Run with `gradio review_ui/app.py` for auto-reload on code changes
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        show_error=True,
+        allowed_paths=allowed_paths,
+        head=KEYBOARD_JS,
+        css=CUSTOM_CSS,
+    )
