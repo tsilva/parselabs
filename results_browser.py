@@ -152,6 +152,31 @@ def get_output_path() -> Path:
     return Path(os.getenv('OUTPUT_PATH', './output'))
 
 
+def get_image_path(entry: dict, output_path: Path) -> Optional[str]:
+    """Get page image path from source_file and page_number."""
+    source_file = entry.get('source_file', '')
+    page_number = entry.get('page_number')
+
+    if not source_file:
+        return None
+
+    # source_file = "2001-12-27 - analises.csv" -> stem = "2001-12-27 - analises"
+    stem = source_file.rsplit('.', 1)[0] if '.' in source_file else source_file
+
+    # page_number = 1 -> "001"
+    if page_number is not None and pd.notna(page_number):
+        page_str = f"{int(page_number):03d}"
+    else:
+        page_str = "001"  # fallback
+
+    # Image path: output_path / stem / stem.001.jpg
+    image_path = output_path / stem / f"{stem}.{page_str}.jpg"
+
+    if image_path.exists():
+        return str(image_path)
+    return None
+
+
 # =============================================================================
 # Data Loading
 # =============================================================================
@@ -241,21 +266,23 @@ def apply_filters(
         # Already sorted by date desc, so first occurrence per lab is the latest
         filtered = filtered.drop_duplicates(subset=['lab_name_standardized'], keep='first')
 
+    # Reset index so iloc positions match displayed row positions
+    filtered = filtered.reset_index(drop=True)
+
     return filtered
 
 
 def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
-    """Prepare DataFrame for display (subset and format columns)."""
+    """Prepare DataFrame for display (subset and format columns).
+
+    Note: Does NOT sort - sorting is done in apply_filters() to ensure
+    the displayed row order matches filtered_df_state for correct row selection.
+    """
     if df.empty:
         return pd.DataFrame(columns=DISPLAY_COLUMNS)
 
-    # Sort by date descending (most recent first)
-    sorted_df = df.copy()
-    if 'date' in sorted_df.columns:
-        sorted_df = sorted_df.sort_values('date', ascending=False, na_position='last')
-
-    # Select and order columns
-    display_df = sorted_df[[col for col in DISPLAY_COLUMNS if col in sorted_df.columns]].copy()
+    # Select and order columns (no sorting - already sorted by apply_filters)
+    display_df = df[[col for col in DISPLAY_COLUMNS if col in df.columns]].copy()
 
     # Format date column
     if 'date' in display_df.columns:
@@ -422,14 +449,17 @@ def handle_filter_change(
     current_idx = 0
     selected_lab = None
     position_text = "No results"
+    image_path = None
 
     if not filtered_df.empty:
-        selected_lab = filtered_df.iloc[0].get('lab_name_standardized')
+        first_row = filtered_df.iloc[0]
+        selected_lab = first_row.get('lab_name_standardized')
         position_text = f"**Row 1 of {len(filtered_df)}**"
+        image_path = get_image_path(first_row.to_dict(), get_output_path())
 
     plot = create_interactive_plot(full_df, selected_lab)
 
-    return display_df, summary, plot, filtered_df, current_idx, position_text
+    return display_df, summary, plot, filtered_df, current_idx, position_text, image_path
 
 
 def handle_row_select(
@@ -439,19 +469,21 @@ def handle_row_select(
 ):
     """Handle row selection to update plot and current index."""
     if evt is None or filtered_df.empty:
-        return create_interactive_plot(full_df, None), 0, "No results"
+        return create_interactive_plot(full_df, None), 0, "No results", None
 
     # Get the selected row index
     row_idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
 
     if row_idx >= len(filtered_df):
-        return create_interactive_plot(full_df, None), 0, "No results"
+        return create_interactive_plot(full_df, None), 0, "No results", None
 
-    # Get lab name from filtered DataFrame
-    lab_name = filtered_df.iloc[row_idx].get('lab_name_standardized')
+    # Get row data
+    row = filtered_df.iloc[row_idx]
+    lab_name = row.get('lab_name_standardized')
     position_text = f"**Row {row_idx + 1} of {len(filtered_df)}**"
+    image_path = get_image_path(row.to_dict(), get_output_path())
 
-    return create_interactive_plot(full_df, lab_name), row_idx, position_text
+    return create_interactive_plot(full_df, lab_name), row_idx, position_text, image_path
 
 
 def handle_previous(
@@ -461,17 +493,19 @@ def handle_previous(
 ):
     """Navigate to previous row."""
     if filtered_df.empty:
-        return create_interactive_plot(full_df, None), 0, "No results"
+        return create_interactive_plot(full_df, None), 0, "No results", None
 
     # Move to previous row (with wrap-around)
     new_idx = current_idx - 1
     if new_idx < 0:
         new_idx = len(filtered_df) - 1  # Wrap to last
 
-    lab_name = filtered_df.iloc[new_idx].get('lab_name_standardized')
+    row = filtered_df.iloc[new_idx]
+    lab_name = row.get('lab_name_standardized')
     position_text = f"**Row {new_idx + 1} of {len(filtered_df)}**"
+    image_path = get_image_path(row.to_dict(), get_output_path())
 
-    return create_interactive_plot(full_df, lab_name), new_idx, position_text
+    return create_interactive_plot(full_df, lab_name), new_idx, position_text, image_path
 
 
 def handle_next(
@@ -481,17 +515,19 @@ def handle_next(
 ):
     """Navigate to next row."""
     if filtered_df.empty:
-        return create_interactive_plot(full_df, None), 0, "No results"
+        return create_interactive_plot(full_df, None), 0, "No results", None
 
     # Move to next row (with wrap-around)
     new_idx = current_idx + 1
     if new_idx >= len(filtered_df):
         new_idx = 0  # Wrap to first
 
-    lab_name = filtered_df.iloc[new_idx].get('lab_name_standardized')
+    row = filtered_df.iloc[new_idx]
+    lab_name = row.get('lab_name_standardized')
     position_text = f"**Row {new_idx + 1} of {len(filtered_df)}**"
+    image_path = get_image_path(row.to_dict(), get_output_path())
 
-    return create_interactive_plot(full_df, lab_name), new_idx, position_text
+    return create_interactive_plot(full_df, lab_name), new_idx, position_text, image_path
 
 
 def export_csv(filtered_df: pd.DataFrame):
@@ -514,9 +550,9 @@ def create_app():
     output_path = get_output_path()
     full_df = load_data(output_path)
 
-    # Sort initial data by date descending
+    # Sort initial data by date descending and reset index
     if not full_df.empty and 'date' in full_df.columns:
-        full_df = full_df.sort_values('date', ascending=False, na_position='last')
+        full_df = full_df.sort_values('date', ascending=False, na_position='last').reset_index(drop=True)
 
     # Get unique lab names for dropdown
     lab_name_choices = []
@@ -526,8 +562,9 @@ def create_app():
     # Initial position text
     initial_position = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
 
-    # Initial plot (first row's lab)
+    # Initial plot (first row's lab) and image
     initial_lab = full_df.iloc[0].get('lab_name_standardized') if not full_df.empty else None
+    initial_image = get_image_path(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
 
     with gr.Blocks(title="Lab Results Browser") as demo:
 
@@ -592,25 +629,34 @@ def create_app():
                     export_file = gr.File(label="Download", visible=False)
 
             with gr.Column(scale=2):
-                gr.Markdown("### Time Series Plot")
-
                 # Navigation controls
                 with gr.Row():
                     prev_btn = gr.Button("< Previous [←]", elem_id="prev-btn", size="sm")
                     position_display = gr.Markdown(initial_position, elem_id="position-display")
                     next_btn = gr.Button("Next [→] >", elem_id="next-btn", size="sm")
 
-                plot_display = gr.Plot(
-                    value=create_interactive_plot(full_df, initial_lab),
-                    label=""
-                )
+                # Tabs for Plot and Source Image
+                with gr.Tabs():
+                    with gr.TabItem("Time Series Plot"):
+                        plot_display = gr.Plot(
+                            value=create_interactive_plot(full_df, initial_lab),
+                            label=""
+                        )
+                    with gr.TabItem("Source Page"):
+                        source_image = gr.Image(
+                            value=initial_image,
+                            label="Source Document Page",
+                            type="filepath",
+                            show_label=False,
+                            height=500
+                        )
 
         gr.Markdown("---")
         gr.Markdown("*Keyboard: ← / k = Previous, → / j = Next*", elem_id="footer")
 
         # Wire up filter events
         filter_inputs = [lab_name_filter, abnormal_filter, text_search, latest_filter, full_df_state]
-        filter_outputs = [data_table, summary_display, plot_display, filtered_df_state, current_idx_state, position_display]
+        filter_outputs = [data_table, summary_display, plot_display, filtered_df_state, current_idx_state, position_display, source_image]
 
         lab_name_filter.change(
             fn=handle_filter_change,
@@ -640,12 +686,12 @@ def create_app():
         data_table.select(
             fn=handle_row_select,
             inputs=[filtered_df_state, full_df_state],
-            outputs=[plot_display, current_idx_state, position_display]
+            outputs=[plot_display, current_idx_state, position_display, source_image]
         )
 
         # Wire up navigation buttons
         nav_inputs = [current_idx_state, filtered_df_state, full_df_state]
-        nav_outputs = [plot_display, current_idx_state, position_display]
+        nav_outputs = [plot_display, current_idx_state, position_display, source_image]
 
         prev_btn.click(
             fn=handle_previous,
