@@ -17,8 +17,8 @@ from datetime import datetime
 from typing import Optional, Tuple
 from dotenv import load_dotenv
 
-# Load .env from parent directory (repo root)
-load_dotenv(Path(__file__).parent.parent / '.env')
+# Load .env from repo root
+load_dotenv(Path(__file__).parent / '.env')
 
 # =============================================================================
 # Keyboard Shortcuts (JavaScript)
@@ -124,8 +124,7 @@ def save_review_to_json(entry: dict, status: str, output_path: Path) -> Tuple[bo
     if result_index is None or pd.isna(result_index):
         return False, (
             "Missing result_index for entry. "
-            "Please re-run main.py to regenerate the CSV with result_index column, "
-            "or run: python -c \"from review_ui.backfill import backfill_result_index; backfill_result_index()\""
+            "Please re-run main.py to regenerate the CSV with result_index column."
         )
 
     result_index = int(result_index)
@@ -740,7 +739,7 @@ if __name__ == "__main__":
     if output_path.parent != output_path:
         allowed_paths.append(str(output_path.parent))
 
-    # Run with `gradio review_ui/app.py` for auto-reload on code changes
+    # Run with `gradio review_ui.py` for auto-reload on code changes
     demo.launch(
         server_name="0.0.0.0",
         server_port=7860,
