@@ -19,8 +19,10 @@ python test.py
 
 ### Development
 The `utils/` directory contains helper scripts for building and maintaining configuration:
-- `build_labs_specs.py` / `build_labs_specs_2.py` - Generate lab specifications
+- `build_lab_specs_conversions.py` - Generate unit conversion factors for lab_specs.json
+- `build_lab_specs_ranges.py` - Generate healthy ranges for lab_specs.json
 - `sort_lab_specs.py` - Sort lab specifications alphabetically
+- `analyze_unknowns.py` - Analyze $UNKNOWN$ values in extracted results
 
 ## Architecture
 

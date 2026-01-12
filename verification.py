@@ -988,11 +988,6 @@ class ExtractionVerifier:
         summary.avg_confidence = sum(confidences) / len(confidences) if confidences else 1.0
         summary.total_results = len(verified_results)
 
-        # Count remaining uncertain
-        for name, info in verification_map.items():
-            if info.get("status") == "uncertain" and info.get("confidence", 1.0) < 0.7:
-                pass  # Already counted
-
         extracted_data["lab_results"] = verified_results
 
         logger.info(f"[{image_path.name}] Verification complete: "

@@ -1,7 +1,6 @@
 """Shared utility functions for the labs parser."""
 
 import json
-import hashlib
 import unicodedata
 import re
 import shutil
@@ -10,15 +9,6 @@ from pathlib import Path
 from typing import Any
 from PIL import Image, ImageEnhance
 import pandas as pd
-
-
-def hash_file(file_path: Path, length: int = 4) -> str:
-    """Generate MD5 hash of file contents."""
-    with open(file_path, "rb") as f:
-        h = hashlib.md5()
-        for chunk in iter(lambda: f.read(4096), b""):
-            h.update(chunk)
-    return h.hexdigest()[:length]
 
 
 def preprocess_page_image(image: Image.Image) -> Image.Image:
