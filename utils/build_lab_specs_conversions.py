@@ -13,9 +13,7 @@ client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.getenv("OPENROUTER_API_KEY")
 )
-# Add your LLM client import here
-# Example: from openai import OpenAI
-# client = OpenAI()  # Or however your client is initialized
+
 
 def get_conversion_factor(lab_name, from_unit, to_unit, temperature=0.0):
     """

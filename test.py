@@ -100,7 +100,7 @@ def test_lab_unit_boolean_value(report):
     if errors:
         report.setdefault(file, []).extend(errors)
 
-def test_lab_name_enum_unit_consistency(report):
+def test_lab_name_standardized_unit_consistency(report):
     file = ALL_FINAL_CSV
     errors = []
     try:
@@ -120,7 +120,7 @@ def test_lab_name_enum_unit_consistency(report):
     if errors:
         report.setdefault(file, []).extend(errors)
 
-def test_lab_value_outliers_by_lab_name_enum(report):
+def test_lab_value_outliers_by_lab_name_standardized(report):
     file = ALL_FINAL_CSV
     errors = []
     try:
@@ -181,7 +181,7 @@ def test_lab_value_outliers_by_lab_name_enum(report):
     if errors:
         report.setdefault(file, []).extend(errors)
 
-def test_unique_date_lab_name_enum(report):
+def test_unique_date_lab_name_standardized(report):
     file = ALL_FINAL_CSV
     errors = []
     try:
@@ -207,9 +207,9 @@ def main():
     test_lab_unit_percent_vs_lab_name(report)
     test_lab_unit_percent_value_range(report)
     test_lab_unit_boolean_value(report)
-    test_lab_name_enum_unit_consistency(report)
-    test_lab_value_outliers_by_lab_name_enum(report)
-    test_unique_date_lab_name_enum(report)
+    test_lab_name_standardized_unit_consistency(report)
+    test_lab_value_outliers_by_lab_name_standardized(report)
+    test_unique_date_lab_name_standardized(report)
     print("\n=== Integrity Report ===")
     if not report:
         print("All checks passed.")
