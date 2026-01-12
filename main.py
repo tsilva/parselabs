@@ -5,6 +5,7 @@ load_dotenv(override=True)
 
 import os
 import sys
+import re
 import json
 import shutil
 import logging
@@ -265,7 +266,6 @@ def process_single_pdf(
                     doc_date = None
                 if not doc_date:
                     # Try to extract from filename
-                    import re
                     match = re.search(r"(\d{4}-\d{2}-\d{2})", pdf_stem)
                     if match:
                         doc_date = match.group(1)
@@ -551,8 +551,7 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python main.py                    # Run without profile (uses .env settings)
-  python main.py --profile tiago    # Run with a specific profile
+  python main.py --profile tiago    # Run with a specific profile (required)
   python main.py --list-profiles    # List available profiles
         """
     )
