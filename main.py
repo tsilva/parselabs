@@ -592,34 +592,36 @@ def main():
     # Load configuration
     config = ExtractionConfig.from_env()
 
-    # Load profile if specified
-    profile = None
-    demographics = None
-    if args.profile:
-        profile_path = Path(f"profiles/{args.profile}.json")
-        if not profile_path.exists():
-            logger.error(f"Profile not found: {profile_path}")
-            print(f"Error: Profile '{args.profile}' not found at {profile_path}")
-            print("Use --list-profiles to see available profiles.")
-            sys.exit(1)
+    # Load profile (required)
+    if not args.profile:
+        print("Error: --profile is required.")
+        print("Use --list-profiles to see available profiles.")
+        sys.exit(1)
 
-        profile = ProfileConfig.from_file(profile_path, config)
-        demographics = profile.demographics
+    profile_path = Path(f"profiles/{args.profile}.json")
+    if not profile_path.exists():
+        logger.error(f"Profile not found: {profile_path}")
+        print(f"Error: Profile '{args.profile}' not found at {profile_path}")
+        print("Use --list-profiles to see available profiles.")
+        sys.exit(1)
 
-        # Override paths from profile
-        if profile.input_path:
-            config.input_path = profile.input_path
-        if profile.output_path:
-            config.output_path = profile.output_path
-            config.output_path.mkdir(parents=True, exist_ok=True)
-        if profile.input_file_regex:
-            config.input_file_regex = profile.input_file_regex
+    profile = ProfileConfig.from_file(profile_path, config)
+    demographics = profile.demographics
 
-        logger.info(f"Using profile: {profile.name}")
-        if demographics.gender:
-            logger.info(f"  Gender: {demographics.gender}")
-        if demographics.age is not None:
-            logger.info(f"  Age: {demographics.age}")
+    # Override paths from profile
+    if profile.input_path:
+        config.input_path = profile.input_path
+    if profile.output_path:
+        config.output_path = profile.output_path
+        config.output_path.mkdir(parents=True, exist_ok=True)
+    if profile.input_file_regex:
+        config.input_file_regex = profile.input_file_regex
+
+    logger.info(f"Using profile: {profile.name}")
+    if demographics.gender:
+        logger.info(f"  Gender: {demographics.gender}")
+    if demographics.age is not None:
+        logger.info(f"  Age: {demographics.age}")
 
     # Load lab specs (with demographic ranges support)
     lab_specs = LabSpecsConfig()
