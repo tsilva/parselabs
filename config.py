@@ -4,8 +4,9 @@ import os
 import json
 import logging
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
+from datetime import date
 
 logger = logging.getLogger(__name__)
 
@@ -91,10 +92,96 @@ class ExtractionConfig:
         )
 
 
+@dataclass
+class Demographics:
+    """User demographic information for range calculation."""
+    gender: Optional[str] = None  # "male", "female", "other"
+    date_of_birth: Optional[str] = None  # ISO format: "YYYY-MM-DD"
+    height_cm: Optional[float] = None
+    weight_kg: Optional[float] = None
+
+    @property
+    def age(self) -> Optional[int]:
+        """Calculate current age from date_of_birth."""
+        if not self.date_of_birth:
+            return None
+        try:
+            dob = date.fromisoformat(self.date_of_birth)
+            today = date.today()
+            return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        except ValueError:
+            return None
+
+
+@dataclass
+class ProfileConfig:
+    """Configuration for a user profile."""
+    name: str
+    demographics: Demographics
+    input_path: Optional[Path] = None
+    output_path: Optional[Path] = None
+    input_file_regex: Optional[str] = None
+
+    @classmethod
+    def from_file(cls, profile_path: Path, env_config: Optional['ExtractionConfig'] = None) -> 'ProfileConfig':
+        """Load profile from JSON file, inheriting from env_config where needed."""
+        with open(profile_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        # Parse demographics
+        demo_data = data.get('demographics', {})
+        demographics = Demographics(
+            gender=demo_data.get('gender'),
+            date_of_birth=demo_data.get('date_of_birth'),
+            height_cm=demo_data.get('height_cm'),
+            weight_kg=demo_data.get('weight_kg'),
+        )
+
+        # Parse paths, with inheritance from env_config
+        paths = data.get('paths', {})
+        inherit = data.get('settings', {}).get('inherit_from_env', True)
+
+        input_path = None
+        if paths.get('input_path'):
+            input_path = Path(paths['input_path'])
+        elif inherit and env_config:
+            input_path = env_config.input_path
+
+        output_path = None
+        if paths.get('output_path'):
+            output_path = Path(paths['output_path'])
+        elif inherit and env_config:
+            output_path = env_config.output_path
+
+        input_file_regex = paths.get('input_file_regex')
+        if not input_file_regex and inherit and env_config:
+            input_file_regex = env_config.input_file_regex
+
+        return cls(
+            name=data.get('name', profile_path.stem),
+            demographics=demographics,
+            input_path=input_path,
+            output_path=output_path,
+            input_file_regex=input_file_regex,
+        )
+
+    @classmethod
+    def list_profiles(cls, profiles_dir: Path = Path("profiles")) -> list[str]:
+        """List available profile names."""
+        if not profiles_dir.exists():
+            return []
+        profiles = []
+        for f in profiles_dir.glob("*.json"):
+            if not f.name.startswith("_"):  # Skip templates like _template.json
+                profiles.append(f.stem)
+        return sorted(profiles)
+
+
 class LabSpecsConfig:
     """Central configuration for lab specifications.
 
     Loads lab_specs.json once and provides multiple views to eliminate redundant file I/O.
+    Supports demographic-aware healthy ranges embedded in the ranges section.
     """
 
     def __init__(self, config_path: Path = Path("config/lab_specs.json")):
@@ -188,14 +275,72 @@ class LabSpecsConfig:
         return None
 
     def get_healthy_range(self, lab_name: str) -> tuple[Optional[float], Optional[float]]:
-        """Get healthy range (min, max) for a lab."""
+        """Get default healthy range (min, max) for a lab.
+
+        Supports both new format (default: [min, max]) and legacy format (healthy: {min, max}).
+        """
         if lab_name not in self._specs:
             return (None, None)
 
-        healthy = self._specs[lab_name].get('ranges', {}).get('healthy')
+        ranges = self._specs[lab_name].get('ranges', {})
+
+        # New format: "default": [min, max]
+        default = ranges.get('default')
+        if isinstance(default, list) and len(default) >= 2:
+            return (default[0], default[1])
+
+        # Legacy format: "healthy": {"min": X, "max": Y}
+        healthy = ranges.get('healthy')
         if healthy:
             return (healthy.get('min'), healthy.get('max'))
+
         return (None, None)
+
+    def get_healthy_range_for_demographics(
+        self,
+        lab_name: str,
+        demographics: Optional['Demographics'] = None
+    ) -> tuple[Optional[float], Optional[float]]:
+        """Get healthy range with demographic-aware overrides.
+
+        Resolution priority (first match wins):
+        1. {gender}:{age_range} - gender + age match (e.g., "male:65+", "female:18-50")
+        2. {gender} - gender match (e.g., "male", "female")
+        3. default - applies to all
+        4. healthy (legacy format) - fallback
+        """
+        if lab_name not in self._specs:
+            return (None, None)
+
+        ranges = self._specs[lab_name].get('ranges', {})
+        gender = demographics.gender if demographics else None
+        age = demographics.age if demographics else None
+
+        # 1. Try gender:age_range (e.g., "male:18-64" or "male:65+")
+        if gender and age is not None:
+            for key, value in ranges.items():
+                if key.startswith(f"{gender}:"):
+                    age_part = key.split(":")[1]
+                    try:
+                        if "-" in age_part:
+                            lo, hi = map(int, age_part.split("-"))
+                            if lo <= age <= hi:
+                                return (value[0], value[1]) if isinstance(value, list) else (None, None)
+                        elif age_part.endswith("+"):
+                            lo = int(age_part[:-1])
+                            if age >= lo:
+                                return (value[0], value[1]) if isinstance(value, list) else (None, None)
+                    except (ValueError, IndexError):
+                        continue
+
+        # 2. Try gender (e.g., "male")
+        if gender and gender in ranges:
+            value = ranges[gender]
+            if isinstance(value, list) and len(value) >= 2:
+                return (value[0], value[1])
+
+        # 3. Try default / healthy (fallback to get_healthy_range which handles both formats)
+        return self.get_healthy_range(lab_name)
 
     def get_percentage_variant(self, lab_name: str) -> Optional[str]:
         """Get the (%) variant of a lab name if it exists.

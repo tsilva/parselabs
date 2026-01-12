@@ -6,7 +6,7 @@ from typing import Optional
 
 from openai import OpenAI
 
-from config import LabSpecsConfig, UNKNOWN_VALUE
+from config import LabSpecsConfig, Demographics, UNKNOWN_VALUE
 from utils import slugify, ensure_columns
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,8 @@ def apply_normalizations(
     df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
     client: Optional[OpenAI] = None,
-    model_id: Optional[str] = None
+    model_id: Optional[str] = None,
+    demographics: Optional[Demographics] = None
 ) -> pd.DataFrame:
     """
     Apply all normalization transformations to the DataFrame in batched operations.
@@ -29,6 +30,7 @@ def apply_normalizations(
         lab_specs: Lab specifications configuration
         client: OpenAI client for qualitative value standardization
         model_id: Model ID for qualitative value standardization
+        demographics: Optional user demographics for demographic-aware range lookups
 
     Returns:
         DataFrame with normalized columns added
@@ -68,7 +70,7 @@ def apply_normalizations(
 
     # Compute health status columns (vectorized where possible)
     if lab_specs.exists:
-        df = compute_health_status(df, lab_specs)
+        df = compute_health_status(df, lab_specs, demographics)
     else:
         df["is_out_of_reference"] = None
         df["healthy_range_min"] = None
@@ -211,18 +213,31 @@ def apply_unit_conversions(
     return df
 
 
-def compute_health_status(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+def compute_health_status(
+    df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+    demographics: Optional[Demographics] = None
+) -> pd.DataFrame:
     """
     Compute health status columns (is_out_of_reference, is_in_healthy_range).
 
-    Uses vectorized operations where possible.
+    Uses vectorized operations where possible. When demographics are provided,
+    uses demographic-aware healthy ranges (gender/age-specific overrides).
+
+    Args:
+        df: DataFrame with lab results
+        lab_specs: Lab specifications configuration
+        demographics: Optional user demographics for demographic-aware ranges
     """
-    # Get healthy ranges for all unique lab names
+    # Get healthy ranges for all unique lab names (with demographic awareness)
     lab_names = df["lab_name_standardized"].unique()
     healthy_ranges = {}
     for lab_name_standardized in lab_names:
         if pd.notna(lab_name_standardized) and lab_name_standardized != UNKNOWN_VALUE:
-            healthy_ranges[lab_name_standardized] = lab_specs.get_healthy_range(lab_name_standardized)
+            # Use demographic-aware range lookup if demographics provided
+            healthy_ranges[lab_name_standardized] = lab_specs.get_healthy_range_for_demographics(
+                lab_name_standardized, demographics
+            )
 
     # Apply healthy ranges (vectorized lookup)
     df["healthy_range_min"] = df["lab_name_standardized"].map(lambda name: healthy_ranges.get(name, (None, None))[0])

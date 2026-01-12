@@ -4,9 +4,11 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 import os
+import sys
 import json
 import shutil
 import logging
+import argparse
 import pandas as pd
 import pdf2image
 from pathlib import Path
@@ -15,7 +17,7 @@ from openai import OpenAI
 from tqdm import tqdm
 
 # Local imports
-from config import ExtractionConfig, LabSpecsConfig, UNKNOWN_VALUE
+from config import ExtractionConfig, LabSpecsConfig, ProfileConfig, Demographics, UNKNOWN_VALUE
 from utils import preprocess_page_image, setup_logging, clear_directory, ensure_columns
 from extraction import (
     LabResult, HealthLabReport, extract_labs_from_page_image, self_consistency
@@ -542,14 +544,84 @@ def _prompt_reprocess_empty(output_path: Path) -> list[Path]:
     return pdfs_to_reprocess
 
 
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description='Lab Results Parser - Extract lab results from PDFs',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python main.py                    # Run without profile (uses .env settings)
+  python main.py --profile tiago    # Run with a specific profile
+  python main.py --list-profiles    # List available profiles
+        """
+    )
+    parser.add_argument(
+        '--profile', '-p',
+        type=str,
+        help='Profile name (without .json extension)'
+    )
+    parser.add_argument(
+        '--list-profiles',
+        action='store_true',
+        help='List available profiles and exit'
+    )
+    return parser.parse_args()
+
+
 def main():
     """Main pipeline orchestration."""
+    # Parse command-line arguments
+    args = parse_args()
+
+    # Handle --list-profiles
+    if args.list_profiles:
+        profiles = ProfileConfig.list_profiles()
+        if profiles:
+            print("Available profiles:")
+            for name in profiles:
+                print(f"  - {name}")
+        else:
+            print("No profiles found. Create profiles in the 'profiles/' directory.")
+        return
+
     # Clear logs at start of run
     global logger
     logger = setup_logging(LOG_DIR, clear_logs=True)
 
     # Load configuration
     config = ExtractionConfig.from_env()
+
+    # Load profile if specified
+    profile = None
+    demographics = None
+    if args.profile:
+        profile_path = Path(f"profiles/{args.profile}.json")
+        if not profile_path.exists():
+            logger.error(f"Profile not found: {profile_path}")
+            print(f"Error: Profile '{args.profile}' not found at {profile_path}")
+            print("Use --list-profiles to see available profiles.")
+            sys.exit(1)
+
+        profile = ProfileConfig.from_file(profile_path, config)
+        demographics = profile.demographics
+
+        # Override paths from profile
+        if profile.input_path:
+            config.input_path = profile.input_path
+        if profile.output_path:
+            config.output_path = profile.output_path
+            config.output_path.mkdir(parents=True, exist_ok=True)
+        if profile.input_file_regex:
+            config.input_file_regex = profile.input_file_regex
+
+        logger.info(f"Using profile: {profile.name}")
+        if demographics.gender:
+            logger.info(f"  Gender: {demographics.gender}")
+        if demographics.age is not None:
+            logger.info(f"  Age: {demographics.age}")
+
+    # Load lab specs (with demographic ranges support)
     lab_specs = LabSpecsConfig()
 
     # Get column configuration
@@ -622,7 +694,7 @@ def main():
 
     # Apply normalizations (pass client and model_id for qualitative value conversion)
     logger.info("Applying normalizations...")
-    merged_df = apply_normalizations(merged_df, lab_specs, client, config.self_consistency_model_id)
+    merged_df = apply_normalizations(merged_df, lab_specs, client, config.self_consistency_model_id, demographics)
 
     # Filter out non-lab-test rows (where LLM couldn't map to a known lab name)
     unknown_mask = merged_df["lab_name_standardized"] == UNKNOWN_VALUE
