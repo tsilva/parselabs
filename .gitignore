@@ -178,3 +178,7 @@ user_stats.json
 
 .vscode/*
 !.vscode/settings.json
+
+# User profiles (contain PII)
+profiles/*.json
+!profiles/_*.json
