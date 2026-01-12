@@ -1,0 +1,21 @@
+{
+  "$comment": "Profile template - copy this file and rename to {your_name}.json",
+  "name": "Your Name",
+
+  "demographics": {
+    "gender": "male",
+    "date_of_birth": "1990-01-01",
+    "height_cm": 175,
+    "weight_kg": 70
+  },
+
+  "paths": {
+    "input_path": "/path/to/your/lab/pdfs",
+    "output_path": "/path/to/your/output",
+    "input_file_regex": ".*\\.pdf"
+  },
+
+  "settings": {
+    "inherit_from_env": true
+  }
+}
