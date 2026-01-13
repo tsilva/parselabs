@@ -466,6 +466,9 @@ def _find_empty_extractions(output_path: Path) -> list[tuple[Path, list[Path]]]:
     for pdf_dir in output_path.iterdir():
         if not pdf_dir.is_dir():
             continue
+        # Skip hidden directories (like .claude, .git, etc.)
+        if pdf_dir.name.startswith('.'):
+            continue
 
         empty_jsons = []
         for json_path in pdf_dir.glob("*.json"):
