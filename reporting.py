@@ -105,9 +105,9 @@ class RunReportGenerator:
             test_lab_unit_percent_vs_lab_name,
             test_lab_unit_percent_value_range,
             test_lab_unit_boolean_value,
-            test_lab_name_enum_unit_consistency,
-            test_lab_value_outliers_by_lab_name_enum,
-            test_unique_date_lab_name_enum,
+            test_lab_name_standardized_unit_consistency,
+            test_lab_value_outliers_by_lab_name_standardized,
+            test_unique_date_lab_name_standardized,
         )
 
         report = {}
@@ -115,9 +115,9 @@ class RunReportGenerator:
         test_lab_unit_percent_vs_lab_name(report)
         test_lab_unit_percent_value_range(report)
         test_lab_unit_boolean_value(report)
-        test_lab_name_enum_unit_consistency(report)
-        test_lab_value_outliers_by_lab_name_enum(report)
-        test_unique_date_lab_name_enum(report)
+        test_lab_name_standardized_unit_consistency(report)
+        test_lab_value_outliers_by_lab_name_standardized(report)
+        test_unique_date_lab_name_standardized(report)
 
         # Categorize as errors vs warnings
         for file_key, errors in report.items():
