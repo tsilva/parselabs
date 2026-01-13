@@ -544,24 +544,28 @@ def handle_review_action(state: dict, status: str):
     # Save to JSON
     success, error = save_review_to_json(current_entry, status, output_path)
 
-    if success:
-        # Update entry in state
-        for i, e in enumerate(state["entries"]):
-            if e.get("_row_idx") == current_entry.get("_row_idx"):
-                state["entries"][i] = state["entries"][i].copy()
-                state["entries"][i]["review_status"] = status
-                state["entries"][i]["reviewed_at"] = datetime.utcnow().isoformat() + 'Z'
-                break
+    if not success:
+        # Show error to user via gr.Warning
+        gr.Warning(f"Failed to save review: {error}")
+        return state, *get_display_updates(state)
 
-        # Re-filter after update (entry may leave current filter)
-        new_filtered = filter_entries(state["entries"], state["filter_mode"])
+    # Update entry in state
+    for i, e in enumerate(state["entries"]):
+        if e.get("_row_idx") == current_entry.get("_row_idx"):
+            state["entries"][i] = state["entries"][i].copy()
+            state["entries"][i]["review_status"] = status
+            state["entries"][i]["reviewed_at"] = datetime.utcnow().isoformat() + 'Z'
+            break
 
-        # Adjust index if needed
-        if len(new_filtered) == 0:
-            state["current_index"] = 0
-        elif state["current_index"] >= len(new_filtered):
-            state["current_index"] = max(0, len(new_filtered) - 1)
-        # If not at end, stay at same index (next item slides into position)
+    # Re-filter after update (entry may leave current filter)
+    new_filtered = filter_entries(state["entries"], state["filter_mode"])
+
+    # Adjust index if needed
+    if len(new_filtered) == 0:
+        state["current_index"] = 0
+    elif state["current_index"] >= len(new_filtered):
+        state["current_index"] = max(0, len(new_filtered) - 1)
+    # If not at end, stay at same index (next item slides into position)
 
     return state, *get_display_updates(state)
 
