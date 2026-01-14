@@ -6,7 +6,7 @@ from typing import Optional
 
 from openai import OpenAI
 
-from config import LabSpecsConfig, Demographics, UNKNOWN_VALUE
+from config import LabSpecsConfig, UNKNOWN_VALUE
 from utils import slugify, ensure_columns
 
 logger = logging.getLogger(__name__)
@@ -17,20 +17,18 @@ def apply_normalizations(
     lab_specs: LabSpecsConfig,
     client: Optional[OpenAI] = None,
     model_id: Optional[str] = None,
-    demographics: Optional[Demographics] = None
 ) -> pd.DataFrame:
     """
-    Apply all normalization transformations to the DataFrame in batched operations.
+    Apply normalization transformations to the DataFrame.
 
-    This function consolidates multiple row-wise operations into efficient vectorized
-    operations where possible.
+    This focuses on unit conversions to enable cross-provider comparison.
+    Health status calculations have been moved to the review tool.
 
     Args:
         df: DataFrame with raw lab results
         lab_specs: Lab specifications configuration
         client: OpenAI client for qualitative value standardization
         model_id: Model ID for qualitative value standardization
-        demographics: Optional user demographics for demographic-aware range lookups
 
     Returns:
         DataFrame with normalized columns added
@@ -67,15 +65,6 @@ def apply_normalizations(
         df["lab_unit_primary"] = df.get("lab_unit_standardized")
         df["reference_min_primary"] = df.get("reference_min_raw")
         df["reference_max_primary"] = df.get("reference_max_raw")
-
-    # Compute health status columns (vectorized where possible)
-    if lab_specs.exists:
-        df = compute_health_status(df, lab_specs, demographics)
-    else:
-        df["is_out_of_reference"] = None
-        df["healthy_range_min"] = None
-        df["healthy_range_max"] = None
-        df["is_in_healthy_range"] = None
 
     return df
 
@@ -151,7 +140,6 @@ def apply_unit_conversions(
                 logger.info(f"[normalization] Converted {comments_mask.sum()} qualitative values from comments")
 
         # Third pass: for ANY test (not just boolean), convert negative-like comments to 0
-        # This handles presence/absence tests where "Negativo"/"Normal" means "not detected" = 0
         negative_comments_mask = (
             df["value_primary"].isna() &
             df["value_raw"].isna() &
@@ -162,8 +150,7 @@ def apply_unit_conversions(
             comment_values = df.loc[negative_comments_mask, "comments"].tolist()
             qual_map = standardize_qualitative_values(comment_values, model_id, client)
 
-            # Only apply 0 for negative results (qual_map returns 0 for negative)
-            # Keep NaN for positive (1) or unknown (None) since we don't have a numeric value
+            # Only apply 0 for negative results
             for idx in df.loc[negative_comments_mask].index:
                 comment = df.at[idx, "comments"]
                 converted = qual_map.get(comment)
@@ -172,7 +159,7 @@ def apply_unit_conversions(
 
             converted_count = sum(1 for c in comment_values if qual_map.get(c) == 0)
             if converted_count > 0:
-                logger.info(f"[normalization] Converted {converted_count} negative-like comments to 0 for numeric tests")
+                logger.info(f"[normalization] Converted {converted_count} negative-like comments to 0")
 
     # Group by lab_name_standardized to apply conversions efficiently
     for lab_name_standardized in df["lab_name_standardized"].unique():
@@ -204,67 +191,10 @@ def apply_unit_conversions(
                 continue
 
             # Apply conversion to all matching rows (vectorized)
-            # Use already-converted value_primary (text values are already NaN)
             df.loc[unit_mask, "value_primary"] = df.loc[unit_mask, "value_primary"] * factor
             df.loc[unit_mask, "reference_min_primary"] = df.loc[unit_mask, "reference_min_raw"] * factor
             df.loc[unit_mask, "reference_max_primary"] = df.loc[unit_mask, "reference_max_raw"] * factor
             df.loc[unit_mask, "lab_unit_primary"] = primary_unit
-
-    return df
-
-
-def compute_health_status(
-    df: pd.DataFrame,
-    lab_specs: LabSpecsConfig,
-    demographics: Optional[Demographics] = None
-) -> pd.DataFrame:
-    """
-    Compute health status columns (is_out_of_reference, is_in_healthy_range).
-
-    Uses vectorized operations where possible. When demographics are provided,
-    uses demographic-aware healthy ranges (gender/age-specific overrides).
-
-    Args:
-        df: DataFrame with lab results
-        lab_specs: Lab specifications configuration
-        demographics: Optional user demographics for demographic-aware ranges
-    """
-    # Get healthy ranges for all unique lab names (with demographic awareness)
-    lab_names = df["lab_name_standardized"].unique()
-    healthy_ranges = {}
-    for lab_name_standardized in lab_names:
-        if pd.notna(lab_name_standardized) and lab_name_standardized != UNKNOWN_VALUE:
-            # Use demographic-aware range lookup if demographics provided
-            healthy_ranges[lab_name_standardized] = lab_specs.get_healthy_range_for_demographics(
-                lab_name_standardized, demographics
-            )
-
-    # Apply healthy ranges (vectorized lookup)
-    df["healthy_range_min"] = df["lab_name_standardized"].map(lambda name: healthy_ranges.get(name, (None, None))[0])
-    df["healthy_range_max"] = df["lab_name_standardized"].map(lambda name: healthy_ranges.get(name, (None, None))[1])
-
-    # Compute is_out_of_reference (vectorized)
-    value_series = pd.to_numeric(df["value_primary"], errors='coerce')
-    ref_min_series = pd.to_numeric(df["reference_min_primary"], errors='coerce')
-    ref_max_series = pd.to_numeric(df["reference_max_primary"], errors='coerce')
-
-    is_low = value_series < ref_min_series
-    is_high = value_series > ref_max_series
-    has_ref = ref_min_series.notna() | ref_max_series.notna()
-
-    df["is_out_of_reference"] = None
-    df.loc[has_ref, "is_out_of_reference"] = (is_low | is_high)[has_ref]
-
-    # Compute is_in_healthy_range (vectorized)
-    healthy_min_series = pd.to_numeric(df["healthy_range_min"], errors='coerce')
-    healthy_max_series = pd.to_numeric(df["healthy_range_max"], errors='coerce')
-
-    too_low = value_series < healthy_min_series
-    too_high = value_series > healthy_max_series
-    has_healthy = healthy_min_series.notna() | healthy_max_series.notna()
-
-    df["is_in_healthy_range"] = None
-    df.loc[has_healthy, "is_in_healthy_range"] = ~(too_low | too_high)[has_healthy]
 
     return df
 
@@ -285,7 +215,6 @@ def deduplicate_results(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataF
 
     def pick_best_dupe(group):
         """Pick best duplicate: prefer primary unit if multiple entries exist."""
-        # Get lab_name_standardized from first row (grouping columns are included)
         lab_name_standardized = group.iloc[0]["lab_name_standardized"]
         primary_unit = lab_specs.get_primary_unit(lab_name_standardized) if lab_specs.exists else None
 
@@ -294,7 +223,7 @@ def deduplicate_results(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataF
         else:
             return group.iloc[0]
 
-    # Group and apply deduplication (using deprecated behavior to preserve columns)
+    # Group and apply deduplication
     import warnings
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category=FutureWarning)
@@ -332,7 +261,6 @@ def apply_dtype_conversions(df: pd.DataFrame, dtype_map: dict) -> pd.DataFrame:
                 df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
             elif "float" in target_dtype:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
-            # Other types like string are often fine as 'object'
         except Exception as e:
             logger.warning(f"Dtype conversion failed for {col} to {target_dtype}: {e}")
 
