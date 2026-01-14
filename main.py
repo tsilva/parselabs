@@ -18,15 +18,13 @@ from openai import OpenAI
 from tqdm import tqdm
 
 # Local imports
-from config import ExtractionConfig, LabSpecsConfig, ProfileConfig, Demographics, UNKNOWN_VALUE
-from utils import preprocess_page_image, setup_logging, clear_directory, ensure_columns
+from config import ExtractionConfig, LabSpecsConfig, ProfileConfig, UNKNOWN_VALUE
+from utils import preprocess_page_image, setup_logging, ensure_columns
 from extraction import (
     LabResult, HealthLabReport, extract_labs_from_page_image, self_consistency
 )
 from standardization import standardize_lab_names, standardize_lab_units
 from normalization import apply_normalizations, deduplicate_results, apply_dtype_conversions
-from plotting import LabPlotter
-from edge_case_detection import EdgeCaseDetector
 
 # Setup logging
 LOG_DIR = Path("./logs")
@@ -40,88 +38,56 @@ client = OpenAI(
 
 
 # ========================================
-# Column Schema (kept here for now as it defines export structure)
+# Column Schema (simplified - 15 columns)
 # ========================================
 
 COLUMN_SCHEMA = {
-    "date": {"dtype": "datetime64[ns]", "excel_width": 13, "plotting_role": "date"},
-    "lab_name_raw": {"dtype": "str", "excel_width": 35, "excel_hidden": False},
-    "value_raw": {"dtype": "float64", "excel_width": 12, "excel_hidden": False},
-    "lab_unit_raw": {"dtype": "str", "excel_width": 15, "excel_hidden": False},
-    "reference_range": {"dtype": "str", "excel_width": 25, "excel_hidden": False},
-    "reference_min_raw": {"dtype": "float64", "excel_width": 12, "excel_hidden": True},
-    "reference_max_raw": {"dtype": "float64", "excel_width": 12, "excel_hidden": True},
-    "is_abnormal": {"dtype": "boolean", "excel_width": 10, "excel_hidden": False},
-    "comments": {"dtype": "str", "excel_width": 40, "excel_hidden": False},
-    "source_text": {"dtype": "str", "excel_width": 50, "excel_hidden": True},
-    "page_number": {"dtype": "Int64", "excel_width": 8},
+    # Core identification
+    "date": {"dtype": "datetime64[ns]", "excel_width": 13},
     "source_file": {"dtype": "str", "excel_width": 25},
-    "lab_type": {"dtype": "str", "excel_width": 10},
-    "lab_name_standardized": {"dtype": "str", "excel_width": 35, "plotting_role": "group"},
-    "lab_unit_standardized": {"dtype": "str", "excel_width": 15},
-    "lab_name_slug": {"dtype": "str", "excel_width": 30, "excel_hidden": True},
-    "value_primary": {"dtype": "float64", "excel_width": 14, "plotting_role": "value"},
-    "lab_unit_primary": {"dtype": "str", "excel_width": 14, "plotting_role": "unit"},
-    "reference_min_primary": {"dtype": "float64", "excel_width": 14},
-    "reference_max_primary": {"dtype": "float64", "excel_width": 14},
-    "is_out_of_reference": {"dtype": "boolean", "excel_width": 14},
-    "healthy_range_min": {"dtype": "float64", "excel_width": 16},
-    "healthy_range_max": {"dtype": "float64", "excel_width": 16},
-    "is_in_healthy_range": {"dtype": "boolean", "excel_width": 18},
+    "page_number": {"dtype": "Int64", "excel_width": 8},
+
+    # Extracted values (standardized)
+    "lab_name": {"dtype": "str", "excel_width": 35},
+    "value": {"dtype": "float64", "excel_width": 12},
+    "unit": {"dtype": "str", "excel_width": 15},
+
+    # Reference ranges from PDF
+    "reference_min": {"dtype": "float64", "excel_width": 12},
+    "reference_max": {"dtype": "float64", "excel_width": 12},
+
+    # Raw values (for audit)
+    "lab_name_raw": {"dtype": "str", "excel_width": 35},
+    "value_raw": {"dtype": "str", "excel_width": 12},
+    "unit_raw": {"dtype": "str", "excel_width": 15},
+
+    # Quality
+    "confidence": {"dtype": "float64", "excel_width": 12},
+    "verified": {"dtype": "boolean", "excel_width": 10},
+
+    # Internal (hidden in Excel)
+    "lab_type": {"dtype": "str", "excel_width": 10, "excel_hidden": True},
     "result_index": {"dtype": "Int64", "excel_width": 10, "excel_hidden": True},
-    "needs_review": {"dtype": "boolean", "excel_width": 12},
-    "review_reason": {"dtype": "str", "excel_width": 40},
-    "confidence_score": {"dtype": "float64", "excel_width": 14},
-    "review_status": {"dtype": "str", "excel_width": 12},
-    "reviewed_at": {"dtype": "str", "excel_width": 20, "excel_hidden": True},
-    # Verification columns
-    "verification_status": {"dtype": "str", "excel_width": 14, "excel_hidden": False},
-    "verification_confidence": {"dtype": "float64", "excel_width": 16, "excel_hidden": False},
-    "verification_method": {"dtype": "str", "excel_width": 20, "excel_hidden": True},
-    "cross_model_verified": {"dtype": "boolean", "excel_width": 14, "excel_hidden": True},
-    "verification_corrected": {"dtype": "boolean", "excel_width": 14, "excel_hidden": True},
-    "value_raw_original": {"dtype": "str", "excel_width": 14, "excel_hidden": True},
 }
 
 
 def get_column_lists(schema: dict):
     """Extract ordered lists from schema."""
     ordered = [
-        # Primary columns in user-specified order
-        "source_file", "page_number", "date",
-        "lab_name_raw", "lab_name_standardized", "lab_type",
-        "lab_unit_raw", "lab_unit_standardized", "lab_unit_primary",
-        "value_raw", "value_primary",
-        "reference_range", "reference_min_primary", "reference_max_primary",
-        "is_out_of_reference",
-        "healthy_range_min", "healthy_range_max", "is_in_healthy_range",
-        "is_abnormal", "comments",
-
-        # Review/quality columns
-        "result_index", "needs_review", "review_reason", "confidence_score",
-        "review_status", "reviewed_at",
-
-        # Verification columns
-        "verification_status", "verification_confidence", "verification_method",
-        "cross_model_verified", "verification_corrected", "value_raw_original",
-
-        # Technical/internal fields
-        "reference_min_raw", "reference_max_raw",
-        "lab_name_slug", "source_text"
+        # Core columns in logical order
+        "date", "source_file", "page_number",
+        "lab_name", "value", "unit",
+        "reference_min", "reference_max",
+        "lab_name_raw", "value_raw", "unit_raw",
+        "confidence", "verified",
+        "lab_type", "result_index",
     ]
     export_cols = [k for k in ordered if k in schema]
     hidden_cols = [col for col, props in schema.items() if props.get("excel_hidden")]
     widths = {col: props["excel_width"] for col, props in schema.items() if "excel_width" in props}
     dtypes = {col: props["dtype"] for col, props in schema.items() if "dtype" in props}
 
-    plotting_cols = {
-        "date": next((col for col, props in schema.items() if props.get("plotting_role") == "date"), "date"),
-        "value": next((col for col, props in schema.items() if props.get("plotting_role") == "value"), "value_normalized"),
-        "group": next((col for col, props in schema.items() if props.get("plotting_role") == "group"), "lab_name"),
-        "unit": next((col for col, props in schema.items() if props.get("plotting_role") == "unit"), "unit_normalized"),
-    }
-
-    return export_cols, hidden_cols, widths, dtypes, plotting_cols
+    return export_cols, hidden_cols, widths, dtypes
 
 
 # ========================================
@@ -129,17 +95,7 @@ def get_column_lists(schema: dict):
 # ========================================
 
 def correct_percentage_lab_names(results: list[dict], lab_specs: LabSpecsConfig) -> list[dict]:
-    """Correct lab names when unit is % but name doesn't end with (%).
-
-    If a (%) variant exists in lab_specs, update the standardized name.
-
-    Args:
-        results: List of result dictionaries with lab_name_standardized and lab_unit_standardized
-        lab_specs: Lab specifications configuration
-
-    Returns:
-        The same results list with corrected lab names
-    """
+    """Correct lab names when unit is % but name doesn't end with (%)."""
     corrected_count = 0
     for result in results:
         std_name = result.get("lab_name_standardized")
@@ -164,18 +120,7 @@ def process_single_pdf(
     config: ExtractionConfig,
     lab_specs: LabSpecsConfig
 ) -> Path | None:
-    """
-    Process a single PDF file: extract, standardize, and save results.
-
-    Args:
-        pdf_path: Path to PDF file
-        output_dir: Output directory
-        config: Extraction configuration
-        lab_specs: Lab specifications configuration
-
-    Returns:
-        Path to output CSV, or None if processing failed
-    """
+    """Process a single PDF file: extract, standardize, and save results."""
     pdf_stem = pdf_path.stem
     doc_out_dir = output_dir / pdf_stem
     doc_out_dir.mkdir(exist_ok=True, parents=True)
@@ -228,9 +173,9 @@ def process_single_pdf(
                     )
                     logger.info(f"[{page_name}] Extraction completed")
 
-                    # Post-extraction verification
+                    # Post-extraction verification (simplified - cross-model only)
                     if config.enable_verification and page_data.get("lab_results"):
-                        logger.info(f"[{page_name}] Running post-extraction verification...")
+                        logger.info(f"[{page_name}] Running cross-model verification...")
                         try:
                             from verification import verify_page_extraction
                             page_data, verification_summary = verify_page_extraction(
@@ -239,13 +184,10 @@ def process_single_pdf(
                                 client=client,
                                 primary_model=config.extract_model_id,
                                 verification_model=config.verification_model_id,
-                                enable_completeness_check=config.enable_completeness_check,
-                                enable_character_verification=config.enable_character_verification,
                             )
                             logger.info(
                                 f"[{page_name}] Verification: {verification_summary.get('verified', 0)} verified, "
                                 f"{verification_summary.get('corrected', 0)} corrected, "
-                                f"{verification_summary.get('uncertain', 0)} uncertain, "
                                 f"avg confidence: {verification_summary.get('avg_confidence', 0):.2f}"
                             )
                         except Exception as ve:
@@ -306,7 +248,7 @@ def process_single_pdf(
             for result in all_results:
                 result["lab_name_standardized"] = UNKNOWN_VALUE
 
-        # Standardize units (with lab name context)
+        # Standardize units
         logger.info(f"[{pdf_stem}] Standardizing units...")
 
         def normalize_raw_unit(raw_unit):
@@ -398,50 +340,27 @@ def merge_csv_files(csv_paths: list[Path]) -> pd.DataFrame:
     return pd.concat(dataframes, ignore_index=True)
 
 
-def export_excel_with_sheets(
+def export_excel(
     df: pd.DataFrame,
     excel_path: Path,
-    export_cols: list,
     hidden_cols: list,
     widths: dict,
-    date_col: str,
-    group_col: str
 ) -> None:
-    """Export DataFrame to Excel with AllData and MostRecentByEnum sheets."""
-    # Sort for most recent extraction
-    if date_col in df.columns and group_col in df.columns:
-        df = df.sort_values(by=[date_col, group_col], ascending=[False, True])
-        most_recent_df = df.drop_duplicates(subset=[group_col], keep='first').copy()
-    else:
-        most_recent_df = pd.DataFrame()
-
+    """Export DataFrame to Excel with formatting."""
     with pd.ExcelWriter(excel_path, engine="xlsxwriter", datetime_format='yyyy-mm-dd', date_format='yyyy-mm-dd') as writer:
-        # AllData sheet
-        df.to_excel(writer, sheet_name="AllData", index=False)
-        ws_all = writer.sheets["AllData"]
-        ws_all.freeze_panes(1, 0)
+        df.to_excel(writer, sheet_name="Data", index=False)
+        ws = writer.sheets["Data"]
+        ws.freeze_panes(1, 0)
         for idx, col_name in enumerate(df.columns):
             width = widths.get(col_name, 12)
             options = {'hidden': True} if col_name in hidden_cols else {}
-            ws_all.set_column(idx, idx, width, None, options)
+            ws.set_column(idx, idx, width, None, options)
 
-        # MostRecentByEnum sheet
-        if not most_recent_df.empty:
-            most_recent_df.to_excel(writer, sheet_name="MostRecentByEnum", index=False)
-            ws_recent = writer.sheets["MostRecentByEnum"]
-            ws_recent.freeze_panes(1, 0)
-            for idx, col_name in enumerate(most_recent_df.columns):
-                width = widths.get(col_name, 12)
-                options = {'hidden': True} if col_name in hidden_cols else {}
-                ws_recent.set_column(idx, idx, width, None, options)
-        else:
-            pd.DataFrame().to_excel(writer, sheet_name="MostRecentByEnum", index=False)
-
-    logger.info(f"Saved Excel with AllData and MostRecentByEnum sheets: {excel_path}")
+    logger.info(f"Saved Excel: {excel_path}")
 
 
 # ========================================
-# Main Pipeline
+# Helpers
 # ========================================
 
 def _get_csv_path(pdf_path: Path, output_path: Path) -> Path:
@@ -449,7 +368,6 @@ def _get_csv_path(pdf_path: Path, output_path: Path) -> Path:
     return output_path / pdf_path.stem / f"{pdf_path.stem}.csv"
 
 
-# Required columns that must exist in document CSVs
 REQUIRED_CSV_COLS = ["result_index", "page_number", "source_file"]
 
 
@@ -458,7 +376,6 @@ def _is_csv_valid(csv_path: Path, required_cols: list[str] = REQUIRED_CSV_COLS) 
     if not csv_path.exists():
         return False
     try:
-        # Read just the header to check columns
         df = pd.read_csv(csv_path, nrows=0)
         return all(col in df.columns for col in required_cols)
     except Exception:
@@ -466,23 +383,17 @@ def _is_csv_valid(csv_path: Path, required_cols: list[str] = REQUIRED_CSV_COLS) 
 
 
 def _process_pdf_wrapper(args):
-    """Wrapper function for multiprocessing with progress tracking."""
+    """Wrapper function for multiprocessing."""
     return process_single_pdf(*args)
 
 
 def _find_empty_extractions(output_path: Path) -> list[tuple[Path, list[Path]]]:
-    """
-    Find all PDFs that have empty extraction JSONs.
-
-    Returns:
-        List of tuples: (pdf_dir, list of empty JSON paths)
-    """
+    """Find all PDFs that have empty extraction JSONs."""
     empty_by_pdf = []
 
     for pdf_dir in output_path.iterdir():
         if not pdf_dir.is_dir():
             continue
-        # Skip hidden directories (like .claude, .git, etc.)
         if pdf_dir.name.startswith('.'):
             continue
 
@@ -490,8 +401,6 @@ def _find_empty_extractions(output_path: Path) -> list[tuple[Path, list[Path]]]:
         for json_path in pdf_dir.glob("*.json"):
             try:
                 data = json.loads(json_path.read_text(encoding='utf-8'))
-                # Only consider empty if no lab_results AND page_has_lab_data is not False
-                # (page_has_lab_data=False means the page intentionally has no lab data)
                 if isinstance(data, dict) and not data.get("lab_results") and data.get("page_has_lab_data") is not False:
                     empty_jsons.append(json_path)
             except (json.JSONDecodeError, UnicodeDecodeError):
@@ -504,12 +413,7 @@ def _find_empty_extractions(output_path: Path) -> list[tuple[Path, list[Path]]]:
 
 
 def _prompt_reprocess_empty(output_path: Path) -> list[Path]:
-    """
-    Check for empty extractions and prompt user to reprocess each one.
-
-    Returns:
-        List of PDF directories that need reprocessing
-    """
+    """Check for empty extractions and prompt user to reprocess each one."""
     empty_extractions = _find_empty_extractions(output_path)
 
     if not empty_extractions:
@@ -532,19 +436,16 @@ def _prompt_reprocess_empty(output_path: Path) -> list[Path]:
             print("Skipping remaining files.")
             break
         elif response == 'a':
-            # Reprocess all remaining
             pdfs_to_reprocess.append(pdf_dir)
-            for remaining_pdf_dir, remaining_jsons in empty_extractions[empty_extractions.index((pdf_dir, empty_jsons)) + 1:]:
+            for remaining_pdf_dir, _ in empty_extractions[empty_extractions.index((pdf_dir, empty_jsons)) + 1:]:
                 pdfs_to_reprocess.append(remaining_pdf_dir)
             break
         elif response == 'y':
             pdfs_to_reprocess.append(pdf_dir)
 
-    # Delete empty JSONs and CSVs for PDFs to reprocess
     if pdfs_to_reprocess:
         print(f"\nDeleting empty extractions for {len(pdfs_to_reprocess)} PDF(s)...")
         for pdf_dir in pdfs_to_reprocess:
-            # Find and delete empty JSONs in this directory (but not pages with page_has_lab_data=False)
             for json_path in pdf_dir.glob("*.json"):
                 try:
                     data = json.loads(json_path.read_text(encoding='utf-8'))
@@ -554,7 +455,6 @@ def _prompt_reprocess_empty(output_path: Path) -> list[Path]:
                 except (json.JSONDecodeError, UnicodeDecodeError):
                     pass
 
-            # Delete the CSV to force full reprocessing
             csv_path = pdf_dir / f"{pdf_dir.name}.csv"
             if csv_path.exists():
                 csv_path.unlink()
@@ -563,6 +463,10 @@ def _prompt_reprocess_empty(output_path: Path) -> list[Path]:
     return pdfs_to_reprocess
 
 
+# ========================================
+# Argument Parsing
+# ========================================
+
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
@@ -570,26 +474,147 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python main.py --profile tiago    # Run with a specific profile (required)
-  python main.py --list-profiles    # List available profiles
+  # Using a profile (recommended for repeat use):
+  python main.py --profile tsilva
+
+  # Direct paths (one-off use):
+  python main.py ./input/ ./output/
+
+  # List available profiles:
+  python main.py --list-profiles
+
+  # Override settings:
+  python main.py --profile tsilva --model google/gemini-2.5-pro --no-verify
         """
     )
+    # Profile-based
     parser.add_argument(
         '--profile', '-p',
         type=str,
-        help='Profile name (without .json extension)'
+        help='Profile name (without extension)'
     )
     parser.add_argument(
         '--list-profiles',
         action='store_true',
         help='List available profiles and exit'
     )
+
+    # Direct paths (positional)
+    parser.add_argument(
+        'input_path',
+        nargs='?',
+        type=str,
+        help='Input directory containing PDFs'
+    )
+    parser.add_argument(
+        'output_path',
+        nargs='?',
+        type=str,
+        help='Output directory for results'
+    )
+
+    # Overrides
+    parser.add_argument(
+        '--model', '-m',
+        type=str,
+        help='Model ID for extraction (default: google/gemini-2.5-flash)'
+    )
+    parser.add_argument(
+        '--no-verify',
+        action='store_true',
+        help='Disable cross-model verification'
+    )
+    parser.add_argument(
+        '--workers', '-w',
+        type=int,
+        help='Number of parallel workers'
+    )
+    parser.add_argument(
+        '--pattern',
+        type=str,
+        default='*.pdf',
+        help='Glob pattern for input files (default: *.pdf)'
+    )
+
     return parser.parse_args()
 
 
+def build_config(args) -> ExtractionConfig:
+    """Build ExtractionConfig from args and env."""
+    # Start with env-based config
+    config = ExtractionConfig.from_env()
+
+    # Load profile if specified
+    if args.profile:
+        profile_path = None
+        for ext in ('.yaml', '.yml', '.json'):
+            p = Path(f"profiles/{args.profile}{ext}")
+            if p.exists():
+                profile_path = p
+                break
+
+        if not profile_path:
+            print(f"Error: Profile '{args.profile}' not found")
+            print("Use --list-profiles to see available profiles.")
+            sys.exit(1)
+
+        profile = ProfileConfig.from_file(profile_path)
+        logger.info(f"Using profile: {profile.name}")
+
+        # Override config from profile
+        if profile.input_path:
+            config.input_path = profile.input_path
+        if profile.output_path:
+            config.output_path = profile.output_path
+        if profile.input_file_regex:
+            config.input_file_regex = profile.input_file_regex
+        if profile.model:
+            config.extract_model_id = profile.model
+            config.self_consistency_model_id = profile.model
+        if profile.verify is not None:
+            config.enable_verification = profile.verify
+        if profile.workers:
+            config.max_workers = profile.workers
+
+    # Override from CLI args (highest priority)
+    if args.input_path:
+        config.input_path = Path(args.input_path)
+    if args.output_path:
+        config.output_path = Path(args.output_path)
+    if args.model:
+        config.extract_model_id = args.model
+        config.self_consistency_model_id = args.model
+    if args.no_verify:
+        config.enable_verification = False
+    if args.workers:
+        config.max_workers = args.workers
+    if args.pattern:
+        config.input_file_regex = args.pattern
+
+    # Validate required paths
+    if not config.input_path:
+        print("Error: Input path required. Use --profile or provide INPUT_PATH.")
+        sys.exit(1)
+    if not config.output_path:
+        print("Error: Output path required. Use --profile or provide OUTPUT_PATH.")
+        sys.exit(1)
+
+    if not config.input_path.exists():
+        print(f"Error: Input path does not exist: {config.input_path}")
+        sys.exit(1)
+
+    # Ensure output directory exists
+    config.output_path.mkdir(parents=True, exist_ok=True)
+
+    return config
+
+
+# ========================================
+# Main Pipeline
+# ========================================
+
 def main():
     """Main pipeline orchestration."""
-    # Parse command-line arguments
     args = parse_args()
 
     # Handle --list-profiles
@@ -607,45 +632,19 @@ def main():
     global logger
     logger = setup_logging(LOG_DIR, clear_logs=True)
 
-    # Load configuration
-    config = ExtractionConfig.from_env()
+    # Build configuration from env + profile + CLI args
+    config = build_config(args)
 
-    # Load profile (required)
-    if not args.profile:
-        print("Error: --profile is required.")
-        print("Use --list-profiles to see available profiles.")
-        sys.exit(1)
+    logger.info(f"Input: {config.input_path}")
+    logger.info(f"Output: {config.output_path}")
+    logger.info(f"Model: {config.extract_model_id}")
+    logger.info(f"Verification: {'enabled' if config.enable_verification else 'disabled'}")
 
-    profile_path = Path(f"profiles/{args.profile}.json")
-    if not profile_path.exists():
-        logger.error(f"Profile not found: {profile_path}")
-        print(f"Error: Profile '{args.profile}' not found at {profile_path}")
-        print("Use --list-profiles to see available profiles.")
-        sys.exit(1)
-
-    profile = ProfileConfig.from_file(profile_path, config)
-    demographics = profile.demographics
-
-    # Override paths from profile
-    if profile.input_path:
-        config.input_path = profile.input_path
-    if profile.output_path:
-        config.output_path = profile.output_path
-        config.output_path.mkdir(parents=True, exist_ok=True)
-    if profile.input_file_regex:
-        config.input_file_regex = profile.input_file_regex
-
-    logger.info(f"Using profile: {profile.name}")
-    if demographics.gender:
-        logger.info(f"  Gender: {demographics.gender}")
-    if demographics.age is not None:
-        logger.info(f"  Age: {demographics.age}")
-
-    # Load lab specs (with demographic ranges support)
+    # Load lab specs
     lab_specs = LabSpecsConfig()
 
     # Get column configuration
-    export_cols, hidden_cols, widths, dtypes, plotting_cols = get_column_lists(COLUMN_SCHEMA)
+    export_cols, hidden_cols, widths, dtypes = get_column_lists(COLUMN_SCHEMA)
 
     # Find PDFs to process
     pdf_files = sorted(list(config.input_path.glob(config.input_file_regex)))
@@ -658,7 +657,7 @@ def main():
     # Check for empty extractions and prompt user to reprocess
     _prompt_reprocess_empty(config.output_path)
 
-    # Filter out PDFs that already have a valid CSV (with all required columns)
+    # Filter out PDFs that already have a valid CSV
     pdfs_to_process = []
     skipped_count = 0
     for pdf_path in pdf_files:
@@ -675,7 +674,6 @@ def main():
 
     if not pdfs_to_process:
         logger.info("All PDFs already processed. Moving to merge step...")
-        # Still need to get CSV paths for merging (only valid CSVs)
         csv_paths = [p for pdf in pdf_files if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))]
         pdfs_failed = 0
     else:
@@ -685,7 +683,6 @@ def main():
 
         tasks = [(pdf, config.output_path, config, lab_specs) for pdf in pdfs_to_process]
 
-        # Use progress bar for PDF processing
         with Pool(n_workers) as pool:
             results = []
             with tqdm(total=len(tasks), desc="Processing PDFs", unit="pdf") as pbar:
@@ -693,10 +690,7 @@ def main():
                     results.append(result)
                     pbar.update(1)
 
-        # Track failed PDFs
         pdfs_failed = sum(1 for r in results if r is None)
-
-        # Collect CSV paths from ALL PDF files, only including valid CSVs with required columns
         csv_paths = [p for pdf in pdf_files if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))]
 
     if not csv_paths:
@@ -715,30 +709,16 @@ def main():
         logger.error("No data to process")
         return
 
-    # Apply normalizations (pass client and model_id for qualitative value conversion)
+    # Apply normalizations (no demographics - moved to review tool)
     logger.info("Applying normalizations...")
-    merged_df = apply_normalizations(merged_df, lab_specs, client, config.self_consistency_model_id, demographics)
+    merged_df = apply_normalizations(merged_df, lab_specs, client, config.self_consistency_model_id)
 
-    # Filter out non-lab-test rows (where LLM couldn't map to a known lab name)
+    # Filter out non-lab-test rows
     unknown_mask = merged_df["lab_name_standardized"] == UNKNOWN_VALUE
     if unknown_mask.any():
         unknown_count = unknown_mask.sum()
-        logger.info(f"Filtering {unknown_count} rows with unknown lab names (non-tests)")
+        logger.info(f"Filtering {unknown_count} rows with unknown lab names")
         merged_df = merged_df[~unknown_mask].reset_index(drop=True)
-
-    # Detect edge cases for review
-    logger.info("Detecting edge cases for review...")
-    detector = EdgeCaseDetector()
-    merged_df = detector.identify_edge_cases(merged_df)
-
-    # Log edge case statistics
-    needs_review_count = merged_df['needs_review'].sum()
-    low_confidence_count = (merged_df['confidence_score'] < 0.7).sum()
-    if needs_review_count > 0:
-        logger.info(f"Found {needs_review_count} edge cases ({needs_review_count/len(merged_df)*100:.1f}%)")
-        logger.info(f"  - {low_confidence_count} items with confidence < 0.7 ({low_confidence_count/len(merged_df)*100:.1f}%)")
-    else:
-        logger.info("No edge cases detected")
 
     # Deduplicate
     if lab_specs.exists:
@@ -746,10 +726,31 @@ def main():
         merged_df = deduplicate_results(merged_df, lab_specs)
         logger.info(f"After deduplication: {len(merged_df)} rows")
 
-    # Reorder columns
-    logger.info("Finalizing column order...")
+    # Rename columns to simplified schema
+    column_renames = {
+        "lab_name_standardized": "lab_name",
+        "value_primary": "value",
+        "lab_unit_primary": "unit",
+        "lab_unit_raw": "unit_raw",
+        "reference_min_primary": "reference_min",
+        "reference_max_primary": "reference_max",
+    }
+    merged_df = merged_df.rename(columns=column_renames)
+
+    # Add confidence column (from verification or default)
+    if "verification_confidence" in merged_df.columns:
+        merged_df["confidence"] = merged_df["verification_confidence"]
+    else:
+        merged_df["confidence"] = 1.0
+
+    # Add verified column
+    if "verification_status" in merged_df.columns:
+        merged_df["verified"] = merged_df["verification_status"].isin(["verified", "corrected"])
+    else:
+        merged_df["verified"] = False
+
+    # Select final columns
     final_cols = [col for col in export_cols if col in merged_df.columns]
-    final_cols += [col for col in merged_df.columns if col not in export_cols]
     merged_df = merged_df[final_cols]
 
     # Apply dtype conversions
@@ -765,51 +766,10 @@ def main():
     # Export Excel
     logger.info("Exporting to Excel...")
     excel_path = config.output_path / "all.xlsx"
-    export_excel_with_sheets(
-        merged_df, excel_path, export_cols, hidden_cols, widths,
-        plotting_cols["date"], plotting_cols["group"]
-    )
-
-    logger.info("All data processing and file exports finished")
-
-    # Generate plots
-    logger.info("Generating plots...")
-    plots_base_dir = Path("plots")
-    plots_base_dir.mkdir(exist_ok=True)
-    clear_directory(plots_base_dir)
-
-    output_plots_dir = config.output_path / "plots"
-    output_plots_dir.mkdir(exist_ok=True)
-    clear_directory(output_plots_dir)
-
-    plotter = LabPlotter(
-        date_col=plotting_cols["date"],
-        value_col=plotting_cols["value"],
-        group_col=plotting_cols["group"],
-        unit_col=plotting_cols["unit"]
-    )
-
-    plotter.generate_all_plots(merged_df, [plots_base_dir, output_plots_dir])
-
-    # Generate end-of-run report
-    logger.info("Generating run report...")
-    from reporting import generate_run_report
-
-    report_path = generate_run_report(
-        df=merged_df,
-        output_path=config.output_path,
-        pdfs_found=len(pdf_files),
-        pdfs_skipped=skipped_count,
-        pdfs_processed=len(csv_paths),
-        pdfs_failed=pdfs_failed,
-        rows_after_merge=rows_after_merge,
-        rows_after_dedup=len(merged_df),
-        csv_path=csv_path,
-        excel_path=excel_path,
-    )
-    logger.info(f"Report saved to: {report_path}")
+    export_excel(merged_df, excel_path, hidden_cols, widths)
 
     logger.info("Pipeline completed successfully")
+    logger.info(f"Output: {csv_path}")
 
 
 if __name__ == "__main__":

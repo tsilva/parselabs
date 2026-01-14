@@ -6,95 +6,160 @@ import logging
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
-from datetime import date
 
 logger = logging.getLogger(__name__)
 
 UNKNOWN_VALUE = "$UNKNOWN$"
 
+# Default model - fast, cheap, good quality
+DEFAULT_MODEL = "google/gemini-2.5-flash"
+
 
 @dataclass
 class ExtractionConfig:
-    """Configuration for extraction pipeline."""
-    input_path: Path
-    input_file_regex: str
-    output_path: Path
-    self_consistency_model_id: str
-    extract_model_id: str
-    n_extractions: int
-    openrouter_api_key: str
-    max_workers: int
+    """Configuration for extraction pipeline.
 
-    # Verification settings
+    Simplified to require only essential inputs with smart defaults.
+    """
+    input_path: Path
+    output_path: Path
+    openrouter_api_key: str
+
+    # Model settings (with smart defaults)
+    extract_model_id: str = DEFAULT_MODEL
+    self_consistency_model_id: str = DEFAULT_MODEL
+
+    # Processing settings
+    input_file_regex: str = "*.pdf"
+    n_extractions: int = 1
+    max_workers: int = field(default_factory=lambda: os.cpu_count() or 1)
+
+    # Verification settings (simplified - only cross-model verification by default)
     enable_verification: bool = True
-    verification_model_id: Optional[str] = None  # Auto-selected if None
-    arbitration_model_id: Optional[str] = None   # Auto-selected if None
-    enable_completeness_check: bool = True
-    enable_character_verification: bool = True
+    verification_model_id: Optional[str] = None  # Auto-selected from different provider
+
+    # Removed settings (were rarely used):
+    # - arbitration_model_id (arbitration stage removed)
+    # - enable_completeness_check (removed - low value)
+    # - enable_character_verification (removed - high cost, low value)
 
     @classmethod
     def from_env(cls) -> 'ExtractionConfig':
-        """Load configuration from environment variables."""
-        input_path = os.getenv("INPUT_PATH")
-        input_file_regex = os.getenv("INPUT_FILE_REGEX")
-        output_path = os.getenv("OUTPUT_PATH")
-        self_consistency_model_id = os.getenv("SELF_CONSISTENCY_MODEL_ID")
-        extract_model_id = os.getenv("EXTRACT_MODEL_ID")
-        n_extractions = int(os.getenv("N_EXTRACTIONS", 1))
+        """Load configuration from environment variables with smart defaults."""
+        # Required
         openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-        max_workers_str = os.getenv("MAX_WORKERS", "1")
+        if not openrouter_api_key:
+            raise ValueError("OPENROUTER_API_KEY not set")
+
+        # Paths (can be overridden by profile)
+        input_path_str = os.getenv("INPUT_PATH")
+        output_path_str = os.getenv("OUTPUT_PATH")
+
+        input_path = Path(input_path_str) if input_path_str else None
+        output_path = Path(output_path_str) if output_path_str else None
+
+        # Models (smart defaults)
+        extract_model_id = os.getenv("EXTRACT_MODEL_ID", DEFAULT_MODEL)
+        self_consistency_model_id = os.getenv("SELF_CONSISTENCY_MODEL_ID", DEFAULT_MODEL)
+
+        # Processing settings (smart defaults)
+        input_file_regex = os.getenv("INPUT_FILE_REGEX", "*.pdf")
+        n_extractions = int(os.getenv("N_EXTRACTIONS", "1"))
+        max_workers_str = os.getenv("MAX_WORKERS", "")
+        max_workers = int(max_workers_str) if max_workers_str else (os.cpu_count() or 1)
 
         # Verification settings
         enable_verification = os.getenv("ENABLE_VERIFICATION", "true").lower() == "true"
         verification_model_id = os.getenv("VERIFICATION_MODEL_ID") or None
-        arbitration_model_id = os.getenv("ARBITRATION_MODEL_ID") or None
-        enable_completeness_check = os.getenv("ENABLE_COMPLETENESS_CHECK", "true").lower() == "true"
-        enable_character_verification = os.getenv("ENABLE_CHARACTER_VERIFICATION", "true").lower() == "true"
-
-        # Validate required fields
-        if not self_consistency_model_id:
-            raise ValueError("SELF_CONSISTENCY_MODEL_ID not set")
-        if not extract_model_id:
-            raise ValueError("EXTRACT_MODEL_ID not set")
-        if not input_path or not Path(input_path).exists():
-            raise ValueError(f"INPUT_PATH ('{input_path}') not set or does not exist.")
-        if not input_file_regex:
-            raise ValueError("INPUT_FILE_REGEX not set")
-        if not output_path:
-            raise ValueError("OUTPUT_PATH not set")
-        if not openrouter_api_key:
-            raise ValueError("OPENROUTER_API_KEY not set")
-
-        # Parse max_workers
-        try:
-            max_workers = max(1, int(max_workers_str))
-        except ValueError:
-            logger.warning(f"MAX_WORKERS ('{max_workers_str}') is not valid. Defaulting to 1.")
-            max_workers = 1
-
-        output_path_obj = Path(output_path)
-        output_path_obj.mkdir(parents=True, exist_ok=True)
 
         return cls(
-            input_path=Path(input_path),
-            input_file_regex=input_file_regex,
-            output_path=output_path_obj,
-            self_consistency_model_id=self_consistency_model_id,
-            extract_model_id=extract_model_id,
-            n_extractions=n_extractions,
+            input_path=input_path,
+            output_path=output_path,
             openrouter_api_key=openrouter_api_key,
+            extract_model_id=extract_model_id,
+            self_consistency_model_id=self_consistency_model_id,
+            input_file_regex=input_file_regex,
+            n_extractions=n_extractions,
             max_workers=max_workers,
             enable_verification=enable_verification,
             verification_model_id=verification_model_id,
-            arbitration_model_id=arbitration_model_id,
-            enable_completeness_check=enable_completeness_check,
-            enable_character_verification=enable_character_verification,
         )
 
 
 @dataclass
+class ProfileConfig:
+    """Simplified profile configuration.
+
+    Just paths + optional setting overrides. No demographics (moved to review tool).
+    Supports both YAML and JSON formats.
+    """
+    name: str
+    input_path: Optional[Path] = None
+    output_path: Optional[Path] = None
+    input_file_regex: Optional[str] = None
+
+    # Optional overrides
+    model: Optional[str] = None
+    verify: Optional[bool] = None
+    workers: Optional[int] = None
+
+    @classmethod
+    def from_file(cls, profile_path: Path) -> 'ProfileConfig':
+        """Load profile from YAML or JSON file."""
+        if not profile_path.exists():
+            raise FileNotFoundError(f"Profile not found: {profile_path}")
+
+        content = profile_path.read_text(encoding='utf-8')
+
+        # Parse based on extension
+        if profile_path.suffix in ('.yaml', '.yml'):
+            import yaml
+            data = yaml.safe_load(content)
+        else:
+            # Default to JSON for backwards compatibility
+            data = json.load(open(profile_path, 'r', encoding='utf-8'))
+
+        # Extract paths
+        paths = data.get('paths', {})
+        input_path_str = paths.get('input_path') or data.get('input_path')
+        output_path_str = paths.get('output_path') or data.get('output_path')
+        input_file_regex = paths.get('input_file_regex') or data.get('input_file_regex')
+
+        # Extract optional overrides
+        model = data.get('model')
+        verify = data.get('verify')
+        workers = data.get('workers')
+
+        return cls(
+            name=data.get('name', profile_path.stem),
+            input_path=Path(input_path_str) if input_path_str else None,
+            output_path=Path(output_path_str) if output_path_str else None,
+            input_file_regex=input_file_regex,
+            model=model,
+            verify=verify,
+            workers=workers,
+        )
+
+    @classmethod
+    def list_profiles(cls, profiles_dir: Path = Path("profiles")) -> list[str]:
+        """List available profile names."""
+        if not profiles_dir.exists():
+            return []
+        profiles = []
+        for ext in ('*.json', '*.yaml', '*.yml'):
+            for f in profiles_dir.glob(ext):
+                if not f.name.startswith('_'):  # Skip templates
+                    profiles.append(f.stem)
+        return sorted(set(profiles))
+
+
+# Keep Demographics class for future use in review tool
+@dataclass
 class Demographics:
-    """User demographic information for range calculation."""
+    """User demographic information for range calculation.
+
+    Note: This is kept for the review tool, not used in extraction.
+    """
     gender: Optional[str] = None  # "male", "female", "other"
     date_of_birth: Optional[str] = None  # ISO format: "YYYY-MM-DD"
     height_cm: Optional[float] = None
@@ -106,6 +171,7 @@ class Demographics:
         if not self.date_of_birth:
             return None
         try:
+            from datetime import date
             dob = date.fromisoformat(self.date_of_birth)
             today = date.today()
             return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
@@ -113,75 +179,10 @@ class Demographics:
             return None
 
 
-@dataclass
-class ProfileConfig:
-    """Configuration for a user profile."""
-    name: str
-    demographics: Demographics
-    input_path: Optional[Path] = None
-    output_path: Optional[Path] = None
-    input_file_regex: Optional[str] = None
-
-    @classmethod
-    def from_file(cls, profile_path: Path, env_config: Optional['ExtractionConfig'] = None) -> 'ProfileConfig':
-        """Load profile from JSON file, inheriting from env_config where needed."""
-        with open(profile_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
-        # Parse demographics
-        demo_data = data.get('demographics', {})
-        demographics = Demographics(
-            gender=demo_data.get('gender'),
-            date_of_birth=demo_data.get('date_of_birth'),
-            height_cm=demo_data.get('height_cm'),
-            weight_kg=demo_data.get('weight_kg'),
-        )
-
-        # Parse paths, with inheritance from env_config
-        paths = data.get('paths', {})
-        inherit = data.get('settings', {}).get('inherit_from_env', True)
-
-        input_path = None
-        if paths.get('input_path'):
-            input_path = Path(paths['input_path'])
-        elif inherit and env_config:
-            input_path = env_config.input_path
-
-        output_path = None
-        if paths.get('output_path'):
-            output_path = Path(paths['output_path'])
-        elif inherit and env_config:
-            output_path = env_config.output_path
-
-        input_file_regex = paths.get('input_file_regex')
-        if not input_file_regex and inherit and env_config:
-            input_file_regex = env_config.input_file_regex
-
-        return cls(
-            name=data.get('name', profile_path.stem),
-            demographics=demographics,
-            input_path=input_path,
-            output_path=output_path,
-            input_file_regex=input_file_regex,
-        )
-
-    @classmethod
-    def list_profiles(cls, profiles_dir: Path = Path("profiles")) -> list[str]:
-        """List available profile names."""
-        if not profiles_dir.exists():
-            return []
-        profiles = []
-        for f in profiles_dir.glob("*.json"):
-            if not f.name.startswith("_"):  # Skip templates like _template.json
-                profiles.append(f.stem)
-        return sorted(profiles)
-
-
 class LabSpecsConfig:
     """Central configuration for lab specifications.
 
-    Loads lab_specs.json once and provides multiple views to eliminate redundant file I/O.
-    Supports demographic-aware healthy ranges embedded in the ranges section.
+    Loads lab_specs.json once and provides multiple views.
     """
 
     def __init__(self, config_path: Path = Path("config/lab_specs.json")):
@@ -275,10 +276,7 @@ class LabSpecsConfig:
         return None
 
     def get_healthy_range(self, lab_name: str) -> tuple[Optional[float], Optional[float]]:
-        """Get default healthy range (min, max) for a lab.
-
-        Supports both new format (default: [min, max]) and legacy format (healthy: {min, max}).
-        """
+        """Get default healthy range (min, max) for a lab."""
         if lab_name not in self._specs:
             return (None, None)
 
@@ -296,61 +294,8 @@ class LabSpecsConfig:
 
         return (None, None)
 
-    def get_healthy_range_for_demographics(
-        self,
-        lab_name: str,
-        demographics: Optional['Demographics'] = None
-    ) -> tuple[Optional[float], Optional[float]]:
-        """Get healthy range with demographic-aware overrides.
-
-        Resolution priority (first match wins):
-        1. {gender}:{age_range} - gender + age match (e.g., "male:65+", "female:18-50")
-        2. {gender} - gender match (e.g., "male", "female")
-        3. default - applies to all
-        4. healthy (legacy format) - fallback
-        """
-        if lab_name not in self._specs:
-            return (None, None)
-
-        ranges = self._specs[lab_name].get('ranges', {})
-        gender = demographics.gender if demographics else None
-        age = demographics.age if demographics else None
-
-        # 1. Try gender:age_range (e.g., "male:18-64" or "male:65+")
-        if gender and age is not None:
-            for key, value in ranges.items():
-                if key.startswith(f"{gender}:"):
-                    age_part = key.split(":")[1]
-                    try:
-                        if "-" in age_part:
-                            lo, hi = map(int, age_part.split("-"))
-                            if lo <= age <= hi:
-                                return (value[0], value[1]) if isinstance(value, list) else (None, None)
-                        elif age_part.endswith("+"):
-                            lo = int(age_part[:-1])
-                            if age >= lo:
-                                return (value[0], value[1]) if isinstance(value, list) else (None, None)
-                    except (ValueError, IndexError):
-                        continue
-
-        # 2. Try gender (e.g., "male")
-        if gender and gender in ranges:
-            value = ranges[gender]
-            if isinstance(value, list) and len(value) >= 2:
-                return (value[0], value[1])
-
-        # 3. Try default / healthy (fallback to get_healthy_range which handles both formats)
-        return self.get_healthy_range(lab_name)
-
     def get_percentage_variant(self, lab_name: str) -> Optional[str]:
-        """Get the (%) variant of a lab name if it exists.
-
-        Args:
-            lab_name: The standardized lab name (e.g., "Blood - Basophils")
-
-        Returns:
-            The (%) variant if it exists (e.g., "Blood - Basophils (%)"), else None
-        """
+        """Get the (%) variant of a lab name if it exists."""
         if lab_name.endswith("(%)"):
             return None  # Already a percentage variant
 

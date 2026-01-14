@@ -181,4 +181,6 @@ user_stats.json
 
 # User profiles (contain PII)
 profiles/*.json
-!profiles/_*.json
+profiles/*.yaml
+profiles/*.yml
+!profiles/_*
