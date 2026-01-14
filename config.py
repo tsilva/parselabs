@@ -88,9 +88,9 @@ class ExtractionConfig:
 
 @dataclass
 class ProfileConfig:
-    """Simplified profile configuration.
+    """Profile configuration with optional demographics.
 
-    Just paths + optional setting overrides. No demographics (moved to review tool).
+    Paths + optional setting overrides + demographics for personalized ranges.
     Supports both YAML and JSON formats.
     """
     name: str
@@ -102,6 +102,9 @@ class ProfileConfig:
     model: Optional[str] = None
     verify: Optional[bool] = None
     workers: Optional[int] = None
+
+    # Demographics for personalized healthy ranges
+    demographics: Optional['Demographics'] = None
 
     @classmethod
     def from_file(cls, profile_path: Path) -> 'ProfileConfig':
@@ -130,6 +133,17 @@ class ProfileConfig:
         verify = data.get('verify')
         workers = data.get('workers')
 
+        # Extract demographics (for personalized healthy ranges)
+        demographics = None
+        demo_data = data.get('demographics', {})
+        if demo_data:
+            demographics = Demographics(
+                gender=demo_data.get('gender'),
+                date_of_birth=demo_data.get('date_of_birth'),
+                height_cm=demo_data.get('height_cm'),
+                weight_kg=demo_data.get('weight_kg'),
+            )
+
         return cls(
             name=data.get('name', profile_path.stem),
             input_path=Path(input_path_str) if input_path_str else None,
@@ -138,6 +152,7 @@ class ProfileConfig:
             model=model,
             verify=verify,
             workers=workers,
+            demographics=demographics,
         )
 
     @classmethod
@@ -293,6 +308,80 @@ class LabSpecsConfig:
             return (healthy.get('min'), healthy.get('max'))
 
         return (None, None)
+
+    def get_healthy_range_for_demographics(
+        self,
+        lab_name: str,
+        gender: Optional[str] = None,
+        age: Optional[int] = None
+    ) -> tuple[Optional[float], Optional[float]]:
+        """Get healthy range for a lab, considering demographics.
+
+        Selection priority:
+        1. Gender + age-specific (e.g., "male:0-17", "female:65+")
+        2. Gender-specific (e.g., "male", "female")
+        3. Default range
+        4. (None, None) if no range found
+
+        Args:
+            lab_name: Standardized lab name
+            gender: "male" or "female" (optional)
+            age: Age in years (optional)
+
+        Returns:
+            Tuple of (min, max) or (None, None)
+        """
+        if lab_name not in self._specs:
+            return (None, None)
+
+        ranges = self._specs[lab_name].get('ranges', {})
+        if not ranges:
+            return (None, None)
+
+        # Try gender + age-specific ranges first
+        if gender and age is not None:
+            for key, value in ranges.items():
+                if key.startswith(f"{gender}:"):
+                    age_part = key.split(":", 1)[1]
+                    if self._age_matches_range(age, age_part):
+                        if isinstance(value, list) and len(value) >= 2:
+                            return (value[0], value[1])
+
+        # Try gender-specific range
+        if gender:
+            gender_range = ranges.get(gender)
+            if isinstance(gender_range, list) and len(gender_range) >= 2:
+                return (gender_range[0], gender_range[1])
+
+        # Fall back to default
+        default = ranges.get('default')
+        if isinstance(default, list) and len(default) >= 2:
+            return (default[0], default[1])
+
+        return (None, None)
+
+    def _age_matches_range(self, age: int, age_spec: str) -> bool:
+        """Check if age matches an age specification.
+
+        Supports formats:
+        - "0-17" (inclusive range)
+        - "65+" (threshold and above)
+        - "18-64" (inclusive range)
+        """
+        if '+' in age_spec:
+            # Format: "65+"
+            threshold = int(age_spec.replace('+', ''))
+            return age >= threshold
+        elif '-' in age_spec:
+            # Format: "0-17" or "18-64"
+            parts = age_spec.split('-')
+            if len(parts) == 2:
+                try:
+                    min_age, max_age = int(parts[0]), int(parts[1])
+                    return min_age <= age <= max_age
+                except ValueError:
+                    return False
+        return False
 
     def get_percentage_variant(self, lab_name: str) -> Optional[str]:
         """Get the (%) variant of a lab name if it exists."""

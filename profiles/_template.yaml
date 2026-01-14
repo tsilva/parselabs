@@ -14,3 +14,8 @@ input_file_regex: "*.pdf"
 # model: "google/gemini-2.5-flash"  # Extraction model
 # verify: true                       # Enable cross-model verification
 # workers: 4                         # Parallel workers
+
+# Optional: Demographics (for results browser - personalized healthy ranges)
+# demographics:
+#   gender: "male"                   # "male" or "female"
+#   date_of_birth: "1990-01-15"      # For age-based ranges

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
 
-from config import ProfileConfig
+from config import ProfileConfig, Demographics, LabSpecsConfig
 
 # Load .env from repo root
 load_dotenv(Path(__file__).parent / '.env')
@@ -134,11 +134,36 @@ if (document.readyState === 'loading') {
 # Global output path (set from profile or environment)
 _configured_output_path: Optional[Path] = None
 
+# Demographics for personalized healthy ranges (set from profile)
+_configured_demographics: Optional[Demographics] = None
+
+# Lab specs config (loaded once)
+_lab_specs: Optional[LabSpecsConfig] = None
+
 
 def set_output_path(path: Path) -> None:
     """Set the output path (called from main when using profile)."""
     global _configured_output_path
     _configured_output_path = path
+
+
+def set_demographics(demographics: Optional[Demographics]) -> None:
+    """Set demographics for personalized range selection."""
+    global _configured_demographics
+    _configured_demographics = demographics
+
+
+def get_demographics() -> Optional[Demographics]:
+    """Get configured demographics."""
+    return _configured_demographics
+
+
+def get_lab_specs() -> LabSpecsConfig:
+    """Get or initialize lab specs config."""
+    global _lab_specs
+    if _lab_specs is None:
+        _lab_specs = LabSpecsConfig()
+    return _lab_specs
 
 
 # Display columns for the data table (in order) - standardized values only
@@ -241,6 +266,24 @@ def load_data(output_path: Path) -> pd.DataFrame:
                 return True
             return False
         df['is_out_of_reference'] = df.apply(check_out_of_range, axis=1)
+
+    # Compute lab_specs healthy ranges based on demographics
+    lab_specs = get_lab_specs()
+    demographics = get_demographics()
+    gender = demographics.gender if demographics else None
+    age = demographics.age if demographics else None
+
+    if 'lab_name' in df.columns and lab_specs.exists:
+        def get_lab_spec_range(lab_name):
+            """Get lab_specs range for a lab name."""
+            range_min, range_max = lab_specs.get_healthy_range_for_demographics(
+                lab_name, gender=gender, age=age
+            )
+            return pd.Series({'lab_specs_min': range_min, 'lab_specs_max': range_max})
+
+        range_df = df['lab_name'].apply(get_lab_spec_range)
+        df['lab_specs_min'] = range_df['lab_specs_min']
+        df['lab_specs_max'] = range_df['lab_specs_max']
 
     return df
 
@@ -396,22 +439,66 @@ def create_single_lab_plot(df: pd.DataFrame, lab_name: str) -> tuple[go.Figure, 
         )
     ))
 
-    # Add reference range bands if available
-    if 'healthy_range_min' in lab_df.columns and 'healthy_range_max' in lab_df.columns:
-        min_vals = lab_df['healthy_range_min'].dropna()
-        max_vals = lab_df['healthy_range_max'].dropna()
+    # Track which ranges we have for legend
+    has_lab_specs_range = False
+    has_pdf_range = False
+
+    # Add lab_specs healthy range (blue band - from lab_specs.json)
+    if 'lab_specs_min' in lab_df.columns and 'lab_specs_max' in lab_df.columns:
+        min_vals = lab_df['lab_specs_min'].dropna()
+        max_vals = lab_df['lab_specs_max'].dropna()
+
+        if not min_vals.empty and not max_vals.empty:
+            spec_min = float(min_vals.iloc[0])
+            spec_max = float(max_vals.iloc[0])
+            has_lab_specs_range = True
+
+            # Blue band for lab_specs healthy range
+            fig.add_hrect(
+                y0=spec_min, y1=spec_max,
+                fillcolor="rgba(59, 130, 246, 0.15)",
+                line_width=0,
+            )
+            fig.add_hline(y=spec_min, line_dash="dot", line_color="rgba(59, 130, 246, 0.6)")
+            fig.add_hline(y=spec_max, line_dash="dot", line_color="rgba(59, 130, 246, 0.6)")
+
+    # Add PDF reference range (green band - from extracted data)
+    if 'reference_min' in lab_df.columns and 'reference_max' in lab_df.columns:
+        min_vals = lab_df['reference_min'].dropna()
+        max_vals = lab_df['reference_max'].dropna()
 
         if not min_vals.empty and not max_vals.empty:
             ref_min = float(min_vals.mode().iloc[0]) if len(min_vals.mode()) > 0 else float(min_vals.iloc[0])
             ref_max = float(max_vals.mode().iloc[0]) if len(max_vals.mode()) > 0 else float(max_vals.iloc[0])
+            has_pdf_range = True
 
+            # Green band for PDF reference range
             fig.add_hrect(
                 y0=ref_min, y1=ref_max,
                 fillcolor="rgba(75, 192, 75, 0.15)",
                 line_width=0,
             )
-            fig.add_hline(y=ref_min, line_dash="dash", line_color="gray")
-            fig.add_hline(y=ref_max, line_dash="dash", line_color="gray")
+            fig.add_hline(y=ref_min, line_dash="dash", line_color="rgba(75, 192, 75, 0.6)")
+            fig.add_hline(y=ref_max, line_dash="dash", line_color="rgba(75, 192, 75, 0.6)")
+
+    # Add legend entries for range types
+    if has_lab_specs_range:
+        fig.add_trace(go.Scatter(
+            x=[None], y=[None],
+            mode='markers',
+            marker=dict(size=10, color='rgba(59, 130, 246, 0.5)', symbol='square'),
+            name='Healthy Range',
+            showlegend=True
+        ))
+
+    if has_pdf_range:
+        fig.add_trace(go.Scatter(
+            x=[None], y=[None],
+            mode='markers',
+            marker=dict(size=10, color='rgba(75, 192, 75, 0.5)', symbol='square'),
+            name='PDF Reference',
+            showlegend=True
+        ))
 
     fig.update_layout(
         title=dict(
@@ -424,7 +511,14 @@ def create_single_lab_plot(df: pd.DataFrame, lab_name: str) -> tuple[go.Figure, 
         template='plotly_white',
         height=300,
         margin=dict(l=60, r=20, t=40, b=40),
-        showlegend=False
+        showlegend=has_lab_specs_range or has_pdf_range,
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="right",
+            x=0.99,
+            bgcolor="rgba(255, 255, 255, 0.8)"
+        )
     )
 
     return fig, unit
@@ -509,10 +603,26 @@ def create_interactive_plot(df: pd.DataFrame, lab_names: Optional[list]) -> go.F
             col=1
         )
 
-        # Add reference range bands if available
-        if 'healthy_range_min' in lab_df.columns and 'healthy_range_max' in lab_df.columns:
-            min_vals = lab_df['healthy_range_min'].dropna()
-            max_vals = lab_df['healthy_range_max'].dropna()
+        # Add lab_specs healthy range (blue band)
+        if 'lab_specs_min' in lab_df.columns and 'lab_specs_max' in lab_df.columns:
+            min_vals = lab_df['lab_specs_min'].dropna()
+            max_vals = lab_df['lab_specs_max'].dropna()
+
+            if not min_vals.empty and not max_vals.empty:
+                spec_min = float(min_vals.iloc[0])
+                spec_max = float(max_vals.iloc[0])
+
+                fig.add_hrect(
+                    y0=spec_min, y1=spec_max,
+                    fillcolor="rgba(59, 130, 246, 0.15)",
+                    line_width=0,
+                    row=i + 1, col=1
+                )
+
+        # Add PDF reference range (green band)
+        if 'reference_min' in lab_df.columns and 'reference_max' in lab_df.columns:
+            min_vals = lab_df['reference_min'].dropna()
+            max_vals = lab_df['reference_max'].dropna()
 
             if not min_vals.empty and not max_vals.empty:
                 ref_min = float(min_vals.mode().iloc[0]) if len(min_vals.mode()) > 0 else float(min_vals.iloc[0])
@@ -902,6 +1012,17 @@ if __name__ == "__main__":
 
     profile = ProfileConfig.from_file(profile_path)
     print(f"Using profile: {profile.name}")
+
+    # Set demographics for personalized range selection
+    if profile.demographics:
+        set_demographics(profile.demographics)
+        demo_info = []
+        if profile.demographics.gender:
+            demo_info.append(f"gender={profile.demographics.gender}")
+        if profile.demographics.age is not None:
+            demo_info.append(f"age={profile.demographics.age}")
+        if demo_info:
+            print(f"Demographics: {', '.join(demo_info)}")
 
     if not profile.output_path:
         print(f"Error: Profile '{args.profile}' has no output_path defined.")
