@@ -449,6 +449,22 @@ def _get_csv_path(pdf_path: Path, output_path: Path) -> Path:
     return output_path / pdf_path.stem / f"{pdf_path.stem}.csv"
 
 
+# Required columns that must exist in document CSVs
+REQUIRED_CSV_COLS = ["result_index", "page_number", "source_file"]
+
+
+def _is_csv_valid(csv_path: Path, required_cols: list[str] = REQUIRED_CSV_COLS) -> bool:
+    """Check if CSV exists and has all required columns."""
+    if not csv_path.exists():
+        return False
+    try:
+        # Read just the header to check columns
+        df = pd.read_csv(csv_path, nrows=0)
+        return all(col in df.columns for col in required_cols)
+    except Exception:
+        return False
+
+
 def _process_pdf_wrapper(args):
     """Wrapper function for multiprocessing with progress tracking."""
     return process_single_pdf(*args)
@@ -642,13 +658,16 @@ def main():
     # Check for empty extractions and prompt user to reprocess
     _prompt_reprocess_empty(config.output_path)
 
-    # Filter out PDFs that already have their CSV
+    # Filter out PDFs that already have a valid CSV (with all required columns)
     pdfs_to_process = []
     skipped_count = 0
     for pdf_path in pdf_files:
-        if _get_csv_path(pdf_path, config.output_path).exists():
+        csv_path = _get_csv_path(pdf_path, config.output_path)
+        if _is_csv_valid(csv_path):
             skipped_count += 1
         else:
+            if csv_path.exists():
+                logger.info(f"Re-processing {pdf_path.name}: CSV missing required columns")
             pdfs_to_process.append(pdf_path)
 
     logger.info(f"Skipping {skipped_count} already-processed PDF(s)")
@@ -656,8 +675,8 @@ def main():
 
     if not pdfs_to_process:
         logger.info("All PDFs already processed. Moving to merge step...")
-        # Still need to get CSV paths for merging
-        csv_paths = [p for pdf in pdf_files if (p := _get_csv_path(pdf, config.output_path)).exists()]
+        # Still need to get CSV paths for merging (only valid CSVs)
+        csv_paths = [p for pdf in pdf_files if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))]
         pdfs_failed = 0
     else:
         # Process PDFs in parallel
@@ -677,8 +696,8 @@ def main():
         # Track failed PDFs
         pdfs_failed = sum(1 for r in results if r is None)
 
-        # Collect CSV paths from ALL PDF files, not just the ones processed in this run
-        csv_paths = [p for pdf in pdf_files if (p := _get_csv_path(pdf, config.output_path)).exists()]
+        # Collect CSV paths from ALL PDF files, only including valid CSVs with required columns
+        csv_paths = [p for pdf in pdf_files if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))]
 
     if not csv_paths:
         logger.error("No PDFs successfully processed. Exiting.")
