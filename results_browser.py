@@ -9,12 +9,16 @@ Or for auto-reload: gradio results_browser.py
 """
 
 import os
+import sys
+import argparse
 import pandas as pd
 import gradio as gr
 import plotly.graph_objects as go
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
+
+from config import ProfileConfig
 
 # Load .env from repo root
 load_dotenv(Path(__file__).parent / '.env')
@@ -126,12 +130,22 @@ if (document.readyState === 'loading') {
 # Configuration
 # =============================================================================
 
+# Global output path (set from profile or environment)
+_configured_output_path: Optional[Path] = None
+
+
+def set_output_path(path: Path) -> None:
+    """Set the output path (called from main when using profile)."""
+    global _configured_output_path
+    _configured_output_path = path
+
+
 # Display columns for the data table (in order) - standardized values only
 DISPLAY_COLUMNS = [
     'date',
-    'lab_name_standardized',
-    'value_primary',
-    'lab_unit_primary',
+    'lab_name',
+    'value',
+    'unit',
     'reference_range',
     'is_out_of_reference',
 ]
@@ -139,16 +153,19 @@ DISPLAY_COLUMNS = [
 # Column display names (human-readable)
 COLUMN_LABELS = {
     'date': 'Date',
-    'lab_name_standardized': 'Lab Name',
-    'value_primary': 'Value',
-    'lab_unit_primary': 'Unit',
+    'lab_name': 'Lab Name',
+    'value': 'Value',
+    'unit': 'Unit',
     'reference_range': 'Reference Range',
     'is_out_of_reference': 'Abnormal',
 }
 
 
 def get_output_path() -> Path:
-    """Get output path from environment."""
+    """Get output path from configuration, profile, or environment."""
+    global _configured_output_path
+    if _configured_output_path:
+        return _configured_output_path
     return Path(os.getenv('OUTPUT_PATH', './output'))
 
 
@@ -193,6 +210,37 @@ def load_data(output_path: Path) -> pd.DataFrame:
     if 'date' in df.columns:
         df['date'] = pd.to_datetime(df['date'], errors='coerce')
 
+    # Compute reference_range from reference_min and reference_max
+    if 'reference_min' in df.columns and 'reference_max' in df.columns:
+        def format_range(row):
+            ref_min = row['reference_min']
+            ref_max = row['reference_max']
+            if pd.isna(ref_min) and pd.isna(ref_max):
+                return ''
+            if pd.isna(ref_min):
+                return f'< {ref_max}'
+            if pd.isna(ref_max):
+                return f'> {ref_min}'
+            return f'{ref_min} - {ref_max}'
+        df['reference_range'] = df.apply(format_range, axis=1)
+
+    # Compute is_out_of_reference by checking if value is outside range
+    if 'value' in df.columns and 'reference_min' in df.columns and 'reference_max' in df.columns:
+        def check_out_of_range(row):
+            val = row['value']
+            ref_min = row['reference_min']
+            ref_max = row['reference_max']
+            if pd.isna(val):
+                return None
+            if pd.isna(ref_min) and pd.isna(ref_max):
+                return None  # No reference range to compare against
+            if pd.notna(ref_min) and val < ref_min:
+                return True
+            if pd.notna(ref_max) and val > ref_max:
+                return True
+            return False
+        df['is_out_of_reference'] = df.apply(check_out_of_range, axis=1)
+
     return df
 
 
@@ -202,7 +250,7 @@ def get_summary_stats(df: pd.DataFrame) -> str:
         return "No data loaded"
 
     total = len(df)
-    unique_tests = df['lab_name_standardized'].nunique() if 'lab_name_standardized' in df.columns else 0
+    unique_tests = df['lab_name'].nunique() if 'lab_name' in df.columns else 0
 
     # Date range
     date_range = ""
@@ -238,7 +286,7 @@ def apply_filters(
 
     # Filter by lab name (single selection)
     if lab_name:
-        filtered = filtered[filtered['lab_name_standardized'] == lab_name]
+        filtered = filtered[filtered['lab_name'] == lab_name]
 
     # Filter abnormal only
     if abnormal_only and 'is_out_of_reference' in filtered.columns:
@@ -249,9 +297,9 @@ def apply_filters(
         filtered = filtered.sort_values('date', ascending=False, na_position='last')
 
     # Latest only: keep only the most recent value per lab test
-    if latest_only and 'lab_name_standardized' in filtered.columns and 'date' in filtered.columns:
+    if latest_only and 'lab_name' in filtered.columns and 'date' in filtered.columns:
         # Already sorted by date desc, so first occurrence per lab is the latest
-        filtered = filtered.drop_duplicates(subset=['lab_name_standardized'], keep='first')
+        filtered = filtered.drop_duplicates(subset=['lab_name'], keep='first')
 
     # Reset index so iloc positions match displayed row positions
     filtered = filtered.reset_index(drop=True)
@@ -282,8 +330,8 @@ def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
         )
 
     # Round numeric columns
-    if 'value_primary' in display_df.columns:
-        display_df['value_primary'] = display_df['value_primary'].round(2)
+    if 'value' in display_df.columns:
+        display_df['value'] = display_df['value'].round(2)
 
     return display_df
 
@@ -309,7 +357,7 @@ def create_interactive_plot(df: pd.DataFrame, lab_name: Optional[str]) -> go.Fig
         return fig
 
     # Filter for selected lab
-    lab_df = df[df['lab_name_standardized'] == lab_name].copy()
+    lab_df = df[df['lab_name'] == lab_name].copy()
 
     if lab_df.empty:
         fig = go.Figure()
@@ -324,7 +372,7 @@ def create_interactive_plot(df: pd.DataFrame, lab_name: Optional[str]) -> go.Fig
 
     # Ensure date is datetime and sort
     lab_df['date'] = pd.to_datetime(lab_df['date'], errors='coerce')
-    lab_df = lab_df.dropna(subset=['date', 'value_primary'])
+    lab_df = lab_df.dropna(subset=['date', 'value'])
     lab_df = lab_df.sort_values('date')
 
     if lab_df.empty:
@@ -340,8 +388,8 @@ def create_interactive_plot(df: pd.DataFrame, lab_name: Optional[str]) -> go.Fig
 
     # Get unit
     unit = ""
-    if 'lab_unit_primary' in lab_df.columns:
-        units = lab_df['lab_unit_primary'].dropna()
+    if 'unit' in lab_df.columns:
+        units = lab_df['unit'].dropna()
         if not units.empty:
             unit = str(units.iloc[0])
 
@@ -350,7 +398,7 @@ def create_interactive_plot(df: pd.DataFrame, lab_name: Optional[str]) -> go.Fig
     # Add data trace
     fig.add_trace(go.Scatter(
         x=lab_df['date'],
-        y=lab_df['value_primary'],
+        y=lab_df['value'],
         mode='lines+markers',
         name=lab_name,
         marker=dict(size=10, color='#1f77b4'),
@@ -439,7 +487,7 @@ def handle_filter_change(
 
     if not filtered_df.empty:
         first_row = filtered_df.iloc[0]
-        selected_lab = first_row.get('lab_name_standardized')
+        selected_lab = first_row.get('lab_name')
         position_text = f"**Row 1 of {len(filtered_df)}**"
         image_path = get_image_path(first_row.to_dict(), get_output_path())
 
@@ -465,7 +513,7 @@ def handle_row_select(
 
     # Get row data
     row = filtered_df.iloc[row_idx]
-    lab_name = row.get('lab_name_standardized')
+    lab_name = row.get('lab_name')
     position_text = f"**Row {row_idx + 1} of {len(filtered_df)}**"
     image_path = get_image_path(row.to_dict(), get_output_path())
 
@@ -487,7 +535,7 @@ def handle_previous(
         new_idx = len(filtered_df) - 1  # Wrap to last
 
     row = filtered_df.iloc[new_idx]
-    lab_name = row.get('lab_name_standardized')
+    lab_name = row.get('lab_name')
     position_text = f"**Row {new_idx + 1} of {len(filtered_df)}**"
     image_path = get_image_path(row.to_dict(), get_output_path())
 
@@ -509,7 +557,7 @@ def handle_next(
         new_idx = 0  # Wrap to first
 
     row = filtered_df.iloc[new_idx]
-    lab_name = row.get('lab_name_standardized')
+    lab_name = row.get('lab_name')
     position_text = f"**Row {new_idx + 1} of {len(filtered_df)}**"
     image_path = get_image_path(row.to_dict(), get_output_path())
 
@@ -542,14 +590,14 @@ def create_app():
 
     # Get unique lab names for dropdown
     lab_name_choices = []
-    if not full_df.empty and 'lab_name_standardized' in full_df.columns:
-        lab_name_choices = sorted(full_df['lab_name_standardized'].dropna().unique().tolist())
+    if not full_df.empty and 'lab_name' in full_df.columns:
+        lab_name_choices = sorted(full_df['lab_name'].dropna().unique().tolist())
 
     # Initial position text
     initial_position = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
 
     # Initial plot (first row's lab) and image
-    initial_lab = full_df.iloc[0].get('lab_name_standardized') if not full_df.empty else None
+    initial_lab = full_df.iloc[0].get('lab_name') if not full_df.empty else None
     initial_image = get_image_path(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
 
     with gr.Blocks(title="Lab Results Browser") as demo:
@@ -690,9 +738,75 @@ def create_app():
     return demo
 
 
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description='Lab Results Browser UI',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python results_browser.py --profile tiago
+  python results_browser.py --list-profiles
+        """
+    )
+    parser.add_argument(
+        '--profile', '-p',
+        type=str,
+        help='Profile name (required unless using --list-profiles)'
+    )
+    parser.add_argument(
+        '--list-profiles',
+        action='store_true',
+        help='List available profiles and exit'
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
+    args = parse_args()
+
+    # Handle --list-profiles
+    if args.list_profiles:
+        profiles = ProfileConfig.list_profiles()
+        if profiles:
+            print("Available profiles:")
+            for name in profiles:
+                print(f"  - {name}")
+        else:
+            print("No profiles found. Create profiles in the 'profiles/' directory.")
+        sys.exit(0)
+
+    # Profile is required for all other operations
+    if not args.profile:
+        print("Error: --profile is required.")
+        print("Use --list-profiles to see available profiles.")
+        print("Example: python results_browser.py --profile tiago")
+        sys.exit(1)
+
+    # Load profile
+    profile_path = None
+    for ext in ('.yaml', '.yml', '.json'):
+        p = Path(f"profiles/{args.profile}{ext}")
+        if p.exists():
+            profile_path = p
+            break
+
+    if not profile_path:
+        print(f"Error: Profile '{args.profile}' not found")
+        print("Use --list-profiles to see available profiles.")
+        sys.exit(1)
+
+    profile = ProfileConfig.from_file(profile_path)
+    print(f"Using profile: {profile.name}")
+
+    if not profile.output_path:
+        print(f"Error: Profile '{args.profile}' has no output_path defined.")
+        sys.exit(1)
+
+    output_path = profile.output_path
+    set_output_path(output_path)
+
     demo = create_app()
-    output_path = get_output_path()
 
     # Build list of allowed paths for serving files
     allowed_paths = [str(output_path)]
