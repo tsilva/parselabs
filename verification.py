@@ -1007,20 +1007,25 @@ def verify_page_extraction(
     client: OpenAI,
     primary_model: str,
     verification_model: Optional[str] = None,
-    enable_completeness_check: bool = True,
-    enable_character_verification: bool = True,
 ) -> Tuple[dict, dict]:
     """
-    Convenience function to verify a page extraction.
+    Verify a page extraction using cross-model verification.
+
+    Simplified verification pipeline:
+    1. Cross-model extraction (extract with different model)
+    2. Batch verification for disagreements
+
+    Removed stages (moved to optional future):
+    - Character-level verification (high cost, low value)
+    - Completeness check (low value)
+    - Arbitration (rarely needed)
 
     Args:
         image_path: Path to source image
         extracted_data: Dict with 'lab_results' key
         client: OpenAI client for OpenRouter
         primary_model: Model used for primary extraction
-        verification_model: Override verification model
-        enable_completeness_check: Check for missed results
-        enable_character_verification: Do character-level verification
+        verification_model: Override verification model (auto-selected if None)
 
     Returns:
         Tuple of (verified_data, summary_dict)
@@ -1029,8 +1034,8 @@ def verify_page_extraction(
         client=client,
         primary_model=primary_model,
         verification_model=verification_model,
-        enable_completeness_check=enable_completeness_check,
-        enable_character_verification=enable_character_verification,
+        enable_completeness_check=False,  # Disabled - low value
+        enable_character_verification=False,  # Disabled - high cost, low value
     )
 
     verified_data, summary = verifier.verify_page(image_path, extracted_data)

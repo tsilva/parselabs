@@ -1,0 +1,16 @@
+# Profile Template - Copy this file and rename to {your_name}.yaml
+# This is the simplified profile format for labs-parser
+
+name: "Your Name"
+
+# Required: Paths to input/output directories
+input_path: "/path/to/your/lab/pdfs"
+output_path: "/path/to/your/output"
+
+# Optional: Filter which PDFs to process (default: *.pdf)
+input_file_regex: "*.pdf"
+
+# Optional overrides (defaults shown):
+# model: "google/gemini-2.5-flash"  # Extraction model
+# verify: true                       # Enable cross-model verification
+# workers: 4                         # Parallel workers
