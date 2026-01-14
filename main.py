@@ -387,14 +387,20 @@ def _process_pdf_wrapper(args):
     return process_single_pdf(*args)
 
 
-def _find_empty_extractions(output_path: Path) -> list[tuple[Path, list[Path]]]:
-    """Find all PDFs that have empty extraction JSONs."""
+def _find_empty_extractions(output_path: Path, matching_stems: set[str]) -> list[tuple[Path, list[Path]]]:
+    """Find all PDFs that have empty extraction JSONs.
+
+    Only considers output directories that match the input file pattern.
+    """
     empty_by_pdf = []
 
     for pdf_dir in output_path.iterdir():
         if not pdf_dir.is_dir():
             continue
         if pdf_dir.name.startswith('.'):
+            continue
+        # Only check directories that match the input pattern
+        if pdf_dir.name not in matching_stems:
             continue
 
         empty_jsons = []
@@ -412,9 +418,9 @@ def _find_empty_extractions(output_path: Path) -> list[tuple[Path, list[Path]]]:
     return sorted(empty_by_pdf, key=lambda x: x[0].name)
 
 
-def _prompt_reprocess_empty(output_path: Path) -> list[Path]:
+def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list[Path]:
     """Check for empty extractions and prompt user to reprocess each one."""
-    empty_extractions = _find_empty_extractions(output_path)
+    empty_extractions = _find_empty_extractions(output_path, matching_stems)
 
     if not empty_extractions:
         return []
@@ -532,8 +538,8 @@ Examples:
     parser.add_argument(
         '--pattern',
         type=str,
-        default='*.pdf',
-        help='Glob pattern for input files (default: *.pdf)'
+        default=None,
+        help='Glob pattern for input files (overrides profile, default: *.pdf)'
     )
 
     return parser.parse_args()
@@ -648,6 +654,7 @@ def main():
 
     # Find PDFs to process
     pdf_files = sorted(list(config.input_path.glob(config.input_file_regex)))
+    matching_stems = {p.stem for p in pdf_files}
     logger.info(f"Found {len(pdf_files)} PDF(s) matching '{config.input_file_regex}'")
 
     if not pdf_files:
@@ -655,7 +662,7 @@ def main():
         return
 
     # Check for empty extractions and prompt user to reprocess
-    _prompt_reprocess_empty(config.output_path)
+    _prompt_reprocess_empty(config.output_path, matching_stems)
 
     # Filter out PDFs that already have a valid CSV
     pdfs_to_process = []
