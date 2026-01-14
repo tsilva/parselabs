@@ -66,13 +66,13 @@ class LabResult(BaseModel):
     lab_name_standardized: Optional[str] = Field(default=None, description="Standardized lab name")
     lab_unit_standardized: Optional[str] = Field(default=None, description="Standardized lab unit")
 
-    # Review tracking fields
+    # Review tracking fields (all prefixed with review_)
     result_index: Optional[int] = Field(default=None, description="Index of this result in the source JSON lab_results array")
-    needs_review: Optional[bool] = Field(default=False, description="Whether this result needs human review (auto-flagged)")
+    review_needed: Optional[bool] = Field(default=False, description="Whether this result needs human review (auto-flagged)")
     review_reason: Optional[str] = Field(default=None, description="Reason why review is needed (auto-generated)")
-    confidence_score: Optional[float] = Field(default=1.0, description="Confidence score 0-1 (auto-generated)")
+    review_confidence: Optional[float] = Field(default=1.0, description="Confidence score 0-1 (auto-generated)")
     review_status: Optional[str] = Field(default=None, description="Human review status: 'accepted', 'rejected', or null")
-    reviewed_at: Optional[str] = Field(default=None, description="ISO timestamp when review was completed")
+    review_completed_at: Optional[str] = Field(default=None, description="ISO timestamp when review was completed")
 
     # Verification fields (added by post-extraction verification)
     verification_status: Optional[str] = Field(default=None, description="Verification status: verified, corrected, uncertain, not_verified")

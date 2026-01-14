@@ -32,7 +32,7 @@ class PipelineMetrics:
     unknown_units: list = field(default_factory=list)
 
     # Edge cases
-    needs_review_count: int = 0
+    review_needed_count: int = 0
     high_priority_count: int = 0  # confidence < 0.7
     edge_case_breakdown: dict = field(default_factory=dict)
 
@@ -83,17 +83,17 @@ class RunReportGenerator:
 
     def _compute_edge_case_metrics(self) -> None:
         """Compute edge case and review metrics."""
-        if 'needs_review' not in self.df.columns:
+        if 'review_needed' not in self.df.columns:
             return
 
-        self.metrics.needs_review_count = int(self.df['needs_review'].sum())
+        self.metrics.review_needed_count = int(self.df['review_needed'].sum())
 
-        if 'confidence_score' in self.df.columns:
-            self.metrics.high_priority_count = int((self.df['confidence_score'] < 0.7).sum())
+        if 'review_confidence' in self.df.columns:
+            self.metrics.high_priority_count = int((self.df['review_confidence'] < 0.7).sum())
 
         # Breakdown by reason
-        if self.metrics.needs_review_count > 0 and 'review_reason' in self.df.columns:
-            review_df = self.df[self.df['needs_review'] == True]
+        if self.metrics.review_needed_count > 0 and 'review_reason' in self.df.columns:
+            review_df = self.df[self.df['review_needed'] == True]
             reasons = review_df['review_reason'].str.split('; ').explode()
             reasons = reasons[reasons != '']
             self.metrics.edge_case_breakdown = reasons.value_counts().to_dict()
@@ -165,8 +165,8 @@ class RunReportGenerator:
             lines.append("")
 
         # Review summary
-        if self.metrics.needs_review_count > 0:
-            lines.append(f"  ITEMS NEEDING REVIEW: {self.metrics.needs_review_count}")
+        if self.metrics.review_needed_count > 0:
+            lines.append(f"  ITEMS NEEDING REVIEW: {self.metrics.review_needed_count}")
             lines.append(f"    - High priority (conf < 0.7): {self.metrics.high_priority_count}")
             lines.append("")
 
@@ -249,11 +249,11 @@ class RunReportGenerator:
             f"",
         ])
 
-        if self.metrics.needs_review_count == 0:
+        if self.metrics.review_needed_count == 0:
             lines.append("No items flagged for review.")
         else:
             lines.extend([
-                f"**{self.metrics.needs_review_count}** items need review",
+                f"**{self.metrics.review_needed_count}** items need review",
                 f"**{self.metrics.high_priority_count}** high priority (confidence < 0.7)",
                 f"",
             ])

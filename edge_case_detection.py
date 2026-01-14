@@ -26,14 +26,14 @@ class EdgeCaseDetector:
         Identify rows that need human review.
 
         Returns DataFrame with additional columns:
-        - needs_review: bool
+        - review_needed: bool
         - review_reason: str
-        - confidence_score: float (0-1)
+        - review_confidence: float (0-1)
         """
         df = df.copy()
-        df['needs_review'] = False
+        df['review_needed'] = False
         df['review_reason'] = ''
-        df['confidence_score'] = 1.0
+        df['review_confidence'] = 1.0
 
         # Apply each edge case detection rule
         for rule in self.edge_case_rules:
@@ -49,9 +49,9 @@ class EdgeCaseDetector:
             df['source_text'].str.len() > 10  # Has meaningful source text
         )
 
-        df.loc[mask, 'needs_review'] = True
+        df.loc[mask, 'review_needed'] = True
         df.loc[mask, 'review_reason'] += 'NULL_VALUE_WITH_SOURCE; '
-        df.loc[mask, 'confidence_score'] = df.loc[mask, 'confidence_score'] * 0.5
+        df.loc[mask, 'review_confidence'] = df.loc[mask, 'review_confidence'] * 0.5
 
         return df
 
@@ -114,9 +114,9 @@ class EdgeCaseDetector:
             ~df['lab_name_raw'].str.contains('pH|ratio|index|score', case=False, na=False)  # Exclude unitless tests
         )
 
-        df.loc[mask, 'needs_review'] = True
+        df.loc[mask, 'review_needed'] = True
         df.loc[mask, 'review_reason'] += 'NUMERIC_NO_UNIT; '
-        df.loc[mask, 'confidence_score'] = df.loc[mask, 'confidence_score'] * 0.8
+        df.loc[mask, 'review_confidence'] = df.loc[mask, 'review_confidence'] * 0.8
 
         return df
 
@@ -134,9 +134,9 @@ class EdgeCaseDetector:
             value_raw_str.str.contains(r'^[<>≤≥]', na=False, regex=True)
         )
 
-        df.loc[mask, 'needs_review'] = True
+        df.loc[mask, 'review_needed'] = True
         df.loc[mask, 'review_reason'] += 'INEQUALITY_IN_VALUE; '
-        df.loc[mask, 'confidence_score'] = df.loc[mask, 'confidence_score'] * 0.6
+        df.loc[mask, 'review_confidence'] = df.loc[mask, 'review_confidence'] * 0.6
 
         return df
 
@@ -199,8 +199,8 @@ class EdgeCaseDetector:
                     (df['page_number'] == page_num) &
                     (df['lab_name_standardized'] == lab_name)
                 )
-                df.loc[mask, 'needs_review'] = True
+                df.loc[mask, 'review_needed'] = True
                 df.loc[mask, 'review_reason'] += 'DUPLICATE_TEST_NAME; '
-                df.loc[mask, 'confidence_score'] = df.loc[mask, 'confidence_score'] * 0.7
+                df.loc[mask, 'review_confidence'] = df.loc[mask, 'review_confidence'] * 0.7
 
         return df
