@@ -14,6 +14,7 @@ import argparse
 import pandas as pd
 import gradio as gr
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
@@ -274,7 +275,7 @@ def get_summary_stats(df: pd.DataFrame) -> str:
 
 def apply_filters(
     df: pd.DataFrame,
-    lab_name: Optional[str],
+    lab_names: Optional[list],
     abnormal_only: bool,
     latest_only: bool = False
 ) -> pd.DataFrame:
@@ -284,9 +285,9 @@ def apply_filters(
 
     filtered = df.copy()
 
-    # Filter by lab name (single selection)
-    if lab_name:
-        filtered = filtered[filtered['lab_name'] == lab_name]
+    # Filter by lab names (multi-selection)
+    if lab_names:
+        filtered = filtered[filtered['lab_name'].isin(lab_names)]
 
     # Filter abnormal only
     if abnormal_only and 'is_out_of_reference' in filtered.columns:
@@ -340,23 +341,8 @@ def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
 # Plotting
 # =============================================================================
 
-def create_interactive_plot(df: pd.DataFrame, lab_name: Optional[str]) -> go.Figure:
-    """Generate interactive Plotly plot for a specific lab test."""
-    if not lab_name or df.empty:
-        fig = go.Figure()
-        fig.add_annotation(
-            text="Select a lab test to view its time series",
-            xref="paper", yref="paper",
-            x=0.5, y=0.5, showarrow=False,
-            font=dict(size=16, color="gray")
-        )
-        fig.update_layout(
-            template='plotly_white',
-            height=400
-        )
-        return fig
-
-    # Filter for selected lab
+def create_single_lab_plot(df: pd.DataFrame, lab_name: str) -> tuple[go.Figure, str]:
+    """Generate a single plot for one lab test. Returns (figure, unit)."""
     lab_df = df[df['lab_name'] == lab_name].copy()
 
     if lab_df.empty:
@@ -367,8 +353,8 @@ def create_interactive_plot(df: pd.DataFrame, lab_name: Optional[str]) -> go.Fig
             x=0.5, y=0.5, showarrow=False,
             font=dict(size=16, color="gray")
         )
-        fig.update_layout(template='plotly_white', height=400)
-        return fig
+        fig.update_layout(template='plotly_white', height=300)
+        return fig, ""
 
     # Ensure date is datetime and sort
     lab_df['date'] = pd.to_datetime(lab_df['date'], errors='coerce')
@@ -383,8 +369,8 @@ def create_interactive_plot(df: pd.DataFrame, lab_name: Optional[str]) -> go.Fig
             x=0.5, y=0.5, showarrow=False,
             font=dict(size=16, color="gray")
         )
-        fig.update_layout(template='plotly_white', height=400)
-        return fig
+        fig.update_layout(template='plotly_white', height=300)
+        return fig, ""
 
     # Get unit
     unit = ""
@@ -416,49 +402,140 @@ def create_interactive_plot(df: pd.DataFrame, lab_name: Optional[str]) -> go.Fig
         max_vals = lab_df['healthy_range_max'].dropna()
 
         if not min_vals.empty and not max_vals.empty:
-            # Use mode (most common value) for reference range
             ref_min = float(min_vals.mode().iloc[0]) if len(min_vals.mode()) > 0 else float(min_vals.iloc[0])
             ref_max = float(max_vals.mode().iloc[0]) if len(max_vals.mode()) > 0 else float(max_vals.iloc[0])
 
-            # Green band for healthy range
             fig.add_hrect(
                 y0=ref_min, y1=ref_max,
                 fillcolor="rgba(75, 192, 75, 0.15)",
                 line_width=0,
-                annotation_text="Healthy Range",
-                annotation_position="top left",
-                annotation=dict(font_size=10, font_color="green")
             )
+            fig.add_hline(y=ref_min, line_dash="dash", line_color="gray")
+            fig.add_hline(y=ref_max, line_dash="dash", line_color="gray")
 
-            # Add reference lines
-            fig.add_hline(
-                y=ref_min,
-                line_dash="dash",
-                line_color="gray",
-                annotation_text=f"Min: {ref_min:.1f}",
-                annotation_position="bottom right"
-            )
-            fig.add_hline(
-                y=ref_max,
-                line_dash="dash",
-                line_color="gray",
-                annotation_text=f"Max: {ref_max:.1f}",
-                annotation_position="top right"
-            )
-
-    # Layout
     fig.update_layout(
         title=dict(
             text=f"{lab_name}" + (f" [{unit}]" if unit else ""),
-            font=dict(size=16)
+            font=dict(size=14)
         ),
         xaxis_title="Date",
         yaxis_title=f"Value ({unit})" if unit else "Value",
         hovermode='x unified',
         template='plotly_white',
-        height=400,
-        margin=dict(l=60, r=20, t=60, b=60),
+        height=300,
+        margin=dict(l=60, r=20, t=40, b=40),
         showlegend=False
+    )
+
+    return fig, unit
+
+
+def create_interactive_plot(df: pd.DataFrame, lab_names: Optional[list]) -> go.Figure:
+    """Generate interactive Plotly plot(s) for selected lab tests.
+
+    When multiple labs are selected, creates vertically stacked subplots.
+    """
+    # Handle empty selection
+    if not lab_names or df.empty:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="Select lab tests to view time series",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16, color="gray")
+        )
+        fig.update_layout(
+            template='plotly_white',
+            height=400
+        )
+        return fig
+
+    # Single lab - simple case
+    if len(lab_names) == 1:
+        fig, _ = create_single_lab_plot(df, lab_names[0])
+        fig.update_layout(height=400)
+        return fig
+
+    # Multiple labs - create stacked subplots
+    n_labs = len(lab_names)
+    fig = make_subplots(
+        rows=n_labs,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.08,
+        subplot_titles=lab_names
+    )
+
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+              '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+
+    for i, lab_name in enumerate(lab_names):
+        lab_df = df[df['lab_name'] == lab_name].copy()
+
+        if lab_df.empty:
+            continue
+
+        lab_df['date'] = pd.to_datetime(lab_df['date'], errors='coerce')
+        lab_df = lab_df.dropna(subset=['date', 'value'])
+        lab_df = lab_df.sort_values('date')
+
+        if lab_df.empty:
+            continue
+
+        # Get unit
+        unit = ""
+        if 'unit' in lab_df.columns:
+            units = lab_df['unit'].dropna()
+            if not units.empty:
+                unit = str(units.iloc[0])
+
+        color = colors[i % len(colors)]
+
+        fig.add_trace(
+            go.Scatter(
+                x=lab_df['date'],
+                y=lab_df['value'],
+                mode='lines+markers',
+                name=lab_name,
+                marker=dict(size=8, color=color),
+                line=dict(width=2, color=color),
+                hovertemplate=(
+                    '<b>Date:</b> %{x|%Y-%m-%d}<br>'
+                    f'<b>Value:</b> %{{y:.2f}} {unit}<br>'
+                    '<extra></extra>'
+                )
+            ),
+            row=i + 1,
+            col=1
+        )
+
+        # Add reference range bands if available
+        if 'healthy_range_min' in lab_df.columns and 'healthy_range_max' in lab_df.columns:
+            min_vals = lab_df['healthy_range_min'].dropna()
+            max_vals = lab_df['healthy_range_max'].dropna()
+
+            if not min_vals.empty and not max_vals.empty:
+                ref_min = float(min_vals.mode().iloc[0]) if len(min_vals.mode()) > 0 else float(min_vals.iloc[0])
+                ref_max = float(max_vals.mode().iloc[0]) if len(max_vals.mode()) > 0 else float(max_vals.iloc[0])
+
+                fig.add_hrect(
+                    y0=ref_min, y1=ref_max,
+                    fillcolor="rgba(75, 192, 75, 0.15)",
+                    line_width=0,
+                    row=i + 1, col=1
+                )
+
+        # Update y-axis label
+        fig.update_yaxes(title_text=unit if unit else "Value", row=i + 1, col=1)
+
+    # Layout
+    height_per_chart = 250
+    fig.update_layout(
+        template='plotly_white',
+        height=height_per_chart * n_labs,
+        margin=dict(l=60, r=20, t=40, b=40),
+        showlegend=False,
+        hovermode='x unified'
     )
 
     return fig
@@ -469,29 +546,37 @@ def create_interactive_plot(df: pd.DataFrame, lab_name: Optional[str]) -> go.Fig
 # =============================================================================
 
 def handle_filter_change(
-    lab_name: Optional[str],
+    lab_names: Optional[list],
     abnormal_only: bool,
     latest_only: bool,
     full_df: pd.DataFrame
 ):
     """Handle filter changes and update display."""
-    filtered_df = apply_filters(full_df, lab_name, abnormal_only, latest_only)
+    filtered_df = apply_filters(full_df, lab_names, abnormal_only, latest_only)
     display_df = prepare_display_df(filtered_df)
     summary = get_summary_stats(filtered_df)
 
-    # Reset to first row, get its lab for plot
+    # Reset to first row
     current_idx = 0
-    selected_lab = None
     position_text = "No results"
     image_path = None
 
+    # Determine which labs to plot
+    if lab_names:
+        # Use filtered labs for plot
+        plot_labs = lab_names
+    elif not filtered_df.empty:
+        # No filter - show first row's lab
+        plot_labs = [filtered_df.iloc[0].get('lab_name')]
+    else:
+        plot_labs = []
+
     if not filtered_df.empty:
         first_row = filtered_df.iloc[0]
-        selected_lab = first_row.get('lab_name')
         position_text = f"**Row 1 of {len(filtered_df)}**"
         image_path = get_image_path(first_row.to_dict(), get_output_path())
 
-    plot = create_interactive_plot(full_df, selected_lab)
+    plot = create_interactive_plot(full_df, plot_labs)
 
     return display_df, summary, plot, filtered_df, current_idx, position_text, image_path
 
@@ -499,35 +584,42 @@ def handle_filter_change(
 def handle_row_select(
     evt: gr.SelectData,
     filtered_df: pd.DataFrame,
-    full_df: pd.DataFrame
+    full_df: pd.DataFrame,
+    lab_names: Optional[list]
 ):
     """Handle row selection to update plot and current index."""
     if evt is None or filtered_df.empty:
-        return create_interactive_plot(full_df, None), 0, "No results", None
+        return create_interactive_plot(full_df, []), 0, "No results", None
 
     # Get the selected row index
     row_idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
 
     if row_idx >= len(filtered_df):
-        return create_interactive_plot(full_df, None), 0, "No results", None
+        return create_interactive_plot(full_df, []), 0, "No results", None
 
     # Get row data
     row = filtered_df.iloc[row_idx]
-    lab_name = row.get('lab_name')
     position_text = f"**Row {row_idx + 1} of {len(filtered_df)}**"
     image_path = get_image_path(row.to_dict(), get_output_path())
 
-    return create_interactive_plot(full_df, lab_name), row_idx, position_text, image_path
+    # Determine which labs to plot
+    if lab_names:
+        plot_labs = lab_names
+    else:
+        plot_labs = [row.get('lab_name')]
+
+    return create_interactive_plot(full_df, plot_labs), row_idx, position_text, image_path
 
 
 def handle_previous(
     current_idx: int,
     filtered_df: pd.DataFrame,
-    full_df: pd.DataFrame
+    full_df: pd.DataFrame,
+    lab_names: Optional[list]
 ):
     """Navigate to previous row."""
     if filtered_df.empty:
-        return create_interactive_plot(full_df, None), 0, "No results", None
+        return create_interactive_plot(full_df, []), 0, "No results", None
 
     # Move to previous row (with wrap-around)
     new_idx = current_idx - 1
@@ -535,21 +627,27 @@ def handle_previous(
         new_idx = len(filtered_df) - 1  # Wrap to last
 
     row = filtered_df.iloc[new_idx]
-    lab_name = row.get('lab_name')
     position_text = f"**Row {new_idx + 1} of {len(filtered_df)}**"
     image_path = get_image_path(row.to_dict(), get_output_path())
 
-    return create_interactive_plot(full_df, lab_name), new_idx, position_text, image_path
+    # Determine which labs to plot
+    if lab_names:
+        plot_labs = lab_names
+    else:
+        plot_labs = [row.get('lab_name')]
+
+    return create_interactive_plot(full_df, plot_labs), new_idx, position_text, image_path
 
 
 def handle_next(
     current_idx: int,
     filtered_df: pd.DataFrame,
-    full_df: pd.DataFrame
+    full_df: pd.DataFrame,
+    lab_names: Optional[list]
 ):
     """Navigate to next row."""
     if filtered_df.empty:
-        return create_interactive_plot(full_df, None), 0, "No results", None
+        return create_interactive_plot(full_df, []), 0, "No results", None
 
     # Move to next row (with wrap-around)
     new_idx = current_idx + 1
@@ -557,11 +655,16 @@ def handle_next(
         new_idx = 0  # Wrap to first
 
     row = filtered_df.iloc[new_idx]
-    lab_name = row.get('lab_name')
     position_text = f"**Row {new_idx + 1} of {len(filtered_df)}**"
     image_path = get_image_path(row.to_dict(), get_output_path())
 
-    return create_interactive_plot(full_df, lab_name), new_idx, position_text, image_path
+    # Determine which labs to plot
+    if lab_names:
+        plot_labs = lab_names
+    else:
+        plot_labs = [row.get('lab_name')]
+
+    return create_interactive_plot(full_df, plot_labs), new_idx, position_text, image_path
 
 
 def export_csv(filtered_df: pd.DataFrame):
@@ -596,8 +699,8 @@ def create_app():
     # Initial position text
     initial_position = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
 
-    # Initial plot (first row's lab) and image
-    initial_lab = full_df.iloc[0].get('lab_name') if not full_df.empty else None
+    # Initial plot (empty - no labs selected) and image
+    initial_labs = []  # Start with no filter applied
     initial_image = get_image_path(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
 
     with gr.Blocks(title="Lab Results Browser") as demo:
@@ -616,9 +719,10 @@ def create_app():
             with gr.Column(scale=3):
                 lab_name_filter = gr.Dropdown(
                     choices=lab_name_choices,
-                    multiselect=False,
-                    label="Lab Name",
-                    info="Filter by specific lab test",
+                    multiselect=True,
+                    value=[],
+                    label="Lab Names",
+                    info="Filter by lab tests (select multiple or none)",
                     allow_custom_value=False
                 )
             with gr.Column(scale=1):
@@ -665,7 +769,7 @@ def create_app():
                 with gr.Tabs():
                     with gr.TabItem("Time Series Plot"):
                         plot_display = gr.Plot(
-                            value=create_interactive_plot(full_df, initial_lab),
+                            value=create_interactive_plot(full_df, initial_labs),
                             label=""
                         )
                     with gr.TabItem("Source Page"):
@@ -705,12 +809,12 @@ def create_app():
         # Wire up row selection
         data_table.select(
             fn=handle_row_select,
-            inputs=[filtered_df_state, full_df_state],
+            inputs=[filtered_df_state, full_df_state, lab_name_filter],
             outputs=[plot_display, current_idx_state, position_display, source_image]
         )
 
         # Wire up navigation buttons
-        nav_inputs = [current_idx_state, filtered_df_state, full_df_state]
+        nav_inputs = [current_idx_state, filtered_df_state, full_df_state, lab_name_filter]
         nav_outputs = [plot_display, current_idx_state, position_display, source_image]
 
         prev_btn.click(
