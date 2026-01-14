@@ -299,6 +299,9 @@ def process_single_pdf(
         if lab_specs.exists:
             all_results = correct_percentage_lab_names(all_results, lab_specs)
 
+        # Update JSON files with standardized values
+        _update_json_with_standardized_values(all_results, doc_out_dir)
+
         # Create DataFrame and save
         df = pd.DataFrame(all_results)
         df["date"] = doc_date
@@ -366,6 +369,38 @@ def export_excel(
 def _get_csv_path(pdf_path: Path, output_path: Path) -> Path:
     """Get the output CSV path for a given PDF file."""
     return output_path / pdf_path.stem / f"{pdf_path.stem}.csv"
+
+
+def _update_json_with_standardized_values(all_results: list[dict], doc_out_dir: Path) -> None:
+    """Update JSON files with standardized lab names and units."""
+    # Group results by page number to minimize file I/O
+    results_by_page: dict[int, list[dict]] = {}
+    for result in all_results:
+        page_num = result.get("page_number")
+        if page_num is not None:
+            results_by_page.setdefault(page_num, []).append(result)
+
+    # Update each JSON file
+    for page_num, page_results in results_by_page.items():
+        # Find the JSON file for this page
+        json_files = list(doc_out_dir.glob(f"*.{page_num:03d}.json"))
+        if not json_files:
+            continue
+        json_path = json_files[0]
+
+        try:
+            data = json.loads(json_path.read_text(encoding='utf-8'))
+
+            # Update each result by result_index
+            for result in page_results:
+                idx = result.get("result_index")
+                if idx is not None and 0 <= idx < len(data.get("lab_results", [])):
+                    data["lab_results"][idx]["lab_name_standardized"] = result.get("lab_name_standardized")
+                    data["lab_results"][idx]["lab_unit_standardized"] = result.get("lab_unit_standardized")
+
+            json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
+        except Exception as e:
+            logger.warning(f"Failed to update JSON {json_path}: {e}")
 
 
 REQUIRED_CSV_COLS = ["result_index", "page_number", "source_file"]
@@ -480,11 +515,8 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Using a profile (recommended for repeat use):
+  # Using a profile (required):
   python main.py --profile tsilva
-
-  # Direct paths (one-off use):
-  python main.py ./input/ ./output/
 
   # List available profiles:
   python main.py --list-profiles
@@ -503,20 +535,6 @@ Examples:
         '--list-profiles',
         action='store_true',
         help='List available profiles and exit'
-    )
-
-    # Direct paths (positional)
-    parser.add_argument(
-        'input_path',
-        nargs='?',
-        type=str,
-        help='Input directory containing PDFs'
-    )
-    parser.add_argument(
-        'output_path',
-        nargs='?',
-        type=str,
-        help='Output directory for results'
     )
 
     # Overrides
@@ -547,46 +565,51 @@ Examples:
 
 def build_config(args) -> ExtractionConfig:
     """Build ExtractionConfig from args and env."""
-    # Start with env-based config
-    config = ExtractionConfig.from_env()
+    # Load profile (required)
+    profile_path = None
+    for ext in ('.yaml', '.yml', '.json'):
+        p = Path(f"profiles/{args.profile}{ext}")
+        if p.exists():
+            profile_path = p
+            break
 
-    # Load profile if specified
-    if args.profile:
-        profile_path = None
-        for ext in ('.yaml', '.yml', '.json'):
-            p = Path(f"profiles/{args.profile}{ext}")
-            if p.exists():
-                profile_path = p
-                break
+    if not profile_path:
+        print(f"Error: Profile '{args.profile}' not found")
+        print("Use --list-profiles to see available profiles.")
+        sys.exit(1)
 
-        if not profile_path:
-            print(f"Error: Profile '{args.profile}' not found")
-            print("Use --list-profiles to see available profiles.")
-            sys.exit(1)
+    profile = ProfileConfig.from_file(profile_path)
+    logger.info(f"Using profile: {profile.name}")
 
-        profile = ProfileConfig.from_file(profile_path)
-        logger.info(f"Using profile: {profile.name}")
+    # Validate profile has required paths
+    if not profile.input_path:
+        print(f"Error: Profile '{args.profile}' has no input_path defined.")
+        sys.exit(1)
+    if not profile.output_path:
+        print(f"Error: Profile '{args.profile}' has no output_path defined.")
+        sys.exit(1)
 
-        # Override config from profile
-        if profile.input_path:
-            config.input_path = profile.input_path
-        if profile.output_path:
-            config.output_path = profile.output_path
-        if profile.input_file_regex:
-            config.input_file_regex = profile.input_file_regex
-        if profile.model:
-            config.extract_model_id = profile.model
-            config.self_consistency_model_id = profile.model
-        if profile.verify is not None:
-            config.enable_verification = profile.verify
-        if profile.workers:
-            config.max_workers = profile.workers
+    # Get API key from environment (still required)
+    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+    if not openrouter_api_key:
+        print("Error: OPENROUTER_API_KEY environment variable not set")
+        sys.exit(1)
+
+    # Build config from profile
+    config = ExtractionConfig(
+        input_path=profile.input_path,
+        output_path=profile.output_path,
+        openrouter_api_key=openrouter_api_key,
+        extract_model_id=profile.model or os.getenv("EXTRACT_MODEL_ID", DEFAULT_MODEL),
+        self_consistency_model_id=profile.model or os.getenv("SELF_CONSISTENCY_MODEL_ID", DEFAULT_MODEL),
+        input_file_regex=profile.input_file_regex or "*.pdf",
+        n_extractions=int(os.getenv("N_EXTRACTIONS", "1")),
+        max_workers=profile.workers or int(os.getenv("MAX_WORKERS", "0")) or (os.cpu_count() or 1),
+        enable_verification=profile.verify if profile.verify is not None else os.getenv("ENABLE_VERIFICATION", "true").lower() == "true",
+        verification_model_id=os.getenv("VERIFICATION_MODEL_ID") or None,
+    )
 
     # Override from CLI args (highest priority)
-    if args.input_path:
-        config.input_path = Path(args.input_path)
-    if args.output_path:
-        config.output_path = Path(args.output_path)
     if args.model:
         config.extract_model_id = args.model
         config.self_consistency_model_id = args.model
@@ -597,14 +620,7 @@ def build_config(args) -> ExtractionConfig:
     if args.pattern:
         config.input_file_regex = args.pattern
 
-    # Validate required paths
-    if not config.input_path:
-        print("Error: Input path required. Use --profile or provide INPUT_PATH.")
-        sys.exit(1)
-    if not config.output_path:
-        print("Error: Output path required. Use --profile or provide OUTPUT_PATH.")
-        sys.exit(1)
-
+    # Validate input path exists
     if not config.input_path.exists():
         print(f"Error: Input path does not exist: {config.input_path}")
         sys.exit(1)
@@ -633,6 +649,13 @@ def main():
         else:
             print("No profiles found. Create profiles in the 'profiles/' directory.")
         return
+
+    # Profile is required for all other operations
+    if not args.profile:
+        print("Error: --profile is required.")
+        print("Use --list-profiles to see available profiles.")
+        print("Example: python main.py --profile tsilva")
+        sys.exit(1)
 
     # Clear logs at start of run
     global logger

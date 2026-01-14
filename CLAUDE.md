@@ -12,11 +12,8 @@ Labs Parser is a Python tool that uses AI (via OpenRouter API) to extract labora
 
 ### Running the Parser
 ```bash
-# Using a profile (recommended for repeat use):
+# Using a profile (required):
 python main.py --profile tsilva
-
-# Direct paths (one-off use):
-python main.py ./input/ ./output/
 
 # List available profiles:
 python main.py --list-profiles
@@ -26,6 +23,9 @@ python main.py --profile tsilva --model google/gemini-2.5-pro --no-verify
 
 # Data integrity validation:
 python test.py
+
+# Review extracted results:
+python review_ui.py --profile tsilva
 ```
 
 ### Development
@@ -159,10 +159,11 @@ Required:
 
 Optional (with smart defaults):
 - `EXTRACT_MODEL_ID` - Vision model (default: `google/gemini-2.5-flash`)
-- `INPUT_PATH` / `OUTPUT_PATH` - Can be set via profile instead
 - `N_EXTRACTIONS` - Self-consistency extractions (default: 1)
 - `MAX_WORKERS` - Parallel workers (default: CPU count)
 - `ENABLE_VERIFICATION` - Cross-model verification (default: true)
+
+Note: Input and output paths must be specified via profiles. See `profiles/_template.yaml`.
 
 ## Validation (test.py)
 

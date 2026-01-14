@@ -963,7 +963,7 @@ class ExtractionVerifier:
 
                 # Flag for review if uncertain
                 if vinfo.get("status") == "uncertain" or vinfo.get("confidence", 1.0) < 0.7:
-                    result["needs_review"] = True
+                    result["review_needed"] = True
                     existing_reason = result.get("review_reason", "") or ""
                     if "VERIFICATION_UNCERTAIN" not in existing_reason:
                         result["review_reason"] = existing_reason + "VERIFICATION_UNCERTAIN; "
@@ -979,7 +979,7 @@ class ExtractionVerifier:
             missed["verification_status"] = "recovered"
             missed["verification_confidence"] = 0.7
             missed["verification_method"] = "completeness_check"
-            missed["needs_review"] = True
+            missed["review_needed"] = True
             missed["review_reason"] = "RECOVERED_FROM_COMPLETENESS_CHECK; "
             verified_results.append(missed)
 

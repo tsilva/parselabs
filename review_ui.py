@@ -6,10 +6,16 @@ Shows source page image side-by-side with extracted data.
 Keyboard-driven: Y=Accept, N=Reject, S=Skip
 
 Review status is stored directly in the extraction JSON files.
+
+Usage:
+  python review_ui.py --profile tiago
+  python review_ui.py --list-profiles
 """
 
 import os
+import sys
 import json
+import argparse
 import pandas as pd
 import gradio as gr
 from pathlib import Path
@@ -19,6 +25,8 @@ from dotenv import load_dotenv
 
 # Load .env from repo root
 load_dotenv(Path(__file__).parent / '.env')
+
+from config import ProfileConfig
 
 # =============================================================================
 # Keyboard Shortcuts (JavaScript)
@@ -64,15 +72,33 @@ CUSTOM_CSS = """
 .status-info { background-color: #0d6efd; color: #ffffff; padding: 10px; border-radius: 5px; margin-bottom: 10px; font-weight: 600; }
 .entry-counter { text-align: center; }
 .footer { text-align: center; color: #666; }
+.page-results-table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+.page-results-table th, .page-results-table td { padding: 6px 8px; text-align: left; border-bottom: 1px solid #ddd; color: #333; }
+.page-results-table th { background-color: #f5f5f5; font-weight: 600; color: #333 !important; }
+.page-results-table tr.highlighted { background-color: #0d6efd !important; color: white !important; }
+.page-results-table tr.highlighted td { color: white !important; }
 """
 
 # =============================================================================
 # Configuration
 # =============================================================================
 
+# Global output path (set from profile or environment)
+_configured_output_path: Optional[Path] = None
+
+
 def get_output_path() -> Path:
-    """Get output path from environment."""
+    """Get output path from configuration, profile, or environment."""
+    global _configured_output_path
+    if _configured_output_path:
+        return _configured_output_path
     return Path(os.getenv('OUTPUT_PATH', './output'))
+
+
+def set_output_path(path: Path) -> None:
+    """Set the output path (called from main when using profile)."""
+    global _configured_output_path
+    _configured_output_path = path
 
 
 # =============================================================================
@@ -142,7 +168,7 @@ def save_review_to_json(entry: dict, status: str, output_path: Path) -> Tuple[bo
 
         # Update the review fields
         data['lab_results'][result_index]['review_status'] = status
-        data['lab_results'][result_index]['reviewed_at'] = datetime.utcnow().isoformat() + 'Z'
+        data['lab_results'][result_index]['review_completed_at'] = datetime.utcnow().isoformat() + 'Z'
 
         # Save back to file
         json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
@@ -199,8 +225,8 @@ def load_entries(output_path: str) -> list:
                     # Sync review fields from JSON
                     if 'review_status' in json_entry:
                         entry['review_status'] = json_entry['review_status']
-                    if 'reviewed_at' in json_entry:
-                        entry['reviewed_at'] = json_entry['reviewed_at']
+                    if 'review_completed_at' in json_entry:
+                        entry['review_completed_at'] = json_entry['review_completed_at']
 
         entries.append(entry)
 
@@ -261,15 +287,15 @@ def filter_entries(entries: list, filter_mode: str) -> list:
     elif filter_mode == 'Low Confidence':
         return [
             e for e in entries
-            if e.get('confidence_score', 1.0) is not None
-            and float(e.get('confidence_score', 1.0)) < 0.7
+            if e.get('review_confidence', 1.0) is not None
+            and float(e.get('review_confidence', 1.0)) < 0.7
             and not is_reviewed(e)
         ]
 
     elif filter_mode == 'Needs Review':
         return [
             e for e in entries
-            if e.get('needs_review', False) == True
+            if e.get('review_needed', False) == True
             and not is_reviewed(e)
         ]
 
@@ -305,10 +331,23 @@ def build_details_table(entry: dict) -> str:
         ('comments', 'comments', None),
     ]
 
+    # Map old column names to renamed columns in all.csv
+    column_aliases = {
+        'lab_name_standardized': 'lab_name',
+        'value_primary': 'value',
+        'lab_unit_standardized': 'unit',
+        'lab_unit_primary': 'unit',
+        'reference_min_primary': 'reference_min',
+        'reference_max_primary': 'reference_max',
+    }
+
     def get_val(field: str) -> str:
         if not field:
             return ""
         val = entry.get(field)
+        # Check renamed column if original not found
+        if (val is None or pd.isna(val)) and field in column_aliases:
+            val = entry.get(column_aliases[field])
         if val is not None and pd.notna(val) and str(val).strip():
             return str(val)
         return ""
@@ -352,6 +391,72 @@ def build_verification_display(entry: dict) -> str:
     return "\n\n".join(lines) if lines else "No verification data"
 
 
+def get_page_results(entries: list, current_entry: dict) -> list:
+    """Get all entries from the same page as current entry."""
+    source_file = current_entry.get('source_file')
+    page_number = current_entry.get('page_number')
+
+    if not source_file or page_number is None:
+        return []
+
+    return [
+        e for e in entries
+        if e.get('source_file') == source_file
+        and e.get('page_number') == page_number
+    ]
+
+
+def build_page_results_html(entries: list, current_entry: dict) -> str:
+    """Build HTML table showing all results from the current page."""
+    page_entries = get_page_results(entries, current_entry)
+
+    if not page_entries:
+        return "<p>No results for this page</p>"
+
+    # Sort by result_index
+    page_entries = sorted(page_entries, key=lambda e: e.get('result_index', 0))
+    current_result_index = current_entry.get('result_index')
+
+    def get_status(entry: dict) -> str:
+        status = get_review_status(entry)
+        if status == 'accepted':
+            return 'Accepted'
+        elif status == 'rejected':
+            return 'Rejected'
+        return 'Pending'
+
+    def escape_html(val) -> str:
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            return ''
+        return str(val).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+    # Build HTML table
+    html = '<table class="page-results-table">'
+    html += '<thead><tr><th>#</th><th>Lab Name</th><th>Value</th><th>Unit</th><th>Status</th></tr></thead>'
+    html += '<tbody>'
+
+    for entry in page_entries:
+        result_idx = entry.get('result_index', 0)
+        is_current = result_idx == current_result_index
+        row_class = ' class="highlighted"' if is_current else ''
+
+        lab_name = entry.get('lab_name_standardized') or entry.get('lab_name') or entry.get('lab_name_raw', '')
+        value = entry.get('value_primary') or entry.get('value') or entry.get('value_raw', '')
+        unit = entry.get('lab_unit_primary') or entry.get('lab_unit_standardized') or entry.get('unit') or entry.get('lab_unit_raw', '')
+        status = get_status(entry)
+
+        html += f'<tr{row_class}>'
+        html += f'<td>{escape_html(result_idx)}</td>'
+        html += f'<td>{escape_html(lab_name)}</td>'
+        html += f'<td>{escape_html(value)}</td>'
+        html += f'<td>{escape_html(unit)}</td>'
+        html += f'<td>{escape_html(status)}</td>'
+        html += '</tr>'
+
+    html += '</tbody></table>'
+    return html
+
+
 def get_display_updates(state: dict):
     """Generate all display component updates from current state."""
     if state is None:
@@ -364,6 +469,7 @@ def get_display_updates(state: dict):
             "",                # review_reason_display
             "",                # confidence_display
             "",                # details_table
+            "",                # page_results_display
             "",                # verification_display
             "",                # source_text_display
             gr.update(interactive=False),  # prev_btn
@@ -397,6 +503,7 @@ def get_display_updates(state: dict):
             "",                           # review_reason_display
             "",                           # confidence_display
             "All entries in this filter have been reviewed!",  # details_table
+            "",                           # page_results_display
             "",                           # verification_display
             "",                           # source_text_display
             gr.update(interactive=False), # prev_btn
@@ -434,16 +541,19 @@ def get_display_updates(state: dict):
         reason_md = ""
 
     # Confidence
-    confidence = entry.get("confidence_score")
+    confidence = entry.get("review_confidence")
     if confidence is not None and pd.notna(confidence):
         conf_val = float(confidence)
         css_class = "status-warning" if conf_val < 0.7 else "status-info"
-        conf_md = f'<div class="{css_class}">confidence_score: {conf_val:.2f}</div>'
+        conf_md = f'<div class="{css_class}">review_confidence: {conf_val:.2f}</div>'
     else:
         conf_md = ""
 
     # Details table
     details_md = build_details_table(entry)
+
+    # Page results table
+    page_results_html = build_page_results_html(entries, entry)
 
     # Verification
     verification_md = build_verification_display(entry)
@@ -466,6 +576,7 @@ def get_display_updates(state: dict):
         reason_md,
         conf_md,
         details_md,
+        page_results_html,
         verification_md,
         str(source_text),
         gr.update(interactive=prev_interactive),
@@ -554,7 +665,7 @@ def handle_review_action(state: dict, status: str):
         if e.get("_row_idx") == current_entry.get("_row_idx"):
             state["entries"][i] = state["entries"][i].copy()
             state["entries"][i]["review_status"] = status
-            state["entries"][i]["reviewed_at"] = datetime.utcnow().isoformat() + 'Z'
+            state["entries"][i]["review_completed_at"] = datetime.utcnow().isoformat() + 'Z'
             break
 
     # Re-filter after update (entry may leave current filter)
@@ -638,6 +749,10 @@ def create_app():
                 confidence_display = gr.HTML("")
                 details_table = gr.Markdown("")
 
+                # Page results accordion
+                with gr.Accordion("Page Results", open=False):
+                    page_results_display = gr.HTML("")
+
                 # Verification accordion
                 with gr.Accordion("Verification", open=False):
                     verification_display = gr.Markdown("")
@@ -682,6 +797,7 @@ def create_app():
             review_reason_display,
             confidence_display,
             details_table,
+            page_results_display,
             verification_display,
             source_text_display,
             prev_btn,
@@ -733,9 +849,84 @@ def create_app():
     return demo
 
 
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description='Lab Extraction Review UI',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python review_ui.py --profile tiago
+  python review_ui.py --list-profiles
+        """
+    )
+    parser.add_argument(
+        '--profile', '-p',
+        type=str,
+        help='Profile name (required unless using --list-profiles)'
+    )
+    parser.add_argument(
+        '--list-profiles',
+        action='store_true',
+        help='List available profiles and exit'
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
+    args = parse_args()
+
+    # Handle --list-profiles
+    if args.list_profiles:
+        profiles = ProfileConfig.list_profiles()
+        if profiles:
+            print("Available profiles:")
+            for name in profiles:
+                print(f"  - {name}")
+        else:
+            print("No profiles found. Create profiles in the 'profiles/' directory.")
+        sys.exit(0)
+
+    # Profile is required for all other operations
+    if not args.profile:
+        print("Error: --profile is required.")
+        print("Use --list-profiles to see available profiles.")
+        print("Example: python review_ui.py --profile tiago")
+        sys.exit(1)
+
+    # Load profile
+    profile_path = None
+    for ext in ('.yaml', '.yml', '.json'):
+        p = Path(f"profiles/{args.profile}{ext}")
+        if p.exists():
+            profile_path = p
+            break
+
+    if not profile_path:
+        print(f"Error: Profile '{args.profile}' not found")
+        print("Use --list-profiles to see available profiles.")
+        sys.exit(1)
+
+    profile = ProfileConfig.from_file(profile_path)
+    print(f"Using profile: {profile.name}")
+
+    if not profile.output_path:
+        print(f"Error: Profile '{args.profile}' has no output_path defined.")
+        sys.exit(1)
+
+    output_path = profile.output_path
+    set_output_path(output_path)
+
+    # Verify output path exists and has all.csv
+    csv_path = output_path / "all.csv"
+    if not csv_path.exists():
+        print(f"Error: No all.csv found at {csv_path}")
+        print("Run main.py first to extract lab results.")
+        sys.exit(1)
+
+    print(f"Output path: {output_path}")
+
     demo = create_app()
-    output_path = get_output_path()
 
     # Build list of allowed paths for serving images
     # Include output_path and its parent to handle various output locations
