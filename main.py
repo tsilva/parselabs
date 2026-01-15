@@ -419,6 +419,11 @@ def _is_csv_valid(csv_path: Path, required_cols: list[str] = REQUIRED_CSV_COLS) 
         return False
 
 
+def _init_worker_logging(log_dir: Path):
+    """Initialize logging in worker processes."""
+    setup_logging(log_dir, clear_logs=False)
+
+
 def _process_pdf_wrapper(args):
     """Wrapper function for multiprocessing."""
     return process_single_pdf(*args)
@@ -716,7 +721,7 @@ def main():
 
         tasks = [(pdf, config.output_path, config, lab_specs) for pdf in pdfs_to_process]
 
-        with Pool(n_workers) as pool:
+        with Pool(n_workers, initializer=_init_worker_logging, initargs=(log_dir,)) as pool:
             results = []
             with tqdm(total=len(tasks), desc="Processing PDFs", unit="pdf") as pbar:
                 for result in pool.imap(_process_pdf_wrapper, tasks):
