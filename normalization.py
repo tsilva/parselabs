@@ -84,7 +84,11 @@ def apply_unit_conversions(
     """
     # Initialize primary unit columns
     # Convert value_raw to numeric for calculations (text values will become NaN)
-    df["value_primary"] = pd.to_numeric(df["value_raw"], errors='coerce')
+    # Normalize European decimal format (comma → period) before conversion
+    df["value_primary"] = pd.to_numeric(
+        df["value_raw"].astype(str).str.replace(',', '.', regex=False),
+        errors='coerce'
+    )
     df["lab_unit_primary"] = df["lab_unit_standardized"]
     df["reference_min_primary"] = df["reference_min_raw"]
     df["reference_max_primary"] = df["reference_max_raw"]
