@@ -684,7 +684,7 @@
         "factor": 0.001
       },
       {
-        "unit": "x10¹/L",
+        "unit": "x10⁹/L",
         "factor": 1.0
       },
       {
@@ -821,39 +821,6 @@
         "factor": 0.0585
       }
     ],
-    "ranges": {
-      "default": [
-        0.2,
-        1.2
-      ]
-    }
-  },
-  "Blood - Bilirubin, Direct": {
-    "lab_type": "blood",
-    "primary_unit": "mg/dL",
-    "alternatives": [],
-    "ranges": {
-      "default": [
-        0,
-        0.3
-      ]
-    }
-  },
-  "Blood - Bilirubin, Indirect": {
-    "lab_type": "blood",
-    "primary_unit": "mg/dL",
-    "alternatives": [],
-    "ranges": {
-      "default": [
-        0.2,
-        0.8
-      ]
-    }
-  },
-  "Blood - Bilirubin, Total": {
-    "lab_type": "blood",
-    "primary_unit": "mg/dL",
-    "alternatives": [],
     "ranges": {
       "default": [
         0.2,
@@ -1163,7 +1130,7 @@
         "factor": 0.001
       },
       {
-        "unit": "x10¹/L",
+        "unit": "x10⁹/L",
         "factor": 1.0
       },
       {
@@ -1290,11 +1257,11 @@
       },
       {
         "unit": "E6/mm3",
-        "factor": 0.001
+        "factor": 1.0
       },
       {
         "unit": "10⁶/mm³",
-        "factor": 0.001
+        "factor": 1.0
       }
     ],
     "ranges": {
@@ -1347,7 +1314,8 @@
   "Blood - Erythrocytes - Hypochromic (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
-    "alternatives": []
+    "alternatives": [],
+    "ranges": {}
   },
   "Blood - Erythropoietin (EPO)": {
     "lab_type": "blood",
@@ -1559,17 +1527,6 @@
       }
     ],
     "ranges": {}
-  },
-  "Blood - HDL Cholesterol": {
-    "lab_type": "blood",
-    "primary_unit": "mg/dL",
-    "alternatives": [],
-    "ranges": {
-      "default": [
-        40,
-        100
-      ]
-    }
   },
   "Blood - HIV (Antibody + p24 Antigen)": {
     "lab_type": "blood",
@@ -1881,8 +1838,8 @@
     ],
     "ranges": {
       "default": [
-        50.0,
-        99.0
+        40.0,
+        100.0
       ]
     }
   },
@@ -2028,7 +1985,7 @@
       },
       {
         "unit": "µg/L",
-        "factor": 10.0
+        "factor": 0.1
       }
     ],
     "ranges": {
@@ -2098,7 +2055,7 @@
         "factor": 0.001
       },
       {
-        "unit": "x10¹/L",
+        "unit": "x10⁹/L",
         "factor": 1.0
       },
       {
@@ -2217,7 +2174,7 @@
         "factor": 0.001
       },
       {
-        "unit": "x10¹/L",
+        "unit": "x10⁹/L",
         "factor": 1.0
       },
       {
@@ -2395,7 +2352,7 @@
         "factor": 0.001
       },
       {
-        "unit": "x10¹/L",
+        "unit": "x10⁹/L",
         "factor": 1.0
       },
       {
@@ -2445,7 +2402,7 @@
         "factor": 0.001
       },
       {
-        "unit": "x10¹/L",
+        "unit": "x10⁹/L",
         "factor": 1.0
       },
       {
@@ -2982,17 +2939,20 @@
   "Blood - Reticulocytes - High RNA (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
-    "alternatives": []
+    "alternatives": [],
+    "ranges": {}
   },
   "Blood - Reticulocytes - Low RNA (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
-    "alternatives": []
+    "alternatives": [],
+    "ranges": {}
   },
   "Blood - Reticulocytes - Medium RNA (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
-    "alternatives": []
+    "alternatives": [],
+    "ranges": {}
   },
   "Blood - Reverse T3": {
     "lab_type": "blood",
@@ -3085,30 +3045,6 @@
       ]
     }
   },
-  "Blood - Thyroid-Stimulating Hormone (TSH)": {
-    "lab_type": "blood",
-    "primary_unit": "mIU/mL",
-    "alternatives": [
-      {
-        "unit": "IU/mL",
-        "factor": 1000.0
-      },
-      {
-        "unit": "µIU/mL",
-        "factor": 0.001
-      },
-      {
-        "unit": "µIU/L",
-        "factor": 1e-06
-      }
-    ],
-    "ranges": {
-      "default": [
-        0.4,
-        4.0
-      ]
-    }
-  },
   "Blood - Total Cholesterol": {
     "lab_type": "blood",
     "primary_unit": "mg/dL",
@@ -3131,7 +3067,7 @@
     "alternatives": [
       {
         "unit": "µg/L",
-        "factor": 0.01
+        "factor": 0.1
       }
     ],
     "ranges": {
@@ -3514,17 +3450,6 @@
       ]
     }
   },
-  "Blood - eAG (Estimated Average Glucose)": {
-    "lab_type": "blood",
-    "primary_unit": "mg/dL",
-    "alternatives": [],
-    "ranges": {
-      "default": [
-        70.0,
-        126.0
-      ]
-    }
-  },
   "Blood - eGFR (CKD-EPI)": {
     "lab_type": "blood",
     "primary_unit": "mL/min/1.73m²",
@@ -3734,7 +3659,8 @@
   "Urine - Bacteriological - Colony Count": {
     "lab_type": "urine",
     "primary_unit": "UFC/mL",
-    "alternatives": []
+    "alternatives": [],
+    "ranges": {}
   },
   "Urine - Bacteriological - Culture": {
     "lab_type": "urine",
@@ -4040,17 +3966,6 @@
         "factor": 1.0
       }
     ],
-    "ranges": {}
-  },
-  "Urine Type II - Sediment - Epithelial cells": {
-    "lab_type": "urine",
-    "primary_unit": "/field",
-    "alternatives": [
-      {
-        "unit": "/campo",
-        "factor": 1.0
-      }
-    ],
     "ranges": {
       "default": [
         0.0,
@@ -4107,17 +4022,6 @@
     }
   },
   "Urine Type II - Sediment - Squamous Epithelial Cells": {
-    "lab_type": "urine",
-    "primary_unit": "/field",
-    "alternatives": [
-      {
-        "unit": "/campo",
-        "factor": 1.0
-      }
-    ],
-    "ranges": {}
-  },
-  "Urine Type II - Sediment - Squamous epithelial cells": {
     "lab_type": "urine",
     "primary_unit": "/field",
     "alternatives": [
