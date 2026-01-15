@@ -500,6 +500,110 @@ def extract_labs_from_page_image(
         return _salvage_lab_results(tool_result_dict)
 
 
+def extract_labs_from_text(
+    text: str,
+    model_id: str,
+    client: OpenAI,
+    temperature: float = 0.3
+) -> dict:
+    """
+    Extract lab results from text using a text-only LLM (no vision).
+
+    This is a cost-optimized extraction path for PDFs with embedded text.
+    Uses the same prompts and tool schema as vision extraction.
+
+    Args:
+        text: Extracted text from PDF (via pdftotext)
+        model_id: Model to use for extraction
+        client: OpenAI client instance
+        temperature: Temperature for sampling
+
+    Returns:
+        Dictionary with extracted report data (validated by Pydantic)
+    """
+    # Use same prompts but adapted for text input
+    user_prompt = f"""Please extract ALL lab test results from this medical lab report text.
+
+CRITICAL: For EACH lab test you find, you MUST extract:
+1. lab_name_raw - The test name EXACTLY as shown (required)
+2. value_raw - The result value EXACTLY as shown (ALWAYS PUT THE RESULT HERE - whether numeric or text)
+3. lab_unit_raw - The unit EXACTLY as shown (extract what you see, can be null if no unit)
+4. reference_range - The reference range text (if visible)
+5. reference_min_raw and reference_max_raw - Parse the numeric bounds from the reference range
+
+Extract test names, values, units, and reference ranges EXACTLY as they appear.
+Pay special attention to preserving the exact formatting and symbols.
+
+CRITICAL: Extract EVERY lab test you see, including:
+- Numeric results → Put in value_raw (examples: "5.2", "14.8", "0.75")
+- Text-based qualitative results → Put in value_raw (examples: "NEGATIVO", "POSITIVO", "NORMAL", "AMARELA", "NAO CONTEM", "AUSENTE", "PRESENTE")
+- Range results → Put in value_raw (examples: "1 a 2", "1-5 / campo", "0-3 / campo")
+
+IMPORTANT: The value_raw field should contain the ACTUAL TEST RESULT, whether it's a number or text.
+
+Also set page_has_lab_data:
+- true if this document contains lab test results
+- false if this is a cover page, instructions, or administrative content with no lab tests
+
+--- DOCUMENT TEXT ---
+{text}
+--- END OF DOCUMENT ---"""
+
+    try:
+        completion = client.chat.completions.create(
+            model=model_id,
+            messages=[
+                {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=temperature,
+            max_tokens=16384,
+            tools=TOOLS,
+            tool_choice={"type": "function", "function": {"name": "extract_lab_results"}}
+        )
+    except APIError as e:
+        logger.error(f"API Error during text-based lab extraction: {e}")
+        raise RuntimeError(f"Text-based lab extraction failed: {e}")
+
+    # Check for valid response structure
+    if not completion or not completion.choices or len(completion.choices) == 0:
+        logger.error("Invalid completion response structure for text extraction")
+        return HealthLabReport(lab_results=[]).model_dump(mode='json')
+
+    if not completion.choices[0].message.tool_calls:
+        logger.warning("No tool call by model for text-based lab extraction")
+        return HealthLabReport(lab_results=[]).model_dump(mode='json')
+
+    tool_args_raw = completion.choices[0].message.tool_calls[0].function.arguments
+    try:
+        tool_result_dict = json.loads(tool_args_raw)
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error for text extraction tool args: {e}")
+        return HealthLabReport(lab_results=[]).model_dump(mode='json')
+
+    # Pre-process: Fix common LLM issues before Pydantic validation
+    tool_result_dict = _fix_lab_results_format(tool_result_dict, client, model_id)
+
+    # Validate with Pydantic
+    try:
+        report_model = HealthLabReport(**tool_result_dict)
+        report_model.normalize_empty_optionals()
+
+        if report_model.lab_results:
+            logger.info(f"Text extraction successful: {len(report_model.lab_results)} lab results")
+        else:
+            if report_model.page_has_lab_data is False:
+                logger.debug("Document confirmed to have no lab data (text extraction)")
+            else:
+                logger.warning("Text extraction returned 0 lab results")
+
+        return report_model.model_dump(mode='json')
+    except Exception as e:
+        num_results = len(tool_result_dict.get("lab_results", []))
+        logger.error(f"Model validation error for text extraction with {num_results} lab_results: {e}")
+        return _salvage_lab_results(tool_result_dict)
+
+
 def _normalize_date_format(date_str: Optional[str]) -> Optional[str]:
     """
     Normalize date strings to YYYY-MM-DD format.
