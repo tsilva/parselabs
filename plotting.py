@@ -146,8 +146,8 @@ class LabPlotter:
             ax.set_xticks(ticks)
             ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
-            # Add reference range bands if available
-            if "healthy_range_min" in lab_df.columns and "healthy_range_max" in lab_df.columns:
+            # Add reference range bands if available (handles open-ended ranges too)
+            if "healthy_range_min" in lab_df.columns or "healthy_range_max" in lab_df.columns:
                 self._add_reference_bands(ax, lab_df, start_date, end_date)
 
             # Add reference range lines (mode)
@@ -190,50 +190,96 @@ class LabPlotter:
 
     def _add_reference_bands(self, ax, lab_df: pd.DataFrame, start_date, end_date) -> None:
         """Add colored reference range bands to plot."""
-        min_vals = lab_df["healthy_range_min"].dropna()
-        max_vals = lab_df["healthy_range_max"].dropna()
+        min_vals = lab_df["healthy_range_min"].dropna() if "healthy_range_min" in lab_df.columns else pd.Series(dtype=float)
+        max_vals = lab_df["healthy_range_max"].dropna() if "healthy_range_max" in lab_df.columns else pd.Series(dtype=float)
 
-        if min_vals.empty or max_vals.empty:
+        if min_vals.empty and max_vals.empty:
             return
 
-        y_min_mode = float(min_vals.mode()[0])
-        y_max_mode = float(max_vals.mode()[0])
+        y_min_mode = float(min_vals.mode()[0]) if not min_vals.empty else None
+        y_max_mode = float(max_vals.mode()[0]) if not max_vals.empty else None
 
         light_green = "#b7e6a1"
         light_red = "#e6b7b7"
 
-        # Green band for healthy range
-        plt.fill_between(
-            [start_date, end_date],
-            y_min_mode,
-            y_max_mode,
-            color=light_green,
-            alpha=0.6,
-            label="Reference Range"
-        )
-
-        # Adjust y-limits to include reference range
-        cur_ymin, cur_ymax = ax.get_ylim()
-        ax.set_ylim(min(cur_ymin, y_min_mode), max(cur_ymax, y_max_mode))
+        # Get current y-axis limits
         cur_ymin, cur_ymax = ax.get_ylim()
 
-        # Red bands for below/above range
-        plt.fill_between(
-            [start_date, end_date],
-            cur_ymin,
-            y_min_mode,
-            color=light_red,
-            alpha=0.3,
-            label="Below Range"
-        )
-        plt.fill_between(
-            [start_date, end_date],
-            y_max_mode,
-            cur_ymax,
-            color=light_red,
-            alpha=0.3,
-            label="Above Range"
-        )
+        if y_min_mode is not None and y_max_mode is not None:
+            # Both bounds: green band between them, red bands outside
+            ax.set_ylim(min(cur_ymin, y_min_mode), max(cur_ymax, y_max_mode))
+            cur_ymin, cur_ymax = ax.get_ylim()
+
+            plt.fill_between(
+                [start_date, end_date],
+                y_min_mode,
+                y_max_mode,
+                color=light_green,
+                alpha=0.6,
+                label="Reference Range"
+            )
+            plt.fill_between(
+                [start_date, end_date],
+                cur_ymin,
+                y_min_mode,
+                color=light_red,
+                alpha=0.3,
+                label="Below Range"
+            )
+            plt.fill_between(
+                [start_date, end_date],
+                y_max_mode,
+                cur_ymax,
+                color=light_red,
+                alpha=0.3,
+                label="Above Range"
+            )
+        elif y_min_mode is not None:
+            # Only lower bound (> y_min_mode): healthy extends from min to top
+            data_max = lab_df[self.value_col].max()
+            y_top = max(cur_ymax, data_max * 1.2, y_min_mode * 2)
+            ax.set_ylim(min(cur_ymin, y_min_mode * 0.8), y_top)
+            cur_ymin, cur_ymax = ax.get_ylim()
+
+            plt.fill_between(
+                [start_date, end_date],
+                y_min_mode,
+                cur_ymax,
+                color=light_green,
+                alpha=0.6,
+                label="Reference Range (≥)"
+            )
+            plt.fill_between(
+                [start_date, end_date],
+                cur_ymin,
+                y_min_mode,
+                color=light_red,
+                alpha=0.3,
+                label="Below Range"
+            )
+        else:
+            # Only upper bound (< y_max_mode): healthy extends from bottom to max
+            data_min = lab_df[self.value_col].min()
+            y_bottom = min(cur_ymin, 0, data_min * 0.9 if data_min > 0 else data_min * 1.1)
+            ax.set_ylim(y_bottom, max(cur_ymax, y_max_mode * 1.2))
+            cur_ymin, cur_ymax = ax.get_ylim()
+
+            plt.fill_between(
+                [start_date, end_date],
+                cur_ymin,
+                y_max_mode,
+                color=light_green,
+                alpha=0.6,
+                label="Reference Range (≤)"
+            )
+            plt.fill_between(
+                [start_date, end_date],
+                y_max_mode,
+                cur_ymax,
+                color=light_red,
+                alpha=0.3,
+                label="Above Range"
+            )
 
     @staticmethod
     def _sanitize_filename(lab_name: str) -> str:
