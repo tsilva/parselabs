@@ -80,9 +80,17 @@ def setup_logging(log_dir: Path, clear_logs: bool = False) -> logging.Logger:
     error_log_path = log_dir / "error.log"
 
     if clear_logs:
+        # Clear logs in the specified directory
         for log_file in (info_log_path, error_log_path):
             if log_file.exists():
                 log_file.write_text("", encoding="utf-8")
+
+        # Also clear project root logs/ directory if it exists (legacy location)
+        project_root_logs = Path("logs")
+        if project_root_logs.exists() and project_root_logs.is_dir():
+            for log_file in (project_root_logs / "info.log", project_root_logs / "error.log"):
+                if log_file.exists():
+                    log_file.write_text("", encoding="utf-8")
 
     # Configure root logger so all modules inherit the same level
     root_logger = logging.getLogger()
