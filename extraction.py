@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from openai import OpenAI, APIError
 
 from utils import parse_llm_json_response
@@ -81,6 +81,17 @@ class LabResult(BaseModel):
     cross_model_verified: Optional[bool] = Field(default=None, description="Whether verified by cross-model extraction")
     verification_corrected: Optional[bool] = Field(default=None, description="Whether value was corrected by verification")
     value_raw_original: Optional[str] = Field(default=None, description="Original value before verification correction")
+
+    @field_validator('value_raw', mode='before')
+    @classmethod
+    def coerce_value_raw_to_string(cls, v):
+        """Coerce numeric values to strings - LLMs often return floats instead of strings."""
+        if v is None:
+            return v
+        if isinstance(v, (int, float)):
+            # Format without unnecessary decimal places for integers
+            return str(int(v)) if isinstance(v, float) and v.is_integer() else str(v)
+        return v
 
 
 class HealthLabReport(BaseModel):
@@ -522,6 +533,129 @@ def _normalize_date_format(date_str: Optional[str]) -> Optional[str]:
     return None
 
 
+# Known LabResult field names for detecting flattened key-value format
+_LAB_RESULT_FIELDS = {
+    'lab_name_raw', 'value_raw', 'lab_unit_raw', 'reference_range',
+    'reference_min_raw', 'reference_max_raw', 'is_abnormal', 'comments', 'source_text'
+}
+
+
+def _parse_labresult_repr(s: str) -> Optional[dict]:
+    """
+    Parse Python repr() format of LabResult objects.
+
+    Some LLMs return strings like:
+    "LabResult(lab_name_raw='Glucose', value_raw='100', lab_unit_raw='mg/dL', ...)"
+
+    Returns a dict if parseable, None otherwise.
+    """
+    if not s.startswith('LabResult('):
+        return None
+
+    try:
+        # Extract the content inside LabResult(...)
+        content = s[10:-1]  # Remove 'LabResult(' and ')'
+
+        # Parse key=value pairs
+        result = {}
+        # Use regex to find key=value patterns, handling quoted strings and None values
+        pattern = r"(\w+)=(?:'([^']*)'|\"([^\"]*)\"|(\d+\.?\d*)|None|(True|False))"
+        for match in re.finditer(pattern, content):
+            key = match.group(1)
+            # Get the matched value from whichever group matched
+            if match.group(2) is not None:  # Single-quoted string
+                value = match.group(2)
+            elif match.group(3) is not None:  # Double-quoted string
+                value = match.group(3)
+            elif match.group(4) is not None:  # Number
+                value = float(match.group(4)) if '.' in match.group(4) else int(match.group(4))
+            elif match.group(5) is not None:  # True/False
+                value = match.group(5) == 'True'
+            else:  # None
+                value = None
+            result[key] = value
+
+        return result if 'lab_name_raw' in result else None
+    except Exception:
+        return None
+
+
+def _reassemble_flattened_key_values(items: list) -> list:
+    """
+    Detect and reassemble flattened key-value strings into proper objects.
+
+    Some LLMs return lab_results as flattened key-value pairs:
+    ['lab_name_raw: Glucose', 'value_raw: 100', 'lab_unit_raw: mg/dL', ...]
+
+    This function detects this pattern and reassembles them into proper dicts.
+    Returns the original list if the pattern is not detected.
+    """
+    if not items:
+        return items
+
+    # Check if this looks like flattened key-value format
+    # Pattern: strings like "field_name: value" where field_name is a known LabResult field
+    kv_pattern = re.compile(r'^(\w+):\s*(.*)$')
+
+    # Count how many items match the pattern with known field names
+    kv_matches = 0
+    for item in items[:min(10, len(items))]:  # Check first 10 items
+        if isinstance(item, str):
+            match = kv_pattern.match(item)
+            if match and match.group(1) in _LAB_RESULT_FIELDS:
+                kv_matches += 1
+
+    # If less than 50% match the pattern, not flattened format
+    if kv_matches < len(items[:min(10, len(items))]) * 0.5:
+        return items
+
+    logger.info(f"Detected flattened key-value format, reassembling {len(items)} items")
+
+    # Reassemble into objects - lab_name_raw starts a new record
+    reassembled = []
+    current_obj = {}
+
+    for item in items:
+        if not isinstance(item, str):
+            # Non-string item, save current and add as-is
+            if current_obj:
+                reassembled.append(current_obj)
+                current_obj = {}
+            reassembled.append(item)
+            continue
+
+        match = kv_pattern.match(item)
+        if not match:
+            continue
+
+        key, value = match.group(1), match.group(2).strip()
+
+        # lab_name_raw starts a new record
+        if key == 'lab_name_raw' and current_obj:
+            reassembled.append(current_obj)
+            current_obj = {}
+
+        # Convert 'null' strings to None, parse numbers for reference fields
+        if value.lower() == 'null' or value == '':
+            value = None
+        elif key in ('reference_min_raw', 'reference_max_raw'):
+            try:
+                value = float(value) if value else None
+            except (ValueError, TypeError):
+                value = None
+        elif key == 'is_abnormal':
+            value = value.lower() == 'true' if value else None
+
+        current_obj[key] = value
+
+    # Don't forget the last object
+    if current_obj:
+        reassembled.append(current_obj)
+
+    logger.info(f"Reassembled {len(items)} key-value items into {len(reassembled)} lab results")
+    return reassembled
+
+
 def _fix_lab_results_format(tool_result_dict: dict, client: OpenAI, model_id: str) -> dict:
     """Fix common LLM formatting issues in lab_results and dates using LLM-based parsing."""
     # Fix date formats at report level
@@ -531,6 +665,10 @@ def _fix_lab_results_format(tool_result_dict: dict, client: OpenAI, model_id: st
 
     if "lab_results" not in tool_result_dict or not isinstance(tool_result_dict["lab_results"], list):
         return tool_result_dict
+
+    # First, try to reassemble flattened key-value format (common LLM issue)
+    # e.g., ['lab_name_raw: Glucose', 'value_raw: 100', ...] -> [{'lab_name_raw': 'Glucose', 'value_raw': '100', ...}]
+    tool_result_dict["lab_results"] = _reassemble_flattened_key_values(tool_result_dict["lab_results"])
 
     # Collect all string-based lab results that need parsing
     string_results = []
@@ -546,6 +684,12 @@ def _fix_lab_results_format(tool_result_dict: dict, client: OpenAI, model_id: st
                 continue
             except json.JSONDecodeError:
                 pass
+
+            # Try to parse LabResult repr format: "LabResult(lab_name_raw='...', ...)"
+            parsed_repr = _parse_labresult_repr(lr_data)
+            if parsed_repr:
+                parsed_lab_results.append(parsed_repr)
+                continue
 
             # Collect for LLM-based parsing
             string_results.append(lr_data)
@@ -674,7 +818,7 @@ def _salvage_lab_results(tool_result_dict: dict) -> dict:
             lr_model = LabResult(**lr_data)
             valid_results.append(lr_model.model_dump(mode='json'))
         except Exception as e:
-            logger.warning(f"Failed to validate lab_result[{i}] in salvage: {e}. Data: {lr_data}")
+            logger.error(f"Failed to validate lab_result[{i}] in salvage: {e}. Data: {lr_data}")
 
     logger.info(f"Salvaged {len(valid_results)}/{len(tool_result_dict['lab_results'])} lab results")
     return HealthLabReport(lab_results=valid_results).model_dump(mode='json')
