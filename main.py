@@ -26,9 +26,8 @@ from extraction import (
 from standardization import standardize_lab_names, standardize_lab_units
 from normalization import apply_normalizations, deduplicate_results, apply_dtype_conversions
 
-# Setup logging
-LOG_DIR = Path("./logs")
-logger = setup_logging(LOG_DIR, clear_logs=False)
+# Module-level logger (file handlers added after config is loaded)
+logger = logging.getLogger(__name__)
 
 # Initialize OpenAI client for OpenRouter
 client = OpenAI(
@@ -660,12 +659,13 @@ def main():
         print("Example: python main.py --profile tsilva")
         sys.exit(1)
 
-    # Clear logs at start of run
-    global logger
-    logger = setup_logging(LOG_DIR, clear_logs=True)
-
     # Build configuration from env + profile + CLI args
     config = build_config(args)
+
+    # Setup logging to output folder for later review
+    global logger
+    log_dir = config.output_path / "logs"
+    logger = setup_logging(log_dir, clear_logs=True)
 
     logger.info(f"Input: {config.input_path}")
     logger.info(f"Output: {config.output_path}")
