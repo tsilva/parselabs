@@ -10,6 +10,7 @@ import json
 import shutil
 import logging
 import argparse
+import subprocess
 import pandas as pd
 import pdf2image
 from pathlib import Path
@@ -21,7 +22,7 @@ from tqdm import tqdm
 from config import ExtractionConfig, LabSpecsConfig, ProfileConfig, UNKNOWN_VALUE
 from utils import preprocess_page_image, setup_logging, ensure_columns
 from extraction import (
-    LabResult, HealthLabReport, extract_labs_from_page_image, self_consistency
+    LabResult, HealthLabReport, extract_labs_from_page_image, extract_labs_from_text, self_consistency
 )
 from standardization import standardize_lab_names, standardize_lab_units
 from normalization import apply_normalizations, deduplicate_results, apply_dtype_conversions
@@ -93,6 +94,73 @@ def get_column_lists(schema: dict):
 
 
 # ========================================
+# PDF Text Extraction (Cost Optimization)
+# ========================================
+
+def extract_text_from_pdf(pdf_path: Path) -> tuple[str, bool]:
+    """
+    Extract text from PDF using pdftotext (from poppler).
+
+    Returns:
+        Tuple of (extracted_text, success).
+        If pdftotext fails or is not installed, returns ("", False).
+    """
+    try:
+        result = subprocess.run(
+            ["pdftotext", "-layout", str(pdf_path), "-"],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        if result.returncode != 0:
+            logger.debug(f"pdftotext returned non-zero exit code: {result.returncode}")
+            return "", False
+        return result.stdout, True
+    except subprocess.TimeoutExpired:
+        logger.warning(f"pdftotext timed out for {pdf_path.name}")
+        return "", False
+    except FileNotFoundError:
+        logger.debug("pdftotext not installed (install with: brew install poppler)")
+        return "", False
+    except Exception as e:
+        logger.warning(f"pdftotext failed for {pdf_path.name}: {e}")
+        return "", False
+
+
+def text_extraction_is_viable(text: str, min_chars: int = 200) -> bool:
+    """
+    Check if extracted text is viable for LLM parsing.
+
+    Checks:
+    1. Minimum character count (not empty/sparse)
+    2. Contains lab-related keywords (confirms it's lab data)
+    3. Contains numbers (lab results have numeric values)
+
+    Returns:
+        True if text is viable for extraction, False otherwise.
+    """
+    # Remove whitespace for character count
+    clean_text = text.replace(" ", "").replace("\n", "")
+    if len(clean_text) < min_chars:
+        return False
+
+    # Check for lab-related keywords (Portuguese/English)
+    lab_keywords = [
+        'resultado', 'result', 'valor', 'value', 'referência', 'reference',
+        'unidade', 'unit', 'mg/dL', 'g/dL', 'mmol', 'hemoglobina', 'glicose',
+        'colesterol', 'análise', 'análises', 'exame', 'sangue', 'urina',
+        'hematologia', 'bioquímica', 'leucócitos', 'eritrócitos', 'plaquetas'
+    ]
+    text_lower = text.lower()
+    has_lab_keywords = any(kw in text_lower for kw in lab_keywords)
+
+    # Check for numeric values (lab results always have numbers)
+    has_numbers = bool(re.search(r'\d+[.,]?\d*', text))
+
+    return has_lab_keywords and has_numbers
+
+
+# ========================================
 # PDF Processing
 # ========================================
 
@@ -136,90 +204,173 @@ def process_single_pdf(
         if not copied_pdf.exists() or copied_pdf.stat().st_size != pdf_path.stat().st_size:
             shutil.copy2(pdf_path, copied_pdf)
 
-        # Convert PDF to images
-        try:
-            pil_pages = pdf2image.convert_from_path(str(copied_pdf))
-        except Exception as e:
-            logger.error(f"[{pdf_stem}] Failed to convert PDF: {e}")
-            return None
+        # ========================================
+        # Text-First Extraction (Cost Optimization)
+        # ========================================
+        # Try to extract text from PDF first - if successful, use text-only LLM (much cheaper)
+        # Falls back to vision-based extraction if text extraction fails or is not viable
 
-        # Process each page
-        all_results = []
-        doc_date = None
+        used_text_extraction = False
+        text_extraction_data = None
 
-        logger.info(f"[{pdf_stem}] Processing {len(pil_pages)} page(s)...")
-        for page_idx, page_image in enumerate(pil_pages):
-            page_name = f"{pdf_stem}.{page_idx+1:03d}"
-            jpg_path = doc_out_dir / f"{page_name}.jpg"
-            json_path = doc_out_dir / f"{page_name}.json"
+        # Check for existing text extraction cache
+        text_json_path = doc_out_dir / f"{pdf_stem}.text.json"
+        if text_json_path.exists():
+            logger.info(f"[{pdf_stem}] Loading cached text extraction data")
+            try:
+                text_extraction_data = json.loads(text_json_path.read_text(encoding='utf-8'))
+                used_text_extraction = True
+            except Exception as e:
+                logger.warning(f"[{pdf_stem}] Failed to load text extraction cache: {e}")
+                text_extraction_data = None
 
-            logger.info(f"[{page_name}] Processing page {page_idx+1}/{len(pil_pages)}...")
+        # Try text extraction if no cache
+        if text_extraction_data is None:
+            pdf_text, pdftotext_success = extract_text_from_pdf(copied_pdf)
 
-            # Preprocess and save image
-            if not jpg_path.exists():
-                processed = preprocess_page_image(page_image)
-                processed.save(jpg_path, "JPEG", quality=95)
-                logger.info(f"[{page_name}] Image preprocessed and saved")
+            if pdftotext_success and text_extraction_is_viable(pdf_text):
+                logger.info(f"[{pdf_stem}] Embedded text found ({len(pdf_text)} chars), trying text extraction...")
 
-            # Extract or load results
-            if not json_path.exists():
-                logger.info(f"[{page_name}] Extracting data from image...")
                 try:
-                    page_data, _ = self_consistency(
-                        extract_labs_from_page_image,
-                        config.self_consistency_model_id,
-                        config.n_extractions,
-                        jpg_path,
+                    text_extraction_data = extract_labs_from_text(
+                        pdf_text,
                         config.extract_model_id,
                         client
                     )
-                    logger.info(f"[{page_name}] Extraction completed")
 
-                    # Post-extraction verification (simplified - cross-model only)
-                    if config.enable_verification and page_data.get("lab_results"):
-                        logger.info(f"[{page_name}] Running cross-model verification...")
-                        try:
-                            from verification import verify_page_extraction
-                            page_data, verification_summary = verify_page_extraction(
-                                image_path=jpg_path,
-                                extracted_data=page_data,
-                                client=client,
-                                primary_model=config.extract_model_id,
-                                verification_model=config.verification_model_id,
-                            )
-                            logger.info(
-                                f"[{page_name}] Verification: {verification_summary.get('verified', 0)} verified, "
-                                f"{verification_summary.get('corrected', 0)} corrected, "
-                                f"avg confidence: {verification_summary.get('avg_confidence', 0):.2f}"
-                            )
-                        except Exception as ve:
-                            logger.error(f"[{page_name}] Verification failed: {ve}")
+                    # Validate text extraction results
+                    if text_extraction_data and len(text_extraction_data.get("lab_results", [])) > 0:
+                        used_text_extraction = True
+                        # Cache the text extraction results
+                        text_json_path.write_text(
+                            json.dumps(text_extraction_data, indent=2, ensure_ascii=False),
+                            encoding='utf-8'
+                        )
+                        logger.info(
+                            f"[{pdf_stem}] Text extraction successful: "
+                            f"{len(text_extraction_data['lab_results'])} results (cost optimized!)"
+                        )
+                    else:
+                        logger.warning(f"[{pdf_stem}] Text extraction returned no results, falling back to vision")
+                        text_extraction_data = None
 
-                    json_path.write_text(json.dumps(page_data, indent=2, ensure_ascii=False), encoding='utf-8')
                 except Exception as e:
-                    logger.error(f"[{page_name}] Extraction failed: {e}")
-                    page_data = HealthLabReport(lab_results=[]).model_dump(mode='json')
+                    logger.warning(f"[{pdf_stem}] Text extraction failed: {e}, falling back to vision")
+                    text_extraction_data = None
             else:
-                logger.info(f"[{page_name}] Loading cached extraction data")
-                page_data = json.loads(json_path.read_text(encoding='utf-8'))
+                if pdftotext_success:
+                    logger.debug(f"[{pdf_stem}] Text not viable for extraction, using vision")
+                else:
+                    logger.debug(f"[{pdf_stem}] No embedded text found, using vision")
 
-            # Extract date from first page
-            if page_idx == 0:
-                doc_date = page_data.get("collection_date") or page_data.get("report_date")
-                if doc_date == "0000-00-00":
-                    doc_date = None
-                if not doc_date:
-                    # Try to extract from filename
-                    match = re.search(r"(\d{4}-\d{2}-\d{2})", pdf_stem)
-                    if match:
-                        doc_date = match.group(1)
+        # ========================================
+        # Vision-Based Extraction (Fallback)
+        # ========================================
+        # If text extraction was not successful, use the traditional vision-based approach
 
-            # Add page metadata and result index to results
-            for result_idx, result in enumerate(page_data.get("lab_results", [])):
+        all_results = []
+        doc_date = None
+
+        if used_text_extraction and text_extraction_data:
+            # Use text extraction results
+            doc_date = text_extraction_data.get("collection_date") or text_extraction_data.get("report_date")
+            if doc_date == "0000-00-00":
+                doc_date = None
+            if not doc_date:
+                # Try to extract from filename
+                match = re.search(r"(\d{4}-\d{2}-\d{2})", pdf_stem)
+                if match:
+                    doc_date = match.group(1)
+
+            # Add page metadata to results (all from "page 1" since text extraction is whole-document)
+            for result_idx, result in enumerate(text_extraction_data.get("lab_results", [])):
                 result["result_index"] = result_idx
-                result["page_number"] = page_idx + 1
-                result["source_file"] = page_name
+                result["page_number"] = 1
+                result["source_file"] = f"{pdf_stem}.text"  # Mark as text extraction
                 all_results.append(result)
+
+        else:
+            # Fall back to vision-based extraction
+            # Convert PDF to images
+            try:
+                pil_pages = pdf2image.convert_from_path(str(copied_pdf))
+            except Exception as e:
+                logger.error(f"[{pdf_stem}] Failed to convert PDF: {e}")
+                return None
+
+            logger.info(f"[{pdf_stem}] Processing {len(pil_pages)} page(s) with vision...")
+            for page_idx, page_image in enumerate(pil_pages):
+                page_name = f"{pdf_stem}.{page_idx+1:03d}"
+                jpg_path = doc_out_dir / f"{page_name}.jpg"
+                json_path = doc_out_dir / f"{page_name}.json"
+
+                logger.info(f"[{page_name}] Processing page {page_idx+1}/{len(pil_pages)}...")
+
+                # Preprocess and save image
+                if not jpg_path.exists():
+                    processed = preprocess_page_image(page_image)
+                    processed.save(jpg_path, "JPEG", quality=95)
+                    logger.info(f"[{page_name}] Image preprocessed and saved")
+
+                # Extract or load results
+                if not json_path.exists():
+                    logger.info(f"[{page_name}] Extracting data from image...")
+                    try:
+                        page_data, _ = self_consistency(
+                            extract_labs_from_page_image,
+                            config.self_consistency_model_id,
+                            config.n_extractions,
+                            jpg_path,
+                            config.extract_model_id,
+                            client
+                        )
+                        logger.info(f"[{page_name}] Extraction completed")
+
+                        # Post-extraction verification (simplified - cross-model only)
+                        if config.enable_verification and page_data.get("lab_results"):
+                            logger.info(f"[{page_name}] Running cross-model verification...")
+                            try:
+                                from verification import verify_page_extraction
+                                page_data, verification_summary = verify_page_extraction(
+                                    image_path=jpg_path,
+                                    extracted_data=page_data,
+                                    client=client,
+                                    primary_model=config.extract_model_id,
+                                    verification_model=config.verification_model_id,
+                                )
+                                logger.info(
+                                    f"[{page_name}] Verification: {verification_summary.get('verified', 0)} verified, "
+                                    f"{verification_summary.get('corrected', 0)} corrected, "
+                                    f"avg confidence: {verification_summary.get('avg_confidence', 0):.2f}"
+                                )
+                            except Exception as ve:
+                                logger.error(f"[{page_name}] Verification failed: {ve}")
+
+                        json_path.write_text(json.dumps(page_data, indent=2, ensure_ascii=False), encoding='utf-8')
+                    except Exception as e:
+                        logger.error(f"[{page_name}] Extraction failed: {e}")
+                        page_data = HealthLabReport(lab_results=[]).model_dump(mode='json')
+                else:
+                    logger.info(f"[{page_name}] Loading cached extraction data")
+                    page_data = json.loads(json_path.read_text(encoding='utf-8'))
+
+                # Extract date from first page
+                if page_idx == 0:
+                    doc_date = page_data.get("collection_date") or page_data.get("report_date")
+                    if doc_date == "0000-00-00":
+                        doc_date = None
+                    if not doc_date:
+                        # Try to extract from filename
+                        match = re.search(r"(\d{4}-\d{2}-\d{2})", pdf_stem)
+                        if match:
+                            doc_date = match.group(1)
+
+                # Add page metadata and result index to results
+                for result_idx, result in enumerate(page_data.get("lab_results", [])):
+                    result["result_index"] = result_idx
+                    result["page_number"] = page_idx + 1
+                    result["source_file"] = page_name
+                    all_results.append(result)
 
         if not all_results:
             logger.warning(f"[{pdf_stem}] No results extracted")
