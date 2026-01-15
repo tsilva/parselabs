@@ -36,6 +36,9 @@ client = OpenAI(
     api_key=os.getenv("OPENROUTER_API_KEY")
 )
 
+# Default model for extraction
+DEFAULT_MODEL = "google/gemini-2.5-flash"
+
 
 # ========================================
 # Column Schema (simplified - 15 columns)

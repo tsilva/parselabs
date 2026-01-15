@@ -429,7 +429,7 @@ def create_single_lab_plot(df: pd.DataFrame, lab_name: str) -> tuple[go.Figure, 
         x=lab_df['date'],
         y=lab_df['value'],
         mode='lines+markers',
-        name=lab_name,
+        name="Values",
         marker=dict(size=10, color='#1f77b4'),
         line=dict(width=2),
         hovertemplate=(
@@ -456,37 +456,51 @@ def create_single_lab_plot(df: pd.DataFrame, lab_name: str) -> tuple[go.Figure, 
             # Blue band for lab_specs healthy range
             fig.add_hrect(
                 y0=spec_min, y1=spec_max,
-                fillcolor="rgba(59, 130, 246, 0.15)",
+                fillcolor="rgba(37, 99, 235, 0.20)",
                 line_width=0,
             )
-            fig.add_hline(y=spec_min, line_dash="dot", line_color="rgba(59, 130, 246, 0.6)")
-            fig.add_hline(y=spec_max, line_dash="dot", line_color="rgba(59, 130, 246, 0.6)")
+            fig.add_hline(y=spec_min, line_dash="dot", line_color="rgba(37, 99, 235, 0.8)")
+            fig.add_hline(y=spec_max, line_dash="dot", line_color="rgba(37, 99, 235, 0.8)")
 
-    # Add PDF reference range (green band - from extracted data)
+    # Add PDF reference range (orange band - from extracted data)
     if 'reference_min' in lab_df.columns and 'reference_max' in lab_df.columns:
         min_vals = lab_df['reference_min'].dropna()
         max_vals = lab_df['reference_max'].dropna()
 
-        if not min_vals.empty and not max_vals.empty:
+        ref_min = None
+        ref_max = None
+        if not min_vals.empty:
             ref_min = float(min_vals.mode().iloc[0]) if len(min_vals.mode()) > 0 else float(min_vals.iloc[0])
+        if not max_vals.empty:
             ref_max = float(max_vals.mode().iloc[0]) if len(max_vals.mode()) > 0 else float(max_vals.iloc[0])
+
+        if ref_min is not None or ref_max is not None:
             has_pdf_range = True
 
-            # Green band for PDF reference range
-            fig.add_hrect(
-                y0=ref_min, y1=ref_max,
-                fillcolor="rgba(75, 192, 75, 0.15)",
-                line_width=0,
-            )
-            fig.add_hline(y=ref_min, line_dash="dash", line_color="rgba(75, 192, 75, 0.6)")
-            fig.add_hline(y=ref_max, line_dash="dash", line_color="rgba(75, 192, 75, 0.6)")
+            if ref_min is not None and ref_max is not None:
+                # Both bounds: draw band
+                fig.add_hrect(
+                    y0=ref_min, y1=ref_max,
+                    fillcolor="rgba(245, 158, 11, 0.20)",
+                    line_width=0,
+                )
+                fig.add_hline(y=ref_min, line_dash="dash", line_color="rgba(245, 158, 11, 0.8)")
+                fig.add_hline(y=ref_max, line_dash="dash", line_color="rgba(245, 158, 11, 0.8)")
+            elif ref_max is not None:
+                # Only upper bound (< ref_max): draw line at max
+                fig.add_hline(y=ref_max, line_dash="dash", line_color="rgba(245, 158, 11, 0.8)",
+                              annotation_text=f"< {ref_max}", annotation_position="top right")
+            else:
+                # Only lower bound (> ref_min): draw line at min
+                fig.add_hline(y=ref_min, line_dash="dash", line_color="rgba(245, 158, 11, 0.8)",
+                              annotation_text=f"> {ref_min}", annotation_position="bottom right")
 
     # Add legend entries for range types
     if has_lab_specs_range:
         fig.add_trace(go.Scatter(
             x=[None], y=[None],
             mode='markers',
-            marker=dict(size=10, color='rgba(59, 130, 246, 0.5)', symbol='square'),
+            marker=dict(size=10, color='rgba(37, 99, 235, 0.6)', symbol='square'),
             name='Healthy Range',
             showlegend=True
         ))
@@ -495,17 +509,29 @@ def create_single_lab_plot(df: pd.DataFrame, lab_name: str) -> tuple[go.Figure, 
         fig.add_trace(go.Scatter(
             x=[None], y=[None],
             mode='markers',
-            marker=dict(size=10, color='rgba(75, 192, 75, 0.5)', symbol='square'),
+            marker=dict(size=10, color='rgba(245, 158, 11, 0.6)', symbol='square'),
             name='PDF Reference',
             showlegend=True
         ))
+
+    # Configure x-axis for dates only (no timestamps)
+    xaxis_config = dict(
+        title="Date",
+        tickformat='%Y-%m-%d',
+    )
+
+    # For single data point, show just that date without surrounding timestamps
+    if len(lab_df) == 1:
+        single_date = lab_df['date'].iloc[0]
+        xaxis_config['tickvals'] = [single_date]
+        xaxis_config['ticktext'] = [single_date.strftime('%Y-%m-%d')]
 
     fig.update_layout(
         title=dict(
             text=f"{lab_name}" + (f" [{unit}]" if unit else ""),
             font=dict(size=14)
         ),
-        xaxis_title="Date",
+        xaxis=xaxis_config,
         yaxis_title=f"Value ({unit})" if unit else "Value",
         hovermode='x unified',
         template='plotly_white',
@@ -590,7 +616,7 @@ def create_interactive_plot(df: pd.DataFrame, lab_names: Optional[list]) -> go.F
                 x=lab_df['date'],
                 y=lab_df['value'],
                 mode='lines+markers',
-                name=lab_name,
+                name="Values",
                 marker=dict(size=8, color=color),
                 line=dict(width=2, color=color),
                 hovertemplate=(
@@ -614,26 +640,38 @@ def create_interactive_plot(df: pd.DataFrame, lab_names: Optional[list]) -> go.F
 
                 fig.add_hrect(
                     y0=spec_min, y1=spec_max,
-                    fillcolor="rgba(59, 130, 246, 0.15)",
+                    fillcolor="rgba(37, 99, 235, 0.20)",
                     line_width=0,
                     row=i + 1, col=1
                 )
 
-        # Add PDF reference range (green band)
+        # Add PDF reference range (orange band)
         if 'reference_min' in lab_df.columns and 'reference_max' in lab_df.columns:
             min_vals = lab_df['reference_min'].dropna()
             max_vals = lab_df['reference_max'].dropna()
 
-            if not min_vals.empty and not max_vals.empty:
+            ref_min = None
+            ref_max = None
+            if not min_vals.empty:
                 ref_min = float(min_vals.mode().iloc[0]) if len(min_vals.mode()) > 0 else float(min_vals.iloc[0])
+            if not max_vals.empty:
                 ref_max = float(max_vals.mode().iloc[0]) if len(max_vals.mode()) > 0 else float(max_vals.iloc[0])
 
+            if ref_min is not None and ref_max is not None:
                 fig.add_hrect(
                     y0=ref_min, y1=ref_max,
-                    fillcolor="rgba(75, 192, 75, 0.15)",
+                    fillcolor="rgba(245, 158, 11, 0.20)",
                     line_width=0,
                     row=i + 1, col=1
                 )
+            elif ref_max is not None:
+                # Only upper bound (< ref_max)
+                fig.add_hline(y=ref_max, line_dash="dash", line_color="rgba(245, 158, 11, 0.8)",
+                              row=i + 1, col=1)
+            elif ref_min is not None:
+                # Only lower bound (> ref_min)
+                fig.add_hline(y=ref_min, line_dash="dash", line_color="rgba(245, 158, 11, 0.8)",
+                              row=i + 1, col=1)
 
         # Update y-axis label
         fig.update_yaxes(title_text=unit if unit else "Value", row=i + 1, col=1)
@@ -647,6 +685,9 @@ def create_interactive_plot(df: pd.DataFrame, lab_names: Optional[list]) -> go.F
         showlegend=False,
         hovermode='x unified'
     )
+
+    # Configure x-axis to show dates only (no timestamps)
+    fig.update_xaxes(tickformat='%Y-%m-%d')
 
     return fig
 
