@@ -339,10 +339,6 @@
       {
         "unit": "UI/ml",
         "factor": 1.0
-      },
-      {
-        "unit": "Indice",
-        "factor": 1.0
       }
     ],
     "ranges": {}
@@ -3455,10 +3451,6 @@
     "primary_unit": "mL/min/1.73m²",
     "alternatives": [
       {
-        "unit": "mL/min",
-        "factor": 1.0
-      },
-      {
         "unit": "ml/min/1.73 m²",
         "factor": 1.0
       },
@@ -3640,7 +3632,7 @@
     }
   },
   "Sample - Product Type": {
-    "lab_type": "blood",
+    "lab_type": "sample",
     "primary_unit": "unitless",
     "alternatives": [],
     "ranges": {}
