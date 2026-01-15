@@ -487,11 +487,27 @@ def create_single_lab_plot(df: pd.DataFrame, lab_name: str) -> tuple[go.Figure, 
                 fig.add_hline(y=ref_min, line_dash="dash", line_color="rgba(245, 158, 11, 0.8)")
                 fig.add_hline(y=ref_max, line_dash="dash", line_color="rgba(245, 158, 11, 0.8)")
             elif ref_max is not None:
-                # Only upper bound (< ref_max): draw line at max
+                # Only upper bound (< ref_max): healthy zone is below ref_max
+                # Calculate y-axis extent based on data
+                data_min = lab_df['value'].min()
+                y_bottom = min(0, data_min * 0.9) if data_min > 0 else data_min * 1.1
+                fig.add_hrect(
+                    y0=y_bottom, y1=ref_max,
+                    fillcolor="rgba(245, 158, 11, 0.20)",
+                    line_width=0,
+                )
                 fig.add_hline(y=ref_max, line_dash="dash", line_color="rgba(245, 158, 11, 0.8)",
                               annotation_text=f"< {ref_max}", annotation_position="top right")
             else:
-                # Only lower bound (> ref_min): draw line at min
+                # Only lower bound (> ref_min): healthy zone extends from ref_min to top
+                # Calculate y-axis extent based on data
+                data_max = lab_df['value'].max()
+                y_top = max(data_max * 1.2, ref_min * 2) if data_max > 0 else data_max * 0.8
+                fig.add_hrect(
+                    y0=ref_min, y1=y_top,
+                    fillcolor="rgba(245, 158, 11, 0.20)",
+                    line_width=0,
+                )
                 fig.add_hline(y=ref_min, line_dash="dash", line_color="rgba(245, 158, 11, 0.8)",
                               annotation_text=f"> {ref_min}", annotation_position="bottom right")
 
@@ -665,11 +681,27 @@ def create_interactive_plot(df: pd.DataFrame, lab_names: Optional[list]) -> go.F
                     row=i + 1, col=1
                 )
             elif ref_max is not None:
-                # Only upper bound (< ref_max)
+                # Only upper bound (< ref_max): healthy zone is below ref_max
+                data_min = lab_df['value'].min()
+                y_bottom = min(0, data_min * 0.9) if data_min > 0 else data_min * 1.1
+                fig.add_hrect(
+                    y0=y_bottom, y1=ref_max,
+                    fillcolor="rgba(245, 158, 11, 0.20)",
+                    line_width=0,
+                    row=i + 1, col=1
+                )
                 fig.add_hline(y=ref_max, line_dash="dash", line_color="rgba(245, 158, 11, 0.8)",
                               row=i + 1, col=1)
             elif ref_min is not None:
-                # Only lower bound (> ref_min)
+                # Only lower bound (> ref_min): healthy zone extends from ref_min to top
+                data_max = lab_df['value'].max()
+                y_top = max(data_max * 1.2, ref_min * 2) if data_max > 0 else data_max * 0.8
+                fig.add_hrect(
+                    y0=ref_min, y1=y_top,
+                    fillcolor="rgba(245, 158, 11, 0.20)",
+                    line_width=0,
+                    row=i + 1, col=1
+                )
                 fig.add_hline(y=ref_min, line_dash="dash", line_color="rgba(245, 158, 11, 0.8)",
                               row=i + 1, col=1)
 
