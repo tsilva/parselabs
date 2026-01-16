@@ -97,9 +97,13 @@ def setup_logging(log_dir: Path, clear_logs: bool = False) -> logging.Logger:
     root_logger.setLevel(logging.INFO)
 
     # Remove existing handlers from root logger
+    # Note: Don't close() handlers in multiprocessing context - they share file descriptors
+    # with the parent process, and closing them can corrupt the parent's file handles
     for handler in list(root_logger.handlers):
         root_logger.removeHandler(handler)
-        handler.close()
+        # Only close if we're in the main process (clear_logs=True indicates main process)
+        if clear_logs:
+            handler.close()
 
     # Formatters
     file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')

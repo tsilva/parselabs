@@ -21,6 +21,12 @@ python main.py --list-profiles
 # Override settings:
 python main.py --profile tsilva --model google/gemini-2.5-pro --no-verify
 
+# Post-extraction verification (run verification on cached data):
+python main.py --profile tsilva --verify-only                  # Verify all pages
+python main.py --profile tsilva --verify-only --unverified-only  # Only unverified
+python main.py --profile tsilva --verify-only --document "2024-01-15-labs"  # Specific doc
+python main.py --profile tsilva --verify-only --date-from 2024-01-01 --date-to 2024-06-30
+
 # Data integrity validation:
 python test.py
 
@@ -64,7 +70,12 @@ Cross-model verification validates extracted values against the source image:
 
 **Configuration:**
 ```bash
---no-verify  # Disable verification
+--no-verify        # Disable verification during extraction
+--verify-only      # Run verification on already-extracted data (skip extraction)
+--unverified-only  # Only verify pages that haven't been verified yet
+--document         # Filter to specific document stem
+--date-from        # Filter results >= date (YYYY-MM-DD)
+--date-to          # Filter results <= date (YYYY-MM-DD)
 ```
 
 ### Configuration System
@@ -161,7 +172,7 @@ Optional (with smart defaults):
 - `EXTRACT_MODEL_ID` - Vision model (default: `google/gemini-2.5-flash`)
 - `N_EXTRACTIONS` - Self-consistency extractions (default: 1)
 - `MAX_WORKERS` - Parallel workers (default: CPU count)
-- `ENABLE_VERIFICATION` - Cross-model verification (default: true)
+- `ENABLE_VERIFICATION` - Cross-model verification (default: false)
 
 Note: Input and output paths must be specified via profiles. See `profiles/_template.yaml`.
 
