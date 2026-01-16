@@ -13,25 +13,25 @@ Labs Parser is a Python tool that uses AI (via OpenRouter API) to extract labora
 ### Running the Parser
 ```bash
 # Using a profile (required):
-python main.py --profile tsilva
+python extract.py --profile tsilva
 
 # List available profiles:
-python main.py --list-profiles
+python extract.py --list-profiles
 
 # Override settings:
-python main.py --profile tsilva --model google/gemini-2.5-pro --no-verify
+python extract.py --profile tsilva --model google/gemini-2.5-pro --no-verify
 
 # Post-extraction verification (run verification on cached data):
-python main.py --profile tsilva --verify-only                  # Verify all pages
-python main.py --profile tsilva --verify-only --unverified-only  # Only unverified
-python main.py --profile tsilva --verify-only --document "2024-01-15-labs"  # Specific doc
-python main.py --profile tsilva --verify-only --date-from 2024-01-01 --date-to 2024-06-30
+python extract.py --profile tsilva --verify-only                  # Verify all pages
+python extract.py --profile tsilva --verify-only --unverified-only  # Only unverified
+python extract.py --profile tsilva --verify-only --document "2024-01-15-labs"  # Specific doc
+python extract.py --profile tsilva --verify-only --date-from 2024-01-01 --date-to 2024-06-30
 
 # Data integrity validation:
 python test.py
 
 # Review extracted results:
-python review_ui.py --profile tsilva
+python review.py --profile tsilva
 ```
 
 ### Development
@@ -43,7 +43,7 @@ The `utils/` directory contains helper scripts for building and maintaining conf
 
 ## Architecture
 
-### Core Pipeline (main.py)
+### Core Pipeline (extract.py)
 
 The processing pipeline has 3 main stages:
 
@@ -192,7 +192,7 @@ Run with `python test.py` - prints report to console.
 ## Important Conventions
 
 ### Documentation Maintenance
-When modifying the extraction pipeline in `main.py` or related modules:
+When modifying the extraction pipeline in `extract.py` or related modules:
 - **Always update `docs/pipeline.md`** to reflect the changes
 - The pipeline diagram and step descriptions must stay in sync with the code
 
