@@ -10,6 +10,7 @@ import json
 import shutil
 import logging
 import argparse
+import hashlib
 import subprocess
 import pandas as pd
 import pdf2image
@@ -127,37 +128,109 @@ def extract_text_from_pdf(pdf_path: Path) -> tuple[str, bool]:
         return "", False
 
 
-def text_extraction_is_viable(text: str, min_chars: int = 200) -> bool:
-    """
-    Check if extracted text is viable for LLM parsing.
+VIABILITY_CACHE_PATH = Path("config/cache/viability_cache.json")
 
-    Checks:
-    1. Minimum character count (not empty/sparse)
-    2. Contains lab-related keywords (confirms it's lab data)
-    3. Contains numbers (lab results have numeric values)
+
+def _load_viability_cache() -> dict:
+    """Load viability check cache from disk."""
+    if VIABILITY_CACHE_PATH.exists():
+        try:
+            return json.loads(VIABILITY_CACHE_PATH.read_text(encoding='utf-8'))
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"Failed to load viability cache: {e}")
+    return {}
+
+
+def _save_viability_cache(cache: dict):
+    """Save viability check cache to disk."""
+    VIABILITY_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    VIABILITY_CACHE_PATH.write_text(
+        json.dumps(cache, indent=2, sort_keys=True),
+        encoding='utf-8'
+    )
+
+
+def text_extraction_is_viable(
+    text: str,
+    client: OpenAI,
+    model_id: str = "google/gemini-2.5-flash",
+    min_chars: int = 200,
+) -> bool:
+    """
+    Check if extracted text is viable for LLM parsing using classification.
+
+    Uses an LLM to classify whether the text contains structured lab data,
+    with results cached to avoid repeated API calls.
+
+    Args:
+        text: The extracted PDF text to check.
+        client: OpenAI client for API calls.
+        model_id: Model to use for classification.
+        min_chars: Minimum character count (excluding whitespace).
 
     Returns:
-        True if text is viable for extraction, False otherwise.
+        True if text is viable for lab extraction, False otherwise.
     """
-    # Remove whitespace for character count
+    # Quick check: minimum character count
     clean_text = text.replace(" ", "").replace("\n", "")
     if len(clean_text) < min_chars:
         return False
 
-    # Check for lab-related keywords (Portuguese/English)
-    lab_keywords = [
-        'resultado', 'result', 'valor', 'value', 'referência', 'reference',
-        'unidade', 'unit', 'mg/dL', 'g/dL', 'mmol', 'hemoglobina', 'glicose',
-        'colesterol', 'análise', 'análises', 'exame', 'sangue', 'urina',
-        'hematologia', 'bioquímica', 'leucócitos', 'eritrócitos', 'plaquetas'
-    ]
-    text_lower = text.lower()
-    has_lab_keywords = any(kw in text_lower for kw in lab_keywords)
+    # Check cache using hash of first 500 chars
+    cache = _load_viability_cache()
+    text_hash = hashlib.md5(text[:500].encode()).hexdigest()
+    if text_hash in cache:
+        logger.debug(f"Viability cache hit: {cache[text_hash]}")
+        return cache[text_hash]
 
-    # Check for numeric values (lab results always have numbers)
-    has_numbers = bool(re.search(r'\d+[.,]?\d*', text))
+    # LLM classification
+    system_prompt = """Classify if this text contains structured lab test results.
 
-    return has_lab_keywords and has_numbers
+LAB DATA characteristics:
+- Test names (Glucose, Hemoglobin, Creatinine, Cholesterol, etc.)
+- Numeric values or qualitative results (142, NEGATIVE, 1.2, POSITIVE)
+- Units (mg/dL, g/dL, %, mmol/L, U/L, etc.)
+- Reference ranges (70-100, 4.0-10.0, <5.0, etc.)
+
+NOT lab data:
+- Disclaimers, legal text, or headers without results
+- Patient info without actual test results
+- Empty or minimal text
+- General medical notes without structured lab values
+
+Return ONLY a JSON object: {"is_lab_data": true} or {"is_lab_data": false}"""
+
+    try:
+        completion = client.chat.completions.create(
+            model=model_id,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text[:1000]}
+            ],
+            temperature=0.0,
+            max_tokens=50
+        )
+
+        response = completion.choices[0].message.content.strip()
+        # Parse JSON from response (handle markdown code blocks)
+        if response.startswith("```"):
+            response = response.split("```")[1]
+            if response.startswith("json"):
+                response = response[4:]
+            response = response.strip()
+        result = json.loads(response)
+        is_viable = result.get("is_lab_data", False)
+        logger.debug(f"LLM viability classification: {is_viable}")
+
+    except Exception as e:
+        logger.warning(f"LLM viability check failed: {e}, falling back to vision")
+        is_viable = False  # Conservative: use vision extraction on failure
+
+    # Save to cache
+    cache[text_hash] = is_viable
+    _save_viability_cache(cache)
+
+    return is_viable
 
 
 # ========================================
@@ -216,10 +289,10 @@ def process_single_pdf(
         # Check for existing text extraction cache
         text_json_path = doc_out_dir / f"{pdf_stem}.text.json"
         if text_json_path.exists():
-            logger.info(f"[{pdf_stem}] Loading cached text extraction data")
             try:
                 text_extraction_data = json.loads(text_json_path.read_text(encoding='utf-8'))
                 used_text_extraction = True
+                logger.info(f"[{pdf_stem}] Strategy: TEXT (cached)")
             except Exception as e:
                 logger.warning(f"[{pdf_stem}] Failed to load text extraction cache: {e}")
                 text_extraction_data = None
@@ -228,8 +301,8 @@ def process_single_pdf(
         if text_extraction_data is None:
             pdf_text, pdftotext_success = extract_text_from_pdf(copied_pdf)
 
-            if pdftotext_success and text_extraction_is_viable(pdf_text):
-                logger.info(f"[{pdf_stem}] Embedded text found ({len(pdf_text)} chars), trying text extraction...")
+            if pdftotext_success and text_extraction_is_viable(pdf_text, client):
+                logger.info(f"[{pdf_stem}] Strategy: TEXT (LLM classified as lab data, {len(pdf_text)} chars)")
 
                 try:
                     text_extraction_data = extract_labs_from_text(
@@ -247,21 +320,21 @@ def process_single_pdf(
                             encoding='utf-8'
                         )
                         logger.info(
-                            f"[{pdf_stem}] Text extraction successful: "
-                            f"{len(text_extraction_data['lab_results'])} results (cost optimized!)"
+                            f"[{pdf_stem}] Text extraction complete: "
+                            f"{len(text_extraction_data['lab_results'])} results"
                         )
                     else:
-                        logger.warning(f"[{pdf_stem}] Text extraction returned no results, falling back to vision")
+                        logger.info(f"[{pdf_stem}] Strategy: TEXT -> VISION (no results from text, falling back)")
                         text_extraction_data = None
 
                 except Exception as e:
-                    logger.warning(f"[{pdf_stem}] Text extraction failed: {e}, falling back to vision")
+                    logger.info(f"[{pdf_stem}] Strategy: TEXT -> VISION (text failed: {e})")
                     text_extraction_data = None
             else:
                 if pdftotext_success:
-                    logger.debug(f"[{pdf_stem}] Text not viable for extraction, using vision")
+                    logger.info(f"[{pdf_stem}] Strategy: VISION (LLM classified as non-lab data)")
                 else:
-                    logger.debug(f"[{pdf_stem}] No embedded text found, using vision")
+                    logger.info(f"[{pdf_stem}] Strategy: VISION (no embedded text in PDF)")
 
         # ========================================
         # Vision-Based Extraction (Fallback)
