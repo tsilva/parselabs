@@ -184,3 +184,6 @@ profiles/*.json
 profiles/*.yaml
 profiles/*.yml
 !profiles/_*
+
+# Cache files (contain PII in mapping keys)
+config/cache/
