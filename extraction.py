@@ -93,6 +93,44 @@ class LabResult(BaseModel):
             return str(int(v)) if isinstance(v, float) and v.is_integer() else str(v)
         return v
 
+    @field_validator('lab_name_raw', mode='before')
+    @classmethod
+    def validate_lab_name_raw(cls, v):
+        """Validate and clean malformed lab names with embedded metadata.
+
+        Some LLMs return lab names containing embedded field data like:
+        "alfa - fetoproteína, value_raw: 5,2, lab_unit_raw: µg/l, reference_range: <= 7,0"
+
+        This validator detects and cleans such malformed entries.
+        """
+        if v is None:
+            return v
+
+        v_str = str(v)
+
+        # Check for embedded metadata patterns (defined later in file)
+        malformed_patterns = ['value_raw:', 'lab_unit_raw:', 'reference_range:',
+                              'source_text:', 'reference_min_raw:', 'reference_max_raw:']
+        v_lower = v_str.lower()
+        is_malformed = any(pattern in v_lower for pattern in malformed_patterns)
+
+        if is_malformed:
+            logger.warning(f"Malformed lab_name_raw detected: {v_str[:100]}...")
+
+            # Attempt to extract just the lab name (text before first metadata marker)
+            for pattern in malformed_patterns:
+                if pattern in v_lower:
+                    idx = v_lower.index(pattern)
+                    candidate = v_str[:idx].strip().rstrip(',').strip()
+                    if candidate and len(candidate) > 1:
+                        logger.info(f"Extracted clean lab name: '{candidate}' from malformed input")
+                        return candidate
+
+            # Can't salvage - raise validation error
+            raise ValueError(f"Cannot parse malformed lab_name_raw: {v_str[:80]}...")
+
+        return v_str
+
 
 class HealthLabReport(BaseModel):
     """Document-level lab report metadata."""
@@ -643,6 +681,98 @@ _LAB_RESULT_FIELDS = {
     'reference_min_raw', 'reference_max_raw', 'is_abnormal', 'comments', 'source_text'
 }
 
+# Patterns indicating embedded extraction metadata in lab_name_raw
+MALFORMED_PATTERNS = ['value_raw:', 'lab_unit_raw:', 'reference_range:',
+                      'source_text:', 'reference_min_raw:', 'reference_max_raw:']
+
+
+def _is_malformed_lab_name(name: str) -> bool:
+    """Check if lab_name_raw contains embedded extraction metadata."""
+    if not name or not isinstance(name, str):
+        return False
+    name_lower = name.lower()
+    return any(pattern in name_lower for pattern in MALFORMED_PATTERNS)
+
+
+def _extract_clean_lab_name(malformed: str) -> Optional[str]:
+    """Extract just the lab name from a malformed string.
+
+    Example: "Glucose, value_raw: 100, lab_unit_raw: mg/dL" → "Glucose"
+    """
+    if not malformed:
+        return None
+    # Try to extract text before first metadata marker
+    for pattern in MALFORMED_PATTERNS:
+        if pattern in malformed.lower():
+            idx = malformed.lower().index(pattern)
+            # Get everything before the pattern, clean it up
+            candidate = malformed[:idx].strip().rstrip(',').strip()
+            if candidate and len(candidate) > 1:
+                return candidate
+    return None
+
+
+def _parse_malformed_to_dict(malformed: str) -> Optional[dict]:
+    """Parse a malformed lab_name_raw that contains all fields as key-value pairs.
+
+    Example input:
+    "alfa - fetoproteína, value_raw: 5,2, lab_unit_raw: µg/l, reference_range: <= 7,0"
+
+    Returns dict with extracted fields.
+    """
+    result = {}
+
+    # Extract lab name (everything before first field marker)
+    clean_name = _extract_clean_lab_name(malformed)
+    if clean_name:
+        result['lab_name_raw'] = clean_name
+
+    # Build lookahead pattern for next field markers (handles European decimals like "5,2")
+    next_field_lookahead = '|'.join(re.escape(p) for p in MALFORMED_PATTERNS)
+
+    # Try to extract other fields using regex
+    for pattern in MALFORMED_PATTERNS:
+        field_name = pattern.rstrip(':')
+        # Match content until the next field marker OR end of string
+        # This handles European decimal notation (commas in numbers like "5,2")
+        field_pattern = rf'{field_name}:\s*(.+?)(?=,\s*(?:{next_field_lookahead})|$)'
+        match = re.search(field_pattern, malformed, re.IGNORECASE)
+        if match:
+            value = match.group(1).strip().rstrip(',').strip()
+            if value.lower() not in ('null', 'none', ''):
+                result[field_name] = value
+
+    return result if result else None
+
+
+def _fix_malformed_lab_names(lab_results: list) -> list:
+    """Fix lab results where lab_name_raw contains embedded metadata."""
+    if not lab_results:
+        return lab_results
+
+    fixed_results = []
+    for item in lab_results:
+        if not isinstance(item, dict):
+            fixed_results.append(item)
+            continue
+
+        lab_name = item.get('lab_name_raw', '')
+        if _is_malformed_lab_name(lab_name):
+            # Try to parse the entire malformed string as a record
+            parsed = _parse_malformed_to_dict(lab_name)
+            if parsed:
+                # Merge parsed fields, but preserve any existing non-null values
+                for key, val in parsed.items():
+                    if val is not None and item.get(key) is None:
+                        item[key] = val
+                # Clean the lab_name_raw
+                item['lab_name_raw'] = parsed.get('lab_name_raw', lab_name)
+                logger.info(f"Fixed malformed lab result: {item.get('lab_name_raw')}")
+
+        fixed_results.append(item)
+
+    return fixed_results
+
 
 def _parse_labresult_repr(s: str) -> Optional[dict]:
     """
@@ -773,6 +903,9 @@ def _fix_lab_results_format(tool_result_dict: dict, client: OpenAI, model_id: st
     # First, try to reassemble flattened key-value format (common LLM issue)
     # e.g., ['lab_name_raw: Glucose', 'value_raw: 100', ...] -> [{'lab_name_raw': 'Glucose', 'value_raw': '100', ...}]
     tool_result_dict["lab_results"] = _reassemble_flattened_key_values(tool_result_dict["lab_results"])
+
+    # Fix malformed lab names with embedded metadata (e.g., "test name, value_raw: 100, lab_unit_raw: mg/dL")
+    tool_result_dict["lab_results"] = _fix_malformed_lab_names(tool_result_dict["lab_results"])
 
     # Collect all string-based lab results that need parsing
     string_results = []
