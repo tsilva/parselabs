@@ -75,7 +75,7 @@ Priority: `collection_date` → `report_date` → filename pattern → None
 
 | File | Purpose |
 |------|---------|
-| `main.py` | Pipeline orchestration |
+| `extract.py` | Pipeline orchestration |
 | `extraction.py` | Vision LLM extraction |
 | `verification.py` | Multi-model verification |
 | `standardization.py` | Name/unit standardization |
@@ -85,5 +85,6 @@ Priority: `collection_date` → `report_date` → filename pattern → None
 | `config/lab_specs.json` | Standardized names, units, conversion factors |
 | `plotting.py` | Time-series plot generation (standalone) |
 | `reporting.py` | Run reports with edge case detection (standalone) |
-| `review_ui.py` | Interactive review UI |
+| `review.py` | Interactive review UI |
+| `browse.py` | Results browser UI |
 | `test.py` | Data validation tests |

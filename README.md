@@ -37,7 +37,7 @@ MAX_WORKERS=1
 2. Run the parser:
 
 ```bash
-python main.py
+python extract.py
 ```
 
 3. The tool will:
@@ -82,7 +82,7 @@ The UI reads from your `OUTPUT_PATH` (configured in `.env` or via environment va
 
 ### Workflow
 
-1. Run `python main.py` to extract lab results
+1. Run `python extract.py` to extract lab results
 2. Launch the review UI with `streamlit run review_ui/app.py`
 3. Review each extraction:
    - Compare extracted values against the source image
