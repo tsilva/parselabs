@@ -478,94 +478,149 @@ def extract_labs_from_page_image(
     image_path: Path,
     model_id: str,
     client: OpenAI,
-    temperature: float = 0.0
+    temperature: float = 0.0,
+    max_retries: int = 3,
+    temperature_step: float = 0.2
 ) -> dict:
     """
     Extract lab results from a page image using vision model.
+
+    Uses temperature escalation retry strategy for malformed outputs.
+    When validation fails due to malformed LLM output (e.g., all fields
+    concatenated into a single string), retries with higher temperature
+    to get the model to produce properly structured output.
 
     Args:
         image_path: Path to the preprocessed page image
         model_id: Vision model to use for extraction
         client: OpenAI client instance
-        temperature: Temperature for sampling
+        temperature: Initial temperature for sampling (default: 0.0)
+        max_retries: Maximum retry attempts with escalating temperature (default: 3)
+        temperature_step: Temperature increment per retry (default: 0.2)
 
     Returns:
-        Dictionary with extracted report data (validated by Pydantic)
+        Dictionary with extracted report data (validated by Pydantic).
+        On failure, includes _extraction_failed=True and _failure_reason.
     """
     with open(image_path, "rb") as img_file:
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
 
-    try:
-        completion = client.chat.completions.create(
-            model=model_id,
-            messages=[
-                {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
-                {"role": "user", "content": [
-                    {"type": "text", "text": EXTRACTION_USER_PROMPT},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_data}"}}
-                ]}
-            ],
-            temperature=temperature,
-            max_tokens=16384,
-            tools=TOOLS,
-            tool_choice={"type": "function", "function": {"name": "extract_lab_results"}}
-        )
-    except APIError as e:
-        logger.error(f"API Error during lab extraction from {image_path.name}: {e}")
-        raise RuntimeError(f"Lab extraction failed for {image_path.name}: {e}")
+    current_temp = temperature
+    last_error = None
 
-    # Check for valid response structure
-    if not completion or not completion.choices or len(completion.choices) == 0:
-        logger.error(f"Invalid completion response structure")
-        return HealthLabReport(lab_results=[]).model_dump(mode='json')
+    for attempt in range(max_retries + 1):  # +1 for initial attempt
+        if attempt > 0:
+            current_temp = temperature + (attempt * temperature_step)
+            logger.info(
+                f"[{image_path.name}] Retry {attempt}/{max_retries} with temperature={current_temp:.1f} "
+                f"(previous error: malformed output)"
+            )
 
-    if not completion.choices[0].message.tool_calls:
-        logger.warning(f"No tool call by model for lab extraction from {image_path.name}")
-        return HealthLabReport(lab_results=[]).model_dump(mode='json')
+        try:
+            completion = client.chat.completions.create(
+                model=model_id,
+                messages=[
+                    {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+                    {"role": "user", "content": [
+                        {"type": "text", "text": EXTRACTION_USER_PROMPT},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_data}"}}
+                    ]}
+                ],
+                temperature=current_temp,
+                max_tokens=16384,
+                tools=TOOLS,
+                tool_choice={"type": "function", "function": {"name": "extract_lab_results"}}
+            )
+        except APIError as e:
+            logger.error(f"API Error during lab extraction from {image_path.name}: {e}")
+            raise RuntimeError(f"Lab extraction failed for {image_path.name}: {e}")
 
-    tool_args_raw = completion.choices[0].message.tool_calls[0].function.arguments
-    try:
-        tool_result_dict = json.loads(tool_args_raw)
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON decode error for tool args: {e}")
-        return HealthLabReport(lab_results=[]).model_dump(mode='json')
+        # Check for valid response structure
+        if not completion or not completion.choices or len(completion.choices) == 0:
+            logger.error(f"Invalid completion response structure")
+            return HealthLabReport(lab_results=[]).model_dump(mode='json')
 
-    # Pre-process: Fix common LLM issues before Pydantic validation (using LLM for soft parsing)
-    tool_result_dict = _fix_lab_results_format(tool_result_dict, client, model_id)
+        if not completion.choices[0].message.tool_calls:
+            logger.warning(f"No tool call by model for lab extraction from {image_path.name}")
+            return HealthLabReport(lab_results=[]).model_dump(mode='json')
 
-    # Validate with Pydantic
-    try:
-        report_model = HealthLabReport(**tool_result_dict)
-        report_model.normalize_empty_optionals()
+        tool_args_raw = completion.choices[0].message.tool_calls[0].function.arguments
+        try:
+            tool_result_dict = json.loads(tool_args_raw)
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error for tool args: {e}")
+            return HealthLabReport(lab_results=[]).model_dump(mode='json')
 
-        # Check for extraction quality - warn if most values are null
-        if report_model.lab_results:
-            null_count = sum(1 for r in report_model.lab_results if r.value_raw is None)
-            total_count = len(report_model.lab_results)
-            null_pct = (null_count / total_count * 100) if total_count > 0 else 0
+        # Pre-process: Fix common LLM issues before Pydantic validation (using LLM for soft parsing)
+        tool_result_dict = _fix_lab_results_format(tool_result_dict, client, model_id)
 
-            if null_pct > 50:
-                logger.warning(
-                    f"Extraction quality issue: {null_count}/{total_count} ({null_pct:.0f}%) lab results have null values. "
-                    f"This suggests the model failed to extract numeric values from the image.\n"
-                    f"\t- {image_path}"
-                )
-        else:
-            if report_model.page_has_lab_data is False:
-                logger.debug(f"Page confirmed to have no lab data:\n\t- {image_path}")
+        # Validate with Pydantic
+        try:
+            report_model = HealthLabReport(**tool_result_dict)
+            report_model.normalize_empty_optionals()
+
+            # Check for extraction quality - warn if most values are null
+            if report_model.lab_results:
+                null_count = sum(1 for r in report_model.lab_results if r.value_raw is None)
+                total_count = len(report_model.lab_results)
+                null_pct = (null_count / total_count * 100) if total_count > 0 else 0
+
+                if null_pct > 50:
+                    logger.warning(
+                        f"Extraction quality issue: {null_count}/{total_count} ({null_pct:.0f}%) lab results have null values. "
+                        f"This suggests the model failed to extract numeric values from the image.\n"
+                        f"\t- {image_path}"
+                    )
             else:
-                logger.warning(
-                    f"Extraction returned 0 lab results. "
-                    f"This may indicate a model extraction failure - image should be manually reviewed.\n"
-                    f"\t- {image_path}"
-                )
+                if report_model.page_has_lab_data is False:
+                    logger.debug(f"Page confirmed to have no lab data:\n\t- {image_path}")
+                else:
+                    logger.warning(
+                        f"Extraction returned 0 lab results. "
+                        f"This may indicate a model extraction failure - image should be manually reviewed.\n"
+                        f"\t- {image_path}"
+                    )
 
-        return report_model.model_dump(mode='json')
-    except Exception as e:
-        num_results = len(tool_result_dict.get("lab_results", []))
-        logger.error(f"Model validation error for report with {num_results} lab_results: {e}")
-        # Try to salvage individual results
-        return _salvage_lab_results(tool_result_dict)
+            # Success - return the validated result
+            result = report_model.model_dump(mode='json')
+            if attempt > 0:
+                logger.info(f"[{image_path.name}] Extraction succeeded on retry {attempt} with temp={current_temp:.1f}")
+            return result
+
+        except ValueError as e:
+            error_msg = str(e)
+            # Check if this is a malformed output error that warrants retry
+            if "MALFORMED OUTPUT" in error_msg:
+                last_error = error_msg
+                num_results = len(tool_result_dict.get("lab_results", []))
+                logger.warning(
+                    f"[{image_path.name}] Malformed output detected ({num_results} results), "
+                    f"attempt {attempt + 1}/{max_retries + 1}"
+                )
+                # Continue to next retry attempt
+                continue
+            else:
+                # Non-retryable validation error - try to salvage
+                num_results = len(tool_result_dict.get("lab_results", []))
+                logger.error(f"Model validation error for report with {num_results} lab_results: {e}")
+                return _salvage_lab_results(tool_result_dict)
+
+        except Exception as e:
+            num_results = len(tool_result_dict.get("lab_results", []))
+            logger.error(f"Model validation error for report with {num_results} lab_results: {e}")
+            # Try to salvage individual results
+            return _salvage_lab_results(tool_result_dict)
+
+    # All retries exhausted - return failure marker
+    logger.error(
+        f"[{image_path.name}] Extraction failed after {max_retries + 1} attempts. "
+        f"Last error: {last_error[:200] if last_error else 'unknown'}"
+    )
+    result = HealthLabReport(lab_results=[]).model_dump(mode='json')
+    result["_extraction_failed"] = True
+    result["_failure_reason"] = f"Malformed output after {max_retries + 1} attempts"
+    result["_retry_count"] = max_retries + 1
+    return result
 
 
 def extract_labs_from_text(

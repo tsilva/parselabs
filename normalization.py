@@ -1,6 +1,7 @@
 """DataFrame normalization and transformation logic."""
 
 import logging
+import re
 import pandas as pd
 from typing import Optional
 
@@ -10,6 +11,73 @@ from config import LabSpecsConfig, UNKNOWN_VALUE
 from utils import slugify, ensure_columns
 
 logger = logging.getLogger(__name__)
+
+
+def preprocess_numeric_value(value) -> str:
+    """
+    Clean raw value for numeric conversion.
+
+    Handles:
+    - Strip trailing "=" (e.g., "0.9=" → "0.9")
+    - Extract first number from embedded metadata (e.g., "52.6=1946" → "52.6")
+    - Remove space thousands separators (e.g., "256 000" → "256000")
+    - European decimal format (comma → period)
+
+    Args:
+        value: Raw value from extraction
+
+    Returns:
+        Cleaned string ready for numeric conversion
+    """
+    if pd.isna(value):
+        return value
+
+    s = str(value).strip()
+
+    # Handle embedded metadata: "52.6=1946" → "52.6" (keep first number before =)
+    # Must be done before stripping trailing "=" to handle both cases
+    if '=' in s and not s.endswith('='):
+        s = s.split('=')[0].strip()
+
+    # Strip trailing "=" (e.g., "0.9=" → "0.9")
+    s = s.rstrip('=')
+
+    # Remove space thousands separators (e.g., "256 000" → "256000")
+    # Only if result looks like a number with spaces between digits
+    if re.match(r'^\d[\d\s]+$', s):
+        s = s.replace(' ', '')
+
+    # European decimal format (comma → period)
+    s = s.replace(',', '.')
+
+    return s
+
+
+def extract_comparison_value(value) -> tuple[str, bool, bool]:
+    """
+    Extract numeric value from comparison operators.
+
+    Args:
+        value: Raw value from extraction
+
+    Returns:
+        Tuple of (numeric_str, is_below_limit, is_above_limit)
+    """
+    if pd.isna(value):
+        return str(value), False, False
+
+    s = str(value).strip()
+    is_below = s.startswith('<')
+    is_above = s.startswith('>')
+
+    if is_below or is_above:
+        # Extract numeric part: "<0.05" → "0.05", "< 10" → "10"
+        numeric = re.sub(r'^[<>]\s*', '', s)
+        # Handle cases like "<20=NR" → "20"
+        numeric = numeric.split('=')[0].strip()
+        return numeric, is_below, is_above
+
+    return s, False, False
 
 
 def apply_normalizations(
@@ -82,13 +150,31 @@ def apply_unit_conversions(
     Handles boolean tests by converting qualitative text values (e.g., "negativo", "positivo")
     to 0/1 using LLM-based classification with caching.
     """
-    # Initialize primary unit columns
-    # Convert value_raw to numeric for calculations (text values will become NaN)
-    # Normalize European decimal format (comma → period) before conversion
-    df["value_primary"] = pd.to_numeric(
-        df["value_raw"].astype(str).str.replace(',', '.', regex=False),
-        errors='coerce'
-    )
+    # Initialize limit indicator columns
+    df["is_below_limit"] = False
+    df["is_above_limit"] = False
+
+    # Extract comparison operators and preprocess values
+    # Apply extract_comparison_value to get numeric part and limit flags
+    comparison_results = df["value_raw"].apply(extract_comparison_value)
+    df["_preprocessed_value"] = comparison_results.apply(lambda x: x[0])
+    df["is_below_limit"] = comparison_results.apply(lambda x: x[1])
+    df["is_above_limit"] = comparison_results.apply(lambda x: x[2])
+
+    # Apply additional preprocessing (spaces, trailing =, embedded metadata, comma→period)
+    df["_preprocessed_value"] = df["_preprocessed_value"].apply(preprocess_numeric_value)
+
+    # Convert preprocessed values to numeric
+    df["value_primary"] = pd.to_numeric(df["_preprocessed_value"], errors='coerce')
+
+    # Clean up temporary column
+    df.drop(columns=["_preprocessed_value"], inplace=True)
+
+    # Log preprocessing results
+    limit_count = df["is_below_limit"].sum() + df["is_above_limit"].sum()
+    if limit_count > 0:
+        logger.info(f"[normalization] Extracted {limit_count} comparison operators (</>)")
+
     df["lab_unit_primary"] = df["lab_unit_standardized"]
     df["reference_min_primary"] = df["reference_min_raw"]
     df["reference_max_primary"] = df["reference_max_raw"]
@@ -106,7 +192,7 @@ def apply_unit_conversions(
         ]
 
         if boolean_labs:
-            # First pass: convert qualitative text in value_raw
+            # First pass: convert qualitative text in value_raw for BOOLEAN labs
             value_raw_mask = (
                 df["lab_name_standardized"].isin(boolean_labs) &
                 df["value_primary"].isna() &
@@ -122,7 +208,7 @@ def apply_unit_conversions(
                     lambda v: qual_map.get(v)
                 )
                 df.loc[value_raw_mask, "lab_unit_primary"] = "boolean"
-                logger.info(f"[normalization] Converted {value_raw_mask.sum()} qualitative values from value_raw")
+                logger.info(f"[normalization] Converted {value_raw_mask.sum()} qualitative values from value_raw (boolean labs)")
 
             # Second pass: use comments field for boolean tests where value_raw is NaN
             comments_mask = (
@@ -141,9 +227,33 @@ def apply_unit_conversions(
                     lambda v: qual_map.get(v)
                 )
                 df.loc[comments_mask, "lab_unit_primary"] = "boolean"
-                logger.info(f"[normalization] Converted {comments_mask.sum()} qualitative values from comments")
+                logger.info(f"[normalization] Converted {comments_mask.sum()} qualitative values from comments (boolean labs)")
 
-        # Third pass: for ANY test (not just boolean), convert negative-like comments to 0
+        # Third pass: for ANY test (not just boolean), convert negative-like value_raw to 0
+        # This handles qualitative text like "Negativo", "Ausente" in numeric-unit labs
+        negative_value_raw_mask = (
+            df["value_primary"].isna() &
+            df["value_raw"].notna() &
+            ~df["lab_name_standardized"].isin(boolean_labs if boolean_labs else [])
+        )
+
+        if negative_value_raw_mask.any():
+            raw_values = df.loc[negative_value_raw_mask, "value_raw"].tolist()
+            qual_map = standardize_qualitative_values(raw_values, model_id, client)
+
+            # Only apply 0 for negative results
+            converted_count = 0
+            for idx in df.loc[negative_value_raw_mask].index:
+                raw_val = df.at[idx, "value_raw"]
+                converted = qual_map.get(raw_val)
+                if converted == 0:
+                    df.at[idx, "value_primary"] = 0.0
+                    converted_count += 1
+
+            if converted_count > 0:
+                logger.info(f"[normalization] Converted {converted_count} negative-like value_raw to 0 (non-boolean labs)")
+
+        # Fourth pass: for ANY test (not just boolean), convert negative-like comments to 0
         negative_comments_mask = (
             df["value_primary"].isna() &
             df["value_raw"].isna() &
@@ -155,13 +265,14 @@ def apply_unit_conversions(
             qual_map = standardize_qualitative_values(comment_values, model_id, client)
 
             # Only apply 0 for negative results
+            converted_count = 0
             for idx in df.loc[negative_comments_mask].index:
                 comment = df.at[idx, "comments"]
                 converted = qual_map.get(comment)
                 if converted == 0:
                     df.at[idx, "value_primary"] = 0.0
+                    converted_count += 1
 
-            converted_count = sum(1 for c in comment_values if qual_map.get(c) == 0)
             if converted_count > 0:
                 logger.info(f"[normalization] Converted {converted_count} negative-like comments to 0")
 
