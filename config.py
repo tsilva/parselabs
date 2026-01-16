@@ -69,7 +69,7 @@ class ExtractionConfig:
         max_workers = int(max_workers_str) if max_workers_str else (os.cpu_count() or 1)
 
         # Verification settings
-        enable_verification = os.getenv("ENABLE_VERIFICATION", "true").lower() == "true"
+        enable_verification = os.getenv("ENABLE_VERIFICATION", "false").lower() == "true"
         verification_model_id = os.getenv("VERIFICATION_MODEL_ID") or None
 
         return cls(
