@@ -25,27 +25,42 @@ class LabResult(BaseModel):
 
     # Raw extraction (exactly as shown in PDF)
     lab_name_raw: str = Field(
-        description="Test name EXACTLY as written in the PDF. Preserve all spacing, capitalization, symbols, and formatting."
+        description="Test name ONLY as written in the PDF. Must contain ONLY the test name - "
+                    "DO NOT include values, units, reference ranges, or field labels. "
+                    "WRONG: 'Glucose, value_raw: 100' CORRECT: 'Glucose'"
     )
     value_raw: Optional[str] = Field(
         default=None,
-        description="Result value EXACTLY as shown - ALWAYS use this field for ALL results. Numeric examples: 5.2, 14.8, 0.5. Text examples: NEGATIVO, POSITIVO, NORMAL, AMARELA, NAO CONTEM, Raras, Ausente. Range examples: 1 a 2, 1-5 / campo, 0-3 / campo. IMPORTANT: Put the actual test result here, whether it's a number or text."
+        description="Result value ONLY. Must contain ONLY the numeric or text result - "
+                    "DO NOT include test names, units, or field labels. "
+                    "Examples: '5.2', '14.8', 'NEGATIVO', 'POSITIVO'"
     )
     lab_unit_raw: Optional[str] = Field(
         default=None,
-        description="Unit EXACTLY as written in PDF (preserve case, spacing, symbols)."
+        description="Unit ONLY as written in PDF. Must contain ONLY the unit symbol - "
+                    "DO NOT include values or test names. Examples: 'mg/dL', '%', 'U/L'"
     )
     reference_range: Optional[str] = Field(
         default=None,
         description="Complete reference range text EXACTLY as shown."
     )
+    reference_notes: Optional[str] = Field(
+        default=None,
+        description="Any notes, comments, or additional context about the reference range. "
+                    "Examples: 'Confirmado por duplo ensaio', 'Criança<400', 'valores podem variar'. "
+                    "Put methodology notes, population-specific ranges, or validation comments HERE."
+    )
     reference_min_raw: Optional[float] = Field(
         default=None,
-        description="Minimum reference value - ALWAYS parse from reference_range. Examples: '< 40' → null, '150 - 400' → 150, '26.5-32.6' → 26.5"
+        description="Minimum reference value as a PLAIN NUMBER ONLY. Parse from reference_range. "
+                    "Put any comments or notes in reference_notes instead. "
+                    "Examples: '< 40' → null, '150 - 400' → 150, '26.5-32.6' → 26.5"
     )
     reference_max_raw: Optional[float] = Field(
         default=None,
-        description="Maximum reference value - ALWAYS parse from reference_range. Examples: '< 40' → 40, '150 - 400' → 400, '26.5-32.6' → 32.6"
+        description="Maximum reference value as a PLAIN NUMBER ONLY. Parse from reference_range. "
+                    "Put any comments or notes in reference_notes instead. "
+                    "Examples: '< 40' → 40, '150 - 400' → 400, '26.5-32.6' → 32.6"
     )
     is_abnormal: Optional[bool] = Field(
         default=None,
@@ -96,38 +111,27 @@ class LabResult(BaseModel):
     @field_validator('lab_name_raw', mode='before')
     @classmethod
     def validate_lab_name_raw(cls, v):
-        """Validate and clean malformed lab names with embedded metadata.
+        """Reject malformed lab names with embedded metadata.
 
-        Some LLMs return lab names containing embedded field data like:
-        "alfa - fetoproteína, value_raw: 5,2, lab_unit_raw: µg/l, reference_range: <= 7,0"
-
-        This validator detects and cleans such malformed entries.
+        Previously this cleaned malformed entries. Now it fails fast
+        to force investigation when the model misbehaves.
         """
         if v is None:
             return v
 
         v_str = str(v)
 
-        # Check for embedded metadata patterns (defined later in file)
+        # Check for embedded metadata patterns
         malformed_patterns = ['value_raw:', 'lab_unit_raw:', 'reference_range:',
                               'source_text:', 'reference_min_raw:', 'reference_max_raw:']
         v_lower = v_str.lower()
-        is_malformed = any(pattern in v_lower for pattern in malformed_patterns)
 
-        if is_malformed:
-            logger.warning(f"Malformed lab_name_raw detected: {v_str[:100]}...")
-
-            # Attempt to extract just the lab name (text before first metadata marker)
-            for pattern in malformed_patterns:
-                if pattern in v_lower:
-                    idx = v_lower.index(pattern)
-                    candidate = v_str[:idx].strip().rstrip(',').strip()
-                    if candidate and len(candidate) > 1:
-                        logger.info(f"Extracted clean lab name: '{candidate}' from malformed input")
-                        return candidate
-
-            # Can't salvage - raise validation error
-            raise ValueError(f"Cannot parse malformed lab_name_raw: {v_str[:80]}...")
+        if any(pattern in v_lower for pattern in malformed_patterns):
+            raise ValueError(
+                f"MALFORMED OUTPUT: lab_name_raw contains embedded field data. "
+                f"Model returned: '{v_str[:100]}...'. "
+                f"This indicates the extraction prompt needs improvement."
+            )
 
         return v_str
 
@@ -233,7 +237,12 @@ CRITICAL RULES:
 
 5. REFERENCE RANGES - ALWAYS PARSE INTO NUMBERS:
    - `reference_range`: Copy the complete reference range text EXACTLY as shown
-   - `reference_min_raw` / `reference_max_raw`: ALWAYS extract numeric bounds when present
+   - `reference_min_raw` / `reference_max_raw`: Extract ONLY the numeric bounds (PLAIN NUMBERS ONLY)
+   - `reference_notes`: Put any comments, methodology notes, or additional context here
+     Examples: "Confirmado por duplo ensaio", "Criança<400", "valores podem variar"
+
+   IMPORTANT: reference_min_raw and reference_max_raw must be PLAIN NUMBERS.
+   Any text, comments, or notes go in reference_notes instead.
 
    Parsing rules and examples:
    - "< 40" or "< 0.3" → reference_min_raw=null, reference_max_raw=40 (or 0.3)
@@ -242,7 +251,7 @@ CRITICAL RULES:
    - "26.5-32.6" → reference_min_raw=26.5, reference_max_raw=32.6
    - "0.2 a 1.0" → reference_min_raw=0.2, reference_max_raw=1.0 ("a" means "to" in Portuguese)
    - "4.0 - 10.0" → reference_min_raw=4.0, reference_max_raw=10.0
-   - "39-117;Criança<400" → reference_min_raw=39, reference_max_raw=117 (ignore additional notes)
+   - "39-117;Criança<400" → reference_min_raw=39, reference_max_raw=117, reference_notes="Criança<400"
    - If no numeric values can be extracted → both null
 
    SPECIAL CASE - Multiple values with shared reference ranges:
@@ -301,6 +310,21 @@ E) Tests with NO visible unit but result is text:
    - Set to false if this is a cover page, instructions, administrative content, or has no lab tests
    - This helps distinguish empty pages from extraction failures
 
+10. FIELD SEPARATION - CRITICAL:
+   - Each field must contain ONLY its designated data type
+   - NEVER concatenate or embed multiple pieces of data in one field
+   - NEVER include field labels (like "value_raw:") inside field values
+
+   WRONG - DO NOT DO THIS:
+   lab_name_raw: "Glucose, value_raw: 100, lab_unit_raw: mg/dL"
+   lab_name_raw: "Hemoglobin value_raw: 14.2"
+   value_raw: "100 mg/dL"
+
+   CORRECT - SEPARATE FIELDS:
+   lab_name_raw: "Glucose"
+   value_raw: "100"
+   lab_unit_raw: "mg/dL"
+
 Remember: Your job is to be a perfect copier, not an interpreter. Extract EVERYTHING, even qualitative results.
 """.strip()
 
@@ -329,6 +353,12 @@ Do NOT skip or omit text-based results - they are just as important as numeric r
 Also set page_has_lab_data:
 - true if this page contains lab test results
 - false if this is a cover page, instructions, or administrative content with no lab tests
+
+BEFORE OUTPUTTING EACH RESULT, VERIFY:
+✓ lab_name_raw contains ONLY the test name (no values, units, or ranges)
+✓ value_raw contains ONLY the result (no test names or units)
+✓ lab_unit_raw contains ONLY the unit (no values)
+✓ No field contains text like "value_raw:", "lab_unit_raw:", etc.
 """.strip()
 
 
@@ -448,7 +478,7 @@ def extract_labs_from_page_image(
     image_path: Path,
     model_id: str,
     client: OpenAI,
-    temperature: float = 0.3
+    temperature: float = 0.0
 ) -> dict:
     """
     Extract lab results from a page image using vision model.
@@ -542,7 +572,7 @@ def extract_labs_from_text(
     text: str,
     model_id: str,
     client: OpenAI,
-    temperature: float = 0.3
+    temperature: float = 0.0
 ) -> dict:
     """
     Extract lab results from text using a text-only LLM (no vision).
@@ -681,99 +711,6 @@ _LAB_RESULT_FIELDS = {
     'reference_min_raw', 'reference_max_raw', 'is_abnormal', 'comments', 'source_text'
 }
 
-# Patterns indicating embedded extraction metadata in lab_name_raw
-MALFORMED_PATTERNS = ['value_raw:', 'lab_unit_raw:', 'reference_range:',
-                      'source_text:', 'reference_min_raw:', 'reference_max_raw:']
-
-
-def _is_malformed_lab_name(name: str) -> bool:
-    """Check if lab_name_raw contains embedded extraction metadata."""
-    if not name or not isinstance(name, str):
-        return False
-    name_lower = name.lower()
-    return any(pattern in name_lower for pattern in MALFORMED_PATTERNS)
-
-
-def _extract_clean_lab_name(malformed: str) -> Optional[str]:
-    """Extract just the lab name from a malformed string.
-
-    Example: "Glucose, value_raw: 100, lab_unit_raw: mg/dL" → "Glucose"
-    """
-    if not malformed:
-        return None
-    # Try to extract text before first metadata marker
-    for pattern in MALFORMED_PATTERNS:
-        if pattern in malformed.lower():
-            idx = malformed.lower().index(pattern)
-            # Get everything before the pattern, clean it up
-            candidate = malformed[:idx].strip().rstrip(',').strip()
-            if candidate and len(candidate) > 1:
-                return candidate
-    return None
-
-
-def _parse_malformed_to_dict(malformed: str) -> Optional[dict]:
-    """Parse a malformed lab_name_raw that contains all fields as key-value pairs.
-
-    Example input:
-    "alfa - fetoproteína, value_raw: 5,2, lab_unit_raw: µg/l, reference_range: <= 7,0"
-
-    Returns dict with extracted fields.
-    """
-    result = {}
-
-    # Extract lab name (everything before first field marker)
-    clean_name = _extract_clean_lab_name(malformed)
-    if clean_name:
-        result['lab_name_raw'] = clean_name
-
-    # Build lookahead pattern for next field markers (handles European decimals like "5,2")
-    next_field_lookahead = '|'.join(re.escape(p) for p in MALFORMED_PATTERNS)
-
-    # Try to extract other fields using regex
-    for pattern in MALFORMED_PATTERNS:
-        field_name = pattern.rstrip(':')
-        # Match content until the next field marker OR end of string
-        # This handles European decimal notation (commas in numbers like "5,2")
-        field_pattern = rf'{field_name}:\s*(.+?)(?=,\s*(?:{next_field_lookahead})|$)'
-        match = re.search(field_pattern, malformed, re.IGNORECASE)
-        if match:
-            value = match.group(1).strip().rstrip(',').strip()
-            if value.lower() not in ('null', 'none', ''):
-                result[field_name] = value
-
-    return result if result else None
-
-
-def _fix_malformed_lab_names(lab_results: list) -> list:
-    """Fix lab results where lab_name_raw contains embedded metadata."""
-    if not lab_results:
-        return lab_results
-
-    fixed_results = []
-    for item in lab_results:
-        if not isinstance(item, dict):
-            fixed_results.append(item)
-            continue
-
-        lab_name = item.get('lab_name_raw', '')
-        if _is_malformed_lab_name(lab_name):
-            # Try to parse the entire malformed string as a record
-            parsed = _parse_malformed_to_dict(lab_name)
-            if parsed:
-                # Merge parsed fields, but preserve any existing non-null values
-                for key, val in parsed.items():
-                    if val is not None and item.get(key) is None:
-                        item[key] = val
-                # Clean the lab_name_raw
-                item['lab_name_raw'] = parsed.get('lab_name_raw', lab_name)
-                logger.info(f"Fixed malformed lab result: {item.get('lab_name_raw')}")
-
-        fixed_results.append(item)
-
-    return fixed_results
-
-
 def _parse_labresult_repr(s: str) -> Optional[dict]:
     """
     Parse Python repr() format of LabResult objects.
@@ -890,6 +827,38 @@ def _reassemble_flattened_key_values(items: list) -> list:
     return reassembled
 
 
+def _clean_numeric_field(value: any) -> Optional[float]:
+    """Strip embedded metadata from numeric fields.
+
+    Some LLMs embed extra field data into numeric reference fields:
+    - '1.20, comments: Confirmado por duplo ensaio (mesma amostra)'
+    - '457.0, is_abnormal: True'
+
+    This function extracts just the numeric value.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        value = value.strip()
+        # Strip embedded field markers
+        for pattern in [', comments:', ', is_abnormal:', ', source_text:', ', reference_notes:']:
+            if pattern.lower() in value.lower():
+                value = value.split(',')[0].strip()
+                break
+        try:
+            # Handle Portuguese decimal format (comma as decimal separator)
+            # But only if there's a single comma and no dot
+            if ',' in value and '.' not in value:
+                value = value.replace(',', '.')
+            return float(value)
+        except ValueError:
+            logger.warning(f"Could not parse numeric field value: {value[:50]}")
+            return None
+    return None
+
+
 def _fix_lab_results_format(tool_result_dict: dict, client: OpenAI, model_id: str) -> dict:
     """Fix common LLM formatting issues in lab_results and dates using LLM-based parsing."""
     # Fix date formats at report level
@@ -904,8 +873,13 @@ def _fix_lab_results_format(tool_result_dict: dict, client: OpenAI, model_id: st
     # e.g., ['lab_name_raw: Glucose', 'value_raw: 100', ...] -> [{'lab_name_raw': 'Glucose', 'value_raw': '100', ...}]
     tool_result_dict["lab_results"] = _reassemble_flattened_key_values(tool_result_dict["lab_results"])
 
-    # Fix malformed lab names with embedded metadata (e.g., "test name, value_raw: 100, lab_unit_raw: mg/dL")
-    tool_result_dict["lab_results"] = _fix_malformed_lab_names(tool_result_dict["lab_results"])
+    # Clean numeric reference fields (strip embedded metadata like ", comments: ...")
+    for item in tool_result_dict["lab_results"]:
+        if isinstance(item, dict):
+            if 'reference_min_raw' in item:
+                item['reference_min_raw'] = _clean_numeric_field(item['reference_min_raw'])
+            if 'reference_max_raw' in item:
+                item['reference_max_raw'] = _clean_numeric_field(item['reference_max_raw'])
 
     # Collect all string-based lab results that need parsing
     string_results = []
@@ -952,7 +926,7 @@ def _fix_lab_results_format(tool_result_dict: dict, client: OpenAI, model_id: st
 
         # Log summary if any failed
         if skipped_count > 0:
-            logger.info(
+            logger.warning(
                 f"Skipped {skipped_count}/{len(string_results)} unparseable lab results. "
                 f"This is normal during self-consistency voting - other extraction attempts may have proper structure."
             )
@@ -1057,5 +1031,5 @@ def _salvage_lab_results(tool_result_dict: dict) -> dict:
         except Exception as e:
             logger.error(f"Failed to validate lab_result[{i}] in salvage: {e}. Data: {lr_data}")
 
-    logger.info(f"Salvaged {len(valid_results)}/{len(tool_result_dict['lab_results'])} lab results")
+    logger.warning(f"Salvaged {len(valid_results)}/{len(tool_result_dict['lab_results'])} lab results")
     return HealthLabReport(lab_results=valid_results).model_dump(mode='json')

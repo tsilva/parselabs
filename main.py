@@ -186,11 +186,13 @@ def text_extraction_is_viable(
     # LLM classification
     system_prompt = """Classify if this text contains structured lab test results.
 
-LAB DATA characteristics:
-- Test names (Glucose, Hemoglobin, Creatinine, Cholesterol, etc.)
-- Numeric values or qualitative results (142, NEGATIVE, 1.2, POSITIVE)
-- Units (mg/dL, g/dL, %, mmol/L, U/L, etc.)
+LAB DATA characteristics (any language):
+- Test names in any language (e.g., Glucose/Glicose, Hemoglobin/Hemoglobina,
+  Creatinine/Creatinina, Cholesterol/Colesterol, Leukocytes/Leucócitos, etc.)
+- Numeric values or qualitative results (142, NEGATIVE/NEGATIVO, 1.2, POSITIVE/POSITIVO)
+- Units (mg/dL, g/dL, %, mmol/L, U/L, x10³/µL, etc.)
 - Reference ranges (70-100, 4.0-10.0, <5.0, etc.)
+- Table-like structure with test names, values, and reference ranges
 
 NOT lab data:
 - Disclaimers, legal text, or headers without results
@@ -324,11 +326,11 @@ def process_single_pdf(
                             f"{len(text_extraction_data['lab_results'])} results"
                         )
                     else:
-                        logger.info(f"[{pdf_stem}] Strategy: TEXT -> VISION (no results from text, falling back)")
+                        logger.warning(f"[{pdf_stem}] Strategy: TEXT -> VISION (no results from text, falling back)")
                         text_extraction_data = None
 
                 except Exception as e:
-                    logger.info(f"[{pdf_stem}] Strategy: TEXT -> VISION (text failed: {e})")
+                    logger.warning(f"[{pdf_stem}] Strategy: TEXT -> VISION (text failed: {e})")
                     text_extraction_data = None
             else:
                 if pdftotext_success:
@@ -736,6 +738,258 @@ def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list
 
 
 # ========================================
+# Post-Extraction Verification (--verify-only)
+# ========================================
+
+def find_verifiable_pages(
+    output_path: Path,
+    document_filter: str | None = None,
+    unverified_only: bool = False,
+) -> list[tuple[Path, Path]]:
+    """
+    Find (json_path, image_path) pairs that can be verified.
+
+    Args:
+        output_path: Root output directory
+        document_filter: Optional document stem to filter
+        unverified_only: Skip already-verified pages
+
+    Returns:
+        List of (json_path, image_path) tuples
+    """
+    verifiable = []
+
+    for doc_dir in output_path.iterdir():
+        if not doc_dir.is_dir() or doc_dir.name.startswith('.'):
+            continue
+
+        # Filter by document name if specified
+        if document_filter and doc_dir.name != document_filter:
+            continue
+
+        # Find all page JSON files (pattern: {stem}.{page}.json)
+        for json_path in sorted(doc_dir.glob("*.json")):
+            # Skip non-page JSONs (e.g., {stem}.text.json)
+            stem = json_path.stem  # e.g., "2024-01-15-labs.001"
+            parts = stem.rsplit(".", 1)
+            if len(parts) != 2 or not parts[1].isdigit():
+                continue
+
+            # Find corresponding image
+            image_path = json_path.with_suffix(".jpg")
+            if not image_path.exists():
+                logger.warning(f"Missing image for {json_path.name}, skipping")
+                continue
+
+            # Check if already verified
+            if unverified_only:
+                try:
+                    data = json.loads(json_path.read_text(encoding='utf-8'))
+                    results = data.get("lab_results", [])
+
+                    # Check if any result needs verification
+                    needs_verification = False
+                    for result in results:
+                        status = result.get("verification_status", "")
+                        if status not in ("verified", "corrected"):
+                            needs_verification = True
+                            break
+
+                    if not needs_verification and results:
+                        logger.debug(f"Skipping already-verified: {json_path.name}")
+                        continue
+
+                except Exception as e:
+                    logger.warning(f"Failed to read {json_path.name}: {e}")
+                    continue
+
+            verifiable.append((json_path, image_path))
+
+    return verifiable
+
+
+def filter_by_date_range(
+    pages: list[tuple[Path, Path]],
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> list[tuple[Path, Path]]:
+    """
+    Filter pages by collection_date in JSON.
+
+    Args:
+        pages: List of (json_path, image_path) tuples
+        date_from: Minimum date (YYYY-MM-DD), inclusive
+        date_to: Maximum date (YYYY-MM-DD), inclusive
+
+    Returns:
+        Filtered list of pages
+    """
+    if not date_from and not date_to:
+        return pages
+
+    filtered = []
+    for json_path, image_path in pages:
+        try:
+            data = json.loads(json_path.read_text(encoding='utf-8'))
+            doc_date = data.get("collection_date") or data.get("report_date")
+
+            if not doc_date or doc_date == "0000-00-00":
+                # No date - include by default
+                filtered.append((json_path, image_path))
+                continue
+
+            # Compare dates as strings (YYYY-MM-DD format sorts correctly)
+            if date_from and doc_date < date_from:
+                continue
+            if date_to and doc_date > date_to:
+                continue
+
+            filtered.append((json_path, image_path))
+
+        except Exception as e:
+            logger.warning(f"Failed to read date from {json_path.name}: {e}")
+            # Include by default on error
+            filtered.append((json_path, image_path))
+
+    return filtered
+
+
+def verify_single_page(
+    json_path: Path,
+    image_path: Path,
+    client: OpenAI,
+    config: ExtractionConfig,
+) -> tuple[bool, dict]:
+    """
+    Verify a single page and update JSON in place.
+
+    Args:
+        json_path: Path to extraction JSON
+        image_path: Path to page image
+        client: OpenAI client
+        config: Extraction config
+
+    Returns:
+        Tuple of (success, summary_dict)
+    """
+    from verification import verify_page_extraction
+
+    try:
+        # Load existing extraction
+        data = json.loads(json_path.read_text(encoding='utf-8'))
+
+        if not data.get("lab_results"):
+            logger.info(f"[{json_path.stem}] No results to verify")
+            return True, {"total": 0, "verified": 0, "corrected": 0}
+
+        # Run verification
+        verified_data, summary = verify_page_extraction(
+            image_path=image_path,
+            extracted_data=data,
+            client=client,
+            primary_model=config.extract_model_id,
+            verification_model=config.verification_model_id,
+        )
+
+        # Atomic write: write to temp file, then rename
+        tmp_path = json_path.with_suffix(".json.tmp")
+        tmp_path.write_text(
+            json.dumps(verified_data, indent=2, ensure_ascii=False),
+            encoding='utf-8'
+        )
+        tmp_path.rename(json_path)
+
+        logger.info(
+            f"[{json_path.stem}] Verified: {summary.get('verified', 0)} verified, "
+            f"{summary.get('corrected', 0)} corrected"
+        )
+        return True, summary
+
+    except Exception as e:
+        logger.error(f"[{json_path.stem}] Verification failed: {e}")
+        return False, {"error": str(e)}
+
+
+def verify_existing_extractions(
+    output_path: Path,
+    config: ExtractionConfig,
+    document_filter: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    unverified_only: bool = False,
+) -> dict:
+    """
+    Main orchestrator for --verify-only mode.
+
+    Runs verification on already-extracted data.
+
+    Args:
+        output_path: Root output directory
+        config: Extraction config
+        document_filter: Optional document stem filter
+        date_from: Optional start date filter
+        date_to: Optional end date filter
+        unverified_only: Skip already-verified results
+
+    Returns:
+        Summary statistics dict
+    """
+    logger.info("=== Post-Extraction Verification Mode ===")
+
+    # Find verifiable pages
+    logger.info("Scanning for verifiable pages...")
+    pages = find_verifiable_pages(output_path, document_filter, unverified_only)
+
+    if not pages:
+        logger.warning("No pages found to verify")
+        return {"total_pages": 0, "verified_pages": 0}
+
+    logger.info(f"Found {len(pages)} page(s) to verify")
+
+    # Apply date filter
+    if date_from or date_to:
+        pages = filter_by_date_range(pages, date_from, date_to)
+        logger.info(f"After date filter: {len(pages)} page(s)")
+
+    if not pages:
+        logger.warning("No pages match date filter")
+        return {"total_pages": 0, "verified_pages": 0}
+
+    # Process pages with progress bar
+    total_stats = {
+        "total_pages": len(pages),
+        "verified_pages": 0,
+        "failed_pages": 0,
+        "total_results": 0,
+        "verified_results": 0,
+        "corrected_results": 0,
+    }
+
+    with tqdm(total=len(pages), desc="Verifying pages", unit="page") as pbar:
+        for json_path, image_path in pages:
+            success, summary = verify_single_page(json_path, image_path, client, config)
+
+            if success:
+                total_stats["verified_pages"] += 1
+                total_stats["total_results"] += summary.get("total", 0)
+                total_stats["verified_results"] += summary.get("verified", 0)
+                total_stats["corrected_results"] += summary.get("corrected", 0)
+            else:
+                total_stats["failed_pages"] += 1
+
+            pbar.update(1)
+
+    # Print summary
+    logger.info("=== Verification Complete ===")
+    logger.info(f"Pages: {total_stats['verified_pages']}/{total_stats['total_pages']} verified")
+    if total_stats["failed_pages"] > 0:
+        logger.warning(f"Failed: {total_stats['failed_pages']} page(s)")
+    logger.info(f"Results: {total_stats['verified_results']} verified, {total_stats['corrected_results']} corrected")
+
+    return total_stats
+
+
+# ========================================
 # Argument Parsing
 # ========================================
 
@@ -754,6 +1008,12 @@ Examples:
 
   # Override settings:
   python main.py --profile tsilva --model google/gemini-2.5-pro --no-verify
+
+  # Post-extraction verification:
+  python main.py --profile tsilva --verify-only
+  python main.py --profile tsilva --verify-only --unverified-only
+  python main.py --profile tsilva --verify-only --document "2024-01-15-labs"
+  python main.py --profile tsilva --verify-only --date-from 2024-01-01 --date-to 2024-06-30
         """
     )
     # Profile-based
@@ -789,6 +1049,33 @@ Examples:
         type=str,
         default=None,
         help='Glob pattern for input files (overrides profile, default: *.pdf)'
+    )
+
+    # Post-extraction verification
+    parser.add_argument(
+        '--verify-only',
+        action='store_true',
+        help='Run verification on cached data (skip extraction)'
+    )
+    parser.add_argument(
+        '--document',
+        type=str,
+        help='Filter to specific document stem (for --verify-only)'
+    )
+    parser.add_argument(
+        '--date-from',
+        type=str,
+        help='Filter results >= date (YYYY-MM-DD, for --verify-only)'
+    )
+    parser.add_argument(
+        '--date-to',
+        type=str,
+        help='Filter results <= date (YYYY-MM-DD, for --verify-only)'
+    )
+    parser.add_argument(
+        '--unverified-only',
+        action='store_true',
+        help='Skip already-verified results (for --verify-only)'
     )
 
     return parser.parse_args()
@@ -836,7 +1123,7 @@ def build_config(args) -> ExtractionConfig:
         input_file_regex=profile.input_file_regex or "*.pdf",
         n_extractions=int(os.getenv("N_EXTRACTIONS", "1")),
         max_workers=profile.workers or int(os.getenv("MAX_WORKERS", "0")) or (os.cpu_count() or 1),
-        enable_verification=profile.verify if profile.verify is not None else os.getenv("ENABLE_VERIFICATION", "true").lower() == "true",
+        enable_verification=profile.verify if profile.verify is not None else os.getenv("ENABLE_VERIFICATION", "false").lower() == "true",
         verification_model_id=os.getenv("VERIFICATION_MODEL_ID") or None,
     )
 
@@ -901,6 +1188,28 @@ def main():
     logger.info(f"Model: {config.extract_model_id}")
     logger.info(f"Verification: {'enabled' if config.enable_verification else 'disabled'}")
 
+    # Handle --verify-only mode (early exit)
+    if args.verify_only:
+        # Enable verification for this mode
+        config.enable_verification = True
+
+        stats = verify_existing_extractions(
+            output_path=config.output_path,
+            config=config,
+            document_filter=args.document,
+            date_from=args.date_from,
+            date_to=args.date_to,
+            unverified_only=args.unverified_only,
+        )
+
+        print(f"\nVerification complete:")
+        print(f"  Pages processed: {stats.get('verified_pages', 0)}/{stats.get('total_pages', 0)}")
+        print(f"  Results verified: {stats.get('verified_results', 0)}")
+        print(f"  Results corrected: {stats.get('corrected_results', 0)}")
+        if stats.get('failed_pages', 0) > 0:
+            print(f"  Failed pages: {stats.get('failed_pages', 0)}")
+        return
+
     # Load lab specs
     lab_specs = LabSpecsConfig()
 
@@ -928,7 +1237,7 @@ def main():
             skipped_count += 1
         else:
             if csv_path.exists():
-                logger.info(f"Re-processing {pdf_path.name}: CSV missing required columns")
+                logger.warning(f"Re-processing {pdf_path.name}: CSV missing required columns")
             pdfs_to_process.append(pdf_path)
 
     logger.info(f"Skipping {skipped_count} already-processed PDF(s)")
@@ -979,7 +1288,7 @@ def main():
     unknown_mask = merged_df["lab_name_standardized"] == UNKNOWN_VALUE
     if unknown_mask.any():
         unknown_count = unknown_mask.sum()
-        logger.info(f"Filtering {unknown_count} rows with unknown lab names")
+        logger.warning(f"Filtering {unknown_count} rows with unknown lab names")
         merged_df = merged_df[~unknown_mask].reset_index(drop=True)
 
     # Deduplicate
