@@ -180,6 +180,11 @@ Run with `python test.py` - prints report to console.
 
 ## Important Conventions
 
+### Documentation Maintenance
+When modifying the extraction pipeline in `main.py` or related modules:
+- **Always update `docs/pipeline.md`** to reflect the changes
+- The pipeline diagram and step descriptions must stay in sync with the code
+
 ### Lab Name Prefixes
 Lab names MUST start with lab type prefix:
 - Blood labs: "Blood - {name}"
