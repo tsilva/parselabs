@@ -69,6 +69,10 @@ COLUMN_SCHEMA = {
     "confidence": {"dtype": "float64", "excel_width": 12},
     "verified": {"dtype": "boolean", "excel_width": 10},
 
+    # Limit indicators (for values like <0.05 or >738)
+    "is_below_limit": {"dtype": "boolean", "excel_width": 12},
+    "is_above_limit": {"dtype": "boolean", "excel_width": 12},
+
     # Internal (hidden in Excel)
     "lab_type": {"dtype": "str", "excel_width": 10, "excel_hidden": True},
     "result_index": {"dtype": "Int64", "excel_width": 10, "excel_hidden": True},
@@ -84,6 +88,7 @@ def get_column_lists(schema: dict):
         "reference_min", "reference_max",
         "lab_name_raw", "value_raw", "unit_raw",
         "confidence", "verified",
+        "is_below_limit", "is_above_limit",
         "lab_type", "result_index",
     ]
     export_cols = [k for k in ordered if k in schema]
@@ -264,12 +269,19 @@ def process_single_pdf(
     output_dir: Path,
     config: ExtractionConfig,
     lab_specs: LabSpecsConfig
-) -> Path | None:
-    """Process a single PDF file: extract, standardize, and save results."""
+) -> tuple[Path | None, list[dict]]:
+    """Process a single PDF file: extract, standardize, and save results.
+
+    Returns:
+        Tuple of (csv_path, failed_pages) where:
+        - csv_path: Path to output CSV, or None if processing failed entirely
+        - failed_pages: List of dicts with 'page' and 'reason' for any extraction failures
+    """
     pdf_stem = pdf_path.stem
     doc_out_dir = output_dir / pdf_stem
     doc_out_dir.mkdir(exist_ok=True, parents=True)
     csv_path = doc_out_dir / f"{pdf_stem}.csv"
+    failed_pages = []  # Track pages that failed extraction
 
     try:
         logger.info(f"[{pdf_stem}] Processing...")
@@ -371,7 +383,7 @@ def process_single_pdf(
                 pil_pages = pdf2image.convert_from_path(str(copied_pdf))
             except Exception as e:
                 logger.error(f"[{pdf_stem}] Failed to convert PDF: {e}")
-                return None
+                return None, failed_pages
 
             logger.info(f"[{pdf_stem}] Processing {len(pil_pages)} page(s) with vision...")
             for page_idx, page_image in enumerate(pil_pages):
@@ -401,6 +413,15 @@ def process_single_pdf(
                         )
                         logger.info(f"[{page_name}] Extraction completed")
 
+                        # Check for extraction failure (temperature retry exhausted)
+                        if page_data.get("_extraction_failed"):
+                            failure_reason = page_data.get("_failure_reason", "Unknown error")
+                            failed_pages.append({
+                                "page": f"{pdf_stem} page {page_idx + 1}",
+                                "reason": failure_reason
+                            })
+                            logger.error(f"[{page_name}] EXTRACTION FAILED: {failure_reason}")
+
                         # Post-extraction verification (simplified - cross-model only)
                         if config.enable_verification and page_data.get("lab_results"):
                             logger.info(f"[{page_name}] Running cross-model verification...")
@@ -428,6 +449,13 @@ def process_single_pdf(
                 else:
                     logger.info(f"[{page_name}] Loading cached extraction data")
                     page_data = json.loads(json_path.read_text(encoding='utf-8'))
+                    # Check for cached extraction failure
+                    if page_data.get("_extraction_failed"):
+                        failure_reason = page_data.get("_failure_reason", "Unknown error")
+                        failed_pages.append({
+                            "page": f"{pdf_stem} page {page_idx + 1}",
+                            "reason": failure_reason
+                        })
 
                 # Extract date from first page
                 if page_idx == 0:
@@ -450,7 +478,7 @@ def process_single_pdf(
         if not all_results:
             logger.warning(f"[{pdf_stem}] No results extracted")
             pd.DataFrame().to_csv(csv_path, index=False)
-            return csv_path
+            return csv_path, failed_pages
 
         # Standardize lab names
         logger.info(f"[{pdf_stem}] Standardizing lab names...")
@@ -542,11 +570,11 @@ def process_single_pdf(
         df.to_csv(csv_path, index=False, encoding='utf-8')
 
         logger.info(f"[{pdf_stem}] Completed successfully")
-        return csv_path
+        return csv_path, failed_pages
 
     except Exception as e:
         logger.error(f"[{pdf_stem}] Unhandled exception: {e}", exc_info=True)
-        return None
+        return None, failed_pages
 
 
 # ========================================
@@ -651,7 +679,10 @@ def _init_worker_logging(log_dir: Path):
 
 
 def _process_pdf_wrapper(args):
-    """Wrapper function for multiprocessing."""
+    """Wrapper function for multiprocessing.
+
+    Returns tuple of (csv_path, failed_pages) from process_single_pdf.
+    """
     return process_single_pdf(*args)
 
 
@@ -1243,6 +1274,8 @@ def main():
     logger.info(f"Skipping {skipped_count} already-processed PDF(s)")
     logger.info(f"Processing {len(pdfs_to_process)} PDF(s)")
 
+    all_failed_pages = []  # Aggregate extraction failures across all PDFs
+
     if not pdfs_to_process:
         logger.info("All PDFs already processed. Moving to merge step...")
         csv_paths = [p for pdf in pdf_files if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))]
@@ -1261,7 +1294,11 @@ def main():
                     results.append(result)
                     pbar.update(1)
 
-        pdfs_failed = sum(1 for r in results if r is None)
+        # Unpack results: each is (csv_path, failed_pages)
+        pdfs_failed = sum(1 for csv_path, _ in results if csv_path is None)
+        for _, failed_pages in results:
+            all_failed_pages.extend(failed_pages)
+
         csv_paths = [p for pdf in pdf_files if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))]
 
     if not csv_paths:
@@ -1339,8 +1376,22 @@ def main():
     excel_path = config.output_path / "all.xlsx"
     export_excel(merged_df, excel_path, hidden_cols, widths)
 
-    logger.info("Pipeline completed successfully")
-    logger.info(f"Output: {csv_path}")
+    # Final summary
+    logger.info("=" * 50)
+    logger.info("Pipeline completed")
+    logger.info(f"  PDFs processed: {len(csv_paths)}")
+    logger.info(f"  Output: {csv_path}")
+
+    # Report extraction failures
+    if all_failed_pages:
+        logger.warning(f"  Pages with extraction failures: {len(all_failed_pages)}")
+        for failure in all_failed_pages:
+            logger.warning(f"    - {failure['page']}: {failure['reason']}")
+        print(f"\n⚠️  Extraction failures detected ({len(all_failed_pages)} pages):")
+        for failure in all_failed_pages:
+            print(f"    - {failure['page']}: {failure['reason']}")
+    else:
+        logger.info("  Extraction failures: 0")
 
 
 if __name__ == "__main__":

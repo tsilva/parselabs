@@ -176,14 +176,14 @@ DISPLAY_COLUMNS = [
     'is_out_of_reference',
 ]
 
-# Column display names (human-readable)
+# Column display names (human-readable, kept short to match content width)
 COLUMN_LABELS = {
     'date': 'Date',
-    'lab_name': 'Lab Name',
+    'lab_name': 'Lab',
     'value': 'Value',
     'unit': 'Unit',
-    'reference_range': 'Reference Range',
-    'is_out_of_reference': 'Abnormal',
+    'reference_range': 'Ref',
+    'is_out_of_reference': 'Abn',
 }
 
 
@@ -242,6 +242,9 @@ def load_data(output_path: Path) -> pd.DataFrame:
             ref_min = row['reference_min']
             ref_max = row['reference_max']
             if pd.isna(ref_min) and pd.isna(ref_max):
+                # Boolean values default to 0 - 1 range
+                if row.get('unit') == 'boolean':
+                    return '0 - 1'
                 return ''
             if pd.isna(ref_min):
                 return f'< {ref_max}'
@@ -259,6 +262,9 @@ def load_data(output_path: Path) -> pd.DataFrame:
             if pd.isna(val):
                 return None
             if pd.isna(ref_min) and pd.isna(ref_max):
+                # Boolean values: value > 0 is abnormal (positive), value == 0 is normal
+                if row.get('unit') == 'boolean':
+                    return val > 0
                 return None  # No reference range to compare against
             if pd.notna(ref_min) and val < ref_min:
                 return True
@@ -358,7 +364,7 @@ def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
     the displayed row order matches filtered_df_state for correct row selection.
     """
     if df.empty:
-        return pd.DataFrame(columns=DISPLAY_COLUMNS)
+        return pd.DataFrame(columns=[COLUMN_LABELS.get(c, c) for c in DISPLAY_COLUMNS])
 
     # Select and order columns (no sorting - already sorted by apply_filters)
     display_df = df[[col for col in DISPLAY_COLUMNS if col in df.columns]].copy()
@@ -376,6 +382,9 @@ def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
     # Round numeric columns
     if 'value' in display_df.columns:
         display_df['value'] = display_df['value'].round(2)
+
+    # Rename columns to display labels
+    display_df = display_df.rename(columns=COLUMN_LABELS)
 
     return display_df
 
@@ -530,17 +539,17 @@ def create_single_lab_plot(df: pd.DataFrame, lab_name: str) -> tuple[go.Figure, 
             showlegend=True
         ))
 
-    # Configure x-axis for dates only (no timestamps)
+    # Configure x-axis for dates (show year only)
     xaxis_config = dict(
         title="Date",
-        tickformat='%Y-%m-%d',
+        tickformat='%Y',
     )
 
-    # For single data point, show just that date without surrounding timestamps
+    # For single data point, show just that year without surrounding timestamps
     if len(lab_df) == 1:
         single_date = lab_df['date'].iloc[0]
         xaxis_config['tickvals'] = [single_date]
-        xaxis_config['ticktext'] = [single_date.strftime('%Y-%m-%d')]
+        xaxis_config['ticktext'] = [single_date.strftime('%Y')]
 
     fig.update_layout(
         title=dict(
@@ -718,8 +727,8 @@ def create_interactive_plot(df: pd.DataFrame, lab_names: Optional[list]) -> go.F
         hovermode='x unified'
     )
 
-    # Configure x-axis to show dates only (no timestamps)
-    fig.update_xaxes(tickformat='%Y-%m-%d')
+    # Configure x-axis to show year only
+    fig.update_xaxes(tickformat='%Y')
 
     return fig
 
@@ -931,7 +940,6 @@ def create_app():
                 gr.Markdown("*Click a row or use arrow keys to navigate*")
                 data_table = gr.DataFrame(
                     value=prepare_display_df(full_df),
-                    headers=list(COLUMN_LABELS.values()),
                     interactive=False,
                     wrap=True,
                     max_height=500
