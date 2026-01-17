@@ -20,7 +20,7 @@ from openai import OpenAI
 from tqdm import tqdm
 
 # Local imports
-from config import ExtractionConfig, LabSpecsConfig, ProfileConfig, UNKNOWN_VALUE
+from config import ExtractionConfig, LabSpecsConfig, ProfileConfig, UNKNOWN_VALUE, DEFAULT_MODEL
 from utils import preprocess_page_image, setup_logging, ensure_columns
 from extraction import (
     LabResult, HealthLabReport, extract_labs_from_page_image, extract_labs_from_text, self_consistency
@@ -36,9 +36,6 @@ client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.getenv("OPENROUTER_API_KEY")
 )
-
-# Default model for extraction
-DEFAULT_MODEL = "google/gemini-3-flash-preview"
 
 
 # ========================================
@@ -1168,8 +1165,8 @@ def build_config(args) -> ExtractionConfig:
         input_path=profile.input_path,
         output_path=profile.output_path,
         openrouter_api_key=openrouter_api_key,
-        extract_model_id=profile.model or os.getenv("EXTRACT_MODEL_ID", DEFAULT_MODEL),
-        self_consistency_model_id=profile.model or os.getenv("SELF_CONSISTENCY_MODEL_ID", DEFAULT_MODEL),
+        extract_model_id=os.getenv("EXTRACT_MODEL_ID", DEFAULT_MODEL),
+        self_consistency_model_id=os.getenv("SELF_CONSISTENCY_MODEL_ID", DEFAULT_MODEL),
         input_file_regex=profile.input_file_regex or "*.pdf",
         n_extractions=int(os.getenv("N_EXTRACTIONS", "1")),
         max_workers=profile.workers or int(os.getenv("MAX_WORKERS", "0")) or (os.cpu_count() or 1),
