@@ -166,7 +166,7 @@ class LabPlotter:
             # Show legend if reference ranges are present
             if ("healthy_range_min" in lab_df.columns and lab_df["healthy_range_min"].notna().any()) or \
                ("healthy_range_max" in lab_df.columns and lab_df["healthy_range_max"].notna().any()):
-                plt.legend()
+                plt.legend(loc='upper right')
 
             # Formatting
             plt.title(title, fontsize=16)

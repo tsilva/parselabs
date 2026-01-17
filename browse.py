@@ -30,101 +30,27 @@ load_dotenv(Path(__file__).parent / '.env')
 
 KEYBOARD_JS = r"""
 <script>
-document.addEventListener('keydown', function(event) {
-    // Skip if user is typing in an input field
-    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
-        return;
-    }
-
-    switch(event.key) {
-        case 'ArrowRight':
-        case 'j':
-            document.querySelector('#next-btn')?.click();
-            event.preventDefault();
-            break;
-        case 'ArrowLeft':
-        case 'k':
-            document.querySelector('#prev-btn')?.click();
-            event.preventDefault();
-            break;
-    }
-});
-
-// Function to highlight and scroll to a row
-function highlightRow(rowIndex) {
-    // Find all table rows in the data table (skip header)
-    const table = document.querySelector('table.table');
-    if (!table) return;
-
-    const rows = table.querySelectorAll('tbody tr');
-
-    // Remove existing highlights
-    rows.forEach(row => row.classList.remove('highlighted-row'));
-
-    // Add highlight to selected row
-    if (rowIndex >= 0 && rowIndex < rows.length) {
-        const targetRow = rows[rowIndex];
-        targetRow.classList.add('highlighted-row');
-
-        // Scroll row into view
-        targetRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-}
-
-// Watch for changes to the position display
-const observer = new MutationObserver(function(mutations) {
-    mutations.forEach(function(mutation) {
-        if (mutation.target.id === 'position-display' ||
-            mutation.target.closest('#position-display')) {
-            const text = mutation.target.textContent || '';
-            const match = text.match(/Row\s+(\d+)\s+of/);
-            if (match) {
-                const rowNum = parseInt(match[1], 10) - 1; // 0-indexed
-                highlightRow(rowNum);
-            }
+(function() {
+    // Keyboard navigation only
+    document.addEventListener('keydown', function(event) {
+        if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+            return;
+        }
+        switch(event.key) {
+            case 'ArrowRight':
+            case 'j':
+                document.querySelector('#next-btn')?.click();
+                event.preventDefault();
+                break;
+            case 'ArrowLeft':
+            case 'k':
+                document.querySelector('#prev-btn')?.click();
+                event.preventDefault();
+                break;
         }
     });
-});
-
-// Start observing once DOM is ready
-function startObserver() {
-    const posDisplay = document.querySelector('#position-display');
-    if (posDisplay) {
-        observer.observe(posDisplay, {
-            childList: true,
-            subtree: true,
-            characterData: true
-        });
-        // Initial highlight
-        const text = posDisplay.textContent || '';
-        const match = text.match(/Row\s+(\d+)\s+of/);
-        if (match) {
-            highlightRow(parseInt(match[1], 10) - 1);
-        }
-    } else {
-        // Retry if not found yet
-        setTimeout(startObserver, 500);
-    }
-}
-
-// Wait for page load then start observer
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', startObserver);
-} else {
-    setTimeout(startObserver, 500);
-}
+})();
 </script>
-
-<style>
-.highlighted-row {
-    background-color: #3b82f6 !important;
-    color: white !important;
-}
-.highlighted-row td {
-    background-color: #3b82f6 !important;
-    color: white !important;
-}
-</style>
 """
 
 # =============================================================================
@@ -140,11 +66,64 @@ _configured_demographics: Optional[Demographics] = None
 # Lab specs config (loaded once)
 _lab_specs: Optional[LabSpecsConfig] = None
 
+# Current profile name
+_current_profile_name: Optional[str] = None
+
 
 def set_output_path(path: Path) -> None:
     """Set the output path (called from main when using profile)."""
     global _configured_output_path
     _configured_output_path = path
+
+
+def set_current_profile(name: str) -> None:
+    """Set the current profile name."""
+    global _current_profile_name
+    _current_profile_name = name
+
+
+def get_current_profile() -> Optional[str]:
+    """Get the current profile name."""
+    return _current_profile_name
+
+
+def load_profile(profile_name: str) -> Optional[ProfileConfig]:
+    """Load a profile by name and update global configuration.
+
+    Returns the loaded ProfileConfig or None if not found.
+    """
+    # Find profile file
+    profile_path = None
+    for ext in ('.yaml', '.yml', '.json'):
+        p = Path(f"profiles/{profile_name}{ext}")
+        if p.exists():
+            profile_path = p
+            break
+
+    if not profile_path:
+        return None
+
+    profile = ProfileConfig.from_file(profile_path)
+
+    # Update global state
+    set_current_profile(profile_name)
+
+    if profile.output_path:
+        set_output_path(profile.output_path)
+
+    if profile.demographics:
+        set_demographics(profile.demographics)
+    else:
+        set_demographics(None)
+
+    return profile
+
+
+def get_available_profiles() -> list[str]:
+    """Get list of available profile names (excluding templates)."""
+    profiles = ProfileConfig.list_profiles()
+    # Filter out template profiles
+    return [p for p in profiles if not p.startswith('_')]
 
 
 def set_demographics(demographics: Optional[Demographics]) -> None:
@@ -342,9 +321,9 @@ def apply_filters(
     if abnormal_only and 'is_out_of_reference' in filtered.columns:
         filtered = filtered[filtered['is_out_of_reference'] == True]
 
-    # Sort by date descending (most recent first)
+    # Sort by date descending (most recent first), then by lab_name ascending (A-Z)
     if 'date' in filtered.columns:
-        filtered = filtered.sort_values('date', ascending=False, na_position='last')
+        filtered = filtered.sort_values(['date', 'lab_name'], ascending=[False, True], na_position='last')
 
     # Latest only: keep only the most recent value per lab test
     if latest_only and 'lab_name' in filtered.columns and 'date' in filtered.columns:
@@ -783,13 +762,18 @@ def handle_row_select(
     if evt is None or filtered_df.empty:
         return create_interactive_plot(full_df, []), 0, "No results", None
 
-    # Get the selected row index
-    row_idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
+    # Get the selected row index - evt.index is (row, col) tuple
+    # Use the row component which is the visual position in the displayed table
+    if isinstance(evt.index, (list, tuple)):
+        row_idx = evt.index[0]
+    else:
+        row_idx = evt.index
 
-    if row_idx >= len(filtered_df):
-        return create_interactive_plot(full_df, []), 0, "No results", None
+    # Ensure row_idx is within bounds of the filtered DataFrame
+    if row_idx < 0 or row_idx >= len(filtered_df):
+        row_idx = 0
 
-    # Get row data
+    # Get row data using iloc (positional index) which matches displayed order
     row = filtered_df.iloc[row_idx]
     position_text = f"**Row {row_idx + 1} of {len(filtered_df)}**"
     image_path = get_image_path(row.to_dict(), get_output_path())
@@ -870,6 +854,72 @@ def export_csv(filtered_df: pd.DataFrame):
     return str(export_path)
 
 
+def handle_profile_change(profile_name: str):
+    """Handle profile switch - reload all data for the new profile."""
+    if not profile_name:
+        return (
+            pd.DataFrame(),  # display_df
+            "No profile selected",  # summary
+            go.Figure(),  # plot
+            pd.DataFrame(),  # full_df
+            pd.DataFrame(),  # filtered_df
+            0,  # current_idx
+            "No results",  # position_text
+            None,  # image
+            [],  # lab_name_choices
+        )
+
+    profile = load_profile(profile_name)
+    if not profile or not profile.output_path:
+        return (
+            pd.DataFrame(),
+            f"Profile '{profile_name}' not found or has no output path",
+            go.Figure(),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            0,
+            "No results",
+            None,
+            [],
+        )
+
+    # Load fresh data for the new profile
+    output_path = get_output_path()
+    full_df = load_data(output_path)
+
+    # Sort initial data by date descending, then by lab_name ascending (A-Z)
+    if not full_df.empty and 'date' in full_df.columns:
+        full_df = full_df.sort_values(['date', 'lab_name'], ascending=[False, True], na_position='last').reset_index(drop=True)
+
+    # Get lab name choices
+    lab_name_choices = []
+    if not full_df.empty and 'lab_name' in full_df.columns:
+        lab_name_choices = sorted(full_df['lab_name'].dropna().unique().tolist())
+
+    # Prepare display
+    display_df = prepare_display_df(full_df)
+    summary = get_summary_stats(full_df)
+
+    # Position and image
+    position_text = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
+    image_path = get_image_path(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
+
+    # Empty plot (no labs selected initially)
+    plot = create_interactive_plot(full_df, [])
+
+    return (
+        display_df,
+        summary,
+        plot,
+        full_df,
+        full_df,  # filtered_df starts as full_df
+        0,
+        position_text,
+        image_path,
+        gr.update(choices=lab_name_choices, value=[]),  # Update dropdown choices and clear selection
+    )
+
+
 # =============================================================================
 # Main App
 # =============================================================================
@@ -879,9 +929,9 @@ def create_app():
     output_path = get_output_path()
     full_df = load_data(output_path)
 
-    # Sort initial data by date descending and reset index
+    # Sort initial data by date descending, then by lab_name ascending (A-Z), and reset index
     if not full_df.empty and 'date' in full_df.columns:
-        full_df = full_df.sort_values('date', ascending=False, na_position='last').reset_index(drop=True)
+        full_df = full_df.sort_values(['date', 'lab_name'], ascending=[False, True], na_position='last').reset_index(drop=True)
 
     # Get unique lab names for dropdown
     lab_name_choices = []
@@ -895,6 +945,10 @@ def create_app():
     initial_labs = []  # Start with no filter applied
     initial_image = get_image_path(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
 
+    # Get available profiles for dropdown
+    available_profiles = get_available_profiles()
+    current_profile = get_current_profile()
+
     with gr.Blocks(title="Lab Results Browser") as demo:
 
         # State variables
@@ -902,8 +956,19 @@ def create_app():
         filtered_df_state = gr.State(value=full_df)
         current_idx_state = gr.State(value=0)
 
-        # Header
-        gr.Markdown("# Lab Results Browser")
+        # Header with profile selector
+        with gr.Row():
+            with gr.Column(scale=4):
+                gr.Markdown("# Lab Results Browser")
+            with gr.Column(scale=1):
+                profile_selector = gr.Dropdown(
+                    choices=available_profiles,
+                    value=current_profile,
+                    label="Profile",
+                    info="Switch between profiles",
+                    allow_custom_value=False,
+                    interactive=True
+                )
         gr.Markdown("Browse and analyze extracted lab results with interactive filtering and plots.")
 
         # Filters Row
@@ -942,7 +1007,8 @@ def create_app():
                     value=prepare_display_df(full_df),
                     interactive=False,
                     wrap=True,
-                    max_height=500
+                    max_height=500,
+                    elem_id="lab-data-table"
                 )
 
                 with gr.Row():
@@ -974,6 +1040,23 @@ def create_app():
 
         gr.Markdown("---")
         gr.Markdown("*Keyboard: ← / k = Previous, → / j = Next*", elem_id="footer")
+
+        # Wire up profile selector
+        profile_selector.change(
+            fn=handle_profile_change,
+            inputs=[profile_selector],
+            outputs=[
+                data_table,
+                summary_display,
+                plot_display,
+                full_df_state,
+                filtered_df_state,
+                current_idx_state,
+                position_display,
+                source_image,
+                lab_name_filter,  # Update choices when profile changes
+            ]
+        )
 
         # Wire up filter events
         filter_inputs = [lab_name_filter, abnormal_filter, latest_filter, full_df_state]
@@ -1040,14 +1123,15 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python results_browser.py --profile tiago
-  python results_browser.py --list-profiles
+  python browse.py                     # Uses first available profile
+  python browse.py --profile tiago     # Uses specific profile
+  python browse.py --list-profiles     # List available profiles
         """
     )
     parser.add_argument(
         '--profile', '-p',
         type=str,
-        help='Profile name (required unless using --list-profiles)'
+        help='Profile name (defaults to first available profile)'
     )
     parser.add_argument(
         '--list-profiles',
@@ -1071,32 +1155,29 @@ if __name__ == "__main__":
             print("No profiles found. Create profiles in the 'profiles/' directory.")
         sys.exit(0)
 
-    # Profile is required for all other operations
-    if not args.profile:
-        print("Error: --profile is required.")
+    # Determine which profile to use
+    profile_name = args.profile
+    if not profile_name:
+        # Default to first available profile
+        available = get_available_profiles()
+        if not available:
+            print("Error: No profiles found.")
+            print("Create profiles in the 'profiles/' directory.")
+            sys.exit(1)
+        profile_name = available[0]
+        print(f"No profile specified, defaulting to: {profile_name}")
+
+    # Load profile using the helper function
+    profile = load_profile(profile_name)
+    if not profile:
+        print(f"Error: Profile '{profile_name}' not found")
         print("Use --list-profiles to see available profiles.")
-        print("Example: python results_browser.py --profile tiago")
         sys.exit(1)
 
-    # Load profile
-    profile_path = None
-    for ext in ('.yaml', '.yml', '.json'):
-        p = Path(f"profiles/{args.profile}{ext}")
-        if p.exists():
-            profile_path = p
-            break
-
-    if not profile_path:
-        print(f"Error: Profile '{args.profile}' not found")
-        print("Use --list-profiles to see available profiles.")
-        sys.exit(1)
-
-    profile = ProfileConfig.from_file(profile_path)
     print(f"Using profile: {profile.name}")
 
-    # Set demographics for personalized range selection
+    # Print demographics info if available
     if profile.demographics:
-        set_demographics(profile.demographics)
         demo_info = []
         if profile.demographics.gender:
             demo_info.append(f"gender={profile.demographics.gender}")
@@ -1106,18 +1187,27 @@ if __name__ == "__main__":
             print(f"Demographics: {', '.join(demo_info)}")
 
     if not profile.output_path:
-        print(f"Error: Profile '{args.profile}' has no output_path defined.")
+        print(f"Error: Profile '{profile_name}' has no output_path defined.")
         sys.exit(1)
 
-    output_path = profile.output_path
-    set_output_path(output_path)
+    # Build list of allowed paths for serving files from all profiles
+    # This enables profile switching without restart
+    available = get_available_profiles()
+    print(f"Available profiles: {', '.join(available)}")
+
+    allowed_paths = set()
+    for pname in available:
+        p = load_profile(pname)
+        if p and p.output_path:
+            allowed_paths.add(str(p.output_path))
+            if p.output_path.parent != p.output_path:
+                allowed_paths.add(str(p.output_path.parent))
+
+    # Reload the original profile before creating app
+    load_profile(profile_name)
+    allowed_paths = list(allowed_paths)
 
     demo = create_app()
-
-    # Build list of allowed paths for serving files
-    allowed_paths = [str(output_path)]
-    if output_path.parent != output_path:
-        allowed_paths.append(str(output_path.parent))
 
     demo.launch(
         server_name="0.0.0.0",

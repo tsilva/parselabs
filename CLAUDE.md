@@ -89,10 +89,11 @@ output_path: "/path/to/output"
 input_file_regex: "*.pdf"  # optional
 
 # Optional overrides:
-model: "google/gemini-3-flash-preview"
 verify: true
 workers: 4
 ```
+
+Note: Model IDs are configured via `.env` only (not in profiles). Paths are configured via profiles only (not in `.env`).
 
 **Lab Specs** (`config/lab_specs.json`):
 - 335 standardized lab test names
