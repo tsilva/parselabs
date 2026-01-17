@@ -351,13 +351,20 @@ CRITICAL RULES:
 6. If NO good match exists or lab not in mapping, use exactly: "{unknown}"
 7. Return a JSON array with objects: {{"raw_unit": "...", "lab_name": "...", "standardized_unit": "..."}}
 
-IMPORTANT UNIT EQUIVALENCIES TO RECOGNIZE:
-Cell count units (all equivalent notations):
-- For erythrocytes (RBC): "x10E6/µl", "x10E6/ul", "x10^6/µL", "x10^6/μL", "10^6/µL", "10⁶/µL", "x10∧/L" → "10¹²/L"
-- For leukocytes (WBC): "x10E3/ul", "x10ˆ3/ul", "x10^3/µL", "10^3/µL", "x10E9/L", "x10^9/L", "10^9/L", "x10/L" → "10⁹/L"
-- For platelets: "x10ˆ3/ul", "x10E3/ul", "x10^3/µL", "x10/L" → "10⁹/L"
-- For reticulocytes: "x10^9/L", "10^9/L" → "10⁹/L"
-- Generic patterns: "xNN^X/unit" or "NNˆX/unit" means 10^X per unit
+CRITICAL: DO NOT CONVERT UNITS - ONLY NORMALIZE FORMAT
+The goal is to standardize unit NOTATION, NOT to convert between different units.
+Unit conversions are handled separately by the system using conversion factors.
+
+CORRECT FORMAT NORMALIZATION (same unit, different notation):
+- "/mm3", "/mm³", "cells/mm³" → "/mm3" (keep as /mm3, do NOT convert to 10⁹/L)
+- "x10E6/µl", "x10E6/ul", "x10^6/µL" → "x10E6/µL" (normalize symbols only)
+- "x10E3/ul", "x10ˆ3/ul", "x10^3/µL" → "x10E3/µL" (normalize symbols only)
+- "x10E9/L", "x10^9/L", "10^9/L", "10⁹/L", "109/L" → "10⁹/L" (these ARE the same unit)
+- "x10E12/L", "x10^12/L", "10¹²/L" → "10¹²/L" (these ARE the same unit)
+
+WRONG - DO NOT DO THIS:
+- "/mm3" → "10⁹/L" (WRONG! This is a unit CONVERSION, not format normalization)
+- "x10E3/µL" → "10⁹/L" (WRONG! These are different magnitude units)
 
 Case normalization:
 - "iu/l", "IU/l", "iu/L" → "IU/L"
