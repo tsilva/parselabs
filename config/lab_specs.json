@@ -133,7 +133,11 @@
   "Blood - Alanine Aminotransferase (ALT)": {
     "lab_type": "blood",
     "primary_unit": "IU/L",
-    "alternatives": [],
+    "alternatives": [
+      {"unit": "U/L", "factor": 1.0},
+      {"unit": "U/L a 37°", "factor": 1.0},
+      {"unit": "U/L a 37º", "factor": 1.0}
+    ],
     "ranges": {
       "default": [
         7,
@@ -190,7 +194,11 @@
   "Blood - Alkaline Phosphatase (ALP)": {
     "lab_type": "blood",
     "primary_unit": "IU/L",
-    "alternatives": [],
+    "alternatives": [
+      {"unit": "U/L", "factor": 1.0},
+      {"unit": "U/L a 37°", "factor": 1.0},
+      {"unit": "U/L a 37º", "factor": 1.0}
+    ],
     "ranges": {
       "default": [
         40,
@@ -687,7 +695,11 @@
   "Blood - Aspartate Aminotransferase (AST)": {
     "lab_type": "blood",
     "primary_unit": "IU/L",
-    "alternatives": [],
+    "alternatives": [
+      {"unit": "U/L", "factor": 1.0},
+      {"unit": "U/L a 37°", "factor": 1.0},
+      {"unit": "U/L a 37º", "factor": 1.0}
+    ],
     "ranges": {
       "default": [
         10.0,
@@ -1303,6 +1315,10 @@
       {
         "unit": "mn",
         "factor": 1.0
+      },
+      {
+        "unit": "mm/hora",
+        "factor": 1.0
       }
     ],
     "ranges": {
@@ -1657,7 +1673,11 @@
   "Blood - Gamma-Glutamyl Transferase (GGT)": {
     "lab_type": "blood",
     "primary_unit": "IU/L",
-    "alternatives": [],
+    "alternatives": [
+      {"unit": "U/L", "factor": 1.0},
+      {"unit": "U/L a 37°", "factor": 1.0},
+      {"unit": "U/L a 37º", "factor": 1.0}
+    ],
     "ranges": {
       "default": [
         5.0,
