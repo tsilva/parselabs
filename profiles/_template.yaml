@@ -11,7 +11,6 @@ output_path: "/path/to/your/output"
 input_file_regex: "*.pdf"
 
 # Optional overrides (defaults shown):
-# model: "google/gemini-3-flash-preview"  # Extraction model
 # verify: true                       # Enable cross-model verification
 # workers: 4                         # Parallel workers
 

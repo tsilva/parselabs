@@ -51,13 +51,6 @@ class ExtractionConfig:
         if not openrouter_api_key:
             raise ValueError("OPENROUTER_API_KEY not set")
 
-        # Paths (can be overridden by profile)
-        input_path_str = os.getenv("INPUT_PATH")
-        output_path_str = os.getenv("OUTPUT_PATH")
-
-        input_path = Path(input_path_str) if input_path_str else None
-        output_path = Path(output_path_str) if output_path_str else None
-
         # Models (smart defaults)
         extract_model_id = os.getenv("EXTRACT_MODEL_ID", DEFAULT_MODEL)
         self_consistency_model_id = os.getenv("SELF_CONSISTENCY_MODEL_ID", DEFAULT_MODEL)
@@ -73,8 +66,8 @@ class ExtractionConfig:
         verification_model_id = os.getenv("VERIFICATION_MODEL_ID") or None
 
         return cls(
-            input_path=input_path,
-            output_path=output_path,
+            input_path=None,
+            output_path=None,
             openrouter_api_key=openrouter_api_key,
             extract_model_id=extract_model_id,
             self_consistency_model_id=self_consistency_model_id,
@@ -99,7 +92,6 @@ class ProfileConfig:
     input_file_regex: Optional[str] = None
 
     # Optional overrides
-    model: Optional[str] = None
     verify: Optional[bool] = None
     workers: Optional[int] = None
 
@@ -129,7 +121,6 @@ class ProfileConfig:
         input_file_regex = paths.get('input_file_regex') or data.get('input_file_regex')
 
         # Extract optional overrides
-        model = data.get('model')
         verify = data.get('verify')
         workers = data.get('workers')
 
@@ -149,7 +140,6 @@ class ProfileConfig:
             input_path=Path(input_path_str) if input_path_str else None,
             output_path=Path(output_path_str) if output_path_str else None,
             input_file_regex=input_file_regex,
-            model=model,
             verify=verify,
             workers=workers,
             demographics=demographics,
