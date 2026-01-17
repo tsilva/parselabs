@@ -18,7 +18,7 @@ PDF → [Text LLM (if viable)] OR [Images → Vision LLM] → Verify → Standar
 - Extract text from PDF using `pdftotext`
 - Check viability (`text_extraction_is_viable`):
   - Minimum 200 characters (excluding whitespace)
-  - LLM classification: sends first 1000 chars to cheap model (`google/gemini-2.5-flash`)
+  - LLM classification: sends first 1000 chars to cheap model (`google/gemini-3-flash-preview`)
   - Classifies whether text contains structured lab data (test names, values, units, ranges)
   - Results cached in `config/cache/viability_cache.json` (keyed by MD5 hash of first 500 chars)
 - If viable, use text-based LLM extraction (cheaper than vision)

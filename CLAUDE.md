@@ -89,7 +89,7 @@ output_path: "/path/to/output"
 input_file_regex: "*.pdf"  # optional
 
 # Optional overrides:
-model: "google/gemini-2.5-flash"
+model: "google/gemini-3-flash-preview"
 verify: true
 workers: 4
 ```
@@ -169,7 +169,7 @@ Required:
 - `OPENROUTER_API_KEY` - API key for OpenRouter
 
 Optional (with smart defaults):
-- `EXTRACT_MODEL_ID` - Vision model (default: `google/gemini-2.5-flash`)
+- `EXTRACT_MODEL_ID` - Vision model (default: `google/gemini-3-flash-preview`)
 - `N_EXTRACTIONS` - Self-consistency extractions (default: 1)
 - `MAX_WORKERS` - Parallel workers (default: CPU count)
 - `ENABLE_VERIFICATION` - Cross-model verification (default: false)
@@ -190,6 +190,15 @@ The test suite validates data integrity:
 Run with `python test.py` - prints report to console.
 
 ## Important Conventions
+
+### Package Management
+Always use `uv` for package management, never `pip` directly:
+```bash
+uv sync              # Install dependencies from pyproject.toml
+uv add <package>     # Add a new dependency
+uv remove <package>  # Remove a dependency
+uv pip install <pkg> # If you must install directly
+```
 
 ### Documentation Maintenance
 When modifying the extraction pipeline in `extract.py` or related modules:

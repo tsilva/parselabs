@@ -254,14 +254,19 @@ CRITICAL RULES:
    - "39-117;Criança<400" → reference_min_raw=39, reference_max_raw=117, reference_notes="Criança<400"
    - If no numeric values can be extracted → both null
 
-   SPECIAL CASE - Multiple values with shared reference ranges:
+   SPECIAL CASE - Multiple values with shared reference ranges (e.g., WBC differentials):
    - Some tests show BOTH percentage AND absolute count (e.g., Neutrophils: "65%" and "4.2 x10^9/L")
+   - CRITICAL: Extract BOTH values as SEPARATE LabResult entries (see Scenario F below)
    - These often share ONE reference range that applies to only ONE of the values
    - When extracting, carefully identify which reference range applies to which value:
      * Look for visual alignment (which range is closest to which value)
      * Check if the reference range units match the test value units
+     * Percentage reference ranges are typically 0-100 (e.g., "40-80")
+     * Absolute count reference ranges are typically small numbers (e.g., "1.5-7.0")
      * If uncertain, copy the reference_range text but leave min/max as null
-   - Example: "Neutrophils 65% (40-80)" and "4.2 x10^9/L" → the "(40-80)" applies ONLY to the % value, NOT the absolute count
+   - Example: "Neutrophils 4.2 10^9/L 65% (40-80)" → Extract as TWO results:
+     * Result 1: value=4.2, unit="10^9/L", reference_min=null, reference_max=null
+     * Result 2: value=65, unit="%", reference_min=40, reference_max=80
 
 6. FLAGS & CONTEXT:
    - `is_abnormal`: Set to true if result is marked (H, L, *, ↑, ↓, "HIGH", "LOW", etc.)
@@ -304,6 +309,30 @@ E) Tests with NO visible unit but result is text:
    Example: "Urine Color: AMARELA"
    → lab_name="Urine Color", value="AMARELA", unit=null
    → Don't invent or assume units - only extract what you see
+
+F) White blood cell differentials with BOTH absolute count AND percentage:
+   These tests often show TWO values on the SAME LINE - one absolute count and one percentage.
+   You MUST extract BOTH as SEPARATE results.
+
+   Example line: "Neutrófilos    3,3  10⁹/L    62,9  %    35.0 - 85.0"
+   → Extract as TWO separate results:
+     1) lab_name_raw="Neutrófilos", value_raw="3.3", lab_unit_raw="10⁹/L", reference_min_raw=null, reference_max_raw=null
+     2) lab_name_raw="Neutrófilos", value_raw="62.9", lab_unit_raw="%", reference_min_raw=35.0, reference_max_raw=85.0
+
+   How to identify which value is which:
+   - The value NEXT TO "10⁹/L", "10^9/L", "/mm³", or similar is the ABSOLUTE COUNT
+   - The value NEXT TO "%" is the PERCENTAGE
+   - Reference ranges like "35.0 - 85.0" (values 0-100) apply to the PERCENTAGE
+   - Reference ranges like "1.5 - 7.0" (small values) apply to the ABSOLUTE COUNT
+
+   This applies to ALL differential white blood cells:
+   - Neutrófilos / Neutrophils
+   - Linfócitos / Lymphocytes
+   - Monócitos / Monocytes
+   - Eosinófilos / Eosinophils
+   - Basófilos / Basophils
+
+   CRITICAL: Do NOT skip or merge these values. Extract BOTH as separate LabResult entries.
 
 9. PAGE CLASSIFICATION:
    - `page_has_lab_data`: Set to true if this page contains ANY lab test results

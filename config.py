@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 UNKNOWN_VALUE = "$UNKNOWN$"
 
 # Default model - fast, cheap, good quality
-DEFAULT_MODEL = "google/gemini-2.5-flash"
+DEFAULT_MODEL = "google/gemini-3-flash-preview"
 
 
 @dataclass
@@ -391,4 +391,18 @@ class LabSpecsConfig:
         percentage_variant = f"{lab_name} (%)"
         if percentage_variant in self._specs:
             return percentage_variant
+        return None
+
+    def get_non_percentage_variant(self, lab_name: str) -> Optional[str]:
+        """Get the non-(%) variant of a lab name if it exists.
+
+        For example: "Blood - Neutrophils (%)" -> "Blood - Neutrophils"
+        """
+        if not lab_name.endswith("(%)"):
+            return None  # Not a percentage variant
+
+        # Remove " (%)" suffix
+        non_percentage_variant = lab_name[:-4]  # Remove " (%)"
+        if non_percentage_variant in self._specs:
+            return non_percentage_variant
         return None

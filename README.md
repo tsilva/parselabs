@@ -24,8 +24,8 @@ cd labs-parser
 1. Configure your environment variables in a `.env` file:
 
 ```
-SELF_CONSISTENCY_MODEL_ID=google/gemini-2.5-flash
-EXTRACT_MODEL_ID=google/gemini-2.5-flash
+SELF_CONSISTENCY_MODEL_ID=google/gemini-3-flash-preview
+EXTRACT_MODEL_ID=google/gemini-3-flash-preview
 INPUT_PATH=./path/to/lab/reports
 INPUT_FILE_REGEX=.*\.pdf
 OUTPUT_PATH=./output
