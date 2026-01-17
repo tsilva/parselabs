@@ -38,7 +38,7 @@ client = OpenAI(
 )
 
 # Default model for extraction
-DEFAULT_MODEL = "google/gemini-2.5-flash"
+DEFAULT_MODEL = "google/gemini-3-flash-preview"
 
 
 # ========================================
@@ -158,7 +158,7 @@ def _save_viability_cache(cache: dict):
 def text_extraction_is_viable(
     text: str,
     client: OpenAI,
-    model_id: str = "google/gemini-2.5-flash",
+    model_id: str = "google/gemini-3-flash-preview",
     min_chars: int = 200,
 ) -> bool:
     """
@@ -245,21 +245,40 @@ Return ONLY a JSON object: {"is_lab_data": true} or {"is_lab_data": false}"""
 # ========================================
 
 def correct_percentage_lab_names(results: list[dict], lab_specs: LabSpecsConfig) -> list[dict]:
-    """Correct lab names when unit is % but name doesn't end with (%)."""
-    corrected_count = 0
+    """Correct lab names based on unit: add (%) when unit is %, remove (%) when unit is not %.
+
+    This handles cases where:
+    1. Unit is "%" but name doesn't end with "(%) " -> add "(%) "
+    2. Unit is NOT "%" but name ends with "(%) " -> remove "(%) " (for absolute counts)
+    """
+    corrected_to_pct = 0
+    corrected_to_abs = 0
+
     for result in results:
         std_name = result.get("lab_name_standardized")
         std_unit = result.get("lab_unit_standardized")
 
-        if std_unit == "%" and std_name and not std_name.endswith("(%)"):
+        if not std_name:
+            continue
+
+        # Case 1: Unit is % but name doesn't have (%) -> add it
+        if std_unit == "%" and not std_name.endswith("(%)"):
             percentage_variant = lab_specs.get_percentage_variant(std_name)
             if percentage_variant:
                 logger.debug(f"Correcting lab name '{std_name}' -> '{percentage_variant}' (unit is %)")
                 result["lab_name_standardized"] = percentage_variant
-                corrected_count += 1
+                corrected_to_pct += 1
 
-    if corrected_count > 0:
-        logger.info(f"Corrected {corrected_count} percentage lab names")
+        # Case 2: Unit is NOT % but name has (%) -> remove it (for absolute counts)
+        elif std_unit != "%" and std_name.endswith("(%)"):
+            non_percentage_variant = lab_specs.get_non_percentage_variant(std_name)
+            if non_percentage_variant:
+                logger.debug(f"Correcting lab name '{std_name}' -> '{non_percentage_variant}' (unit is {std_unit})")
+                result["lab_name_standardized"] = non_percentage_variant
+                corrected_to_abs += 1
+
+    if corrected_to_pct > 0 or corrected_to_abs > 0:
+        logger.info(f"Corrected {corrected_to_pct} to percentage, {corrected_to_abs} to absolute lab names")
 
     return results
 
@@ -1063,7 +1082,7 @@ Examples:
     parser.add_argument(
         '--model', '-m',
         type=str,
-        help='Model ID for extraction (default: google/gemini-2.5-flash)'
+        help='Model ID for extraction (default: google/gemini-3-flash-preview)'
     )
     parser.add_argument(
         '--no-verify',
