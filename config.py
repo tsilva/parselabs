@@ -34,15 +34,6 @@ class ExtractionConfig:
     n_extractions: int = 1
     max_workers: int = field(default_factory=lambda: os.cpu_count() or 1)
 
-    # Verification settings (simplified - only cross-model verification by default)
-    enable_verification: bool = True
-    verification_model_id: Optional[str] = None  # Auto-selected from different provider
-
-    # Removed settings (were rarely used):
-    # - arbitration_model_id (arbitration stage removed)
-    # - enable_completeness_check (removed - low value)
-    # - enable_character_verification (removed - high cost, low value)
-
     @classmethod
     def from_env(cls) -> 'ExtractionConfig':
         """Load configuration from environment variables with smart defaults."""
@@ -61,10 +52,6 @@ class ExtractionConfig:
         max_workers_str = os.getenv("MAX_WORKERS", "")
         max_workers = int(max_workers_str) if max_workers_str else (os.cpu_count() or 1)
 
-        # Verification settings
-        enable_verification = os.getenv("ENABLE_VERIFICATION", "false").lower() == "true"
-        verification_model_id = os.getenv("VERIFICATION_MODEL_ID") or None
-
         return cls(
             input_path=None,
             output_path=None,
@@ -74,8 +61,6 @@ class ExtractionConfig:
             input_file_regex=input_file_regex,
             n_extractions=n_extractions,
             max_workers=max_workers,
-            enable_verification=enable_verification,
-            verification_model_id=verification_model_id,
         )
 
 
@@ -92,7 +77,6 @@ class ProfileConfig:
     input_file_regex: Optional[str] = None
 
     # Optional overrides
-    verify: Optional[bool] = None
     workers: Optional[int] = None
 
     # Demographics for personalized healthy ranges
@@ -121,7 +105,6 @@ class ProfileConfig:
         input_file_regex = paths.get('input_file_regex') or data.get('input_file_regex')
 
         # Extract optional overrides
-        verify = data.get('verify')
         workers = data.get('workers')
 
         # Extract demographics (for personalized healthy ranges)
@@ -140,7 +123,6 @@ class ProfileConfig:
             input_path=Path(input_path_str) if input_path_str else None,
             output_path=Path(output_path_str) if output_path_str else None,
             input_file_regex=input_file_regex,
-            verify=verify,
             workers=workers,
             demographics=demographics,
         )

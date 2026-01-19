@@ -89,14 +89,6 @@ class LabResult(BaseModel):
     review_status: Optional[str] = Field(default=None, description="Human review status: 'accepted', 'rejected', or null")
     review_completed_at: Optional[str] = Field(default=None, description="ISO timestamp when review was completed")
 
-    # Verification fields (added by post-extraction verification)
-    verification_status: Optional[str] = Field(default=None, description="Verification status: verified, corrected, uncertain, not_verified")
-    verification_confidence: Optional[float] = Field(default=None, description="Verification confidence score (0-1)")
-    verification_method: Optional[str] = Field(default=None, description="Method used for verification")
-    cross_model_verified: Optional[bool] = Field(default=None, description="Whether verified by cross-model extraction")
-    verification_corrected: Optional[bool] = Field(default=None, description="Whether value was corrected by verification")
-    value_raw_original: Optional[str] = Field(default=None, description="Original value before verification correction")
-
     @field_validator('value_raw', mode='before')
     @classmethod
     def coerce_value_raw_to_string(cls, v):
