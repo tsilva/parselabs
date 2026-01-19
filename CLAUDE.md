@@ -24,8 +24,14 @@ python extract.py --profile tsilva --model google/gemini-2.5-pro
 # Data integrity validation:
 python test.py
 
-# Review extracted results:
+# Unified viewer (browse + review):
+python viewer.py --profile tsilva
+
+# Legacy review tool:
 python review.py --profile tsilva
+
+# Legacy browse tool:
+python browse.py --profile tsilva
 ```
 
 ### Development
@@ -90,6 +96,33 @@ The `ValueValidator` class detects extraction errors by analyzing the data itsel
 ```
 
 Flagged rows appear in `review.py` under "Needs Review" filter with `review_needed=True`, `review_reason`, and `review_confidence` columns.
+
+### Unified Viewer (viewer.py)
+
+The unified viewer combines browse and review functionality into a single tool:
+
+**Layout:**
+- Left: Data table with all results (click to select)
+- Right: Tabbed panel with Plot, Source image, and Details tabs
+- Bottom-right: Review actions (Accept/Reject/Skip)
+
+**Features:**
+- **From browse.py**: Time-series plots with dual reference ranges (lab_specs + PDF), multi-lab selection, CSV export
+- **From review.py**: Accept/Reject workflow, keyboard shortcuts (Y/N/S), review persistence to JSON files
+
+**Filters (all always visible):**
+- Lab name multi-select
+- Abnormal only / Latest only checkboxes
+- Review status dropdown (All, Unreviewed, Needs Review, Low Confidence, Accepted, Rejected)
+
+**Keyboard shortcuts:**
+- `Y` = Accept, `N` = Reject, `S` = Skip
+- Arrow keys or `j`/`k` = Navigate
+
+**Ports:**
+- `viewer.py` runs on port 7862
+- `review.py` (legacy) runs on port 7860
+- `browse.py` (legacy) runs on port 7861
 
 ### Configuration System
 
@@ -232,7 +265,12 @@ Lab names MUST start with lab type prefix:
 
 ### Reviewing Extracted Data
 
-Filter for items needing review:
+Use the unified viewer for interactive review:
+```bash
+python viewer.py --profile tsilva
+```
+
+Or filter programmatically:
 ```python
 import pandas as pd
 df = pd.read_csv("output/all.csv")
