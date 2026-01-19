@@ -19,13 +19,7 @@ python extract.py --profile tsilva
 python extract.py --list-profiles
 
 # Override settings:
-python extract.py --profile tsilva --model google/gemini-2.5-pro --no-verify
-
-# Post-extraction verification (run verification on cached data):
-python extract.py --profile tsilva --verify-only                  # Verify all pages
-python extract.py --profile tsilva --verify-only --unverified-only  # Only unverified
-python extract.py --profile tsilva --verify-only --document "2024-01-15-labs"  # Specific doc
-python extract.py --profile tsilva --verify-only --date-from 2024-01-01 --date-to 2024-06-30
+python extract.py --profile tsilva --model google/gemini-2.5-pro
 
 # Data integrity validation:
 python test.py
@@ -54,7 +48,6 @@ The processing pipeline has 3 main stages:
 2. **Extraction** (`extract_labs_from_page_image`)
    - Extracts structured lab data directly from page images using vision models
    - Returns `HealthLabReport` with nested `LabResult` objects validated by Pydantic
-   - Optional cross-model verification for accuracy
 
 3. **Normalization & Mapping**
    - Maps raw lab names/units to standardized enums via config files
@@ -98,23 +91,6 @@ The `ValueValidator` class detects extraction errors by analyzing the data itsel
 
 Flagged rows appear in `review.py` under "Needs Review" filter with `review_needed=True`, `review_reason`, and `review_confidence` columns.
 
-### Simplified Verification (verification.py)
-
-Cross-model verification validates extracted values against the source image:
-
-1. **Cross-Model Extraction** - Re-extract with a different model family
-2. **Batch Verification** - For disagreements, verify each value
-
-**Configuration:**
-```bash
---no-verify        # Disable verification during extraction
---verify-only      # Run verification on already-extracted data (skip extraction)
---unverified-only  # Only verify pages that haven't been verified yet
---document         # Filter to specific document stem
---date-from        # Filter results >= date (YYYY-MM-DD)
---date-to          # Filter results <= date (YYYY-MM-DD)
-```
-
 ### Configuration System
 
 **Profiles** (`profiles/*.yaml` or `profiles/*.json`):
@@ -126,7 +102,6 @@ output_path: "/path/to/output"
 input_file_regex: "*.pdf"  # optional
 
 # Optional overrides:
-verify: true
 workers: 4
 ```
 
@@ -152,7 +127,7 @@ Example entry:
 }
 ```
 
-### Output Schema (18 columns)
+### Output Schema (17 columns)
 
 ```csv
 # Core identification
@@ -175,8 +150,7 @@ value_raw           # Original value (before conversion)
 unit_raw            # Original unit
 
 # Quality
-confidence          # 0-1 score
-verified            # Boolean: was cross-model verification done?
+confidence          # Defaults to 1.0
 
 # Review flags (from validation.py)
 review_needed       # Boolean: needs human review?
@@ -215,7 +189,6 @@ Optional (with smart defaults):
 - `EXTRACT_MODEL_ID` - Vision model (default: `google/gemini-3-flash-preview`)
 - `N_EXTRACTIONS` - Self-consistency extractions (default: 1)
 - `MAX_WORKERS` - Parallel workers (default: CPU count)
-- `ENABLE_VERIFICATION` - Cross-model verification (default: false)
 
 Note: Input and output paths must be specified via profiles. See `profiles/_template.yaml`.
 

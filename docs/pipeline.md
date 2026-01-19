@@ -5,7 +5,7 @@
 ## Quick Overview
 
 ```
-PDF → [Text LLM (if viable)] OR [Images → Vision LLM] → Verify → Standardize → Normalize → Dedupe → Export
+PDF → [Text LLM (if viable)] OR [Images → Vision LLM] → Standardize → Normalize → Dedupe → Export
 ```
 
 ## Pipeline Steps
@@ -37,37 +37,30 @@ PDF → [Text LLM (if viable)] OR [Images → Vision LLM] → Verify → Standar
 - Self-consistency: run N times, LLM votes on best if results differ
 - Cache result as `{doc}/{doc}.{page}.json`
 
-### 5. Post-Extraction Verification (optional)
-- Re-extract with different model provider
-- Compare results, batch verify disagreements
-- Character-level verification for uncertain values
-- Arbitration via third model if needed
-- Adds: `verified` (boolean), `confidence` (float)
-
-### 6. Date Resolution
+### 5. Date Resolution
 Priority: `collection_date` → `report_date` → filename pattern → None
 
-### 7. Lab Name Standardization
+### 6. Lab Name Standardization
 - LLM maps raw names → standardized names from `lab_specs.json`
 - Unknown → `$UNKNOWN$`
 
-### 8. Lab Unit Standardization
+### 7. Lab Unit Standardization
 - LLM maps (raw_unit, lab_name) → standardized units
 - Correct percentage names: unit "%" → name ends with "(%)"
 
-### 9. Merge All Documents
+### 8. Merge All Documents
 - Concatenate all document CSVs into single DataFrame
 
-### 10. Normalization
+### 9. Normalization
 - Convert values to primary units using factors from `lab_specs.json`
 - Convert reference ranges to primary units
 - Map qualitative values (e.g., "NEGATIVO" → 0)
 
-### 11. Deduplication
+### 10. Deduplication
 - Group by (date, lab_name_standardized)
 - Keep one result per group (prefer primary unit)
 
-### 12. Export
+### 11. Export
 - `all.csv` - merged results
 - `all.xlsx` - AllData + MostRecentByEnum sheets
 
@@ -77,7 +70,6 @@ Priority: `collection_date` → `report_date` → filename pattern → None
 |------|---------|
 | `extract.py` | Pipeline orchestration |
 | `extraction.py` | Vision LLM extraction |
-| `verification.py` | Multi-model verification |
 | `standardization.py` | Name/unit standardization |
 | `normalization.py` | Unit conversion, value normalization |
 | `config.py` | Configuration classes (ExtractionConfig, ProfileConfig, LabSpecsConfig) |
