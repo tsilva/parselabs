@@ -1,7 +1,7 @@
 """
-Lab Results Viewer - Unified Browse & Review UI
+Lab Results Viewer
 
-Combines browse.py's analysis/visualization with review.py's validation workflow.
+Interactive UI for browsing and reviewing extracted lab results.
 Shows data table with interactive plots and review actions side-by-side.
 
 Usage:
@@ -1462,7 +1462,7 @@ def create_app():
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description='Lab Results Viewer - Unified Browse & Review UI',
+        description='Lab Results Viewer',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

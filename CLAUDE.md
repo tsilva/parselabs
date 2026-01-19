@@ -24,14 +24,8 @@ python extract.py --profile tsilva --model google/gemini-2.5-pro
 # Data integrity validation:
 python test.py
 
-# Unified viewer (browse + review):
+# View and review extracted results:
 python viewer.py --profile tsilva
-
-# Legacy review tool:
-python review.py --profile tsilva
-
-# Legacy browse tool:
-python browse.py --profile tsilva
 ```
 
 ### Development
@@ -62,7 +56,7 @@ The processing pipeline has 3 main stages:
 
 4. **Value Validation** (`validation.py`)
    - Detects extraction errors from the data itself (no source image re-check)
-   - Flags suspicious values for review in `review.py`
+   - Flags suspicious values for review in `viewer.py`
 
 ### Value Validation (validation.py)
 
@@ -95,11 +89,11 @@ The `ValueValidator` class detects extraction errors by analyzing the data itsel
 }
 ```
 
-Flagged rows appear in `review.py` under "Needs Review" filter with `review_needed=True`, `review_reason`, and `review_confidence` columns.
+Flagged rows appear in `viewer.py` under "Needs Review" filter with `review_needed=True`, `review_reason`, and `review_confidence` columns.
 
-### Unified Viewer (viewer.py)
+### Viewer (viewer.py)
 
-The unified viewer combines browse and review functionality into a single tool:
+Interactive UI for browsing and reviewing extracted lab results:
 
 **Layout:**
 - Left: Data table with all results (click to select)
@@ -107,8 +101,10 @@ The unified viewer combines browse and review functionality into a single tool:
 - Bottom-right: Review actions (Accept/Reject/Skip)
 
 **Features:**
-- **From browse.py**: Time-series plots with dual reference ranges (lab_specs + PDF), multi-lab selection, CSV export
-- **From review.py**: Accept/Reject workflow, keyboard shortcuts (Y/N/S), review persistence to JSON files
+- Time-series plots with dual reference ranges (lab_specs + PDF)
+- Multi-lab selection with stacked subplots
+- Accept/Reject workflow with JSON persistence
+- CSV export of filtered data
 
 **Filters (all always visible):**
 - Lab name multi-select
@@ -119,10 +115,7 @@ The unified viewer combines browse and review functionality into a single tool:
 - `Y` = Accept, `N` = Reject, `S` = Skip
 - Arrow keys or `j`/`k` = Navigate
 
-**Ports:**
-- `viewer.py` runs on port 7862
-- `review.py` (legacy) runs on port 7860
-- `browse.py` (legacy) runs on port 7861
+**Port:** 7862
 
 ### Configuration System
 
