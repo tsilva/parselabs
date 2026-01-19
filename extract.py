@@ -27,6 +27,7 @@ from extraction import (
 )
 from standardization import standardize_lab_names, standardize_lab_units
 from normalization import apply_normalizations, deduplicate_results, apply_dtype_conversions
+from validation import ValueValidator
 
 # Module-level logger (file handlers added after config is loaded)
 logger = logging.getLogger(__name__)
@@ -66,6 +67,11 @@ COLUMN_SCHEMA = {
     "confidence": {"dtype": "float64", "excel_width": 12},
     "verified": {"dtype": "boolean", "excel_width": 10},
 
+    # Review flags (from validation)
+    "review_needed": {"dtype": "boolean", "excel_width": 12},
+    "review_reason": {"dtype": "str", "excel_width": 30},
+    "review_confidence": {"dtype": "float64", "excel_width": 14},
+
     # Limit indicators (for values like <0.05 or >738)
     "is_below_limit": {"dtype": "boolean", "excel_width": 12},
     "is_above_limit": {"dtype": "boolean", "excel_width": 12},
@@ -85,6 +91,7 @@ def get_column_lists(schema: dict):
         "reference_min", "reference_max",
         "lab_name_raw", "value_raw", "unit_raw",
         "confidence", "verified",
+        "review_needed", "review_reason", "review_confidence",
         "is_below_limit", "is_above_limit",
         "lab_type", "result_index",
     ]
@@ -1360,6 +1367,16 @@ def main():
         "reference_max_primary": "reference_max",
     }
     merged_df = merged_df.rename(columns=column_renames)
+
+    # Run value-based validation
+    logger.info("Running value-based validation...")
+    validator = ValueValidator(lab_specs)
+    merged_df = validator.validate(merged_df)
+    validation_stats = validator.validation_stats
+    if validation_stats.get('rows_flagged', 0) > 0:
+        logger.info(f"Validation flagged {validation_stats['rows_flagged']} rows for review")
+        for reason, count in validation_stats.get('flags_by_reason', {}).items():
+            logger.info(f"  - {reason}: {count}")
 
     # Add confidence column (from verification or default)
     if "verification_confidence" in merged_df.columns:

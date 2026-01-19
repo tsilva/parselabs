@@ -1,4 +1,34 @@
 {
+  "_relationships": [
+    {
+      "name": "LDL_FRIEDEWALD",
+      "description": "LDL calculated via Friedewald formula (valid when Trig < 400 mg/dL)",
+      "formula": "Blood - Total Cholesterol - Blood - High-Density Lipoprotein Cholesterol (HDL Cholesterol) - (Blood - Triglycerides / 5)",
+      "target": "Blood - Low-Density Lipoprotein Cholesterol (LDL Cholesterol)",
+      "tolerance_percent": 15
+    },
+    {
+      "name": "ALBUMIN_GLOBULIN_RATIO",
+      "description": "A/G ratio = Albumin / (Total Protein - Albumin)",
+      "formula": "Blood - Albumin / (Blood - Total Protein - Blood - Albumin)",
+      "target": "Blood - Albumin/Globulin Ratio",
+      "tolerance_percent": 20
+    },
+    {
+      "name": "BILIRUBIN_TOTAL",
+      "description": "Total Bilirubin = Direct + Indirect",
+      "formula": "Blood - Bilirubin Direct + Blood - Bilirubin Indirect",
+      "target": "Blood - Bilirubin Total",
+      "tolerance_percent": 15
+    },
+    {
+      "name": "MCHC_CALCULATION",
+      "description": "MCHC = (Hemoglobin / Hematocrit) * 100",
+      "formula": "(Blood - Hemoglobin (Hgb) / Blood - Hematocrit (HCT) (%)) * 100",
+      "target": "Blood - Mean Corpuscular Hemoglobin Concentration (MCHC)",
+      "tolerance_percent": 10
+    }
+  ],
   "Blood - 1,25-OH₂ Vitamin D": {
     "lab_type": "blood",
     "primary_unit": "pg/mL",
@@ -1165,7 +1195,10 @@
         0.3,
         0.7
       ]
-    }
+    },
+    "biological_min": 0,
+    "biological_max": 30,
+    "max_daily_change": 3
   },
   "Blood - Cryoglobulins, Qualitative": {
     "lab_type": "blood",
@@ -1707,7 +1740,10 @@
         70.0,
         99.0
       ]
-    }
+    },
+    "biological_min": 0,
+    "biological_max": 1000,
+    "max_daily_change": 200
   },
   "Blood - Glucose-6-Phosphate Dehydrogenase (G6PD)": {
     "lab_type": "blood",
@@ -1848,7 +1884,10 @@
         36.1,
         44.3
       ]
-    }
+    },
+    "biological_min": 0,
+    "biological_max": 70,
+    "max_daily_change": 5
   },
   "Blood - Hemoglobin (Hgb)": {
     "lab_type": "blood",
@@ -1884,7 +1923,10 @@
         11.0,
         15.0
       ]
-    }
+    },
+    "biological_min": 0,
+    "biological_max": 25,
+    "max_daily_change": 2.0
   },
   "Blood - Hemoglobin A (%)": {
     "lab_type": "blood",
@@ -2069,7 +2111,9 @@
         50,
         70
       ]
-    }
+    },
+    "biological_min": 0,
+    "biological_max": 200
   },
   "Blood - Homocysteine": {
     "lab_type": "blood",
@@ -2428,7 +2472,9 @@
         0.0,
         99.0
       ]
-    }
+    },
+    "biological_min": 0,
+    "biological_max": 500
   },
   "Blood - Lupus Erythematosus Cells Screen (LE Cells)": {
     "lab_type": "blood",
@@ -2983,7 +3029,10 @@
         150,
         400
       ]
-    }
+    },
+    "biological_min": 0,
+    "biological_max": 2000,
+    "max_daily_change": 100
   },
   "Blood - Platelets - Immature (%)": {
     "lab_type": "blood",
@@ -3407,7 +3456,9 @@
         125.0,
         200.0
       ]
-    }
+    },
+    "biological_min": 0,
+    "biological_max": 600
   },
   "Blood - Total Iron-Binding Capacity (TIBC)": {
     "lab_type": "blood",
@@ -3567,7 +3618,9 @@
         30.0,
         150.0
       ]
-    }
+    },
+    "biological_min": 0,
+    "biological_max": 2000
   },
   "Blood - Urea": {
     "lab_type": "blood",

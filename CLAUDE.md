@@ -61,6 +61,43 @@ The processing pipeline has 3 main stages:
    - Converts values to primary units using conversion factors
    - Deduplicates by (date, lab_name) pairs
 
+4. **Value Validation** (`validation.py`)
+   - Detects extraction errors from the data itself (no source image re-check)
+   - Flags suspicious values for review in `review.py`
+
+### Value Validation (validation.py)
+
+The `ValueValidator` class detects extraction errors by analyzing the data itself:
+
+| Category | Reason Codes | Description |
+|----------|--------------|-------------|
+| Biological Plausibility | `NEGATIVE_VALUE`, `IMPOSSIBLE_VALUE`, `PERCENTAGE_BOUNDS` | Values outside biological limits |
+| Inter-Lab Relationships | `RELATIONSHIP_MISMATCH` | Calculated values don't match (e.g., LDL Friedewald formula) |
+| Temporal Consistency | `TEMPORAL_ANOMALY` | Implausible change rate between tests |
+| Format Artifacts | `FORMAT_ARTIFACT` | Concatenation errors (e.g., "52.6=1946") |
+| Reference Ranges | `RANGE_INCONSISTENCY`, `EXTREME_DEVIATION` | Reference range issues or value far outside range |
+
+**Configuration in `lab_specs.json`:**
+```json
+{
+  "Blood - Hemoglobin (Hgb)": {
+    "biological_min": 0,
+    "biological_max": 25,
+    "max_daily_change": 2.0
+  },
+  "_relationships": [
+    {
+      "name": "LDL_FRIEDEWALD",
+      "formula": "Blood - Total Cholesterol - Blood - HDL Cholesterol - (Blood - Triglycerides / 5)",
+      "target": "Blood - LDL Cholesterol",
+      "tolerance_percent": 15
+    }
+  ]
+}
+```
+
+Flagged rows appear in `review.py` under "Needs Review" filter with `review_needed=True`, `review_reason`, and `review_confidence` columns.
+
 ### Simplified Verification (verification.py)
 
 Cross-model verification validates extracted values against the source image:
@@ -115,7 +152,7 @@ Example entry:
 }
 ```
 
-### Output Schema (15 columns)
+### Output Schema (18 columns)
 
 ```csv
 # Core identification
@@ -140,6 +177,11 @@ unit_raw            # Original unit
 # Quality
 confidence          # 0-1 score
 verified            # Boolean: was cross-model verification done?
+
+# Review flags (from validation.py)
+review_needed       # Boolean: needs human review?
+review_reason       # Reason codes (e.g., "FORMAT_ARTIFACT; EXTREME_DEVIATION;")
+review_confidence   # Adjusted confidence after validation
 
 # Internal
 lab_type            # blood/urine/feces (hidden in Excel)
@@ -217,11 +259,17 @@ Lab names MUST start with lab type prefix:
 
 ### Reviewing Extracted Data
 
-Filter for unmapped values:
+Filter for items needing review:
 ```python
 import pandas as pd
 df = pd.read_csv("output/all.csv")
 
+# Items flagged by validation
+needs_review = df[df['review_needed'] == True]
+
 # Low confidence items
 low_conf = df[df['confidence'] < 0.7]
+
+# Filter by specific validation reason
+format_errors = df[df['review_reason'].str.contains('FORMAT_ARTIFACT', na=False)]
 ```
