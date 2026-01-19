@@ -50,9 +50,14 @@ python extract.py
 
 - Extracts lab test names, values, units, and reference ranges
 - Standardizes lab names and units using controlled vocabularies
+- **Value validation** detects extraction errors automatically:
+  - Biologically impossible values (negative concentrations, out-of-range percentages)
+  - Inter-lab relationship mismatches (e.g., LDL vs calculated LDL)
+  - Format artifacts (concatenation errors like "52.6=1946")
+  - Extreme deviations from reference ranges
 - Processes multiple documents in parallel
 - Caches results to avoid reprocessing
-- Generates clean, structured CSV output
+- Generates clean, structured CSV output with review flags
 
 ## 🔍 Review UI
 

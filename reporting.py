@@ -36,7 +36,11 @@ class PipelineMetrics:
     high_priority_count: int = 0  # confidence < 0.7
     edge_case_breakdown: dict = field(default_factory=dict)
 
-    # Validation results
+    # Value validation stats (from validation.py)
+    validation_flags_count: int = 0
+    validation_flags_breakdown: dict = field(default_factory=dict)
+
+    # Data integrity validation results (from test.py)
     validation_errors: list = field(default_factory=list)
     validation_warnings: list = field(default_factory=list)
 
@@ -97,6 +101,19 @@ class RunReportGenerator:
             reasons = review_df['review_reason'].str.split('; ').explode()
             reasons = reasons[reasons != '']
             self.metrics.edge_case_breakdown = reasons.value_counts().to_dict()
+
+            # Separate validation flags (from validation.py)
+            validation_reasons = [
+                'IMPOSSIBLE_VALUE', 'RELATIONSHIP_MISMATCH', 'TEMPORAL_ANOMALY',
+                'FORMAT_ARTIFACT', 'RANGE_INCONSISTENCY', 'PERCENTAGE_BOUNDS',
+                'NEGATIVE_VALUE', 'EXTREME_DEVIATION'
+            ]
+            validation_breakdown = {
+                k: v for k, v in self.metrics.edge_case_breakdown.items()
+                if k in validation_reasons
+            }
+            self.metrics.validation_flags_breakdown = validation_breakdown
+            self.metrics.validation_flags_count = sum(validation_breakdown.values())
 
     def run_validations(self) -> None:
         """Run validation checks (from test.py)."""
@@ -168,6 +185,8 @@ class RunReportGenerator:
         if self.metrics.review_needed_count > 0:
             lines.append(f"  ITEMS NEEDING REVIEW: {self.metrics.review_needed_count}")
             lines.append(f"    - High priority (conf < 0.7): {self.metrics.high_priority_count}")
+            if self.metrics.validation_flags_count > 0:
+                lines.append(f"    - Value validation flags: {self.metrics.validation_flags_count}")
             lines.append("")
 
         # Validation issues
@@ -258,14 +277,31 @@ class RunReportGenerator:
                 f"",
             ])
 
-            if self.metrics.edge_case_breakdown:
+            # Value validation flags (from validation.py)
+            if self.metrics.validation_flags_count > 0:
                 lines.extend([
-                    f"### Breakdown by Category",
+                    f"### Value Validation Flags ({self.metrics.validation_flags_count})",
+                    f"",
+                    f"| Issue Type | Count |",
+                    f"|------------|-------|",
+                ])
+                for category, count in self.metrics.validation_flags_breakdown.items():
+                    lines.append(f"| {category} | {count} |")
+                lines.append("")
+
+            # Other review flags
+            other_flags = {
+                k: v for k, v in self.metrics.edge_case_breakdown.items()
+                if k not in self.metrics.validation_flags_breakdown
+            }
+            if other_flags:
+                lines.extend([
+                    f"### Other Review Flags",
                     f"",
                     f"| Category | Count |",
                     f"|----------|-------|",
                 ])
-                for category, count in self.metrics.edge_case_breakdown.items():
+                for category, count in other_flags.items():
                     lines.append(f"| {category} | {count} |")
                 lines.append("")
 

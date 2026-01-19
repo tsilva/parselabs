@@ -205,12 +205,18 @@ class LabSpecsConfig:
         with open(config_path, 'r', encoding='utf-8') as f:
             self._specs = json.load(f)
 
-        # Pre-compute all views
-        self._standardized_names = sorted(self._specs.keys())
+        # Pre-compute all views (filter out meta keys starting with _)
+        self._standardized_names = sorted(
+            key for key in self._specs.keys() if not key.startswith('_')
+        )
 
         # Collect unique units from primary_unit and alternatives
         all_units = set()
         for lab_name, spec in self._specs.items():
+            if lab_name.startswith('_'):  # Skip meta keys
+                continue
+            if not isinstance(spec, dict):  # Skip non-dict entries
+                continue
             primary = spec.get('primary_unit')
             if primary:
                 all_units.add(primary)
@@ -226,6 +232,7 @@ class LabSpecsConfig:
         self._lab_type_map = {
             lab_name: spec.get('lab_type', 'blood')
             for lab_name, spec in self._specs.items()
+            if not lab_name.startswith('_') and isinstance(spec, dict)
         }
 
         logger.info(f"Loaded {len(self._standardized_names)} lab specs, "
