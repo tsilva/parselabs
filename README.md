@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.png" alt="labs-parser" width="200"/>
+  <img src="logo.png" alt="labs-parser" width="280"/>
 
   # labs-parser
 
@@ -13,13 +13,18 @@
 
 ---
 
+## Overview
+
+labs-parser uses AI vision models to extract laboratory test results from PDF documents and images, converting unstructured medical reports into clean, standardized CSV/Excel data. It automatically normalizes test names, converts units, and validates results for accuracy.
+
 ## Features
 
-- **AI-Powered Extraction** — Vision models extract lab names, values, units, and reference ranges directly from PDF images
-- **Smart Validation** — Automatically detects extraction errors across 5 categories: biological plausibility, inter-lab relationships, temporal consistency, format artifacts, and reference range deviations
+- **AI-Powered Extraction** — Vision models extract lab names, values, units, and reference ranges directly from PDF pages
+- **Smart Validation** — Detects extraction errors across 5 categories: biological plausibility, inter-lab relationships, temporal consistency, format artifacts, and reference range deviations
+- **Cost-Optimized** — Text-first extraction uses cheaper LLM calls when PDF text is parseable, falling back to vision only when needed
 - **Profile-Based Workflow** — Configure multiple profiles for different users or data sources with simple YAML files
 - **Gradio Review UI** — Side-by-side comparison of source documents and extracted data with keyboard shortcuts
-- **Time-Series Visualization** — Track lab values over time with auto-generated plots
+- **335+ Standardized Labs** — Comprehensive lab specifications with unit conversions and reference ranges
 
 ## Quick Start
 
@@ -37,7 +42,7 @@ export OPENROUTER_API_KEY=your_key_here
 # Extract lab results
 python extract.py --profile myname
 
-# Review results in the browser
+# Review results
 python review.py --profile myname
 ```
 
@@ -57,14 +62,20 @@ cd labs-parser
 uv sync
 ```
 
+### macOS (Poppler)
+
+```bash
+brew install poppler
+```
+
 ### Environment Variables
 
-Create a `.env` file with your API key:
+Create a `.env` file:
 
 ```bash
 OPENROUTER_API_KEY=your_key_here
 
-# Optional overrides:
+# Optional:
 EXTRACT_MODEL_ID=google/gemini-3-flash-preview  # Vision model
 N_EXTRACTIONS=1                                  # Self-consistency extractions
 MAX_WORKERS=4                                    # Parallel workers
@@ -101,17 +112,21 @@ The `config/lab_specs.json` file contains 335+ standardized lab tests with:
 - Primary units and conversion factors
 - Reference ranges
 - Biological limits for validation
+- Inter-lab relationships (e.g., LDL Friedewald formula)
 
 ## Usage
 
 ### Extract Lab Results
 
 ```bash
-# Using a profile (recommended)
+# Using a profile (required)
 python extract.py --profile myname
 
 # Override model
 python extract.py --profile myname --model google/gemini-2.5-pro
+
+# Filter files
+python extract.py --profile myname --pattern "2024-*.pdf"
 ```
 
 ### Review Extracted Data
@@ -140,7 +155,7 @@ For each PDF, the tool generates:
 
 | File | Description |
 |------|-------------|
-| `{doc}/` | Directory containing page images and JSON extractions |
+| `{doc}/` | Directory with page images and JSON extractions |
 | `{doc}.csv` | Combined results for the document |
 | `all.csv` | Merged results from all documents |
 | `all.xlsx` | Excel workbook with formatted data |
@@ -160,14 +175,25 @@ For each PDF, the tool generates:
 
 ## Architecture
 
-The extraction pipeline has 4 stages:
+The extraction pipeline has 5 stages:
 
-1. **PDF Processing** — Converts pages to preprocessed grayscale images
-2. **Extraction** — Vision models extract structured `LabResult` objects
-3. **Normalization** — Maps to standardized names/units with conversions
-4. **Validation** — Flags suspicious values for review
+1. **PDF Processing** — Text extraction or page-to-image conversion
+2. **Extraction** — Vision/text LLM extracts structured `LabResult` objects
+3. **Standardization** — Maps to standardized names and units
+4. **Normalization** — Converts values to primary units
+5. **Validation** — Flags suspicious values for review
 
 For detailed documentation, see [docs/pipeline.md](docs/pipeline.md).
+
+## Validation Categories
+
+| Category | Reason Codes | Description |
+|----------|--------------|-------------|
+| Biological Plausibility | `NEGATIVE_VALUE`, `IMPOSSIBLE_VALUE`, `PERCENTAGE_BOUNDS` | Values outside biological limits |
+| Inter-Lab Relationships | `RELATIONSHIP_MISMATCH` | Calculated values don't match formulas |
+| Temporal Consistency | `TEMPORAL_ANOMALY` | Implausible change rate between tests |
+| Format Artifacts | `FORMAT_ARTIFACT` | OCR/extraction concatenation errors |
+| Reference Ranges | `RANGE_INCONSISTENCY`, `EXTREME_DEVIATION` | Reference range issues |
 
 ## License
 
