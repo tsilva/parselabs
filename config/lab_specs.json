@@ -3181,6 +3181,17 @@
       ]
     }
   },
+  "Blood - Quick Time (%)": {
+    "lab_type": "blood",
+    "primary_unit": "%",
+    "alternatives": [],
+    "ranges": {
+      "default": [
+        70.0,
+        130.0
+      ]
+    }
+  },
   "Blood - Red Blood Cell Morphology": {
     "lab_type": "blood",
     "primary_unit": "unitless",

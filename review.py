@@ -101,6 +101,55 @@ def set_output_path(path: Path) -> None:
     _configured_output_path = path
 
 
+# Global profile name (for profile switching)
+_current_profile_name: Optional[str] = None
+
+
+def set_current_profile(name: str) -> None:
+    """Set the current profile name."""
+    global _current_profile_name
+    _current_profile_name = name
+
+
+def get_current_profile() -> Optional[str]:
+    """Get the current profile name."""
+    return _current_profile_name
+
+
+def get_available_profiles() -> list[str]:
+    """Get list of available profile names (excluding templates)."""
+    profiles = ProfileConfig.list_profiles()
+    # Filter out template profiles
+    return [p for p in profiles if not p.startswith('_')]
+
+
+def load_profile(profile_name: str) -> Optional[ProfileConfig]:
+    """Load a profile by name and update global configuration.
+
+    Returns the loaded ProfileConfig or None if not found.
+    """
+    # Find profile file
+    profile_path = None
+    for ext in ('.yaml', '.yml', '.json'):
+        p = Path(f"profiles/{profile_name}{ext}")
+        if p.exists():
+            profile_path = p
+            break
+
+    if not profile_path:
+        return None
+
+    profile = ProfileConfig.from_file(profile_path)
+
+    # Update global state
+    set_current_profile(profile_name)
+
+    if profile.output_path:
+        set_output_path(profile.output_path)
+
+    return profile
+
+
 # =============================================================================
 # JSON File Operations
 # =============================================================================
@@ -696,6 +745,31 @@ def handle_skip(state: dict):
     return handle_next(state)
 
 
+def handle_profile_change(profile_name: str, state: dict):
+    """Handle profile switch - reload all data for the new profile."""
+    if not profile_name:
+        return state, *get_display_updates(state)
+
+    profile = load_profile(profile_name)
+    if not profile or not profile.output_path:
+        gr.Warning(f"Profile '{profile_name}' not found or has no output path")
+        return state, *get_display_updates(state)
+
+    # Reload entries from the new profile
+    output_path = get_output_path()
+    entries = load_entries(str(output_path))
+
+    # Create new state
+    new_state = {
+        "current_index": 0,
+        "filter_mode": state.get("filter_mode", "Unreviewed") if state else "Unreviewed",
+        "entries": entries,
+        "output_path": str(output_path),
+    }
+
+    return new_state, *get_display_updates(new_state)
+
+
 # =============================================================================
 # Main App
 # =============================================================================
@@ -703,13 +777,26 @@ def handle_skip(state: dict):
 def create_app():
     """Create and configure the Gradio app."""
 
+    # Get available profiles for dropdown
+    available_profiles = get_available_profiles()
+    current_profile = get_current_profile()
+
     with gr.Blocks(title="Lab Review") as demo:
 
         # State
         app_state = gr.State(value=None)
 
-        # Header
-        gr.Markdown("# Lab Extraction Review")
+        # Header with profile selector
+        with gr.Row():
+            with gr.Column(scale=4):
+                gr.Markdown("# Lab Extraction Review")
+            with gr.Column(scale=1):
+                profile_selector = gr.Dropdown(
+                    choices=available_profiles,
+                    value=current_profile,
+                    label="Profile",
+                    interactive=True
+                )
 
         # Filter radio
         filter_radio = gr.Radio(
@@ -810,6 +897,13 @@ def create_app():
             outputs=all_outputs
         )
 
+        # Profile change
+        profile_selector.change(
+            fn=handle_profile_change,
+            inputs=[profile_selector, app_state],
+            outputs=all_outputs
+        )
+
         # Filter change
         filter_radio.change(
             fn=handle_filter_change,
@@ -894,45 +988,47 @@ if __name__ == "__main__":
         print("Example: python review_ui.py --profile tiago")
         sys.exit(1)
 
-    # Load profile
-    profile_path = None
-    for ext in ('.yaml', '.yml', '.json'):
-        p = Path(f"profiles/{args.profile}{ext}")
-        if p.exists():
-            profile_path = p
-            break
-
-    if not profile_path:
+    # Load profile using the helper function
+    profile = load_profile(args.profile)
+    if not profile:
         print(f"Error: Profile '{args.profile}' not found")
         print("Use --list-profiles to see available profiles.")
         sys.exit(1)
 
-    profile = ProfileConfig.from_file(profile_path)
     print(f"Using profile: {profile.name}")
 
     if not profile.output_path:
         print(f"Error: Profile '{args.profile}' has no output_path defined.")
         sys.exit(1)
 
-    output_path = profile.output_path
-    set_output_path(output_path)
-
     # Verify output path exists and has all.csv
+    output_path = get_output_path()
     csv_path = output_path / "all.csv"
     if not csv_path.exists():
         print(f"Error: No all.csv found at {csv_path}")
         print("Run main.py first to extract lab results.")
         sys.exit(1)
 
+    # Build list of allowed paths for serving files from all profiles
+    # This enables profile switching without restart
+    available = get_available_profiles()
+    print(f"Available profiles: {', '.join(available)}")
+
+    allowed_paths = set()
+    for pname in available:
+        p = load_profile(pname)
+        if p and p.output_path:
+            allowed_paths.add(str(p.output_path))
+            if p.output_path.parent != p.output_path:
+                allowed_paths.add(str(p.output_path.parent))
+
+    # Reload the original profile before creating app
+    load_profile(args.profile)
+    allowed_paths = list(allowed_paths)
+
     print(f"Output path: {output_path}")
 
     demo = create_app()
-
-    # Build list of allowed paths for serving images
-    # Include output_path and its parent to handle various output locations
-    allowed_paths = [str(output_path)]
-    if output_path.parent != output_path:
-        allowed_paths.append(str(output_path.parent))
 
     # Run with `gradio review_ui.py` for auto-reload on code changes
     demo.launch(
