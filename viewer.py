@@ -75,12 +75,115 @@ KEYBOARD_JS = r"""
 # =============================================================================
 
 CUSTOM_CSS = """
+/* Status badges */
 .status-accepted { background-color: #198754; color: #ffffff; padding: 8px 12px; border-radius: 5px; font-weight: 600; display: inline-block; }
 .status-rejected { background-color: #dc3545; color: #ffffff; padding: 8px 12px; border-radius: 5px; font-weight: 600; display: inline-block; }
 .status-pending { background-color: #6c757d; color: #ffffff; padding: 8px 12px; border-radius: 5px; font-weight: 600; display: inline-block; }
 .status-warning { background-color: #fd7e14; color: #ffffff; padding: 8px 12px; border-radius: 5px; font-weight: 600; display: inline-block; margin-top: 5px; }
 .status-info { background-color: #0d6efd; color: #ffffff; padding: 8px 12px; border-radius: 5px; font-weight: 600; display: inline-block; margin-top: 5px; }
 .review-actions { margin-top: 10px; }
+
+/* Summary cards - dark mode compatible */
+.summary-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; padding: 8px 0; }
+.stat-card {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 0.9em;
+    background-color: rgba(75, 85, 99, 0.6);
+    border: 1px solid rgba(107, 114, 128, 0.5);
+    color: #e5e7eb;
+}
+.stat-card.warning {
+    background-color: rgba(245, 158, 11, 0.25);
+    border-color: #f59e0b;
+    color: #fcd34d;
+}
+.stat-card.danger {
+    background-color: rgba(239, 68, 68, 0.25);
+    border-color: #ef4444;
+    color: #fca5a5;
+}
+.stat-card.success {
+    background-color: rgba(16, 185, 129, 0.25);
+    border-color: #10b981;
+    color: #6ee7b7;
+}
+
+/* Review reason banner - dark mode compatible */
+.review-banner {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    font-size: 0.9em;
+}
+.review-banner.warning {
+    background-color: rgba(245, 158, 11, 0.2);
+    border: 1px solid #f59e0b;
+    color: #fcd34d;
+}
+.review-banner.info {
+    background-color: rgba(59, 130, 246, 0.2);
+    border: 1px solid #3b82f6;
+    color: #93c5fd;
+}
+.review-banner-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+.review-banner-reasons {
+    font-size: 0.85em;
+    opacity: 0.9;
+}
+
+/* Quick filter pills - dark mode compatible */
+.quick-filter-pills {
+    padding: 4px 0;
+}
+.quick-filter-pills .wrap {
+    gap: 8px !important;
+}
+.quick-filter-pills label {
+    padding: 6px 14px !important;
+    border-radius: 20px !important;
+    font-size: 0.85em !important;
+    font-weight: 500 !important;
+    border: 1px solid rgba(107, 114, 128, 0.5) !important;
+    background-color: rgba(55, 65, 81, 0.6) !important;
+    color: #e5e7eb !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+}
+.quick-filter-pills label:hover {
+    background-color: rgba(75, 85, 99, 0.8) !important;
+    border-color: rgba(156, 163, 175, 0.6) !important;
+}
+.quick-filter-pills input:checked + label {
+    background-color: #3b82f6 !important;
+    border-color: #3b82f6 !important;
+    color: white !important;
+}
+
+/* Compact table display - dark mode compatible */
+#lab-data-table table {
+    font-size: 0.85em;
+}
+#lab-data-table td, #lab-data-table th {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+    padding: 6px 10px !important;
+}
+#lab-data-table tr:hover {
+    background-color: rgba(75, 85, 99, 0.5) !important;
+}
+#lab-data-table tr.selected {
+    background-color: rgba(59, 130, 246, 0.3) !important;
+    border-left: 3px solid #3b82f6;
+}
 """
 
 # =============================================================================
@@ -443,6 +546,118 @@ def get_summary_stats(df: pd.DataFrame) -> str:
     return f"**{total:,} results** | {unique_tests} tests | {abnormal_count} abnormal | {needs_review_count} need review | {reviewed_count} reviewed{date_range}"
 
 
+def build_summary_cards(df: pd.DataFrame) -> str:
+    """Generate HTML summary cards with color coding."""
+    if df.empty:
+        return '<div class="summary-row"><span class="stat-card">No data loaded</span></div>'
+
+    total = len(df)
+    unique_tests = df['lab_name'].nunique() if 'lab_name' in df.columns else 0
+
+    # Date range
+    date_range = ""
+    if 'date' in df.columns and df['date'].notna().any():
+        min_date = df['date'].min()
+        max_date = df['date'].max()
+        if pd.notna(min_date) and pd.notna(max_date):
+            date_range = f"{min_date.strftime('%Y')}-{max_date.strftime('%Y')}"
+
+    # Abnormal count
+    abnormal_count = 0
+    if 'is_out_of_reference' in df.columns:
+        abnormal_count = int(df['is_out_of_reference'].sum())
+
+    # Review counts
+    reviewed_count = 0
+    needs_review_count = 0
+    if 'review_status' in df.columns:
+        reviewed_count = int(df['review_status'].notna().sum())
+    if 'review_needed' in df.columns:
+        # Only count those that need review AND haven't been reviewed yet
+        needs_review_count = int(
+            ((df['review_needed'] == True) &
+             (df['review_status'].isna() | (df['review_status'] == ''))).sum()
+        )
+
+    # Build HTML cards
+    cards = []
+    cards.append(f'<span class="stat-card">{total:,} results</span>')
+    cards.append(f'<span class="stat-card">{unique_tests} tests</span>')
+
+    if date_range:
+        cards.append(f'<span class="stat-card">{date_range}</span>')
+
+    if needs_review_count > 0:
+        cards.append(f'<span class="stat-card warning">{needs_review_count} need review</span>')
+
+    if abnormal_count > 0:
+        cards.append(f'<span class="stat-card danger">{abnormal_count} abnormal</span>')
+
+    if reviewed_count > 0:
+        cards.append(f'<span class="stat-card success">{reviewed_count} reviewed</span>')
+
+    return f'<div class="summary-row">{" ".join(cards)}</div>'
+
+
+# Human-readable descriptions for validation reason codes
+REASON_DESCRIPTIONS = {
+    "IMPOSSIBLE_VALUE": "Biologically impossible value detected",
+    "RELATIONSHIP_MISMATCH": "Calculated value doesn't match related labs",
+    "TEMPORAL_ANOMALY": "Implausible change between consecutive tests",
+    "FORMAT_ARTIFACT": "Possible extraction/formatting error",
+    "RANGE_INCONSISTENCY": "Reference range appears invalid",
+    "PERCENTAGE_BOUNDS": "Percentage value outside 0-100%",
+    "NEGATIVE_VALUE": "Unexpected negative value",
+    "EXTREME_DEVIATION": "Value extremely far outside reference range",
+}
+
+
+def build_review_reason_banner(entry: dict) -> str:
+    """Build HTML banner showing why a result needs review."""
+    if not entry:
+        return ""
+
+    review_needed = entry.get('review_needed')
+    review_reason = entry.get('review_reason')
+    review_confidence = entry.get('review_confidence')
+
+    if not review_needed and not review_reason:
+        return ""
+
+    # Parse reason codes (semicolon-separated)
+    reasons = []
+    if review_reason and pd.notna(review_reason):
+        reason_str = str(review_reason).strip()
+        for code in reason_str.split(';'):
+            code = code.strip()
+            if code and code in REASON_DESCRIPTIONS:
+                reasons.append(REASON_DESCRIPTIONS[code])
+            elif code:
+                reasons.append(code)
+
+    if not reasons and not (review_confidence and pd.notna(review_confidence) and float(review_confidence) < 0.7):
+        return ""
+
+    # Build banner HTML
+    banner_class = "warning" if reasons else "info"
+    title = "Review Needed" if reasons else "Low Confidence"
+
+    html = f'<div class="review-banner {banner_class}">'
+    html += f'<div class="review-banner-title">⚠️ {title}</div>'
+
+    if reasons:
+        html += '<div class="review-banner-reasons">'
+        html += '<br>'.join(f"• {r}" for r in reasons)
+        html += '</div>'
+
+    if review_confidence and pd.notna(review_confidence):
+        conf_val = float(review_confidence)
+        html += f'<div style="margin-top: 4px; font-size: 0.85em;">Confidence: {conf_val:.0%}</div>'
+
+    html += '</div>'
+    return html
+
+
 # =============================================================================
 # Filtering
 # =============================================================================
@@ -454,7 +669,15 @@ def apply_filters(
     latest_only: bool,
     review_filter: str
 ) -> pd.DataFrame:
-    """Apply all filters to DataFrame and sort by date descending."""
+    """Apply all filters to DataFrame and sort by date descending.
+
+    Args:
+        df: Full DataFrame
+        lab_names: List of lab names to filter by (from advanced filters)
+        abnormal_only: Whether to show only abnormal results (from advanced filters)
+        latest_only: Whether to show only latest result per lab (from advanced filters)
+        review_filter: Quick filter option ('All', 'Needs Review', 'Abnormal', 'Unreviewed')
+    """
     if df.empty:
         return df
 
@@ -464,28 +687,21 @@ def apply_filters(
     if lab_names:
         filtered = filtered[filtered['lab_name'].isin(lab_names)]
 
-    # Filter abnormal only
+    # Filter abnormal only (from advanced filters checkbox)
     if abnormal_only and 'is_out_of_reference' in filtered.columns:
         filtered = filtered[filtered['is_out_of_reference'] == True]
 
-    # Filter by review status
+    # Quick filter pills options
     if review_filter == 'Unreviewed':
         filtered = filtered[filtered['review_status'].isna() | (filtered['review_status'] == '')]
-    elif review_filter == 'Accepted':
-        filtered = filtered[filtered['review_status'] == 'accepted']
-    elif review_filter == 'Rejected':
-        filtered = filtered[filtered['review_status'] == 'rejected']
+    elif review_filter == 'Abnormal':
+        # Quick filter for abnormal results
+        if 'is_out_of_reference' in filtered.columns:
+            filtered = filtered[filtered['is_out_of_reference'] == True]
     elif review_filter == 'Needs Review':
         if 'review_needed' in filtered.columns:
             filtered = filtered[
                 (filtered['review_needed'] == True) &
-                (filtered['review_status'].isna() | (filtered['review_status'] == ''))
-            ]
-    elif review_filter == 'Low Confidence':
-        if 'review_confidence' in filtered.columns:
-            filtered = filtered[
-                (filtered['review_confidence'].notna()) &
-                (filtered['review_confidence'] < 0.7) &
                 (filtered['review_status'].isna() | (filtered['review_status'] == ''))
             ]
 
@@ -918,13 +1134,14 @@ def handle_filter_change(
     """Handle filter changes and update display."""
     filtered_df = apply_filters(full_df, lab_names, abnormal_only, latest_only, review_filter)
     display_df = prepare_display_df(filtered_df)
-    summary = get_summary_stats(filtered_df)
+    summary = build_summary_cards(filtered_df)
 
     current_idx = 0
     position_text = "No results"
     image_path = None
     details_html = "<p>No entry selected</p>"
     status_html = ""
+    banner_html = ""
 
     # Determine which labs to plot
     if lab_names:
@@ -940,10 +1157,11 @@ def handle_filter_change(
         image_path = get_image_path(first_row.to_dict(), get_output_path())
         details_html = build_details_html(first_row.to_dict())
         status_html = build_review_status_html(first_row.to_dict())
+        banner_html = build_review_reason_banner(first_row.to_dict())
 
     plot = create_interactive_plot(full_df, plot_labs)
 
-    return display_df, summary, plot, filtered_df, current_idx, position_text, image_path, details_html, status_html
+    return display_df, summary, plot, filtered_df, current_idx, position_text, image_path, details_html, status_html, banner_html
 
 
 def handle_row_select(
@@ -954,7 +1172,7 @@ def handle_row_select(
 ):
     """Handle row selection to update plot, details, and current index."""
     if evt is None or filtered_df.empty:
-        return create_interactive_plot(full_df, []), 0, "No results", None, "<p>No entry selected</p>", ""
+        return create_interactive_plot(full_df, []), 0, "No results", None, "<p>No entry selected</p>", "", ""
 
     if isinstance(evt.index, (list, tuple)):
         row_idx = evt.index[0]
@@ -969,13 +1187,14 @@ def handle_row_select(
     image_path = get_image_path(row.to_dict(), get_output_path())
     details_html = build_details_html(row.to_dict())
     status_html = build_review_status_html(row.to_dict())
+    banner_html = build_review_reason_banner(row.to_dict())
 
     if lab_names:
         plot_labs = lab_names
     else:
         plot_labs = [row.get('lab_name')]
 
-    return create_interactive_plot(full_df, plot_labs), row_idx, position_text, image_path, details_html, status_html
+    return create_interactive_plot(full_df, plot_labs), row_idx, position_text, image_path, details_html, status_html, banner_html
 
 
 def handle_previous(
@@ -986,7 +1205,7 @@ def handle_previous(
 ):
     """Navigate to previous row."""
     if filtered_df.empty:
-        return create_interactive_plot(full_df, []), 0, "No results", None, "<p>No entry selected</p>", ""
+        return create_interactive_plot(full_df, []), 0, "No results", None, "<p>No entry selected</p>", "", ""
 
     new_idx = current_idx - 1
     if new_idx < 0:
@@ -997,13 +1216,14 @@ def handle_previous(
     image_path = get_image_path(row.to_dict(), get_output_path())
     details_html = build_details_html(row.to_dict())
     status_html = build_review_status_html(row.to_dict())
+    banner_html = build_review_reason_banner(row.to_dict())
 
     if lab_names:
         plot_labs = lab_names
     else:
         plot_labs = [row.get('lab_name')]
 
-    return create_interactive_plot(full_df, plot_labs), new_idx, position_text, image_path, details_html, status_html
+    return create_interactive_plot(full_df, plot_labs), new_idx, position_text, image_path, details_html, status_html, banner_html
 
 
 def handle_next(
@@ -1014,7 +1234,7 @@ def handle_next(
 ):
     """Navigate to next row."""
     if filtered_df.empty:
-        return create_interactive_plot(full_df, []), 0, "No results", None, "<p>No entry selected</p>", ""
+        return create_interactive_plot(full_df, []), 0, "No results", None, "<p>No entry selected</p>", "", ""
 
     new_idx = current_idx + 1
     if new_idx >= len(filtered_df):
@@ -1025,13 +1245,14 @@ def handle_next(
     image_path = get_image_path(row.to_dict(), get_output_path())
     details_html = build_details_html(row.to_dict())
     status_html = build_review_status_html(row.to_dict())
+    banner_html = build_review_reason_banner(row.to_dict())
 
     if lab_names:
         plot_labs = lab_names
     else:
         plot_labs = [row.get('lab_name')]
 
-    return create_interactive_plot(full_df, plot_labs), new_idx, position_text, image_path, details_html, status_html
+    return create_interactive_plot(full_df, plot_labs), new_idx, position_text, image_path, details_html, status_html, banner_html
 
 
 def handle_review_action(
@@ -1056,7 +1277,8 @@ def handle_review_action(
             None,  # image
             "<p>No entry selected</p>",  # details
             "",  # status_html
-            get_summary_stats(full_df),  # summary
+            build_summary_cards(full_df),  # summary
+            "",  # banner_html
         )
 
     if current_idx >= len(filtered_df):
@@ -1083,7 +1305,7 @@ def handle_review_action(
     # Re-filter
     filtered_df = apply_filters(full_df, lab_names, abnormal_only, latest_only, review_filter)
     display_df = prepare_display_df(filtered_df)
-    summary = get_summary_stats(full_df)
+    summary = build_summary_cards(full_df)
 
     # Adjust index if needed
     if len(filtered_df) == 0:
@@ -1099,6 +1321,7 @@ def handle_review_action(
             "<p>All entries reviewed in this filter!</p>",
             "",
             summary,
+            "",  # banner_html
         )
 
     if current_idx >= len(filtered_df):
@@ -1109,6 +1332,7 @@ def handle_review_action(
     image_path = get_image_path(row.to_dict(), get_output_path())
     details_html = build_details_html(row.to_dict())
     status_html = build_review_status_html(row.to_dict())
+    banner_html = build_review_reason_banner(row.to_dict())
 
     if lab_names:
         plot_labs = lab_names
@@ -1128,6 +1352,7 @@ def handle_review_action(
         details_html,
         status_html,
         summary,
+        banner_html,
     )
 
 
@@ -1189,7 +1414,7 @@ def handle_profile_change(profile_name: str):
     if not profile_name:
         return (
             pd.DataFrame(),  # display_df
-            "No profile selected",  # summary
+            '<div class="summary-row"><span class="stat-card">No profile selected</span></div>',  # summary
             go.Figure(),  # plot
             pd.DataFrame(),  # full_df
             pd.DataFrame(),  # filtered_df
@@ -1199,13 +1424,14 @@ def handle_profile_change(profile_name: str):
             [],  # lab_name_choices
             "<p>No entry selected</p>",  # details
             "",  # status_html
+            "",  # banner_html
         )
 
     profile = load_profile(profile_name)
     if not profile or not profile.output_path:
         return (
             pd.DataFrame(),
-            f"Profile '{profile_name}' not found or has no output path",
+            f'<div class="summary-row"><span class="stat-card warning">Profile \'{profile_name}\' not found or has no output path</span></div>',
             go.Figure(),
             pd.DataFrame(),
             pd.DataFrame(),
@@ -1215,6 +1441,7 @@ def handle_profile_change(profile_name: str):
             [],
             "<p>No entry selected</p>",
             "",
+            "",  # banner_html
         )
 
     output_path = get_output_path()
@@ -1228,14 +1455,22 @@ def handle_profile_change(profile_name: str):
         lab_name_choices = sorted(full_df['lab_name'].dropna().unique().tolist())
 
     display_df = prepare_display_df(full_df)
-    summary = get_summary_stats(full_df)
+    summary = build_summary_cards(full_df)
 
     position_text = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
     image_path = get_image_path(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
     details_html = build_details_html(full_df.iloc[0].to_dict()) if not full_df.empty else "<p>No entry selected</p>"
     status_html = build_review_status_html(full_df.iloc[0].to_dict()) if not full_df.empty else ""
+    banner_html = build_review_reason_banner(full_df.iloc[0].to_dict()) if not full_df.empty else ""
 
-    plot = create_interactive_plot(full_df, [])
+    # Auto-select first row - show its plot
+    initial_plot_labs = []
+    if not full_df.empty:
+        first_lab = full_df.iloc[0].get('lab_name')
+        if first_lab:
+            initial_plot_labs = [first_lab]
+
+    plot = create_interactive_plot(full_df, initial_plot_labs)
 
     return (
         display_df,
@@ -1249,6 +1484,7 @@ def handle_profile_change(profile_name: str):
         gr.update(choices=lab_name_choices, value=[]),
         details_html,
         status_html,
+        banner_html,
     )
 
 
@@ -1273,10 +1509,17 @@ def create_app():
     initial_details = build_details_html(full_df.iloc[0].to_dict()) if not full_df.empty else "<p>No entry selected</p>"
     initial_status = build_review_status_html(full_df.iloc[0].to_dict()) if not full_df.empty else ""
 
+    # Auto-select first row - get its lab name for the initial plot
+    initial_plot_labs = []
+    if not full_df.empty:
+        first_lab = full_df.iloc[0].get('lab_name')
+        if first_lab:
+            initial_plot_labs = [first_lab]
+
     available_profiles = get_available_profiles()
     current_profile = get_current_profile()
 
-    with gr.Blocks(title="Lab Results Viewer", css=CUSTOM_CSS) as demo:
+    with gr.Blocks(title="Lab Results Viewer") as demo:
 
         # State variables
         full_df_state = gr.State(value=full_df)
@@ -1298,28 +1541,32 @@ def create_app():
 
         gr.Markdown("Browse, analyze, and review extracted lab results.")
 
-        # Filters Row
+        # Quick filter pills row
         with gr.Row():
-            with gr.Column(scale=2):
-                lab_name_filter = gr.Dropdown(
-                    choices=lab_name_choices,
-                    multiselect=True,
-                    value=[],
-                    label="Lab Names",
-                    allow_custom_value=False
-                )
-            with gr.Column(scale=1):
-                abnormal_filter = gr.Checkbox(label="Abnormal Only", value=False)
-                latest_filter = gr.Checkbox(label="Latest Only", value=False)
-            with gr.Column(scale=1):
-                review_filter = gr.Dropdown(
-                    choices=['All', 'Unreviewed', 'Needs Review', 'Low Confidence', 'Accepted', 'Rejected'],
-                    value='All',
-                    label="Review Status"
-                )
+            review_filter = gr.Radio(
+                choices=['All', 'Needs Review', 'Abnormal', 'Unreviewed'],
+                value='All',
+                label="Quick Filters",
+                elem_classes="quick-filter-pills"
+            )
 
-        # Summary statistics
-        summary_display = gr.Markdown(get_summary_stats(full_df))
+        # Summary cards
+        summary_display = gr.HTML(build_summary_cards(full_df))
+
+        # Collapsible advanced filters
+        with gr.Accordion("Advanced Filters", open=False):
+            with gr.Row():
+                with gr.Column(scale=2):
+                    lab_name_filter = gr.Dropdown(
+                        choices=lab_name_choices,
+                        multiselect=True,
+                        value=[],
+                        label="Lab Names",
+                        allow_custom_value=False
+                    )
+                with gr.Column(scale=1):
+                    abnormal_filter = gr.Checkbox(label="Abnormal Only", value=False)
+                    latest_filter = gr.Checkbox(label="Latest Only", value=False)
 
         gr.Markdown("---")
 
@@ -1353,7 +1600,7 @@ def create_app():
                 with gr.Tabs():
                     with gr.TabItem("Plot"):
                         plot_display = gr.Plot(
-                            value=create_interactive_plot(full_df, []),
+                            value=create_interactive_plot(full_df, initial_plot_labs),
                             label=""
                         )
                     with gr.TabItem("Source"):
@@ -1369,8 +1616,13 @@ def create_app():
 
                 gr.Markdown("---")
 
-                # Review section
+                # Review section with reason banner
                 gr.Markdown("### Review")
+
+                # Review reason banner (shows why item needs review)
+                initial_banner = build_review_reason_banner(full_df.iloc[0].to_dict()) if not full_df.empty else ""
+                review_reason_banner = gr.HTML(value=initial_banner)
+
                 with gr.Row():
                     review_status_display = gr.HTML(value=initial_status)
 
@@ -1412,12 +1664,13 @@ def create_app():
                 lab_name_filter,
                 details_display,
                 review_status_display,
+                review_reason_banner,
             ]
         )
 
         # Filter inputs and outputs
         filter_inputs = [lab_name_filter, abnormal_filter, latest_filter, review_filter, full_df_state]
-        filter_outputs = [data_table, summary_display, plot_display, filtered_df_state, current_idx_state, position_display, source_image, details_display, review_status_display]
+        filter_outputs = [data_table, summary_display, plot_display, filtered_df_state, current_idx_state, position_display, source_image, details_display, review_status_display, review_reason_banner]
 
         lab_name_filter.change(fn=handle_filter_change, inputs=filter_inputs, outputs=filter_outputs)
         abnormal_filter.change(fn=handle_filter_change, inputs=filter_inputs, outputs=filter_outputs)
@@ -1428,19 +1681,19 @@ def create_app():
         data_table.select(
             fn=handle_row_select,
             inputs=[filtered_df_state, full_df_state, lab_name_filter],
-            outputs=[plot_display, current_idx_state, position_display, source_image, details_display, review_status_display]
+            outputs=[plot_display, current_idx_state, position_display, source_image, details_display, review_status_display, review_reason_banner]
         )
 
         # Navigation buttons
         nav_inputs = [current_idx_state, filtered_df_state, full_df_state, lab_name_filter]
-        nav_outputs = [plot_display, current_idx_state, position_display, source_image, details_display, review_status_display]
+        nav_outputs = [plot_display, current_idx_state, position_display, source_image, details_display, review_status_display, review_reason_banner]
 
         prev_btn.click(fn=handle_previous, inputs=nav_inputs, outputs=nav_outputs)
         next_btn.click(fn=handle_next, inputs=nav_inputs, outputs=nav_outputs)
 
         # Review action buttons
         review_inputs = [current_idx_state, filtered_df_state, full_df_state, lab_name_filter, abnormal_filter, latest_filter, review_filter]
-        review_outputs = [full_df_state, filtered_df_state, data_table, plot_display, current_idx_state, position_display, source_image, details_display, review_status_display, summary_display]
+        review_outputs = [full_df_state, filtered_df_state, data_table, plot_display, current_idx_state, position_display, source_image, details_display, review_status_display, summary_display, review_reason_banner]
 
         accept_btn.click(fn=handle_accept, inputs=review_inputs, outputs=review_outputs)
         reject_btn.click(fn=handle_reject, inputs=review_inputs, outputs=review_outputs)
@@ -1566,4 +1819,5 @@ if __name__ == "__main__":
         show_error=True,
         allowed_paths=allowed_paths,
         head=KEYBOARD_JS,
+        css=CUSTOM_CSS,
     )
