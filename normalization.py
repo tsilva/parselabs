@@ -311,6 +311,65 @@ def apply_unit_conversions(
             df.loc[unit_mask, "reference_max_primary"] = df.loc[unit_mask, "reference_max_raw"] * factor
             df.loc[unit_mask, "lab_unit_primary"] = primary_unit
 
+    # Sanitize percentage reference ranges (discard wrong-unit ranges)
+    df = sanitize_percentage_reference_ranges(df)
+
+    return df
+
+
+def sanitize_percentage_reference_ranges(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Discard reference ranges that are clearly in the wrong unit for percentage labs.
+
+    For labs with unit '%', detects when extracted reference ranges appear to be
+    in absolute count units (common for leucocyte fractions where PDFs show
+    absolute count ranges alongside percentage values).
+
+    Detection heuristic:
+    - If value > ref_max * 5: range is clearly wrong (e.g., 77% vs range 2.1-7.6)
+    - If ref_max > 100: invalid percentage range
+
+    Args:
+        df: DataFrame with lab results containing reference range columns
+
+    Returns:
+        DataFrame with suspicious reference ranges nullified
+    """
+    if df.empty:
+        return df
+
+    unit_col = "lab_unit_primary" if "lab_unit_primary" in df.columns else "lab_unit_standardized"
+    value_col = "value_primary" if "value_primary" in df.columns else "value_raw"
+    ref_min_col = "reference_min_primary" if "reference_min_primary" in df.columns else "reference_min_raw"
+    ref_max_col = "reference_max_primary" if "reference_max_primary" in df.columns else "reference_max_raw"
+
+    if unit_col not in df.columns or value_col not in df.columns:
+        return df
+
+    # Find percentage labs
+    percentage_mask = df[unit_col] == '%'
+
+    if not percentage_mask.any():
+        return df
+
+    # Condition 1: value > ref_max * 5 (clear unit mismatch)
+    # Condition 2: ref_max > 100 (invalid percentage)
+    suspicious_mask = percentage_mask & (
+        df[ref_max_col].notna() &
+        (
+            (df[value_col].notna() & (df[value_col] > df[ref_max_col] * 5)) |
+            (df[ref_max_col] > 100)
+        )
+    )
+
+    if suspicious_mask.any():
+        count = suspicious_mask.sum()
+        logger.info(f"[normalization] Discarding {count} suspicious reference ranges for percentage labs (likely wrong unit)")
+
+        # Nullify the reference ranges
+        df.loc[suspicious_mask, ref_min_col] = pd.NA
+        df.loc[suspicious_mask, ref_max_col] = pd.NA
+
     return df
 
 
