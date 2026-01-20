@@ -382,14 +382,7 @@ def process_single_pdf(
 
         if used_text_extraction and text_extraction_data:
             # Use text extraction results
-            doc_date = text_extraction_data.get("collection_date") or text_extraction_data.get("report_date")
-            if doc_date == "0000-00-00":
-                doc_date = None
-            if not doc_date:
-                # Try to extract from filename
-                match = re.search(r"(\d{4}-\d{2}-\d{2})", pdf_stem)
-                if match:
-                    doc_date = match.group(1)
+            doc_date = _extract_document_date(text_extraction_data, pdf_stem)
 
             # Add page metadata to results (all from "page 1" since text extraction is whole-document)
             for result_idx, result in enumerate(text_extraction_data.get("lab_results", [])):
@@ -461,14 +454,7 @@ def process_single_pdf(
 
                 # Extract date from first page
                 if page_idx == 0:
-                    doc_date = page_data.get("collection_date") or page_data.get("report_date")
-                    if doc_date == "0000-00-00":
-                        doc_date = None
-                    if not doc_date:
-                        # Try to extract from filename
-                        match = re.search(r"(\d{4}-\d{2}-\d{2})", pdf_stem)
-                        if match:
-                            doc_date = match.group(1)
+                    doc_date = _extract_document_date(page_data, pdf_stem)
 
                 # Add page metadata and result index to results
                 for result_idx, result in enumerate(page_data.get("lab_results", [])):
@@ -623,6 +609,26 @@ def export_excel(
 # ========================================
 # Helpers
 # ========================================
+
+def _extract_document_date(data_dict: dict, pdf_stem: str) -> str | None:
+    """Extract document date from extraction data or filename.
+
+    Args:
+        data_dict: Dict containing collection_date or report_date fields
+        pdf_stem: PDF filename stem (without extension) to extract date from
+
+    Returns:
+        Date string in YYYY-MM-DD format, or None if not found
+    """
+    doc_date = data_dict.get("collection_date") or data_dict.get("report_date")
+    if doc_date == "0000-00-00":
+        doc_date = None
+    if not doc_date:
+        match = re.search(r"(\d{4}-\d{2}-\d{2})", pdf_stem)
+        if match:
+            doc_date = match.group(1)
+    return doc_date
+
 
 def _get_csv_path(pdf_path: Path, output_path: Path) -> Path:
     """Get the output CSV path for a given PDF file."""

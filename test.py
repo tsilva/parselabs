@@ -1,6 +1,7 @@
 import pandas as pd
 import hashlib
 import json
+from functools import wraps
 from dotenv import dotenv_values
 import os
 
@@ -8,6 +9,23 @@ import os
 env = dotenv_values(".env")
 OUTPUT_PATH = env.get("OUTPUT_PATH", "output")
 ALL_FINAL_CSV = os.path.join(OUTPUT_PATH, "all.csv")
+
+
+def integrity_test(func):
+    """Decorator that handles common test boilerplate: file loading, error handling, and reporting."""
+    @wraps(func)
+    def wrapper(report):
+        file = ALL_FINAL_CSV
+        errors = []
+        try:
+            df = pd.read_csv(file)
+            func(df, report, errors)
+        except Exception as e:
+            errors.append(f"Exception: {e}")
+        if errors:
+            report.setdefault(file, []).extend(errors)
+    return wrapper
+
 
 def test_all_rows_have_dates_and_no_duplicates(report):
     file = ALL_FINAL_CSV
@@ -190,11 +208,13 @@ def test_unique_date_lab_name_standardized(report):
             # Check for duplicate (date, lab_name_standardized) pairs
             duplicates = df.duplicated(subset=['date', 'lab_name_standardized'], keep=False)
             if duplicates.any():
-                dup_rows = df[duplicates][['date', 'lab_name_standardized']]
-                for idx, row in dup_rows.iterrows():
-                    source_file = df.loc[idx].get('source_file', 'unknown')
+                dup_df = df[duplicates]
+                for row in dup_df.itertuples():
+                    source_file = getattr(row, 'source_file', 'unknown') or 'unknown'
+                    date_val = getattr(row, 'date', '')
+                    lab_name = getattr(row, 'lab_name_standardized', '')
                     report.setdefault(source_file, []).append(
-                        f"Duplicate (date, lab_name_standardized) at index {idx}: date={row['date']}, lab_name_standardized={row['lab_name_standardized']}"
+                        f"Duplicate (date, lab_name_standardized) at index {row.Index}: date={date_val}, lab_name_standardized={lab_name}"
                     )
     except Exception as e:
         errors.append(f"Exception: {e}")
