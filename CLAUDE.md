@@ -30,10 +30,13 @@ python viewer.py --profile tsilva
 
 ### Development
 The `utils/` directory contains helper scripts for building and maintaining configuration:
+- `validate_lab_specs_schema.py` - Validate lab_specs.json schema and LOINC code presence
 - `build_lab_specs_conversions.py` - Generate unit conversion factors for lab_specs.json
 - `build_lab_specs_ranges.py` - Generate healthy ranges for lab_specs.json
 - `sort_lab_specs.py` - Sort lab specifications alphabetically
 - `analyze_unknowns.py` - Analyze $UNKNOWN$ values in extracted results
+
+See `utils/README.md` for detailed usage instructions.
 
 ## Architecture
 
@@ -134,15 +137,17 @@ workers: 4
 Note: Model IDs are configured via `.env` only (not in profiles). Paths are configured via profiles only (not in `.env`).
 
 **Lab Specs** (`config/lab_specs.json`):
-- 335 standardized lab test names
+- 328 standardized lab test names
 - Primary units and conversion factors
 - Reference ranges (for review tool)
+- LOINC codes for lab test identification and interoperability (required for all labs)
 
 Example entry:
 ```json
 {
   "Blood - Glucose": {
     "primary_unit": "mg/dL",
+    "loinc_code": "2345-7",
     "alternatives": [
       {"unit": "mmol/L", "factor": 18.0}
     ],
@@ -205,6 +210,7 @@ For each PDF `{doc_stem}.pdf`:
 Final outputs in `OUTPUT_PATH`:
 - `all.csv` - Merged results from all documents
 - `all.xlsx` - Excel with formatted data
+- `lab_specs.json` - Copy of lab specifications used for this extraction (for reproducibility)
 
 ## Environment Configuration
 
@@ -220,7 +226,23 @@ Note: Input and output paths must be specified via profiles. See `profiles/_temp
 
 ## Validation (test.py)
 
-The test suite validates data integrity:
+The test suite validates both configuration and data integrity:
+
+### Configuration Validation
+- **Schema validation** (via `utils/validate_lab_specs_schema.py`):
+  - JSON structure and syntax
+  - Required fields for all labs (lab_type, primary_unit, loinc_code)
+  - Data types and value ranges
+  - LOINC code presence (all labs must have LOINC codes except known exceptions)
+  - Relationship configurations
+  - Lab name prefixes match lab_type
+  - Unit conversion factors
+  - Reference range consistency
+- **LOINC-specific checks**:
+  - Critical LOINC codes are correct (AAT, ALP, Bilirubin, etc.)
+  - No duplicate LOINC codes across different test types
+
+### Data Integrity Validation
 - All rows have dates
 - No duplicate rows (by hash)
 - No duplicate (date, lab_name) pairs
@@ -230,6 +252,11 @@ The test suite validates data integrity:
 - Outlier detection (>3 std from mean)
 
 Run with `python test.py` - prints report to console.
+
+You can also run the schema validator standalone:
+```bash
+python utils/validate_lab_specs_schema.py
+```
 
 ## Important Conventions
 

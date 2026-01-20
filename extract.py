@@ -935,6 +935,12 @@ def main():
     # Load lab specs
     lab_specs = LabSpecsConfig()
 
+    # Copy lab specs to output folder for reproducibility
+    if lab_specs.exists:
+        lab_specs_dest = config.output_path / "lab_specs.json"
+        shutil.copy2(lab_specs.config_path, lab_specs_dest)
+        logger.info(f"Copied lab specs to output: {lab_specs_dest}")
+
     # Get column configuration
     export_cols, hidden_cols, widths, dtypes = get_column_lists(COLUMN_SCHEMA)
 
