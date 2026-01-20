@@ -407,12 +407,17 @@ def load_data(output_path: Path) -> pd.DataFrame:
     json_cache = {}
     review_statuses = []
 
-    for idx, row in df.iterrows():
-        result_index = row.get('result_index')
+    for row in df.itertuples():
+        result_index = getattr(row, 'result_index', None)
         review_status = None
 
         if result_index is not None and pd.notna(result_index):
-            json_path = get_json_path(row.to_dict(), output_path)
+            # Build entry dict with only fields needed for get_json_path
+            entry = {
+                'source_file': getattr(row, 'source_file', ''),
+                'page_number': getattr(row, 'page_number', None)
+            }
+            json_path = get_json_path(entry, output_path)
             json_path_str = str(json_path)
 
             if json_path_str not in json_cache:
