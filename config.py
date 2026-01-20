@@ -385,3 +385,25 @@ class LabSpecsConfig:
         if non_percentage_variant in self._specs:
             return non_percentage_variant
         return None
+
+    def get_loinc_code(self, lab_name: str) -> Optional[str]:
+        """Get LOINC code for a lab test if available.
+
+        LOINC (Logical Observation Identifiers Names and Codes) is a
+        universal standard for identifying laboratory observations.
+
+        Args:
+            lab_name: Standardized lab name
+
+        Returns:
+            LOINC code string (e.g., "1558-6") or None if not configured
+
+        Example:
+            >>> lab_specs.get_loinc_code("Blood - Glucose (Fasting)")
+            "1558-6"
+            >>> lab_specs.get_loinc_code("Blood - Unknown Test")
+            None
+        """
+        if lab_name not in self._specs:
+            return None
+        return self._specs[lab_name].get('loinc_code')

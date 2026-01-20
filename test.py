@@ -4,6 +4,7 @@ import json
 from functools import wraps
 from dotenv import dotenv_values
 import os
+import sys
 
 # Load OUTPUT_PATH from .env
 env = dotenv_values(".env")
@@ -221,8 +222,139 @@ def test_unique_date_lab_name_standardized(report):
     if errors:
         report.setdefault(file, []).extend(errors)
 
+def test_loinc_critical_codes(report):
+    """Ensure critical LOINC codes are correct."""
+    file = "config/lab_specs.json"
+    errors = []
+    try:
+        with open(file, 'r') as f:
+            config = json.load(f)
+
+        # AAT must not be 6768-6 (that's ALP)
+        if 'Blood - Alpha-1-Antitrypsin (AAT)' in config:
+            aat_code = config['Blood - Alpha-1-Antitrypsin (AAT)'].get('loinc_code')
+            if aat_code != "1825-9":
+                errors.append(f"AAT code should be 1825-9, got {aat_code}")
+
+        # ALP should be 6768-6
+        if 'Blood - Alkaline Phosphatase (ALP)' in config:
+            alp_code = config['Blood - Alkaline Phosphatase (ALP)'].get('loinc_code')
+            if alp_code != "6768-6":
+                errors.append(f"ALP code should be 6768-6, got {alp_code}")
+
+        # Bilirubin Total should have 1975-2
+        if 'Blood - Bilirubin Total' in config:
+            bili_code = config['Blood - Bilirubin Total'].get('loinc_code')
+            if bili_code != "1975-2":
+                errors.append(f"Bilirubin Total should be 1975-2, got {bili_code}")
+
+        # Hemolysis tests should NOT have 1975-2
+        hemolysis_tests = [
+            'Blood - Hemolysis (total, immediate) (%)',
+            'Blood - Hemolysis (total, after incubation) (%)',
+            'Blood - Hemolysis (initial, immediate) (%)',
+            'Blood - Hemolysis (initial, after incubation) (%)'
+        ]
+        for test_name in hemolysis_tests:
+            if test_name in config:
+                code = config[test_name].get('loinc_code')
+                if code == "1975-2":
+                    errors.append(f"{test_name} should not share code 1975-2 with Bilirubin")
+
+        # Albumin (%) should have 13980-8
+        if 'Blood - Albumin (%)' in config:
+            albumin_code = config['Blood - Albumin (%)'].get('loinc_code')
+            if albumin_code != "13980-8":
+                errors.append(f"Albumin (%) should be 13980-8, got {albumin_code}")
+
+        # Alpha-1 Globulins (%) should have 13978-2
+        if 'Blood - Alpha-1 Globulins (%)' in config:
+            alpha1_code = config['Blood - Alpha-1 Globulins (%)'].get('loinc_code')
+            if alpha1_code != "13978-2":
+                errors.append(f"Alpha-1 Globulins (%) should be 13978-2, got {alpha1_code}")
+
+    except Exception as e:
+        errors.append(f"Exception: {e}")
+    if errors:
+        report.setdefault(file, []).extend(errors)
+
+
+def test_no_critical_loinc_duplicates(report):
+    """Ensure completely different tests don't share LOINC codes."""
+    file = "config/lab_specs.json"
+    errors = []
+    try:
+        with open(file, 'r') as f:
+            config = json.load(f)
+
+        # Build reverse mapping
+        loinc_to_tests = {}
+        for name, spec in config.items():
+            if name.startswith('_'):
+                continue
+            code = spec.get('loinc_code')
+            if code:
+                if code not in loinc_to_tests:
+                    loinc_to_tests[code] = []
+                loinc_to_tests[code].append(name)
+
+        # Check for known bad duplications
+        critical_pairs = [
+            ("Alkaline Phosphatase", "Alpha-1-Antitrypsin"),
+            ("Bilirubin", "Hemolysis"),
+            ("Albumin (%)", "Alpha-1 Globulin"),
+        ]
+
+        for code, tests in loinc_to_tests.items():
+            for pair in critical_pairs:
+                has_first = any(pair[0] in t for t in tests)
+                has_second = any(pair[1] in t for t in tests)
+                if has_first and has_second:
+                    errors.append(
+                        f"LOINC {code} incorrectly shared between {pair[0]} and {pair[1]}: {tests}"
+                    )
+
+    except Exception as e:
+        errors.append(f"Exception: {e}")
+    if errors:
+        report.setdefault(file, []).extend(errors)
+
+
+def test_lab_specs_schema(report):
+    """Validate lab_specs.json schema and completeness."""
+    file = "config/lab_specs.json"
+    errors = []
+
+    try:
+        # Import the validator
+        sys.path.insert(0, 'utils')
+        from validate_lab_specs_schema import LabSpecsValidator
+
+        # Run validation
+        validator = LabSpecsValidator()
+        is_valid = validator.validate()
+
+        # Collect errors
+        if validator.errors:
+            errors.extend(validator.errors)
+
+        # Note: warnings are informational only, not failures
+
+    except Exception as e:
+        errors.append(f"Exception during schema validation: {e}")
+
+    if errors:
+        report.setdefault(file, []).extend(errors)
+
+
 def main():
     report = {}
+    # Schema validation first (validates config structure)
+    test_lab_specs_schema(report)
+    # Then LOINC-specific validations
+    test_loinc_critical_codes(report)
+    test_no_critical_loinc_duplicates(report)
+    # Then data integrity tests
     test_all_rows_have_dates_and_no_duplicates(report)
     test_lab_unit_percent_vs_lab_name(report)
     test_lab_unit_percent_value_range(report)

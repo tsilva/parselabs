@@ -29,7 +29,7 @@
       "tolerance_percent": 10
     }
   ],
-  "Blood - 1,25-OH₂ Vitamin D": {
+  "Blood - 1,25-OH\u2082 Vitamin D": {
     "lab_type": "blood",
     "primary_unit": "pg/mL",
     "alternatives": [
@@ -43,7 +43,8 @@
         19.9,
         79.3
       ]
-    }
+    },
+    "loinc_code": "1673-1"
   },
   "Blood - 17-OH Progesterone": {
     "lab_type": "blood",
@@ -54,7 +55,8 @@
         0.15,
         2.9
       ]
-    }
+    },
+    "loinc_code": "1668-1"
   },
   "Blood - 25-OH Vitamin D": {
     "lab_type": "blood",
@@ -65,11 +67,11 @@
         "factor": 0.4
       },
       {
-        "unit": "µg/L",
+        "unit": "\u00b5g/L",
         "factor": 1.0
       },
       {
-        "unit": "µg/dL",
+        "unit": "\u00b5g/dL",
         "factor": 10.0
       },
       {
@@ -82,7 +84,8 @@
         20.0,
         50.0
       ]
-    }
+    },
+    "loinc_code": "1989-3"
   },
   "Blood - 4-Androstenedione": {
     "lab_type": "blood",
@@ -93,7 +96,8 @@
         0.3,
         3.5
       ]
-    }
+    },
+    "loinc_code": "2679-0"
   },
   "Blood - 5'-Nucleotidase (5'-NT)": {
     "lab_type": "blood",
@@ -104,7 +108,8 @@
         2.0,
         15.0
       ]
-    }
+    },
+    "loinc_code": "1823-4"
   },
   "Blood - AST (SGOT)": {
     "lab_type": "blood",
@@ -115,11 +120,11 @@
         "factor": 1.0
       },
       {
-        "unit": "U/L a 37°",
+        "unit": "U/L a 37\u00b0",
         "factor": 1.0
       },
       {
-        "unit": "U/L a 37º",
+        "unit": "U/L a 37\u00ba",
         "factor": 1.0
       }
     ],
@@ -136,7 +141,8 @@
         9,
         32
       ]
-    }
+    },
+    "loinc_code": "1920-8"
   },
   "Blood - Activated Partial Thromboplastin Time (aPTT)": {
     "lab_type": "blood",
@@ -147,7 +153,8 @@
         25.0,
         35.0
       ]
-    }
+    },
+    "loinc_code": "3173-2"
   },
   "Blood - Adrenocorticotropic Hormone (ACTH)": {
     "lab_type": "blood",
@@ -158,15 +165,25 @@
         6.0,
         50.0
       ]
-    }
+    },
+    "loinc_code": "2141-0"
   },
   "Blood - Alanine Aminotransferase (ALT)": {
     "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [
-      {"unit": "U/L", "factor": 1.0},
-      {"unit": "U/L a 37°", "factor": 1.0},
-      {"unit": "U/L a 37º", "factor": 1.0}
+      {
+        "unit": "U/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "U/L a 37\u00b0",
+        "factor": 1.0
+      },
+      {
+        "unit": "U/L a 37\u00ba",
+        "factor": 1.0
+      }
     ],
     "ranges": {
       "default": [
@@ -181,7 +198,8 @@
         7,
         45
       ]
-    }
+    },
+    "loinc_code": "1742-6"
   },
   "Blood - Albumin": {
     "lab_type": "blood",
@@ -197,7 +215,8 @@
         3.5,
         5.0
       ]
-    }
+    },
+    "loinc_code": "1751-7"
   },
   "Blood - Albumin (%)": {
     "lab_type": "blood",
@@ -208,7 +227,8 @@
         55.0,
         65.0
       ]
-    }
+    },
+    "loinc_code": "13980-8"
   },
   "Blood - Albumin/Globulin Ratio": {
     "lab_type": "blood",
@@ -219,15 +239,25 @@
         1.1,
         2.5
       ]
-    }
+    },
+    "loinc_code": "1759-0"
   },
   "Blood - Alkaline Phosphatase (ALP)": {
     "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [
-      {"unit": "U/L", "factor": 1.0},
-      {"unit": "U/L a 37°", "factor": 1.0},
-      {"unit": "U/L a 37º", "factor": 1.0}
+      {
+        "unit": "U/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "U/L a 37\u00b0",
+        "factor": 1.0
+      },
+      {
+        "unit": "U/L a 37\u00ba",
+        "factor": 1.0
+      }
     ],
     "ranges": {
       "default": [
@@ -250,7 +280,8 @@
         100,
         400
       ]
-    }
+    },
+    "loinc_code": "6768-6"
   },
   "Blood - Alpha-1 Globulins": {
     "lab_type": "blood",
@@ -266,7 +297,8 @@
         0.1,
         0.3
       ]
-    }
+    },
+    "loinc_code": "2862-1"
   },
   "Blood - Alpha-1 Globulins (%)": {
     "lab_type": "blood",
@@ -277,7 +309,8 @@
         2.9,
         4.9
       ]
-    }
+    },
+    "loinc_code": "13978-2"
   },
   "Blood - Alpha-1-Antitrypsin (AAT)": {
     "lab_type": "blood",
@@ -288,7 +321,8 @@
         90,
         200
       ]
-    }
+    },
+    "loinc_code": "1825-9"
   },
   "Blood - Alpha-2 Globulins": {
     "lab_type": "blood",
@@ -304,7 +338,8 @@
         0.6,
         1.0
       ]
-    }
+    },
+    "loinc_code": "2865-4"
   },
   "Blood - Alpha-2 Globulins (%)": {
     "lab_type": "blood",
@@ -315,7 +350,8 @@
         7.0,
         13.0
       ]
-    }
+    },
+    "loinc_code": "13981-6"
   },
   "Blood - Alpha-Fetoprotein (AFP)": {
     "lab_type": "blood",
@@ -334,18 +370,20 @@
         0.0,
         7.0
       ]
-    }
+    },
+    "loinc_code": "1834-1"
   },
   "Blood - Ammonia": {
     "lab_type": "blood",
-    "primary_unit": "µmol/L",
+    "primary_unit": "\u00b5mol/L",
     "alternatives": [],
     "ranges": {
       "default": [
         11.0,
         60
       ]
-    }
+    },
+    "loinc_code": "1841-6"
   },
   "Blood - Amylase (alpha-Amylase)": {
     "lab_type": "blood",
@@ -356,7 +394,8 @@
         30.0,
         110.0
       ]
-    }
+    },
+    "loinc_code": "1798-8"
   },
   "Blood - Anisocytosis": {
     "lab_type": "blood",
@@ -367,7 +406,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "10378-8"
   },
   "Blood - Anti-Cardiolipin IgG": {
     "lab_type": "blood",
@@ -378,7 +418,8 @@
         0.0,
         120.0
       ]
-    }
+    },
+    "loinc_code": "5247-1"
   },
   "Blood - Anti-Cardiolipin IgM": {
     "lab_type": "blood",
@@ -389,7 +430,8 @@
         0.0,
         120.0
       ]
-    }
+    },
+    "loinc_code": "5248-9"
   },
   "Blood - Anti-Cyclic Citrullinated Peptide Antibody (Anti-CCP Ab)": {
     "lab_type": "blood",
@@ -400,7 +442,8 @@
         0.0,
         17.0
       ]
-    }
+    },
+    "loinc_code": "30935-1"
   },
   "Blood - Anti-Cytomegalovirus IgG": {
     "lab_type": "blood",
@@ -411,7 +454,8 @@
         "factor": 1.0
       }
     ],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "7851-9"
   },
   "Blood - Anti-Cytomegalovirus IgM": {
     "lab_type": "blood",
@@ -422,7 +466,8 @@
         "factor": 1.0
       }
     ],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "7852-7"
   },
   "Blood - Anti-Dopamine D2 Receptor Antibody (D2R)": {
     "lab_type": "blood",
@@ -433,7 +478,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": ""
   },
   "Blood - Anti-Double-Stranded DNA Antibody IgG (Anti-dsDNA IgG)": {
     "lab_type": "blood",
@@ -444,19 +490,22 @@
         0.0,
         30.0
       ]
-    }
+    },
+    "loinc_code": "31348-6"
   },
   "Blood - Anti-Endomysial Antibody (IgA)": {
     "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "25399-1"
   },
   "Blood - Anti-Endomysial Antibody (IgG)": {
     "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "25383-5"
   },
   "Blood - Anti-Epstein-Barr Virus (EBV) VCA IgG": {
     "lab_type": "blood",
@@ -467,7 +516,8 @@
         "factor": 1.0
       }
     ],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "7885-7"
   },
   "Blood - Anti-Epstein-Barr Virus (EBV) VCA IgM": {
     "lab_type": "blood",
@@ -478,7 +528,8 @@
         "factor": 1.0
       }
     ],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "7886-5"
   },
   "Blood - Anti-Gliadin IgA": {
     "lab_type": "blood",
@@ -489,7 +540,8 @@
         0.0,
         20.0
       ]
-    }
+    },
+    "loinc_code": "16901-9"
   },
   "Blood - Anti-Gliadin IgG": {
     "lab_type": "blood",
@@ -500,7 +552,8 @@
         0.0,
         20.0
       ]
-    }
+    },
+    "loinc_code": "16902-7"
   },
   "Blood - Anti-HBc (IgG + IgM)": {
     "lab_type": "blood",
@@ -511,7 +564,8 @@
         1.0,
         9999
       ]
-    }
+    },
+    "loinc_code": "5192-0"
   },
   "Blood - Anti-HBs Antibody": {
     "lab_type": "blood",
@@ -522,7 +576,8 @@
         0.0,
         9.0
       ]
-    }
+    },
+    "loinc_code": "5195-3"
   },
   "Blood - Anti-HCV Total": {
     "lab_type": "blood",
@@ -533,7 +588,8 @@
         0.0,
         1.0
       ]
-    }
+    },
+    "loinc_code": "16128-1"
   },
   "Blood - Anti-Mitochondrial Antibody (AMA), IgG": {
     "lab_type": "blood",
@@ -544,7 +600,8 @@
         0,
         10
       ]
-    }
+    },
+    "loinc_code": "8090-5"
   },
   "Blood - Anti-Neutrophil Cytoplasmic Antibodies IgG (ANCA IgG)": {
     "lab_type": "blood",
@@ -555,7 +612,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "14277-8"
   },
   "Blood - Anti-Proteinase 3 Antibody IgG (Anti-PR3 Ab)": {
     "lab_type": "blood",
@@ -566,7 +624,8 @@
         0.0,
         20.0
       ]
-    }
+    },
+    "loinc_code": "29644-5"
   },
   "Blood - Anti-Scleroderma-70 Antibody (Anti-Scl-70 Ab)": {
     "lab_type": "blood",
@@ -577,9 +636,10 @@
         0.0,
         20.0
       ]
-    }
+    },
+    "loinc_code": "5469-1"
   },
-  "Blood - Anti-Sjögren's-Syndrome-Related Antigen A Antibody (Anti-SSA/Ro Ab)": {
+  "Blood - Anti-Sj\u00f6gren's-Syndrome-Related Antigen A Antibody (Anti-SSA/Ro Ab)": {
     "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [
@@ -593,9 +653,10 @@
         0.0,
         20.0
       ]
-    }
+    },
+    "loinc_code": "11090-8"
   },
-  "Blood - Anti-Sjögren's-Syndrome-Related Antigen B Antibody (Anti-SSB/La Ab)": {
+  "Blood - Anti-Sj\u00f6gren's-Syndrome-Related Antigen B Antibody (Anti-SSB/La Ab)": {
     "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [],
@@ -604,7 +665,8 @@
         0.0,
         20.0
       ]
-    }
+    },
+    "loinc_code": "11088-2"
   },
   "Blood - Anti-Smooth Muscle Antibody (ASMA), IgG": {
     "lab_type": "blood",
@@ -615,7 +677,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "5358-2"
   },
   "Blood - Anti-Thyroglobulin Antibody (Anti-Tg Ab)": {
     "lab_type": "blood",
@@ -631,7 +694,8 @@
         5.0,
         100.0
       ]
-    }
+    },
+    "loinc_code": "8098-6"
   },
   "Blood - Anti-Thyroid Peroxidase Antibody (Anti-TPO Ab)": {
     "lab_type": "blood",
@@ -647,7 +711,8 @@
         0.0,
         60.0
       ]
-    }
+    },
+    "loinc_code": "8099-4"
   },
   "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA)": {
     "lab_type": "blood",
@@ -663,7 +728,8 @@
         0.0,
         7.0
       ]
-    }
+    },
+    "loinc_code": "31017-7"
   },
   "Blood - Anti-Tissue Transglutaminase Antibody IgG (Anti-tTG IgG)": {
     "lab_type": "blood",
@@ -674,7 +740,8 @@
         0.0,
         7.0
       ]
-    }
+    },
+    "loinc_code": "35285-2"
   },
   "Blood - Antinuclear Antibodies (ANA)": {
     "lab_type": "blood",
@@ -685,7 +752,8 @@
         0,
         0.7
       ]
-    }
+    },
+    "loinc_code": "5048-4"
   },
   "Blood - Antistreptolysin O Titre (ASO)": {
     "lab_type": "blood",
@@ -696,7 +764,8 @@
         0.0,
         200.0
       ]
-    }
+    },
+    "loinc_code": "5370-7"
   },
   "Blood - Apolipoprotein B": {
     "lab_type": "blood",
@@ -720,15 +789,25 @@
         55,
         125
       ]
-    }
+    },
+    "loinc_code": "1884-6"
   },
   "Blood - Aspartate Aminotransferase (AST)": {
     "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [
-      {"unit": "U/L", "factor": 1.0},
-      {"unit": "U/L a 37°", "factor": 1.0},
-      {"unit": "U/L a 37º", "factor": 1.0}
+      {
+        "unit": "U/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "U/L a 37\u00b0",
+        "factor": 1.0
+      },
+      {
+        "unit": "U/L a 37\u00ba",
+        "factor": 1.0
+      }
     ],
     "ranges": {
       "default": [
@@ -743,7 +822,8 @@
         9,
         32
       ]
-    }
+    },
+    "loinc_code": "1920-8"
   },
   "Blood - BUN (Blood Urea Nitrogen)": {
     "lab_type": "blood",
@@ -767,18 +847,19 @@
         6,
         21
       ]
-    }
+    },
+    "loinc_code": "3094-0"
   },
   "Blood - Basophils": {
     "lab_type": "blood",
-    "primary_unit": "10⁹/L",
+    "primary_unit": "10\u2079/L",
     "alternatives": [
       {
-        "unit": "10⁶/L",
+        "unit": "10\u2076/L",
         "factor": 0.001
       },
       {
-        "unit": "x10⁹/L",
+        "unit": "x10\u2079/L",
         "factor": 1.0
       },
       {
@@ -786,7 +867,7 @@
         "factor": 0.001
       },
       {
-        "unit": "cells/mm³",
+        "unit": "cells/mm\u00b3",
         "factor": 0.001
       }
     ],
@@ -795,7 +876,8 @@
         0.0,
         0.1
       ]
-    }
+    },
+    "loinc_code": "705-4"
   },
   "Blood - Basophils (%)": {
     "lab_type": "blood",
@@ -806,7 +888,8 @@
         0.0,
         1.0
       ]
-    }
+    },
+    "loinc_code": "706-2"
   },
   "Blood - Beta Globulins": {
     "lab_type": "blood",
@@ -817,7 +900,8 @@
         0.7,
         1.1
       ]
-    }
+    },
+    "loinc_code": "2868-8"
   },
   "Blood - Beta Globulins (%)": {
     "lab_type": "blood",
@@ -828,7 +912,8 @@
         7.0,
         13.0
       ]
-    }
+    },
+    "loinc_code": "13982-4"
   },
   "Blood - Beta-1 Globulins": {
     "lab_type": "blood",
@@ -839,7 +924,8 @@
         0.2,
         0.4
       ]
-    }
+    },
+    "loinc_code": "32730-5"
   },
   "Blood - Beta-1 Globulins (%)": {
     "lab_type": "blood",
@@ -850,7 +936,8 @@
         4.0,
         7.0
       ]
-    }
+    },
+    "loinc_code": "32732-1"
   },
   "Blood - Beta-2 Globulins": {
     "lab_type": "blood",
@@ -861,7 +948,8 @@
         0.7,
         1.2
       ]
-    }
+    },
+    "loinc_code": "32731-3"
   },
   "Blood - Beta-2 Globulins (%)": {
     "lab_type": "blood",
@@ -872,14 +960,15 @@
         2.0,
         4.0
       ]
-    }
+    },
+    "loinc_code": "32733-9"
   },
   "Blood - Bilirubin Direct": {
     "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "µmol/L",
+        "unit": "\u00b5mol/L",
         "factor": 0.0585
       }
     ],
@@ -888,14 +977,15 @@
         0.0,
         0.3
       ]
-    }
+    },
+    "loinc_code": "1968-7"
   },
   "Blood - Bilirubin Indirect": {
     "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "µmol/L",
+        "unit": "\u00b5mol/L",
         "factor": 0.0585
       }
     ],
@@ -904,14 +994,15 @@
         0.2,
         0.8
       ]
-    }
+    },
+    "loinc_code": "1971-1"
   },
   "Blood - Bilirubin Total": {
     "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "µmol/L",
+        "unit": "\u00b5mol/L",
         "factor": 0.0585
       }
     ],
@@ -928,7 +1019,8 @@
         0.2,
         1.0
       ]
-    }
+    },
+    "loinc_code": "1975-2"
   },
   "Blood - C-Reactive Protein (CRP)": {
     "lab_type": "blood",
@@ -944,7 +1036,8 @@
         0.0,
         5.0
       ]
-    }
+    },
+    "loinc_code": "1988-5"
   },
   "Blood - CA 19-9": {
     "lab_type": "blood",
@@ -955,7 +1048,8 @@
         0.0,
         37.0
       ]
-    }
+    },
+    "loinc_code": "24108-3"
   },
   "Blood - CEA (Carcino-Embryonic Ag)": {
     "lab_type": "blood",
@@ -966,7 +1060,8 @@
         0.0,
         3.0
       ]
-    }
+    },
+    "loinc_code": "2039-6"
   },
   "Blood - Calcitonin": {
     "lab_type": "blood",
@@ -985,7 +1080,8 @@
         0,
         5
       ]
-    }
+    },
+    "loinc_code": "1995-2"
   },
   "Blood - Calcium (ionized)": {
     "lab_type": "blood",
@@ -996,7 +1092,8 @@
         1.12,
         1.32
       ]
-    }
+    },
+    "loinc_code": "1994-5"
   },
   "Blood - Calcium (total)": {
     "lab_type": "blood",
@@ -1016,13 +1113,15 @@
         8.5,
         10.5
       ]
-    }
+    },
+    "loinc_code": "17861-6"
   },
   "Blood - Cell Morphology": {
     "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "11125-2"
   },
   "Blood - Ceruloplasmin": {
     "lab_type": "blood",
@@ -1033,7 +1132,8 @@
         20.0,
         60.0
       ]
-    }
+    },
+    "loinc_code": "2037-0"
   },
   "Blood - Chloride": {
     "lab_type": "blood",
@@ -1049,29 +1149,32 @@
         98.0,
         107.0
       ]
-    }
+    },
+    "loinc_code": "2075-0"
   },
   "Blood - Chromium (Cr)": {
     "lab_type": "blood",
-    "primary_unit": "µg/L",
+    "primary_unit": "\u00b5g/L",
     "alternatives": [],
     "ranges": {
       "default": [
         0.1,
         0.5
       ]
-    }
+    },
+    "loinc_code": "5599-1"
   },
   "Blood - Circulating Immune Complexes": {
     "lab_type": "blood",
-    "primary_unit": "µg/mL",
+    "primary_unit": "\u00b5g/mL",
     "alternatives": [],
     "ranges": {
       "default": [
         0.0,
         10.0
       ]
-    }
+    },
+    "loinc_code": "11572-5"
   },
   "Blood - Complement C3": {
     "lab_type": "blood",
@@ -1087,7 +1190,8 @@
         70.0,
         180.0
       ]
-    }
+    },
+    "loinc_code": "4485-9"
   },
   "Blood - Complement C4": {
     "lab_type": "blood",
@@ -1098,11 +1202,12 @@
         10.0,
         40.0
       ]
-    }
+    },
+    "loinc_code": "4498-2"
   },
   "Blood - Copper": {
     "lab_type": "blood",
-    "primary_unit": "µg/dL",
+    "primary_unit": "\u00b5g/dL",
     "alternatives": [],
     "ranges": {
       "default": [
@@ -1117,25 +1222,27 @@
         80,
         160
       ]
-    }
+    },
+    "loinc_code": "5685-8"
   },
   "Blood - Copper (Erythrocytes)": {
     "lab_type": "blood",
-    "primary_unit": "µg/dL",
+    "primary_unit": "\u00b5g/dL",
     "alternatives": [],
     "ranges": {
       "default": [
         90.0,
         190.0
       ]
-    }
+    },
+    "loinc_code": "5682-5"
   },
   "Blood - Cortisol": {
     "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [
       {
-        "unit": "µg/dL",
+        "unit": "\u00b5g/dL",
         "factor": 10.0
       }
     ],
@@ -1144,7 +1251,8 @@
         50.0,
         230.0
       ]
-    }
+    },
+    "loinc_code": "2143-6"
   },
   "Blood - Creatine Kinase (CK)": {
     "lab_type": "blood",
@@ -1163,14 +1271,15 @@
         26,
         192
       ]
-    }
+    },
+    "loinc_code": "2157-6"
   },
   "Blood - Creatinine": {
     "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "µmol/L",
+        "unit": "\u00b5mol/L",
         "factor": 0.0113
       }
     ],
@@ -1198,7 +1307,8 @@
     },
     "biological_min": 0,
     "biological_max": 30,
-    "max_daily_change": 3
+    "max_daily_change": 3,
+    "loinc_code": "2160-0"
   },
   "Blood - Cryoglobulins, Qualitative": {
     "lab_type": "blood",
@@ -1209,7 +1319,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "5117-2"
   },
   "Blood - Dehydroepiandrosterone (DHEA)": {
     "lab_type": "blood",
@@ -1220,11 +1331,12 @@
         0.9,
         9.5
       ]
-    }
+    },
+    "loinc_code": "2666-7"
   },
   "Blood - Dehydroepiandrosterone (DHEA)-S": {
     "lab_type": "blood",
-    "primary_unit": "µg/mL",
+    "primary_unit": "\u00b5g/mL",
     "alternatives": [],
     "ranges": {
       "default": [
@@ -1237,13 +1349,14 @@
       ],
       "male:40-49": [
         0.72,
-        4.10
+        4.1
       ],
       "male:50+": [
         0.43,
         3.23
       ]
-    }
+    },
+    "loinc_code": "2196-4"
   },
   "Blood - Dihydrotestosterone (DHT)": {
     "lab_type": "blood",
@@ -1254,24 +1367,26 @@
         4.0,
         22.0
       ]
-    }
+    },
+    "loinc_code": "2190-7"
   },
   "Blood - Direct Antiglobulin Test (DAT)": {
     "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "890-4"
   },
   "Blood - Eosinophils": {
     "lab_type": "blood",
-    "primary_unit": "10⁹/L",
+    "primary_unit": "10\u2079/L",
     "alternatives": [
       {
-        "unit": "10⁶/L",
+        "unit": "10\u2076/L",
         "factor": 0.001
       },
       {
-        "unit": "x10⁹/L",
+        "unit": "x10\u2079/L",
         "factor": 1.0
       },
       {
@@ -1279,7 +1394,7 @@
         "factor": 0.001
       },
       {
-        "unit": "cells/mm³",
+        "unit": "cells/mm\u00b3",
         "factor": 0.001
       }
     ],
@@ -1288,7 +1403,8 @@
         0.02,
         0.5
       ]
-    }
+    },
+    "loinc_code": "711-2"
   },
   "Blood - Eosinophils (%)": {
     "lab_type": "blood",
@@ -1299,7 +1415,8 @@
         1.0,
         6.0
       ]
-    }
+    },
+    "loinc_code": "713-8"
   },
   "Blood - Erythrocyte Sedimentation Rate (ESR)": {
     "lab_type": "blood",
@@ -1335,7 +1452,8 @@
         0,
         30
       ]
-    }
+    },
+    "loinc_code": "4537-7"
   },
   "Blood - Erythrocyte Sedimentation Rate (ESR) - 1h": {
     "lab_type": "blood",
@@ -1375,7 +1493,8 @@
         0,
         30
       ]
-    }
+    },
+    "loinc_code": "30341-2"
   },
   "Blood - Erythrocyte Sedimentation Rate (ESR) - 2h": {
     "lab_type": "blood",
@@ -1395,7 +1514,8 @@
         0,
         30
       ]
-    }
+    },
+    "loinc_code": "11089-0"
   },
   "Blood - Erythrocyte Sedimentation Rate (ESR, 1 Hour)": {
     "lab_type": "blood",
@@ -1427,7 +1547,8 @@
         0,
         30
       ]
-    }
+    },
+    "loinc_code": "30341-2"
   },
   "Blood - Erythrocyte Sedimentation Rate (ESR, 2 Hour)": {
     "lab_type": "blood",
@@ -1438,14 +1559,15 @@
         0.0,
         30.0
       ]
-    }
+    },
+    "loinc_code": "11089-0"
   },
   "Blood - Erythrocytes": {
     "lab_type": "blood",
-    "primary_unit": "10¹²/L",
+    "primary_unit": "10\u00b9\u00b2/L",
     "alternatives": [
       {
-        "unit": "10⁹/L",
+        "unit": "10\u2079/L",
         "factor": 0.001
       },
       {
@@ -1453,7 +1575,7 @@
         "factor": 1.0
       },
       {
-        "unit": "10⁶/mm³",
+        "unit": "10\u2076/mm\u00b3",
         "factor": 1.0
       }
     ],
@@ -1470,18 +1592,19 @@
         4.0,
         5.2
       ]
-    }
+    },
+    "loinc_code": "789-8"
   },
   "Blood - Erythrocytes (RBC)": {
     "lab_type": "blood",
-    "primary_unit": "10¹²/L",
+    "primary_unit": "10\u00b9\u00b2/L",
     "alternatives": [
       {
         "unit": "10^12/L",
         "factor": 1.0
       },
       {
-        "unit": "x10¹²/L",
+        "unit": "x10\u00b9\u00b2/L",
         "factor": 1.0
       },
       {
@@ -1489,7 +1612,7 @@
         "factor": 1.0
       },
       {
-        "unit": "M/µL",
+        "unit": "M/\u00b5L",
         "factor": 1.0
       },
       {
@@ -1510,13 +1633,15 @@
         4.0,
         5.2
       ]
-    }
+    },
+    "loinc_code": "789-8"
   },
   "Blood - Erythrocytes - Hypochromic (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "58994-9"
   },
   "Blood - Erythropoietin (EPO)": {
     "lab_type": "blood",
@@ -1527,7 +1652,8 @@
         3.7,
         31.5
       ]
-    }
+    },
+    "loinc_code": "2187-3"
   },
   "Blood - Estimated Average Glucose (eAG)": {
     "lab_type": "blood",
@@ -1538,7 +1664,8 @@
         70,
         126
       ]
-    }
+    },
+    "loinc_code": "75414-8"
   },
   "Blood - Estradiol (E2)": {
     "lab_type": "blood",
@@ -1553,7 +1680,8 @@
         10,
         40
       ]
-    }
+    },
+    "loinc_code": "2243-4"
   },
   "Blood - Estriol (E3)": {
     "lab_type": "blood",
@@ -1564,14 +1692,15 @@
         0,
         0.21
       ]
-    }
+    },
+    "loinc_code": "2245-9"
   },
   "Blood - Ferritin": {
     "lab_type": "blood",
     "primary_unit": "ng/mL",
     "alternatives": [
       {
-        "unit": "µg/L",
+        "unit": "\u00b5g/L",
         "factor": 1.0
       }
     ],
@@ -1592,7 +1721,8 @@
         20,
         300
       ]
-    }
+    },
+    "loinc_code": "2276-4"
   },
   "Blood - Folate": {
     "lab_type": "blood",
@@ -1608,7 +1738,8 @@
         7.0,
         45.3
       ]
-    }
+    },
+    "loinc_code": "2284-8"
   },
   "Blood - Follicle-Stimulating Hormone (FSH)": {
     "lab_type": "blood",
@@ -1628,7 +1759,8 @@
         1.5,
         12.4
       ]
-    }
+    },
+    "loinc_code": "15067-2"
   },
   "Blood - Free T3": {
     "lab_type": "blood",
@@ -1644,7 +1776,8 @@
         3.5,
         6.5
       ]
-    }
+    },
+    "loinc_code": "3051-0"
   },
   "Blood - Free T4": {
     "lab_type": "blood",
@@ -1660,7 +1793,8 @@
         9.0,
         19.0
       ]
-    }
+    },
+    "loinc_code": "3024-7"
   },
   "Blood - Free Testosterone": {
     "lab_type": "blood",
@@ -1679,7 +1813,8 @@
         0.1,
         6.4
       ]
-    }
+    },
+    "loinc_code": "2991-8"
   },
   "Blood - Gamma Globulins": {
     "lab_type": "blood",
@@ -1690,7 +1825,8 @@
         0.6,
         1.4
       ]
-    }
+    },
+    "loinc_code": "2871-2"
   },
   "Blood - Gamma Globulins (%)": {
     "lab_type": "blood",
@@ -1701,15 +1837,25 @@
         11.0,
         18.0
       ]
-    }
+    },
+    "loinc_code": "13983-2"
   },
   "Blood - Gamma-Glutamyl Transferase (GGT)": {
     "lab_type": "blood",
     "primary_unit": "IU/L",
     "alternatives": [
-      {"unit": "U/L", "factor": 1.0},
-      {"unit": "U/L a 37°", "factor": 1.0},
-      {"unit": "U/L a 37º", "factor": 1.0}
+      {
+        "unit": "U/L",
+        "factor": 1.0
+      },
+      {
+        "unit": "U/L a 37\u00b0",
+        "factor": 1.0
+      },
+      {
+        "unit": "U/L a 37\u00ba",
+        "factor": 1.0
+      }
     ],
     "ranges": {
       "default": [
@@ -1724,7 +1870,8 @@
         5,
         36
       ]
-    }
+    },
+    "loinc_code": "2324-2"
   },
   "Blood - Glucose (Fasting)": {
     "lab_type": "blood",
@@ -1743,7 +1890,8 @@
     },
     "biological_min": 0,
     "biological_max": 1000,
-    "max_daily_change": 200
+    "max_daily_change": 200,
+    "loinc_code": "1558-6"
   },
   "Blood - Glucose-6-Phosphate Dehydrogenase (G6PD)": {
     "lab_type": "blood",
@@ -1758,13 +1906,15 @@
         "factor": 1.0
       }
     ],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "2739-1"
   },
   "Blood - HIV (Antibody + p24 Antigen)": {
     "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "75622-6"
   },
   "Blood - HIV-1 Proviral DNA": {
     "lab_type": "blood",
@@ -1775,7 +1925,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "29893-8"
   },
   "Blood - HIV-2 Proviral DNA": {
     "lab_type": "blood",
@@ -1786,7 +1937,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "29894-6"
   },
   "Blood - HLA-B27 Genotyping": {
     "lab_type": "blood",
@@ -1797,7 +1949,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "13298-5"
   },
   "Blood - Haematocrit (HCT) (%)": {
     "lab_type": "blood",
@@ -1825,7 +1978,8 @@
         36.1,
         44.3
       ]
-    }
+    },
+    "loinc_code": "4544-3"
   },
   "Blood - Haemoglobin (Hb)": {
     "lab_type": "blood",
@@ -1844,7 +1998,8 @@
         12.0,
         16.0
       ]
-    }
+    },
+    "loinc_code": "718-7"
   },
   "Blood - Haptoglobin": {
     "lab_type": "blood",
@@ -1860,7 +2015,8 @@
         30.0,
         200.0
       ]
-    }
+    },
+    "loinc_code": "4542-7"
   },
   "Blood - Hematocrit (HCT) (%)": {
     "lab_type": "blood",
@@ -1887,7 +2043,8 @@
     },
     "biological_min": 0,
     "biological_max": 70,
-    "max_daily_change": 5
+    "max_daily_change": 5,
+    "loinc_code": "4544-3"
   },
   "Blood - Hemoglobin (Hgb)": {
     "lab_type": "blood",
@@ -1926,7 +2083,8 @@
     },
     "biological_min": 0,
     "biological_max": 25,
-    "max_daily_change": 2.0
+    "max_daily_change": 2.0,
+    "loinc_code": "718-7"
   },
   "Blood - Hemoglobin A (%)": {
     "lab_type": "blood",
@@ -1937,7 +2095,8 @@
         95,
         98
       ]
-    }
+    },
+    "loinc_code": "4546-8"
   },
   "Blood - Hemoglobin A1c (%)": {
     "lab_type": "blood",
@@ -1948,7 +2107,8 @@
         4.0,
         5.6
       ]
-    }
+    },
+    "loinc_code": "4548-4"
   },
   "Blood - Hemoglobin A1c (IFCC)": {
     "lab_type": "blood",
@@ -1972,7 +2132,8 @@
         20.0,
         42.0
       ]
-    }
+    },
+    "loinc_code": "59261-8"
   },
   "Blood - Hemoglobin A1c (IFCC) (%)": {
     "lab_type": "blood",
@@ -1983,7 +2144,8 @@
         4.0,
         5.6
       ]
-    }
+    },
+    "loinc_code": "59261-8"
   },
   "Blood - Hemoglobin A2 (%)": {
     "lab_type": "blood",
@@ -1994,7 +2156,8 @@
         2.0,
         3.5
       ]
-    }
+    },
+    "loinc_code": "4551-8"
   },
   "Blood - Hemoglobin Distribution Width (HDW)": {
     "lab_type": "blood",
@@ -2005,7 +2168,8 @@
         1.8,
         2.6
       ]
-    }
+    },
+    "loinc_code": "46423-0"
   },
   "Blood - Hemoglobin F (Fetal) (%)": {
     "lab_type": "blood",
@@ -2016,49 +2180,57 @@
         0,
         2
       ]
-    }
+    },
+    "loinc_code": "4576-5"
   },
   "Blood - Hemoglobin HPLC Comment": {
     "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "57794-0"
   },
   "Blood - Hemolysis (initial, after incubation) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "40740-3"
   },
   "Blood - Hemolysis (initial, immediate) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "4667-2"
   },
   "Blood - Hemolysis (total, after incubation) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "50795-4"
   },
   "Blood - Hemolysis (total, immediate) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "50795-4"
   },
   "Blood - Hepatitis A Antibody (IgM)": {
     "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "22314-9"
   },
   "Blood - Hepatitis A Antibody Total": {
     "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "20575-7"
   },
   "Blood - Hepatitis B Surface Antigen (HBsAg)": {
     "lab_type": "blood",
@@ -2069,25 +2241,29 @@
         0.0,
         1.0
       ]
-    }
+    },
+    "loinc_code": "5196-1"
   },
   "Blood - Hepatitis B e Antibody (Anti-HBe)": {
     "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "5193-8"
   },
   "Blood - Hepatitis B e Antigen (HBeAg)": {
     "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "5194-6"
   },
   "Blood - High mRNA Content (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "61438-7"
   },
   "Blood - High-Density Lipoprotein Cholesterol (HDL Cholesterol)": {
     "lab_type": "blood",
@@ -2113,14 +2289,15 @@
       ]
     },
     "biological_min": 0,
-    "biological_max": 200
+    "biological_max": 200,
+    "loinc_code": "2085-9"
   },
   "Blood - Homocysteine": {
     "lab_type": "blood",
-    "primary_unit": "µg/mL",
+    "primary_unit": "\u00b5g/mL",
     "alternatives": [
       {
-        "unit": "µmol/L",
+        "unit": "\u00b5mol/L",
         "factor": 0.135
       }
     ],
@@ -2137,13 +2314,15 @@
         0.5,
         1.1
       ]
-    }
+    },
+    "loinc_code": "13965-9"
   },
   "Blood - Hypochromic Red Blood Cells (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "58994-9"
   },
   "Blood - INR (Prothrombin Time)": {
     "lab_type": "blood",
@@ -2154,7 +2333,8 @@
         0.8,
         1.2
       ]
-    }
+    },
+    "loinc_code": "6301-6"
   },
   "Blood - Immature Granulocytes (%)": {
     "lab_type": "blood",
@@ -2165,7 +2345,8 @@
         0,
         0.5
       ]
-    }
+    },
+    "loinc_code": "53115-2"
   },
   "Blood - Immature Granulocytes (IG) (%)": {
     "lab_type": "blood",
@@ -2176,13 +2357,15 @@
         0.0,
         0.6
       ]
-    }
+    },
+    "loinc_code": "53115-2"
   },
   "Blood - Immature Reticulocyte Fraction (IRF) (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "33516-6"
   },
   "Blood - Immunoglobulin A (IgA)": {
     "lab_type": "blood",
@@ -2201,7 +2384,8 @@
         70.0,
         400.0
       ]
-    }
+    },
+    "loinc_code": "2458-8"
   },
   "Blood - Immunoglobulin G (IgG)": {
     "lab_type": "blood",
@@ -2212,7 +2396,8 @@
         700.0,
         1600.0
       ]
-    }
+    },
+    "loinc_code": "2465-3"
   },
   "Blood - Immunoglobulin M (IgM)": {
     "lab_type": "blood",
@@ -2231,7 +2416,8 @@
         50.0,
         260.0
       ]
-    }
+    },
+    "loinc_code": "2472-9"
   },
   "Blood - Insulin": {
     "lab_type": "blood",
@@ -2247,7 +2433,8 @@
         18.0,
         173.0
       ]
-    }
+    },
+    "loinc_code": "20448-7"
   },
   "Blood - Insulin-Like Growth Factor 1 (IGF-1)": {
     "lab_type": "blood",
@@ -2282,7 +2469,8 @@
         48.0,
         210.0
       ]
-    }
+    },
+    "loinc_code": "14633-2"
   },
   "Blood - Intrinsic Factor Ab (IgG)": {
     "lab_type": "blood",
@@ -2293,18 +2481,19 @@
         0.0,
         20.0
       ]
-    }
+    },
+    "loinc_code": "8150-7"
   },
   "Blood - Iron": {
     "lab_type": "blood",
-    "primary_unit": "µg/dL",
+    "primary_unit": "\u00b5g/dL",
     "alternatives": [
       {
-        "unit": "µmol/L",
+        "unit": "\u00b5mol/L",
         "factor": 5.5845
       },
       {
-        "unit": "µg/L",
+        "unit": "\u00b5g/L",
         "factor": 0.1
       }
     ],
@@ -2321,13 +2510,15 @@
         50,
         170
       ]
-    }
+    },
+    "loinc_code": "2498-4"
   },
   "Blood - Katz Index": {
     "lab_type": "blood",
     "primary_unit": "ratio",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "87509-6"
   },
   "Blood - LDL/HDL Ratio": {
     "lab_type": "blood",
@@ -2343,7 +2534,8 @@
         1.0,
         3.5
       ]
-    }
+    },
+    "loinc_code": "11054-4"
   },
   "Blood - Lactate Dehydrogenase (LDH)": {
     "lab_type": "blood",
@@ -2362,28 +2554,30 @@
         135,
         214
       ]
-    }
+    },
+    "loinc_code": "2532-0"
   },
   "Blood - Leukocyte Morphology": {
     "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "11156-7"
   },
   "Blood - Leukocytes": {
     "lab_type": "blood",
-    "primary_unit": "10⁹/L",
+    "primary_unit": "10\u2079/L",
     "alternatives": [
       {
-        "unit": "10⁶/L",
+        "unit": "10\u2076/L",
         "factor": 0.001
       },
       {
-        "unit": "cells/µL",
+        "unit": "cells/\u00b5L",
         "factor": 0.001
       },
       {
-        "unit": "x10⁹/L",
+        "unit": "x10\u2079/L",
         "factor": 1.0
       },
       {
@@ -2391,7 +2585,7 @@
         "factor": 0.001
       },
       {
-        "unit": "cells/mm³",
+        "unit": "cells/mm\u00b3",
         "factor": 0.001
       }
     ],
@@ -2408,7 +2602,8 @@
         4.0,
         11.0
       ]
-    }
+    },
+    "loinc_code": "6690-2"
   },
   "Blood - Lipase": {
     "lab_type": "blood",
@@ -2419,7 +2614,8 @@
         10.0,
         60.0
       ]
-    }
+    },
+    "loinc_code": "3040-3"
   },
   "Blood - Lipoprotein(a)": {
     "lab_type": "blood",
@@ -2439,7 +2635,8 @@
         0,
         75
       ]
-    }
+    },
+    "loinc_code": "10835-7"
   },
   "Blood - Lithium": {
     "lab_type": "blood",
@@ -2450,13 +2647,15 @@
         0,
         0.333
       ]
-    }
+    },
+    "loinc_code": "3719-5"
   },
   "Blood - Low mRNA Content (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "61440-3"
   },
   "Blood - Low-Density Lipoprotein Cholesterol (LDL Cholesterol)": {
     "lab_type": "blood",
@@ -2474,7 +2673,8 @@
       ]
     },
     "biological_min": 0,
-    "biological_max": 500
+    "biological_max": 500,
+    "loinc_code": "2089-1"
   },
   "Blood - Lupus Erythematosus Cells Screen (LE Cells)": {
     "lab_type": "blood",
@@ -2485,7 +2685,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "14407-1"
   },
   "Blood - Luteinizing Hormone (LH)": {
     "lab_type": "blood",
@@ -2505,18 +2706,19 @@
         1.7,
         8.6
       ]
-    }
+    },
+    "loinc_code": "10501-5"
   },
   "Blood - Lymphocytes": {
     "lab_type": "blood",
-    "primary_unit": "10⁹/L",
+    "primary_unit": "10\u2079/L",
     "alternatives": [
       {
-        "unit": "10⁶/L",
+        "unit": "10\u2076/L",
         "factor": 0.001
       },
       {
-        "unit": "x10⁹/L",
+        "unit": "x10\u2079/L",
         "factor": 1.0
       },
       {
@@ -2524,7 +2726,7 @@
         "factor": 0.001
       },
       {
-        "unit": "cells/mm³",
+        "unit": "cells/mm\u00b3",
         "factor": 0.001
       }
     ],
@@ -2533,7 +2735,8 @@
         1.0,
         3.0
       ]
-    }
+    },
+    "loinc_code": "731-0"
   },
   "Blood - Lymphocytes (%)": {
     "lab_type": "blood",
@@ -2544,13 +2747,15 @@
         20.0,
         40.0
       ]
-    }
+    },
+    "loinc_code": "736-9"
   },
   "Blood - Lymphoplasmacytic Cells (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "30406-3"
   },
   "Blood - Macrocytes (%)": {
     "lab_type": "blood",
@@ -2561,7 +2766,8 @@
         1.5,
         8.5
       ]
-    }
+    },
+    "loinc_code": "34992-8"
   },
   "Blood - Magnesium": {
     "lab_type": "blood",
@@ -2585,7 +2791,8 @@
         1.6,
         2.6
       ]
-    }
+    },
+    "loinc_code": "2601-3"
   },
   "Blood - Magnesium (Erythrocytes)": {
     "lab_type": "blood",
@@ -2601,7 +2808,8 @@
         4.2,
         6.8
       ]
-    }
+    },
+    "loinc_code": "14879-0"
   },
   "Blood - Mean Corpuscular Hemoglobin (MCH)": {
     "lab_type": "blood",
@@ -2612,7 +2820,8 @@
         27.0,
         33.0
       ]
-    }
+    },
+    "loinc_code": "785-6"
   },
   "Blood - Mean Corpuscular Hemoglobin Concentration (MCHC)": {
     "lab_type": "blood",
@@ -2623,7 +2832,8 @@
         32.0,
         36.0
       ]
-    }
+    },
+    "loinc_code": "786-4"
   },
   "Blood - Mean Corpuscular Hemoglobin Concentration (MCHC) (%)": {
     "lab_type": "blood",
@@ -2634,7 +2844,8 @@
         32.0,
         36.0
       ]
-    }
+    },
+    "loinc_code": "786-4"
   },
   "Blood - Mean Corpuscular Volume (MCV)": {
     "lab_type": "blood",
@@ -2650,7 +2861,8 @@
         80.0,
         100.0
       ]
-    }
+    },
+    "loinc_code": "787-2"
   },
   "Blood - Mean Platelet Volume (MPV)": {
     "lab_type": "blood",
@@ -2666,13 +2878,15 @@
         7.5,
         11.5
       ]
-    }
+    },
+    "loinc_code": "32623-1"
   },
   "Blood - Medium mRNA Content (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "61439-5"
   },
   "Blood - Methylmalonic Acid": {
     "lab_type": "blood",
@@ -2683,18 +2897,19 @@
         0,
         400
       ]
-    }
+    },
+    "loinc_code": "2709-4"
   },
   "Blood - Monocytes": {
     "lab_type": "blood",
-    "primary_unit": "10⁹/L",
+    "primary_unit": "10\u2079/L",
     "alternatives": [
       {
-        "unit": "10⁶/L",
+        "unit": "10\u2076/L",
         "factor": 0.001
       },
       {
-        "unit": "x10⁹/L",
+        "unit": "x10\u2079/L",
         "factor": 1.0
       },
       {
@@ -2702,7 +2917,7 @@
         "factor": 0.001
       },
       {
-        "unit": "cells/mm³",
+        "unit": "cells/mm\u00b3",
         "factor": 0.001
       }
     ],
@@ -2711,7 +2926,8 @@
         0.2,
         0.8
       ]
-    }
+    },
+    "loinc_code": "742-7"
   },
   "Blood - Monocytes (%)": {
     "lab_type": "blood",
@@ -2722,7 +2938,8 @@
         2.0,
         8.0
       ]
-    }
+    },
+    "loinc_code": "5905-5"
   },
   "Blood - Myeloperoxidase Anti-Neutrophil Cytoplasmic Antibodies (MPO-ANCA)": {
     "lab_type": "blood",
@@ -2733,18 +2950,19 @@
         0.0,
         20
       ]
-    }
+    },
+    "loinc_code": "17353-4"
   },
   "Blood - Neutrophils": {
     "lab_type": "blood",
-    "primary_unit": "10⁹/L",
+    "primary_unit": "10\u2079/L",
     "alternatives": [
       {
-        "unit": "10⁶/L",
+        "unit": "10\u2076/L",
         "factor": 0.001
       },
       {
-        "unit": "x10⁹/L",
+        "unit": "x10\u2079/L",
         "factor": 1.0
       },
       {
@@ -2752,7 +2970,7 @@
         "factor": 0.001
       },
       {
-        "unit": "cells/mm³",
+        "unit": "cells/mm\u00b3",
         "factor": 0.001
       }
     ],
@@ -2761,7 +2979,8 @@
         2.0,
         7.0
       ]
-    }
+    },
+    "loinc_code": "751-8"
   },
   "Blood - Neutrophils (%)": {
     "lab_type": "blood",
@@ -2772,7 +2991,8 @@
         40.0,
         70.0
       ]
-    }
+    },
+    "loinc_code": "770-8"
   },
   "Blood - Nucleated Red Blood Cells (nRBC)": {
     "lab_type": "blood",
@@ -2783,7 +3003,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "30392-5"
   },
   "Blood - Osmotic Resistance Initial (After Incubation)": {
     "lab_type": "blood",
@@ -2794,7 +3015,8 @@
         "factor": 1.0
       }
     ],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "5911-3"
   },
   "Blood - Osmotic Resistance Initial (Immediate)": {
     "lab_type": "blood",
@@ -2805,7 +3027,8 @@
         "factor": 1.0
       }
     ],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "5911-3"
   },
   "Blood - Osmotic Resistance Total (After Incubation)": {
     "lab_type": "blood",
@@ -2816,7 +3039,8 @@
         "factor": 1.0
       }
     ],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "5911-3"
   },
   "Blood - Osmotic Resistance Total (Immediate)": {
     "lab_type": "blood",
@@ -2827,7 +3051,8 @@
         "factor": 1.0
       }
     ],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "5911-3"
   },
   "Blood - Osteocalcin": {
     "lab_type": "blood",
@@ -2846,61 +3071,71 @@
         9,
         25
       ]
-    }
+    },
+    "loinc_code": "2697-2"
   },
   "Blood - PNH Monocytes CD14 Negative (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "90736-0"
   },
   "Blood - PNH Monocytes CD157 Negative (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "90736-0"
   },
   "Blood - PNH Monocytes Clone (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "90736-0"
   },
   "Blood - PNH Monocytes FLAER Negative (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "90736-0"
   },
   "Blood - PNH Neutrophils CD157 Negative (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "90737-8"
   },
   "Blood - PNH Neutrophils CD16 Negative (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "90737-8"
   },
   "Blood - PNH Neutrophils CD66b Negative (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "90737-8"
   },
   "Blood - PNH Neutrophils Clone (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "90737-8"
   },
   "Blood - PNH Neutrophils FLAER Negative (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "90737-8"
   },
   "Blood - PSA Free/Total Ratio": {
     "lab_type": "blood",
@@ -2915,7 +3150,8 @@
         0.25,
         1.0
       ]
-    }
+    },
+    "loinc_code": "12841-3"
   },
   "Blood - Parathyroid Hormone (Intact) (PTH)": {
     "lab_type": "blood",
@@ -2931,7 +3167,8 @@
         15.0,
         65.0
       ]
-    }
+    },
+    "loinc_code": "2731-8"
   },
   "Blood - Phosphate (inorganic)": {
     "lab_type": "blood",
@@ -2942,7 +3179,8 @@
         2.5,
         4.5
       ]
-    }
+    },
+    "loinc_code": "2777-1"
   },
   "Blood - Plasma Cells (%)": {
     "lab_type": "blood",
@@ -2953,7 +3191,8 @@
         0,
         1
       ]
-    }
+    },
+    "loinc_code": "13047-6"
   },
   "Blood - Platelet Distribution Width (PDW)": {
     "lab_type": "blood",
@@ -2969,7 +3208,8 @@
         9.0,
         17.0
       ]
-    }
+    },
+    "loinc_code": "32207-3"
   },
   "Blood - Platelet Distribution Width (PDW) (%)": {
     "lab_type": "blood",
@@ -2980,13 +3220,15 @@
         25,
         65
       ]
-    }
+    },
+    "loinc_code": "51631-0"
   },
   "Blood - Platelet Morphology": {
     "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "11125-2"
   },
   "Blood - Plateletcrit (PCT) (%)": {
     "lab_type": "blood",
@@ -2997,14 +3239,15 @@
         0.13,
         0.32
       ]
-    }
+    },
+    "loinc_code": "51637-7"
   },
   "Blood - Platelets": {
     "lab_type": "blood",
-    "primary_unit": "10⁹/L",
+    "primary_unit": "10\u2079/L",
     "alternatives": [
       {
-        "unit": "10⁶/L",
+        "unit": "10\u2076/L",
         "factor": 0.001
       },
       {
@@ -3012,7 +3255,7 @@
         "factor": 0.001
       },
       {
-        "unit": "10³/mm³",
+        "unit": "10\u00b3/mm\u00b3",
         "factor": 1.0
       }
     ],
@@ -3032,7 +3275,8 @@
     },
     "biological_min": 0,
     "biological_max": 2000,
-    "max_daily_change": 100
+    "max_daily_change": 100,
+    "loinc_code": "777-3"
   },
   "Blood - Platelets - Immature (%)": {
     "lab_type": "blood",
@@ -3043,7 +3287,8 @@
         1.1,
         7.1
       ]
-    }
+    },
+    "loinc_code": "53800-9"
   },
   "Blood - Potassium": {
     "lab_type": "blood",
@@ -3059,7 +3304,8 @@
         3.5,
         5.0
       ]
-    }
+    },
+    "loinc_code": "2823-3"
   },
   "Blood - Progesterone (PRG)": {
     "lab_type": "blood",
@@ -3074,7 +3320,8 @@
         0.0,
         0.5
       ]
-    }
+    },
+    "loinc_code": "2839-9"
   },
   "Blood - Prolactin": {
     "lab_type": "blood",
@@ -3089,7 +3336,8 @@
         4.0,
         15.2
       ]
-    }
+    },
+    "loinc_code": "2842-3"
   },
   "Blood - Prostate-Specific Antigen (PSA), Free": {
     "lab_type": "blood",
@@ -3100,7 +3348,8 @@
         0,
         4
       ]
-    }
+    },
+    "loinc_code": "10886-0"
   },
   "Blood - Prostate-Specific Antigen (PSA), Total": {
     "lab_type": "blood",
@@ -3131,7 +3380,8 @@
         0,
         6.5
       ]
-    }
+    },
+    "loinc_code": "2857-1"
   },
   "Blood - Prothrombin Time (PT)": {
     "lab_type": "blood",
@@ -3142,7 +3392,8 @@
         11.0,
         13.5
       ]
-    }
+    },
+    "loinc_code": "5902-2"
   },
   "Blood - Prothrombin Time (PT) (%)": {
     "lab_type": "blood",
@@ -3153,7 +3404,8 @@
         70.0,
         130.0
       ]
-    }
+    },
+    "loinc_code": "3289-6"
   },
   "Blood - Pyruvate Kinase": {
     "lab_type": "blood",
@@ -3168,7 +3420,8 @@
         "factor": 1.0
       }
     ],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "2742-5"
   },
   "Blood - Quick Time": {
     "lab_type": "blood",
@@ -3179,7 +3432,8 @@
         9.0,
         13.0
       ]
-    }
+    },
+    "loinc_code": "5902-2"
   },
   "Blood - Quick Time (%)": {
     "lab_type": "blood",
@@ -3190,13 +3444,15 @@
         70.0,
         130.0
       ]
-    }
+    },
+    "loinc_code": "3289-6"
   },
   "Blood - Red Blood Cell Morphology": {
     "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "779-9"
   },
   "Blood - Red Cell Distribution Width (RDW) (%)": {
     "lab_type": "blood",
@@ -3207,7 +3463,8 @@
         11,
         15
       ]
-    }
+    },
+    "loinc_code": "788-0"
   },
   "Blood - Red Cell Distribution Width (RDW-CV) (%)": {
     "lab_type": "blood",
@@ -3218,7 +3475,8 @@
         11.5,
         14.5
       ]
-    }
+    },
+    "loinc_code": "788-0"
   },
   "Blood - Red Cell Distribution Width - Standard Deviation (RDW-SD)": {
     "lab_type": "blood",
@@ -3234,7 +3492,8 @@
         39.0,
         46.0
       ]
-    }
+    },
+    "loinc_code": "21000-5"
   },
   "Blood - Red Cell Distribution Width - Standard Deviation (RDW-SD) (%)": {
     "lab_type": "blood",
@@ -3245,14 +3504,15 @@
         37.0,
         54.0
       ]
-    }
+    },
+    "loinc_code": "21000-5"
   },
   "Blood - Reticulocyte Count": {
     "lab_type": "blood",
-    "primary_unit": "10⁹/L",
+    "primary_unit": "10\u2079/L",
     "alternatives": [
       {
-        "unit": "cells/µL",
+        "unit": "cells/\u00b5L",
         "factor": 0.001
       }
     ],
@@ -3261,7 +3521,8 @@
         24,
         84
       ]
-    }
+    },
+    "loinc_code": "14196-0"
   },
   "Blood - Reticulocyte Count (%)": {
     "lab_type": "blood",
@@ -3272,7 +3533,8 @@
         0.5,
         2.5
       ]
-    }
+    },
+    "loinc_code": "4679-7"
   },
   "Blood - Reticulocyte Hemoglobin Content": {
     "lab_type": "blood",
@@ -3283,7 +3545,8 @@
         28,
         35
       ]
-    }
+    },
+    "loinc_code": "42810-2"
   },
   "Blood - Reticulocyte Hemoglobin Content (CHr)": {
     "lab_type": "blood",
@@ -3294,7 +3557,8 @@
         28.0,
         35.0
       ]
-    }
+    },
+    "loinc_code": "42810-2"
   },
   "Blood - Reticulocyte Hemoglobin Equivalent": {
     "lab_type": "blood",
@@ -3305,7 +3569,8 @@
         28,
         35
       ]
-    }
+    },
+    "loinc_code": "42810-2"
   },
   "Blood - Reticulocyte Index (%)": {
     "lab_type": "blood",
@@ -3316,7 +3581,8 @@
         0.5,
         2.5
       ]
-    }
+    },
+    "loinc_code": "40665-2"
   },
   "Blood - Reticulocytes (%)": {
     "lab_type": "blood",
@@ -3327,36 +3593,41 @@
         0.5,
         2.5
       ]
-    }
+    },
+    "loinc_code": "4679-7"
   },
   "Blood - Reticulocytes (absolute)": {
     "lab_type": "blood",
-    "primary_unit": "10⁹/L",
+    "primary_unit": "10\u2079/L",
     "alternatives": [],
     "ranges": {
       "default": [
         25,
         75
       ]
-    }
+    },
+    "loinc_code": "14196-0"
   },
   "Blood - Reticulocytes - High RNA (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "61438-7"
   },
   "Blood - Reticulocytes - Low RNA (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "61440-3"
   },
   "Blood - Reticulocytes - Medium RNA (%)": {
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "61439-5"
   },
   "Blood - Reverse T3": {
     "lab_type": "blood",
@@ -3367,7 +3638,8 @@
         0.09,
         0.35
       ]
-    }
+    },
+    "loinc_code": "3052-8"
   },
   "Blood - Rheumatoid Arthritis Test (RA Test)": {
     "lab_type": "blood",
@@ -3378,7 +3650,8 @@
         0.0,
         14.0
       ]
-    }
+    },
+    "loinc_code": "11572-5"
   },
   "Blood - Rheumatoid Factor (RF)": {
     "lab_type": "blood",
@@ -3389,18 +3662,20 @@
         0.0,
         14.0
       ]
-    }
+    },
+    "loinc_code": "11572-5"
   },
   "Blood - Selenium": {
     "lab_type": "blood",
-    "primary_unit": "µg/L",
+    "primary_unit": "\u00b5g/L",
     "alternatives": [],
     "ranges": {
       "default": [
         70.0,
         150.0
       ]
-    }
+    },
+    "loinc_code": "5727-8"
   },
   "Blood - Sex Hormone-Binding Globulin (SHBG)": {
     "lab_type": "blood",
@@ -3415,7 +3690,8 @@
         10,
         57
       ]
-    }
+    },
+    "loinc_code": "1835-8"
   },
   "Blood - Sodium": {
     "lab_type": "blood",
@@ -3431,11 +3707,12 @@
         135.0,
         145.0
       ]
-    }
+    },
+    "loinc_code": "2951-2"
   },
   "Blood - Thyroid Stimulating Hormone (TSH)": {
     "lab_type": "blood",
-    "primary_unit": "µIU/mL",
+    "primary_unit": "\u00b5IU/mL",
     "alternatives": [
       {
         "unit": "mUI/L",
@@ -3451,7 +3728,8 @@
         0.4,
         4.0
       ]
-    }
+    },
+    "loinc_code": "3016-3"
   },
   "Blood - Total Cholesterol": {
     "lab_type": "blood",
@@ -3469,14 +3747,15 @@
       ]
     },
     "biological_min": 0,
-    "biological_max": 600
+    "biological_max": 600,
+    "loinc_code": "2093-3"
   },
   "Blood - Total Iron-Binding Capacity (TIBC)": {
     "lab_type": "blood",
-    "primary_unit": "µg/dL",
+    "primary_unit": "\u00b5g/dL",
     "alternatives": [
       {
-        "unit": "µg/L",
+        "unit": "\u00b5g/L",
         "factor": 0.1
       }
     ],
@@ -3485,7 +3764,8 @@
         250.0,
         450.0
       ]
-    }
+    },
+    "loinc_code": "2500-7"
   },
   "Blood - Total Protein": {
     "lab_type": "blood",
@@ -3501,7 +3781,8 @@
         6.0,
         8.3
       ]
-    }
+    },
+    "loinc_code": "2885-2"
   },
   "Blood - Total T3": {
     "lab_type": "blood",
@@ -3517,11 +3798,12 @@
         0.6,
         2.0
       ]
-    }
+    },
+    "loinc_code": "3050-2"
   },
   "Blood - Total T4": {
     "lab_type": "blood",
-    "primary_unit": "µg/dL",
+    "primary_unit": "\u00b5g/dL",
     "alternatives": [
       {
         "unit": "nmol/L",
@@ -3533,7 +3815,8 @@
         5,
         12
       ]
-    }
+    },
+    "loinc_code": "3026-2"
   },
   "Blood - Total Testosterone": {
     "lab_type": "blood",
@@ -3561,14 +3844,15 @@
         15,
         70
       ]
-    }
+    },
+    "loinc_code": "2986-8"
   },
   "Blood - Transferrin": {
     "lab_type": "blood",
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "µmol/L",
+        "unit": "\u00b5mol/L",
         "factor": 7.957
       }
     ],
@@ -3577,7 +3861,8 @@
         200.0,
         360.0
       ]
-    }
+    },
+    "loinc_code": "3034-6"
   },
   "Blood - Transferrin (%)": {
     "lab_type": "blood",
@@ -3588,7 +3873,8 @@
         20.0,
         50.0
       ]
-    }
+    },
+    "loinc_code": "2505-6"
   },
   "Blood - Transferrin Saturation (%)": {
     "lab_type": "blood",
@@ -3607,13 +3893,15 @@
         15,
         45
       ]
-    }
+    },
+    "loinc_code": "2502-3"
   },
   "Blood - Treponema pallidum Hemagglutination (TPHA)": {
     "lab_type": "blood",
     "primary_unit": "boolean",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "5406-3"
   },
   "Blood - Triglycerides": {
     "lab_type": "blood",
@@ -3631,7 +3919,8 @@
       ]
     },
     "biological_min": 0,
-    "biological_max": 2000
+    "biological_max": 2000,
+    "loinc_code": "2571-8"
   },
   "Blood - Urea": {
     "lab_type": "blood",
@@ -3647,7 +3936,8 @@
         13,
         45
       ]
-    }
+    },
+    "loinc_code": "3094-0"
   },
   "Blood - Uric Acid": {
     "lab_type": "blood",
@@ -3671,7 +3961,8 @@
         2.4,
         6.0
       ]
-    }
+    },
+    "loinc_code": "3084-1"
   },
   "Blood - VDRL": {
     "lab_type": "blood",
@@ -3682,7 +3973,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "5292-8"
   },
   "Blood - Very Low-Density Lipoprotein Cholesterol (VLDL)": {
     "lab_type": "blood",
@@ -3698,18 +3990,20 @@
         5.0,
         30.0
       ]
-    }
+    },
+    "loinc_code": "13457-7"
   },
   "Blood - Vitamin A (Retinol)": {
     "lab_type": "blood",
-    "primary_unit": "µg/dL",
+    "primary_unit": "\u00b5g/dL",
     "alternatives": [],
     "ranges": {
       "default": [
         20.0,
         60.0
       ]
-    }
+    },
+    "loinc_code": "2905-8"
   },
   "Blood - Vitamin B12": {
     "lab_type": "blood",
@@ -3729,11 +4023,12 @@
         133.0,
         675.0
       ]
-    }
+    },
+    "loinc_code": "2132-9"
   },
   "Blood - Vitamin B6 (PLP)": {
     "lab_type": "blood",
-    "primary_unit": "µg/L",
+    "primary_unit": "\u00b5g/L",
     "alternatives": [
       {
         "unit": "ng/mL",
@@ -3745,14 +4040,15 @@
         5.0,
         50.0
       ]
-    }
+    },
+    "loinc_code": "14635-7"
   },
   "Blood - Vitamin C (Ascorbic Acid)": {
     "lab_type": "blood",
     "primary_unit": "mg/L",
     "alternatives": [
       {
-        "unit": "µmol/L",
+        "unit": "\u00b5mol/L",
         "factor": 0.176
       }
     ],
@@ -3761,7 +4057,8 @@
         4.0,
         20.0
       ]
-    }
+    },
+    "loinc_code": "2164-2"
   },
   "Blood - Vitamin E (Alpha-Tocopherol)": {
     "lab_type": "blood",
@@ -3772,7 +4069,8 @@
         5.5,
         17.0
       ]
-    }
+    },
+    "loinc_code": "14590-4"
   },
   "Blood - Waaler-Rose Test": {
     "lab_type": "blood",
@@ -3783,7 +4081,8 @@
         0,
         20
       ]
-    }
+    },
+    "loinc_code": "11572-5"
   },
   "Blood - Widal (S. Paratyphi A H)": {
     "lab_type": "blood",
@@ -3794,7 +4093,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "22518-5"
   },
   "Blood - Widal (S. Paratyphi A O)": {
     "lab_type": "blood",
@@ -3805,7 +4105,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "33316-1"
   },
   "Blood - Widal (S. Paratyphi B H)": {
     "lab_type": "blood",
@@ -3816,7 +4117,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "22522-7"
   },
   "Blood - Widal (S. Paratyphi B O)": {
     "lab_type": "blood",
@@ -3827,7 +4129,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "11265-6"
   },
   "Blood - Widal (S. Typhi H)": {
     "lab_type": "blood",
@@ -3838,7 +4141,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "42960-5"
   },
   "Blood - Widal (S. Typhi O)": {
     "lab_type": "blood",
@@ -3849,7 +4153,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "42959-7"
   },
   "Blood - Wright Reaction": {
     "lab_type": "blood",
@@ -3860,14 +4165,15 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "5406-3"
   },
   "Blood - Zinc": {
     "lab_type": "blood",
-    "primary_unit": "µmol/L",
+    "primary_unit": "\u00b5mol/L",
     "alternatives": [
       {
-        "unit": "µg/dL",
+        "unit": "\u00b5g/dL",
         "factor": 0.153
       }
     ],
@@ -3876,18 +4182,19 @@
         10.7,
         22.9
       ]
-    }
+    },
+    "loinc_code": "5671-8"
   },
   "Blood - eGFR (CKD-EPI)": {
     "lab_type": "blood",
-    "primary_unit": "mL/min/1.73m²",
+    "primary_unit": "mL/min/1.73m\u00b2",
     "alternatives": [
       {
-        "unit": "ml/min/1.73 m²",
+        "unit": "ml/min/1.73 m\u00b2",
         "factor": 1.0
       },
       {
-        "unit": "ml/min/1,73 m²",
+        "unit": "ml/min/1,73 m\u00b2",
         "factor": 1.0
       }
     ],
@@ -3896,7 +4203,8 @@
         90.0,
         120.0
       ]
-    }
+    },
+    "loinc_code": "98979-8"
   },
   "Feces - Calprotectin": {
     "lab_type": "feces",
@@ -3907,18 +4215,20 @@
         0.0,
         50.0
       ]
-    }
+    },
+    "loinc_code": "27925-7"
   },
   "Feces - Chymotrypsin": {
     "lab_type": "feces",
-    "primary_unit": "µg",
+    "primary_unit": "\u00b5g",
     "alternatives": [],
     "ranges": {
       "default": [
         6,
         9999
       ]
-    }
+    },
+    "loinc_code": "2088-8"
   },
   "Feces - Fecal Occult Blood (FOBT)": {
     "lab_type": "feces",
@@ -3929,7 +4239,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "2335-8"
   },
   "Feces - Gram Bacteria": {
     "lab_type": "feces",
@@ -3940,7 +4251,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "664-3"
   },
   "Feces - Helicobacter pylori Ag": {
     "lab_type": "feces",
@@ -3951,7 +4263,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "31843-6"
   },
   "Feces - Muscle Fibres (partial digestion)": {
     "lab_type": "feces",
@@ -3962,7 +4275,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "9830-1"
   },
   "Feces - Neutral Fats": {
     "lab_type": "feces",
@@ -3973,7 +4287,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "9831-9"
   },
   "Feces - Ova & Parasites": {
     "lab_type": "feces",
@@ -3984,18 +4299,20 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "673-4"
   },
   "Feces - Pancreatic Elastase": {
     "lab_type": "feces",
-    "primary_unit": "µg/g",
+    "primary_unit": "\u00b5g/g",
     "alternatives": [],
     "ranges": {
       "default": [
         200,
         9999
       ]
-    }
+    },
+    "loinc_code": "13969-1"
   },
   "Feces - Salmonella": {
     "lab_type": "feces",
@@ -4006,7 +4323,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "82301-3"
   },
   "Feces - Shigella": {
     "lab_type": "feces",
@@ -4017,7 +4335,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "82300-5"
   },
   "Feces - Starch Granules": {
     "lab_type": "feces",
@@ -4028,7 +4347,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "9832-7"
   },
   "Feces - Yersinia": {
     "lab_type": "feces",
@@ -4039,7 +4359,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "28549-4"
   },
   "Saliva - SARS-CoV-2 RNA (RT-PCR)": {
     "lab_type": "saliva",
@@ -4050,7 +4371,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "94500-6"
   },
   "Saliva - Secretory IgA": {
     "lab_type": "saliva",
@@ -4061,13 +4383,15 @@
         10.0,
         27.0
       ]
-    }
+    },
+    "loinc_code": "26849-0"
   },
   "Sample - Product Type": {
     "lab_type": "sample",
     "primary_unit": "unitless",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "31208-2"
   },
   "Urine - Bacteriological - Acid-Fast Bacilli": {
     "lab_type": "urine",
@@ -4078,13 +4402,15 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "13926-1"
   },
   "Urine - Bacteriological - Colony Count": {
     "lab_type": "urine",
     "primary_unit": "UFC/mL",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "19090-0"
   },
   "Urine - Bacteriological - Culture": {
     "lab_type": "urine",
@@ -4095,7 +4421,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "630-4"
   },
   "Urine - Bacteriological - Cytology": {
     "lab_type": "urine",
@@ -4106,7 +4433,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "19764-0"
   },
   "Urine - Bacteriological - Gram Bacteria": {
     "lab_type": "urine",
@@ -4117,7 +4445,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "664-3"
   },
   "Urine - Bacteriological - Gram Negative Bacteria": {
     "lab_type": "urine",
@@ -4128,7 +4457,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "664-3"
   },
   "Urine - Bacteriological - Gram Positive Bacteria": {
     "lab_type": "urine",
@@ -4139,18 +4469,20 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "664-3"
   },
   "Urine - Free Cortisol (24 Hours)": {
     "lab_type": "urine",
-    "primary_unit": "µg/24h",
+    "primary_unit": "\u00b5g/24h",
     "alternatives": [],
     "ranges": {
       "default": [
         10.0,
         50.0
       ]
-    }
+    },
+    "loinc_code": "2144-4"
   },
   "Urine - Free Cortisol (24 Hours) - Volume": {
     "lab_type": "urine",
@@ -4161,13 +4493,15 @@
         600.0,
         9999
       ]
-    }
+    },
+    "loinc_code": "3167-4"
   },
   "Urine - Hemosiderin": {
     "lab_type": "urine",
     "primary_unit": "boolean",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "10574-1"
   },
   "Urine Type II - Albumin": {
     "lab_type": "urine",
@@ -4178,7 +4512,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "1754-1"
   },
   "Urine Type II - Appearance": {
     "lab_type": "urine",
@@ -4189,7 +4524,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "5767-4"
   },
   "Urine Type II - Bilirubin": {
     "lab_type": "urine",
@@ -4205,7 +4541,8 @@
         0,
         0.2
       ]
-    }
+    },
+    "loinc_code": "1977-8"
   },
   "Urine Type II - Blood": {
     "lab_type": "urine",
@@ -4216,13 +4553,15 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "5794-8"
   },
   "Urine Type II - Color": {
     "lab_type": "urine",
     "primary_unit": "unitless",
     "alternatives": [],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "5778-1"
   },
   "Urine Type II - Colour": {
     "lab_type": "urine",
@@ -4233,7 +4572,8 @@
         1,
         1
       ]
-    }
+    },
+    "loinc_code": "5778-1"
   },
   "Urine Type II - Density": {
     "lab_type": "urine",
@@ -4244,7 +4584,8 @@
         1.01,
         1.025
       ]
-    }
+    },
+    "loinc_code": "5811-0"
   },
   "Urine Type II - Deposit": {
     "lab_type": "urine",
@@ -4255,7 +4596,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "5787-2"
   },
   "Urine Type II - Glucose": {
     "lab_type": "urine",
@@ -4271,7 +4613,8 @@
         0,
         15
       ]
-    }
+    },
+    "loinc_code": "2350-7"
   },
   "Urine Type II - Haemoglobin": {
     "lab_type": "urine",
@@ -4282,7 +4625,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "5794-8"
   },
   "Urine Type II - Ketones": {
     "lab_type": "urine",
@@ -4298,7 +4642,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "2514-8"
   },
   "Urine Type II - Leukocytes": {
     "lab_type": "urine",
@@ -4309,7 +4654,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "5799-7"
   },
   "Urine Type II - Nitrites": {
     "lab_type": "urine",
@@ -4320,7 +4666,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "5802-9"
   },
   "Urine Type II - Proteins": {
     "lab_type": "urine",
@@ -4336,7 +4683,8 @@
         0,
         15
       ]
-    }
+    },
+    "loinc_code": "2888-6"
   },
   "Urine Type II - Sediment - Casts": {
     "lab_type": "urine",
@@ -4347,7 +4695,8 @@
         "factor": 1.0
       }
     ],
-    "ranges": {}
+    "ranges": {},
+    "loinc_code": "5820-1"
   },
   "Urine Type II - Sediment - Cells": {
     "lab_type": "urine",
@@ -4363,7 +4712,8 @@
         0.0,
         5.0
       ]
-    }
+    },
+    "loinc_code": "5787-2"
   },
   "Urine Type II - Sediment - Crystals": {
     "lab_type": "urine",
@@ -4379,7 +4729,8 @@
         0.0,
         1.0
       ]
-    }
+    },
+    "loinc_code": "5774-0"
   },
   "Urine Type II - Sediment - Epithelial Cells": {
     "lab_type": "urine",
@@ -4395,7 +4746,8 @@
         0.0,
         5.0
       ]
-    }
+    },
+    "loinc_code": "5787-2"
   },
   "Urine Type II - Sediment - Erythrocytes": {
     "lab_type": "urine",
@@ -4411,7 +4763,8 @@
         0.0,
         2.0
       ]
-    }
+    },
+    "loinc_code": "5807-8"
   },
   "Urine Type II - Sediment - Leukocytes": {
     "lab_type": "urine",
@@ -4427,7 +4780,8 @@
         0.0,
         5.0
       ]
-    }
+    },
+    "loinc_code": "5821-9"
   },
   "Urine Type II - Sediment - Small Round Cells": {
     "lab_type": "urine",
@@ -4443,7 +4797,8 @@
         0.0,
         2.0
       ]
-    }
+    },
+    "loinc_code": "13945-1"
   },
   "Urine Type II - Sediment - Squamous Epithelial Cells": {
     "lab_type": "urine",
@@ -4459,7 +4814,8 @@
         0.0,
         5.0
       ]
-    }
+    },
+    "loinc_code": "12258-0"
   },
   "Urine Type II - Sediment - Total Casts": {
     "lab_type": "urine",
@@ -4470,7 +4826,8 @@
         0.0,
         1.0
       ]
-    }
+    },
+    "loinc_code": "5820-1"
   },
   "Urine Type II - Sediment - Transitional epithelial cells": {
     "lab_type": "urine",
@@ -4481,7 +4838,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "13945-1"
   },
   "Urine Type II - Sediment - Tubular epithelial cells": {
     "lab_type": "urine",
@@ -4492,7 +4850,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "12248-1"
   },
   "Urine Type II - Sediment - Upper tract cells": {
     "lab_type": "urine",
@@ -4503,7 +4862,8 @@
         0.0,
         2.0
       ]
-    }
+    },
+    "loinc_code": "12248-1"
   },
   "Urine Type II - Specific Gravity": {
     "lab_type": "urine",
@@ -4514,7 +4874,8 @@
         1.003,
         1.03
       ]
-    }
+    },
+    "loinc_code": "5811-0"
   },
   "Urine Type II - Turbidity": {
     "lab_type": "urine",
@@ -4525,7 +4886,8 @@
         0,
         0
       ]
-    }
+    },
+    "loinc_code": "5767-4"
   },
   "Urine Type II - Urobilinogen": {
     "lab_type": "urine",
@@ -4541,7 +4903,8 @@
         0,
         1.0
       ]
-    }
+    },
+    "loinc_code": "20405-7"
   },
   "Urine Type II - pH": {
     "lab_type": "urine",
@@ -4552,6 +4915,7 @@
         4.6,
         8.0
       ]
-    }
+    },
+    "loinc_code": "5803-7"
   }
 }
