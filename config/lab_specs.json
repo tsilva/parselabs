@@ -29,7 +29,7 @@
       "tolerance_percent": 10
     }
   ],
-  "Blood - 1,25-OH\u2082 Vitamin D": {
+  "Blood - 1,25-OH₂ Vitamin D": {
     "lab_type": "blood",
     "primary_unit": "pg/mL",
     "alternatives": [
@@ -67,11 +67,11 @@
         "factor": 0.4
       },
       {
-        "unit": "\u00b5g/L",
+        "unit": "µg/L",
         "factor": 1.0
       },
       {
-        "unit": "\u00b5g/dL",
+        "unit": "µg/dL",
         "factor": 10.0
       },
       {
@@ -120,11 +120,11 @@
         "factor": 1.0
       },
       {
-        "unit": "U/L a 37\u00b0",
+        "unit": "U/L a 37°",
         "factor": 1.0
       },
       {
-        "unit": "U/L a 37\u00ba",
+        "unit": "U/L a 37º",
         "factor": 1.0
       }
     ],
@@ -177,11 +177,11 @@
         "factor": 1.0
       },
       {
-        "unit": "U/L a 37\u00b0",
+        "unit": "U/L a 37°",
         "factor": 1.0
       },
       {
-        "unit": "U/L a 37\u00ba",
+        "unit": "U/L a 37º",
         "factor": 1.0
       }
     ],
@@ -251,11 +251,11 @@
         "factor": 1.0
       },
       {
-        "unit": "U/L a 37\u00b0",
+        "unit": "U/L a 37°",
         "factor": 1.0
       },
       {
-        "unit": "U/L a 37\u00ba",
+        "unit": "U/L a 37º",
         "factor": 1.0
       }
     ],
@@ -375,7 +375,7 @@
   },
   "Blood - Ammonia": {
     "lab_type": "blood",
-    "primary_unit": "\u00b5mol/L",
+    "primary_unit": "µmol/L",
     "alternatives": [],
     "ranges": {
       "default": [
@@ -639,7 +639,7 @@
     },
     "loinc_code": "5469-1"
   },
-  "Blood - Anti-Sj\u00f6gren's-Syndrome-Related Antigen A Antibody (Anti-SSA/Ro Ab)": {
+  "Blood - Anti-Sjögren's-Syndrome-Related Antigen A Antibody (Anti-SSA/Ro Ab)": {
     "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [
@@ -656,7 +656,7 @@
     },
     "loinc_code": "11090-8"
   },
-  "Blood - Anti-Sj\u00f6gren's-Syndrome-Related Antigen B Antibody (Anti-SSB/La Ab)": {
+  "Blood - Anti-Sjögren's-Syndrome-Related Antigen B Antibody (Anti-SSB/La Ab)": {
     "lab_type": "blood",
     "primary_unit": "IU/mL",
     "alternatives": [],
@@ -801,11 +801,11 @@
         "factor": 1.0
       },
       {
-        "unit": "U/L a 37\u00b0",
+        "unit": "U/L a 37°",
         "factor": 1.0
       },
       {
-        "unit": "U/L a 37\u00ba",
+        "unit": "U/L a 37º",
         "factor": 1.0
       }
     ],
@@ -852,14 +852,14 @@
   },
   "Blood - Basophils": {
     "lab_type": "blood",
-    "primary_unit": "10\u2079/L",
+    "primary_unit": "10⁹/L",
     "alternatives": [
       {
-        "unit": "10\u2076/L",
+        "unit": "10⁶/L",
         "factor": 0.001
       },
       {
-        "unit": "x10\u2079/L",
+        "unit": "x10⁹/L",
         "factor": 1.0
       },
       {
@@ -867,7 +867,7 @@
         "factor": 0.001
       },
       {
-        "unit": "cells/mm\u00b3",
+        "unit": "cells/mm³",
         "factor": 0.001
       }
     ],
@@ -968,7 +968,7 @@
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "\u00b5mol/L",
+        "unit": "µmol/L",
         "factor": 0.0585
       }
     ],
@@ -985,7 +985,7 @@
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "\u00b5mol/L",
+        "unit": "µmol/L",
         "factor": 0.0585
       }
     ],
@@ -1002,7 +1002,7 @@
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "\u00b5mol/L",
+        "unit": "µmol/L",
         "factor": 0.0585
       }
     ],
@@ -1154,7 +1154,7 @@
   },
   "Blood - Chromium (Cr)": {
     "lab_type": "blood",
-    "primary_unit": "\u00b5g/L",
+    "primary_unit": "µg/L",
     "alternatives": [],
     "ranges": {
       "default": [
@@ -1166,7 +1166,7 @@
   },
   "Blood - Circulating Immune Complexes": {
     "lab_type": "blood",
-    "primary_unit": "\u00b5g/mL",
+    "primary_unit": "µg/mL",
     "alternatives": [],
     "ranges": {
       "default": [
@@ -1207,7 +1207,7 @@
   },
   "Blood - Copper": {
     "lab_type": "blood",
-    "primary_unit": "\u00b5g/dL",
+    "primary_unit": "µg/dL",
     "alternatives": [],
     "ranges": {
       "default": [
@@ -1227,7 +1227,7 @@
   },
   "Blood - Copper (Erythrocytes)": {
     "lab_type": "blood",
-    "primary_unit": "\u00b5g/dL",
+    "primary_unit": "µg/dL",
     "alternatives": [],
     "ranges": {
       "default": [
@@ -1242,7 +1242,7 @@
     "primary_unit": "ng/mL",
     "alternatives": [
       {
-        "unit": "\u00b5g/dL",
+        "unit": "µg/dL",
         "factor": 10.0
       }
     ],
@@ -1279,7 +1279,7 @@
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "\u00b5mol/L",
+        "unit": "µmol/L",
         "factor": 0.0113
       }
     ],
@@ -1336,7 +1336,7 @@
   },
   "Blood - Dehydroepiandrosterone (DHEA)-S": {
     "lab_type": "blood",
-    "primary_unit": "\u00b5g/mL",
+    "primary_unit": "µg/mL",
     "alternatives": [],
     "ranges": {
       "default": [
@@ -1379,14 +1379,14 @@
   },
   "Blood - Eosinophils": {
     "lab_type": "blood",
-    "primary_unit": "10\u2079/L",
+    "primary_unit": "10⁹/L",
     "alternatives": [
       {
-        "unit": "10\u2076/L",
+        "unit": "10⁶/L",
         "factor": 0.001
       },
       {
-        "unit": "x10\u2079/L",
+        "unit": "x10⁹/L",
         "factor": 1.0
       },
       {
@@ -1394,7 +1394,7 @@
         "factor": 0.001
       },
       {
-        "unit": "cells/mm\u00b3",
+        "unit": "cells/mm³",
         "factor": 0.001
       }
     ],
@@ -1564,10 +1564,10 @@
   },
   "Blood - Erythrocytes": {
     "lab_type": "blood",
-    "primary_unit": "10\u00b9\u00b2/L",
+    "primary_unit": "10¹²/L",
     "alternatives": [
       {
-        "unit": "10\u2079/L",
+        "unit": "10⁹/L",
         "factor": 0.001
       },
       {
@@ -1575,7 +1575,7 @@
         "factor": 1.0
       },
       {
-        "unit": "10\u2076/mm\u00b3",
+        "unit": "10⁶/mm³",
         "factor": 1.0
       }
     ],
@@ -1597,14 +1597,14 @@
   },
   "Blood - Erythrocytes (RBC)": {
     "lab_type": "blood",
-    "primary_unit": "10\u00b9\u00b2/L",
+    "primary_unit": "10¹²/L",
     "alternatives": [
       {
         "unit": "10^12/L",
         "factor": 1.0
       },
       {
-        "unit": "x10\u00b9\u00b2/L",
+        "unit": "x10¹²/L",
         "factor": 1.0
       },
       {
@@ -1612,7 +1612,7 @@
         "factor": 1.0
       },
       {
-        "unit": "M/\u00b5L",
+        "unit": "M/µL",
         "factor": 1.0
       },
       {
@@ -1700,7 +1700,7 @@
     "primary_unit": "ng/mL",
     "alternatives": [
       {
-        "unit": "\u00b5g/L",
+        "unit": "µg/L",
         "factor": 1.0
       }
     ],
@@ -1849,11 +1849,11 @@
         "factor": 1.0
       },
       {
-        "unit": "U/L a 37\u00b0",
+        "unit": "U/L a 37°",
         "factor": 1.0
       },
       {
-        "unit": "U/L a 37\u00ba",
+        "unit": "U/L a 37º",
         "factor": 1.0
       }
     ],
@@ -2294,10 +2294,10 @@
   },
   "Blood - Homocysteine": {
     "lab_type": "blood",
-    "primary_unit": "\u00b5g/mL",
+    "primary_unit": "µg/mL",
     "alternatives": [
       {
-        "unit": "\u00b5mol/L",
+        "unit": "µmol/L",
         "factor": 0.135
       }
     ],
@@ -2486,14 +2486,14 @@
   },
   "Blood - Iron": {
     "lab_type": "blood",
-    "primary_unit": "\u00b5g/dL",
+    "primary_unit": "µg/dL",
     "alternatives": [
       {
-        "unit": "\u00b5mol/L",
+        "unit": "µmol/L",
         "factor": 5.5845
       },
       {
-        "unit": "\u00b5g/L",
+        "unit": "µg/L",
         "factor": 0.1
       }
     ],
@@ -2566,18 +2566,18 @@
   },
   "Blood - Leukocytes": {
     "lab_type": "blood",
-    "primary_unit": "10\u2079/L",
+    "primary_unit": "10⁹/L",
     "alternatives": [
       {
-        "unit": "10\u2076/L",
+        "unit": "10⁶/L",
         "factor": 0.001
       },
       {
-        "unit": "cells/\u00b5L",
+        "unit": "cells/µL",
         "factor": 0.001
       },
       {
-        "unit": "x10\u2079/L",
+        "unit": "x10⁹/L",
         "factor": 1.0
       },
       {
@@ -2585,7 +2585,7 @@
         "factor": 0.001
       },
       {
-        "unit": "cells/mm\u00b3",
+        "unit": "cells/mm³",
         "factor": 0.001
       }
     ],
@@ -2711,14 +2711,14 @@
   },
   "Blood - Lymphocytes": {
     "lab_type": "blood",
-    "primary_unit": "10\u2079/L",
+    "primary_unit": "10⁹/L",
     "alternatives": [
       {
-        "unit": "10\u2076/L",
+        "unit": "10⁶/L",
         "factor": 0.001
       },
       {
-        "unit": "x10\u2079/L",
+        "unit": "x10⁹/L",
         "factor": 1.0
       },
       {
@@ -2726,7 +2726,7 @@
         "factor": 0.001
       },
       {
-        "unit": "cells/mm\u00b3",
+        "unit": "cells/mm³",
         "factor": 0.001
       }
     ],
@@ -2902,14 +2902,14 @@
   },
   "Blood - Monocytes": {
     "lab_type": "blood",
-    "primary_unit": "10\u2079/L",
+    "primary_unit": "10⁹/L",
     "alternatives": [
       {
-        "unit": "10\u2076/L",
+        "unit": "10⁶/L",
         "factor": 0.001
       },
       {
-        "unit": "x10\u2079/L",
+        "unit": "x10⁹/L",
         "factor": 1.0
       },
       {
@@ -2917,7 +2917,7 @@
         "factor": 0.001
       },
       {
-        "unit": "cells/mm\u00b3",
+        "unit": "cells/mm³",
         "factor": 0.001
       }
     ],
@@ -2955,14 +2955,14 @@
   },
   "Blood - Neutrophils": {
     "lab_type": "blood",
-    "primary_unit": "10\u2079/L",
+    "primary_unit": "10⁹/L",
     "alternatives": [
       {
-        "unit": "10\u2076/L",
+        "unit": "10⁶/L",
         "factor": 0.001
       },
       {
-        "unit": "x10\u2079/L",
+        "unit": "x10⁹/L",
         "factor": 1.0
       },
       {
@@ -2970,7 +2970,7 @@
         "factor": 0.001
       },
       {
-        "unit": "cells/mm\u00b3",
+        "unit": "cells/mm³",
         "factor": 0.001
       }
     ],
@@ -3244,10 +3244,10 @@
   },
   "Blood - Platelets": {
     "lab_type": "blood",
-    "primary_unit": "10\u2079/L",
+    "primary_unit": "10⁹/L",
     "alternatives": [
       {
-        "unit": "10\u2076/L",
+        "unit": "10⁶/L",
         "factor": 0.001
       },
       {
@@ -3255,7 +3255,7 @@
         "factor": 0.001
       },
       {
-        "unit": "10\u00b3/mm\u00b3",
+        "unit": "10³/mm³",
         "factor": 1.0
       }
     ],
@@ -3509,10 +3509,10 @@
   },
   "Blood - Reticulocyte Count": {
     "lab_type": "blood",
-    "primary_unit": "10\u2079/L",
+    "primary_unit": "10⁹/L",
     "alternatives": [
       {
-        "unit": "cells/\u00b5L",
+        "unit": "cells/µL",
         "factor": 0.001
       }
     ],
@@ -3598,7 +3598,7 @@
   },
   "Blood - Reticulocytes (absolute)": {
     "lab_type": "blood",
-    "primary_unit": "10\u2079/L",
+    "primary_unit": "10⁹/L",
     "alternatives": [],
     "ranges": {
       "default": [
@@ -3667,7 +3667,7 @@
   },
   "Blood - Selenium": {
     "lab_type": "blood",
-    "primary_unit": "\u00b5g/L",
+    "primary_unit": "µg/L",
     "alternatives": [],
     "ranges": {
       "default": [
@@ -3712,7 +3712,7 @@
   },
   "Blood - Thyroid Stimulating Hormone (TSH)": {
     "lab_type": "blood",
-    "primary_unit": "\u00b5IU/mL",
+    "primary_unit": "µIU/mL",
     "alternatives": [
       {
         "unit": "mUI/L",
@@ -3752,10 +3752,10 @@
   },
   "Blood - Total Iron-Binding Capacity (TIBC)": {
     "lab_type": "blood",
-    "primary_unit": "\u00b5g/dL",
+    "primary_unit": "µg/dL",
     "alternatives": [
       {
-        "unit": "\u00b5g/L",
+        "unit": "µg/L",
         "factor": 0.1
       }
     ],
@@ -3803,7 +3803,7 @@
   },
   "Blood - Total T4": {
     "lab_type": "blood",
-    "primary_unit": "\u00b5g/dL",
+    "primary_unit": "µg/dL",
     "alternatives": [
       {
         "unit": "nmol/L",
@@ -3852,7 +3852,7 @@
     "primary_unit": "mg/dL",
     "alternatives": [
       {
-        "unit": "\u00b5mol/L",
+        "unit": "µmol/L",
         "factor": 7.957
       }
     ],
@@ -3995,7 +3995,7 @@
   },
   "Blood - Vitamin A (Retinol)": {
     "lab_type": "blood",
-    "primary_unit": "\u00b5g/dL",
+    "primary_unit": "µg/dL",
     "alternatives": [],
     "ranges": {
       "default": [
@@ -4028,7 +4028,7 @@
   },
   "Blood - Vitamin B6 (PLP)": {
     "lab_type": "blood",
-    "primary_unit": "\u00b5g/L",
+    "primary_unit": "µg/L",
     "alternatives": [
       {
         "unit": "ng/mL",
@@ -4048,7 +4048,7 @@
     "primary_unit": "mg/L",
     "alternatives": [
       {
-        "unit": "\u00b5mol/L",
+        "unit": "µmol/L",
         "factor": 0.176
       }
     ],
@@ -4170,10 +4170,10 @@
   },
   "Blood - Zinc": {
     "lab_type": "blood",
-    "primary_unit": "\u00b5mol/L",
+    "primary_unit": "µmol/L",
     "alternatives": [
       {
-        "unit": "\u00b5g/dL",
+        "unit": "µg/dL",
         "factor": 0.153
       }
     ],
@@ -4187,14 +4187,14 @@
   },
   "Blood - eGFR (CKD-EPI)": {
     "lab_type": "blood",
-    "primary_unit": "mL/min/1.73m\u00b2",
+    "primary_unit": "mL/min/1.73m²",
     "alternatives": [
       {
-        "unit": "ml/min/1.73 m\u00b2",
+        "unit": "ml/min/1.73 m²",
         "factor": 1.0
       },
       {
-        "unit": "ml/min/1,73 m\u00b2",
+        "unit": "ml/min/1,73 m²",
         "factor": 1.0
       }
     ],
@@ -4220,7 +4220,7 @@
   },
   "Feces - Chymotrypsin": {
     "lab_type": "feces",
-    "primary_unit": "\u00b5g",
+    "primary_unit": "µg",
     "alternatives": [],
     "ranges": {
       "default": [
@@ -4304,7 +4304,7 @@
   },
   "Feces - Pancreatic Elastase": {
     "lab_type": "feces",
-    "primary_unit": "\u00b5g/g",
+    "primary_unit": "µg/g",
     "alternatives": [],
     "ranges": {
       "default": [
@@ -4474,7 +4474,7 @@
   },
   "Urine - Free Cortisol (24 Hours)": {
     "lab_type": "urine",
-    "primary_unit": "\u00b5g/24h",
+    "primary_unit": "µg/24h",
     "alternatives": [],
     "ranges": {
       "default": [
