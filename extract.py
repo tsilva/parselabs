@@ -1008,6 +1008,14 @@ def main():
         logger.error("No data to process")
         return
 
+    # Filter out legacy columns that are not in current schema
+    # (e.g., verification_status, verified, cross_model_verified, etc. from old versions)
+    expected_cols = list(LabResult.model_fields.keys()) + ["date"]
+    legacy_cols = [col for col in merged_df.columns if col not in expected_cols]
+    if legacy_cols:
+        logger.info(f"Removing {len(legacy_cols)} legacy columns: {', '.join(legacy_cols)}")
+        merged_df = merged_df.drop(columns=legacy_cols)
+
     # Apply normalizations (no demographics - moved to review tool)
     logger.info("Applying normalizations...")
     merged_df = apply_normalizations(merged_df, lab_specs, client, config.self_consistency_model_id)
@@ -1048,14 +1056,17 @@ def main():
 
     # Add confidence column (default to 1.0)
     merged_df["confidence"] = 1.0
+    logger.debug(f"After setting confidence=1.0: NaN count = {merged_df['confidence'].isna().sum()}")
 
     # Select final columns
     final_cols = [col for col in export_cols if col in merged_df.columns]
     merged_df = merged_df[final_cols]
+    logger.debug(f"After column filtering: confidence NaN count = {merged_df['confidence'].isna().sum() if 'confidence' in merged_df.columns else 'column missing'}")
 
     # Apply dtype conversions
     logger.info("Applying data type conversions...")
     merged_df = apply_dtype_conversions(merged_df, dtypes)
+    logger.debug(f"After dtype conversion: confidence NaN count = {merged_df['confidence'].isna().sum()}")
 
     # Save merged CSV
     logger.info("Saving merged CSV...")
