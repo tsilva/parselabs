@@ -49,6 +49,14 @@ class ValueValidator:
             "rows_flagged": 0,
             "flags_by_reason": {},
         }
+        # Column name mappings (resolved once per validate() call)
+        self._value_col: str = ''
+        self._lab_name_col: str = ''
+        self._unit_col: str = ''
+        self._date_col: str = 'date'
+        self._ref_min_col: str = ''
+        self._ref_max_col: str = ''
+        self._value_raw_col: str = 'value_raw'
 
     @property
     def validation_stats(self) -> dict:
@@ -76,6 +84,13 @@ class ValueValidator:
             df['review_reason'] = ''
         if 'review_confidence' not in df.columns:
             df['review_confidence'] = 1.0
+
+        # Resolve column names once (supports both naming conventions)
+        self._value_col = 'value' if 'value' in df.columns else 'value_primary'
+        self._lab_name_col = 'lab_name' if 'lab_name' in df.columns else 'lab_name_standardized'
+        self._unit_col = 'unit' if 'unit' in df.columns else 'lab_unit_primary'
+        self._ref_min_col = 'reference_min' if 'reference_min' in df.columns else 'reference_min_primary'
+        self._ref_max_col = 'reference_max' if 'reference_max' in df.columns else 'reference_max_primary'
 
         # Reset stats
         self._validation_stats = {
@@ -152,62 +167,55 @@ class ValueValidator:
         - Percentage bounds (0-100%)
         - Boolean constraints (0/1 for positive/negative tests)
         """
-        value_col = 'value' if 'value' in df.columns else 'value_primary'
-        lab_name_col = 'lab_name' if 'lab_name' in df.columns else 'lab_name_standardized'
-        unit_col = 'unit' if 'unit' in df.columns else 'lab_unit_primary'
-
-        if value_col not in df.columns or lab_name_col not in df.columns:
+        if self._value_col not in df.columns or self._lab_name_col not in df.columns:
             return df
 
-        # Check negative values (excluding labs that can be negative like temperature change)
-        negative_allowed = {
-            'Blood - Anion Gap',  # Can be negative in some conditions
+        # Labs allowed to have negative values
+        negative_allowed = {'Blood - Anion Gap'}
+
+        # Collect indices to flag by reason code
+        flags: dict[str, list] = {
+            "NEGATIVE_VALUE": [],
+            "PERCENTAGE_BOUNDS": [],
+            "IMPOSSIBLE_VALUE": [],
         }
 
-        for idx, row in df.iterrows():
-            value = row.get(value_col)
-            lab_name = row.get(lab_name_col)
-            unit = row.get(unit_col)
+        values = df[self._value_col]
+        lab_names = df[self._lab_name_col]
+        units = df[self._unit_col] if self._unit_col in df.columns else pd.Series(index=df.index)
+
+        for idx in df.index:
+            value = values.loc[idx]
+            lab_name = lab_names.loc[idx]
 
             if pd.isna(value) or pd.isna(lab_name):
                 continue
 
             # Check for negative concentrations
             if value < 0 and lab_name not in negative_allowed:
-                df = self._flag_row(
-                    df,
-                    pd.Series([True if i == idx else False for i in df.index], index=df.index),
-                    "NEGATIVE_VALUE"
-                )
+                flags["NEGATIVE_VALUE"].append(idx)
                 continue
 
             # Check percentage bounds
-            if unit == '%':
-                if value < 0 or value > 100:
-                    df = self._flag_row(
-                        df,
-                        pd.Series([True if i == idx else False for i in df.index], index=df.index),
-                        "PERCENTAGE_BOUNDS"
-                    )
-                    continue
+            unit = units.loc[idx] if idx in units.index else None
+            if unit == '%' and (value < 0 or value > 100):
+                flags["PERCENTAGE_BOUNDS"].append(idx)
+                continue
 
             # Check biological limits from lab_specs
             spec = self.lab_specs.specs.get(lab_name, {})
             bio_min = spec.get('biological_min')
             bio_max = spec.get('biological_max')
 
-            if bio_min is not None and value < bio_min:
-                df = self._flag_row(
-                    df,
-                    pd.Series([True if i == idx else False for i in df.index], index=df.index),
-                    "IMPOSSIBLE_VALUE"
-                )
-            elif bio_max is not None and value > bio_max:
-                df = self._flag_row(
-                    df,
-                    pd.Series([True if i == idx else False for i in df.index], index=df.index),
-                    "IMPOSSIBLE_VALUE"
-                )
+            if (bio_min is not None and value < bio_min) or \
+               (bio_max is not None and value > bio_max):
+                flags["IMPOSSIBLE_VALUE"].append(idx)
+
+        # Batch flag all collected indices
+        for reason_code, indices in flags.items():
+            if indices:
+                mask = df.index.isin(indices)
+                df = self._flag_row(df, mask, reason_code)
 
         return df
 
@@ -228,23 +236,19 @@ class ValueValidator:
         if not relationships:
             return df
 
-        value_col = 'value' if 'value' in df.columns else 'value_primary'
-        lab_name_col = 'lab_name' if 'lab_name' in df.columns else 'lab_name_standardized'
-        date_col = 'date'
-
-        if date_col not in df.columns:
+        if self._date_col not in df.columns:
             return df
 
         # Group by date to check relationships within same test date
-        for date_val, date_group in df.groupby(date_col):
+        for date_val, date_group in df.groupby(self._date_col):
             if pd.isna(date_val):
                 continue
 
             # Build lookup of lab values for this date
             lab_values = {}
             for _, row in date_group.iterrows():
-                lab_name = row.get(lab_name_col)
-                value = row.get(value_col)
+                lab_name = row.get(self._lab_name_col)
+                value = row.get(self._value_col)
                 if pd.notna(lab_name) and pd.notna(value):
                     lab_values[lab_name] = value
 
@@ -277,8 +281,8 @@ class ValueValidator:
                     if pct_diff > tolerance_pct:
                         # Flag the target row
                         mask = (
-                            (df[date_col] == date_val) &
-                            (df[lab_name_col] == target)
+                            (df[self._date_col] == date_val) &
+                            (df[self._lab_name_col] == target)
                         )
                         df = self._flag_row(df, mask, "RELATIONSHIP_MISMATCH")
                         logger.debug(
@@ -339,19 +343,18 @@ class ValueValidator:
         Uses max_daily_change from lab_specs to determine if a value
         changed too rapidly between tests.
         """
-        value_col = 'value' if 'value' in df.columns else 'value_primary'
-        lab_name_col = 'lab_name' if 'lab_name' in df.columns else 'lab_name_standardized'
-        date_col = 'date'
-
-        if date_col not in df.columns or value_col not in df.columns:
+        if self._date_col not in df.columns or self._value_col not in df.columns:
             return df
 
         # Ensure date is datetime
-        if not pd.api.types.is_datetime64_any_dtype(df[date_col]):
-            df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+        if not pd.api.types.is_datetime64_any_dtype(df[self._date_col]):
+            df[self._date_col] = pd.to_datetime(df[self._date_col], errors='coerce')
+
+        # Collect all indices to flag
+        temporal_anomaly_indices: list = []
 
         # Group by lab name and check temporal consistency
-        for lab_name, group in df.groupby(lab_name_col):
+        for lab_name, group in df.groupby(self._lab_name_col):
             if pd.isna(lab_name):
                 continue
 
@@ -362,14 +365,14 @@ class ValueValidator:
                 continue
 
             # Sort by date
-            group_sorted = group.sort_values(date_col)
+            group_sorted = group.sort_values(self._date_col)
 
             prev_date = None
             prev_value = None
 
-            for idx, row in group_sorted.iterrows():
-                curr_date = row.get(date_col)
-                curr_value = row.get(value_col)
+            for idx in group_sorted.index:
+                curr_date = group_sorted.loc[idx, self._date_col]
+                curr_value = group_sorted.loc[idx, self._value_col]
 
                 if pd.isna(curr_date) or pd.isna(curr_value):
                     continue
@@ -384,11 +387,7 @@ class ValueValidator:
 
                         # Check if exceeds max allowed daily change
                         if daily_rate > max_daily_change:
-                            df = self._flag_row(
-                                df,
-                                pd.Series([True if i == idx else False for i in df.index], index=df.index),
-                                "TEMPORAL_ANOMALY"
-                            )
+                            temporal_anomaly_indices.append(idx)
                             logger.debug(
                                 f"Temporal anomaly for {lab_name}: {prev_value:.1f} -> {curr_value:.1f} "
                                 f"over {days_diff} days (rate: {daily_rate:.2f}/day, max: {max_daily_change})"
@@ -396,6 +395,11 @@ class ValueValidator:
 
                 prev_date = curr_date
                 prev_value = curr_value
+
+        # Batch flag all collected indices
+        if temporal_anomaly_indices:
+            mask = df.index.isin(temporal_anomaly_indices)
+            df = self._flag_row(df, mask, "TEMPORAL_ANOMALY")
 
         return df
 
@@ -411,17 +415,23 @@ class ValueValidator:
         - Magnitude mismatch (wrong order of magnitude for unit)
         - Embedded text in numeric fields
         """
-        value_col = 'value' if 'value' in df.columns else 'value_primary'
-        value_raw_col = 'value_raw'
-        lab_name_col = 'lab_name' if 'lab_name' in df.columns else 'lab_name_standardized'
-
-        if value_raw_col not in df.columns:
+        if self._value_raw_col not in df.columns:
             return df
 
-        for idx, row in df.iterrows():
-            value_raw = row.get(value_raw_col)
-            value = row.get(value_col)
-            lab_name = row.get(lab_name_col)
+        # Collect indices to flag by reason code
+        flags: dict[str, list] = {
+            "FORMAT_ARTIFACT": [],
+            "IMPOSSIBLE_VALUE": [],
+        }
+
+        values = df[self._value_col] if self._value_col in df.columns else pd.Series(index=df.index)
+        lab_names = df[self._lab_name_col] if self._lab_name_col in df.columns else pd.Series(index=df.index)
+        values_raw = df[self._value_raw_col]
+
+        for idx in df.index:
+            value_raw = values_raw.loc[idx]
+            value = values.loc[idx] if idx in values.index else None
+            lab_name = lab_names.loc[idx] if idx in lab_names.index else None
 
             if pd.isna(value_raw):
                 continue
@@ -434,11 +444,7 @@ class ValueValidator:
                 # Remove any trailing non-digits
                 decimal_digits = re.match(r'\d+', decimal_part)
                 if decimal_digits and len(decimal_digits.group()) > 4:
-                    df = self._flag_row(
-                        df,
-                        pd.Series([True if i == idx else False for i in df.index], index=df.index),
-                        "FORMAT_ARTIFACT"
-                    )
+                    flags["FORMAT_ARTIFACT"].append(idx)
                     logger.debug(f"Excessive decimals in {lab_name}: {value_raw_str}")
                     continue
 
@@ -456,11 +462,7 @@ class ValueValidator:
                     # e.g., "52.6=1946", "0.8= 30", "0.4= 15"
                     concat_pattern = re.match(r'^[\d\.\-\+<>≤≥]+\s*=\s*\d+', cleaned)
                     if concat_pattern:
-                        df = self._flag_row(
-                            df,
-                            pd.Series([True if i == idx else False for i in df.index], index=df.index),
-                            "FORMAT_ARTIFACT"
-                        )
+                        flags["FORMAT_ARTIFACT"].append(idx)
                         logger.debug(f"Concatenation error in {lab_name}: {value_raw_str}")
                         continue
 
@@ -476,14 +478,16 @@ class ValueValidator:
 
                 # Only flag if we have explicit biological_max defined and value exceeds it
                 if bio_max is not None and value > bio_max:
-                    df = self._flag_row(
-                        df,
-                        pd.Series([True if i == idx else False for i in df.index], index=df.index),
-                        "IMPOSSIBLE_VALUE"
-                    )
+                    flags["IMPOSSIBLE_VALUE"].append(idx)
                     logger.debug(
                         f"Value exceeds biological max for {lab_name}: {value} > {bio_max}"
                     )
+
+        # Batch flag all collected indices
+        for reason_code, indices in flags.items():
+            if indices:
+                mask = df.index.isin(indices)
+                df = self._flag_row(df, mask, reason_code)
 
         return df
 
@@ -498,28 +502,30 @@ class ValueValidator:
         - ref_min > ref_max (invalid range)
         - Value extremely far outside extracted range (100x)
         """
-        value_col = 'value' if 'value' in df.columns else 'value_primary'
-        ref_min_col = 'reference_min' if 'reference_min' in df.columns else 'reference_min_primary'
-        ref_max_col = 'reference_max' if 'reference_max' in df.columns else 'reference_max_primary'
-        lab_name_col = 'lab_name' if 'lab_name' in df.columns else 'lab_name_standardized'
-
-        if ref_min_col not in df.columns or ref_max_col not in df.columns:
+        if self._ref_min_col not in df.columns or self._ref_max_col not in df.columns:
             return df
 
-        for idx, row in df.iterrows():
-            value = row.get(value_col)
-            ref_min = row.get(ref_min_col)
-            ref_max = row.get(ref_max_col)
-            lab_name = row.get(lab_name_col)
+        # Collect indices to flag by reason code
+        flags: dict[str, list] = {
+            "RANGE_INCONSISTENCY": [],
+            "EXTREME_DEVIATION": [],
+        }
+
+        values = df[self._value_col] if self._value_col in df.columns else pd.Series(index=df.index)
+        lab_names = df[self._lab_name_col] if self._lab_name_col in df.columns else pd.Series(index=df.index)
+        ref_mins = df[self._ref_min_col]
+        ref_maxs = df[self._ref_max_col]
+
+        for idx in df.index:
+            value = values.loc[idx] if idx in values.index else None
+            ref_min = ref_mins.loc[idx]
+            ref_max = ref_maxs.loc[idx]
+            lab_name = lab_names.loc[idx] if idx in lab_names.index else None
 
             # Check ref_min > ref_max (inverted range)
             if pd.notna(ref_min) and pd.notna(ref_max):
                 if ref_min > ref_max:
-                    df = self._flag_row(
-                        df,
-                        pd.Series([True if i == idx else False for i in df.index], index=df.index),
-                        "RANGE_INCONSISTENCY"
-                    )
+                    flags["RANGE_INCONSISTENCY"].append(idx)
                     logger.debug(f"Inverted range for {lab_name}: {ref_min} > {ref_max}")
                     continue
 
@@ -537,15 +543,17 @@ class ValueValidator:
 
                     # Flag if deviation is more than 10x the range size
                     if deviation > range_size * 10:
-                        df = self._flag_row(
-                            df,
-                            pd.Series([True if i == idx else False for i in df.index], index=df.index),
-                            "EXTREME_DEVIATION"
-                        )
+                        flags["EXTREME_DEVIATION"].append(idx)
                         logger.debug(
                             f"Extreme deviation for {lab_name}: {value} "
                             f"(range: {ref_min}-{ref_max}, deviation: {deviation:.1f})"
                         )
+
+        # Batch flag all collected indices
+        for reason_code, indices in flags.items():
+            if indices:
+                mask = df.index.isin(indices)
+                df = self._flag_row(df, mask, reason_code)
 
         return df
 
