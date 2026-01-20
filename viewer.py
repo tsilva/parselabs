@@ -8,7 +8,7 @@ Usage:
   python viewer.py --profile tiago
   python viewer.py --list-profiles
 
-Keyboard: Y=Accept, N=Reject, S=Skip, Arrow keys/j/k=Navigate
+Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate
 """
 
 import os
@@ -48,10 +48,6 @@ KEYBOARD_JS = r"""
                 break;
             case 'n':
                 document.querySelector('#reject-btn')?.click();
-                event.preventDefault();
-                break;
-            case 's':
-                document.querySelector('#skip-btn')?.click();
                 event.preventDefault();
                 break;
             case 'arrowright':
@@ -669,7 +665,7 @@ def build_review_reason_banner(entry: dict) -> str:
 
 def apply_filters(
     df: pd.DataFrame,
-    lab_names: Optional[list],
+    lab_names: Optional[str],
     abnormal_only: bool,
     latest_only: bool,
     review_filter: str
@@ -678,7 +674,7 @@ def apply_filters(
 
     Args:
         df: Full DataFrame
-        lab_names: List of lab names to filter by (from advanced filters)
+        lab_names: Lab name to filter by (from advanced filters)
         abnormal_only: Whether to show only abnormal results (from advanced filters)
         latest_only: Whether to show only latest result per lab (from advanced filters)
         review_filter: Quick filter option ('All', 'Needs Review', 'Abnormal', 'Unreviewed')
@@ -688,9 +684,9 @@ def apply_filters(
 
     filtered = df.copy()
 
-    # Filter by lab names (multi-selection)
+    # Filter by lab name (single selection)
     if lab_names:
-        filtered = filtered[filtered['lab_name'].isin(lab_names)]
+        filtered = filtered[filtered['lab_name'] == lab_names]
 
     # Filter abnormal only (from advanced filters checkbox)
     if abnormal_only and 'is_out_of_reference' in filtered.columns:
@@ -1130,7 +1126,7 @@ def build_review_status_html(entry: dict) -> str:
 # =============================================================================
 
 def handle_filter_change(
-    lab_names: Optional[list],
+    lab_names: Optional[str],
     abnormal_only: bool,
     latest_only: bool,
     review_filter: str,
@@ -1150,7 +1146,7 @@ def handle_filter_change(
 
     # Determine which labs to plot
     if lab_names:
-        plot_labs = lab_names
+        plot_labs = [lab_names]
     elif not filtered_df.empty:
         plot_labs = [filtered_df.iloc[0].get('lab_name')]
     else:
@@ -1173,7 +1169,7 @@ def handle_row_select(
     evt: gr.SelectData,
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
-    lab_names: Optional[list]
+    lab_names: Optional[str]
 ):
     """Handle row selection to update plot, details, and current index."""
     if evt is None or filtered_df.empty:
@@ -1195,7 +1191,7 @@ def handle_row_select(
     banner_html = build_review_reason_banner(row.to_dict())
 
     if lab_names:
-        plot_labs = lab_names
+        plot_labs = [lab_names]
     else:
         plot_labs = [row.get('lab_name')]
 
@@ -1206,7 +1202,7 @@ def handle_previous(
     current_idx: int,
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
-    lab_names: Optional[list]
+    lab_names: Optional[str]
 ):
     """Navigate to previous row."""
     if filtered_df.empty:
@@ -1224,7 +1220,7 @@ def handle_previous(
     banner_html = build_review_reason_banner(row.to_dict())
 
     if lab_names:
-        plot_labs = lab_names
+        plot_labs = [lab_names]
     else:
         plot_labs = [row.get('lab_name')]
 
@@ -1235,7 +1231,7 @@ def handle_next(
     current_idx: int,
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
-    lab_names: Optional[list]
+    lab_names: Optional[str]
 ):
     """Navigate to next row."""
     if filtered_df.empty:
@@ -1253,7 +1249,7 @@ def handle_next(
     banner_html = build_review_reason_banner(row.to_dict())
 
     if lab_names:
-        plot_labs = lab_names
+        plot_labs = [lab_names]
     else:
         plot_labs = [row.get('lab_name')]
 
@@ -1264,7 +1260,7 @@ def handle_review_action(
     current_idx: int,
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
-    lab_names: Optional[list],
+    lab_names: Optional[str],
     abnormal_only: bool,
     latest_only: bool,
     review_filter: str,
@@ -1319,7 +1315,7 @@ def handle_review_action(
             full_df,
             filtered_df,
             display_df,
-            create_interactive_plot(full_df, lab_names or []),
+            create_interactive_plot(full_df, [lab_names] if lab_names else []),
             current_idx,
             "All done!",
             None,
@@ -1340,7 +1336,7 @@ def handle_review_action(
     banner_html = build_review_reason_banner(row.to_dict())
 
     if lab_names:
-        plot_labs = lab_names
+        plot_labs = [lab_names]
     else:
         plot_labs = [row.get('lab_name')]
 
@@ -1391,16 +1387,6 @@ def handle_reject(
         current_idx, filtered_df, full_df, lab_names,
         abnormal_only, latest_only, review_filter, "rejected"
     )
-
-
-def handle_skip(
-    current_idx: int,
-    filtered_df: pd.DataFrame,
-    full_df: pd.DataFrame,
-    lab_names: Optional[list]
-):
-    """Skip to next entry without marking."""
-    return handle_next(current_idx, filtered_df, full_df, lab_names)
 
 
 def export_csv(filtered_df: pd.DataFrame):
@@ -1486,7 +1472,7 @@ def handle_profile_change(profile_name: str):
         0,
         position_text,
         image_path,
-        gr.update(choices=lab_name_choices, value=[]),
+        gr.update(choices=lab_name_choices, value=None),
         details_html,
         status_html,
         banner_html,
@@ -1564,8 +1550,8 @@ def create_app():
                 with gr.Column(scale=2):
                     lab_name_filter = gr.Dropdown(
                         choices=lab_name_choices,
-                        multiselect=True,
-                        value=[],
+                        multiselect=False,
+                        value=None,
                         label="Lab Names",
                         allow_custom_value=False
                     )
@@ -1644,14 +1630,9 @@ def create_app():
                         elem_id="reject-btn",
                         size="sm"
                     )
-                    skip_btn = gr.Button(
-                        "Skip [S]",
-                        elem_id="skip-btn",
-                        size="sm"
-                    )
 
         gr.Markdown("---")
-        gr.Markdown("*Keyboard: Y=Accept, N=Reject, S=Skip, Arrow keys/j/k=Navigate*")
+        gr.Markdown("*Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate*")
 
         # Wire up profile selector
         profile_selector.change(
@@ -1702,7 +1683,6 @@ def create_app():
 
         accept_btn.click(fn=handle_accept, inputs=review_inputs, outputs=review_outputs)
         reject_btn.click(fn=handle_reject, inputs=review_inputs, outputs=review_outputs)
-        skip_btn.click(fn=handle_skip, inputs=nav_inputs, outputs=nav_outputs)
 
         # Export
         export_btn.click(
