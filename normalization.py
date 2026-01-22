@@ -192,6 +192,9 @@ def validate_reference_range(
     Detects when PDF reference ranges are in wrong units (common when PDFs show
     both percentage and absolute values, and the reference range gets misassigned).
 
+    When a mismatch is detected, attempts to convert the range using known
+    conversion factors before nullifying.
+
     Args:
         lab_name_standardized: Standardized lab name
         value: Numeric value
@@ -201,7 +204,7 @@ def validate_reference_range(
         lab_specs: Lab specifications configuration
 
     Returns:
-        Tuple of (validated_ref_min, validated_ref_max) - may be nullified if suspicious
+        Tuple of (validated_ref_min, validated_ref_max) - may be converted or nullified
     """
     if not lab_specs.exists:
         return ref_min, ref_max
@@ -209,11 +212,22 @@ def validate_reference_range(
     if pd.isna(lab_name_standardized) or lab_name_standardized == UNKNOWN_VALUE:
         return ref_min, ref_max
 
+    lab_config = lab_specs._specs.get(lab_name_standardized, {})
+
+    # Skip validation for labs where ranges legitimately vary (e.g., by menstrual cycle phase)
+    if lab_config.get("ranges_vary_with_cycle", False):
+        return ref_min, ref_max
+
+    # Skip validation for labs with inherently messy reference data
+    # (e.g., WBC differentials where PDFs show both % and absolute counts with shared ref ranges)
+    if lab_config.get("skip_range_validation", False):
+        return ref_min, ref_max
+
     if ref_min is None or ref_max is None:
         return ref_min, ref_max
 
     # Get expected range for this lab from lab_specs
-    ranges = lab_specs._specs.get(lab_name_standardized, {}).get("ranges", {})
+    ranges = lab_config.get("ranges", {})
     if not ranges:
         return ref_min, ref_max
 
@@ -229,6 +243,22 @@ def validate_reference_range(
 
     expected_min, expected_max = expected_range[0], expected_range[1]
 
+    # If unit differs from primary unit, convert expected range using conversion factor
+    # This handles cases where PDF reference ranges are in a different unit than lab_specs
+    primary_unit = lab_config.get("primary_unit")
+    if unit and primary_unit and unit != primary_unit:
+        alternatives = lab_config.get("alternatives", [])
+        for alt in alternatives:
+            if alt.get("unit") == unit:
+                factor = alt.get("factor", 1.0)
+                # Convert expected range from primary unit to the current unit
+                # factor converts FROM alternative unit TO primary unit
+                # So to convert FROM primary TO alternative, we divide by factor
+                if factor and factor != 0:
+                    expected_min = expected_min / factor
+                    expected_max = expected_max / factor
+                break
+
     if expected_min is None or expected_max is None or expected_min == 0 or expected_max == 0:
         return ref_min, ref_max
 
@@ -240,20 +270,145 @@ def validate_reference_range(
     THRESHOLD_HIGH = 10.0
     THRESHOLD_LOW = 0.1
 
+    # Require BOTH ratios to be suspicious to avoid false positives
+    # Example false positive: Eosinophils PDF=(0, 5) vs expected=(1, 6)
+    #   ratio_min = 0/1 = 0.0 (suspicious), but ratio_max = 5/6 = 0.83 (fine)
+    # Example true positive: Neutrophils PDF=(2000, 7500) vs expected=(40, 70)
+    #   ratio_min = 50x, ratio_max = 107x (BOTH suspicious)
     is_suspicious = (
-        ratio_min > THRESHOLD_HIGH or ratio_min < THRESHOLD_LOW or
-        ratio_max > THRESHOLD_HIGH or ratio_max < THRESHOLD_LOW
+        (ratio_min > THRESHOLD_HIGH or ratio_min < THRESHOLD_LOW) and
+        (ratio_max > THRESHOLD_HIGH or ratio_max < THRESHOLD_LOW)
     )
 
     if is_suspicious:
-        logger.warning(
-            f"[range_validation] Suspicious reference range for {lab_name_standardized} ({unit}): "
-            f"PDF=({ref_min:.2f}, {ref_max:.2f}), expected≈({expected_min}, {expected_max}), "
-            f"ratios=({ratio_min:.2f}x, {ratio_max:.2f}x) - nullifying range"
+        # Try to find a conversion factor that would fix the range
+        converted_ref_min, converted_ref_max, was_explained = _try_convert_mismatched_range(
+            lab_name_standardized, ref_min, ref_max, expected_min, expected_max,
+            ratio_min, ratio_max, lab_config, lab_specs
         )
+
+        if converted_ref_min is not None and converted_ref_max is not None:
+            return converted_ref_min, converted_ref_max
+
+        # Only log warning if the issue wasn't already explained
+        if not was_explained:
+            logger.error(
+                f"[range_validation] Suspicious reference range for {lab_name_standardized} ({unit}): "
+                f"PDF=({ref_min:.2f}, {ref_max:.2f}), expected≈({expected_min}, {expected_max}), "
+                f"ratios=({ratio_min:.2f}x, {ratio_max:.2f}x) - nullifying range"
+            )
         return None, None
 
     return ref_min, ref_max
+
+
+def _try_convert_mismatched_range(
+    lab_name_standardized: str,
+    ref_min: float,
+    ref_max: float,
+    expected_min: float,
+    expected_max: float,
+    ratio_min: float,
+    ratio_max: float,
+    lab_config: dict,
+    lab_specs: LabSpecsConfig
+) -> Tuple[Optional[float], Optional[float], bool]:
+    """
+    Attempt to convert a mismatched reference range using known conversion factors.
+
+    This handles cases where the PDF extracted a reference range in a different unit
+    than the value. For example:
+    - Platelets value in 10⁹/L but range in /mm³ (1000x)
+    - Glucose value in mg/dL but range in mmol/L (~18x)
+    - Protein electrophoresis with % and g/dL ranges mixed up
+
+    Args:
+        lab_name_standardized: Standardized lab name
+        ref_min, ref_max: PDF reference range values
+        expected_min, expected_max: Expected range from lab_specs
+        ratio_min, ratio_max: Ratios of PDF to expected values
+        lab_config: Lab configuration from lab_specs
+        lab_specs: Full lab specifications
+
+    Returns:
+        Tuple of (converted_ref_min, converted_ref_max, was_explained)
+        - If conversion successful: (converted_min, converted_max, False)
+        - If detected but can't convert: (None, None, True) - issue was logged
+        - If unknown mismatch: (None, None, False) - caller should log warning
+    """
+    TOLERANCE = 0.3  # Allow 30% tolerance when matching conversion factors
+
+    # Strategy 1: Check if ratio matches any alternative unit's conversion factor
+    alternatives = lab_config.get("alternatives", [])
+    for alt in alternatives:
+        factor = alt.get("factor", 1.0)
+        if factor is None or factor == 0:
+            continue
+
+        # The PDF range might be in this alternative unit
+        # Conversion factor converts FROM alternative unit TO primary unit
+        # So if PDF range / expected range ≈ 1/factor, the PDF range is in alternative unit
+        expected_ratio = 1.0 / factor
+
+        # Check if both ratios match this conversion factor
+        if (abs(ratio_min - expected_ratio) / expected_ratio < TOLERANCE and
+            abs(ratio_max - expected_ratio) / expected_ratio < TOLERANCE):
+            # Apply conversion: multiply by factor to convert to primary unit
+            converted_min = ref_min * factor
+            converted_max = ref_max * factor
+            logger.info(
+                f"[range_validation] Converted reference range for {lab_name_standardized}: "
+                f"PDF=({ref_min:.2f}, {ref_max:.2f}) -> ({converted_min:.2f}, {converted_max:.2f}) "
+                f"using factor {factor} (detected {alt.get('unit')} unit)"
+            )
+            return converted_min, converted_max, False
+
+    # Strategy 2: Check for percentage/absolute value mix-up (protein electrophoresis)
+    # If lab is "Blood - X" (g/dL) and there's "Blood - X (%)", check if range fits %
+    if not lab_name_standardized.endswith("(%)"):
+        pct_lab_name = f"{lab_name_standardized} (%)"
+        if pct_lab_name in lab_specs._specs:
+            pct_config = lab_specs._specs[pct_lab_name]
+            pct_ranges = pct_config.get("ranges", {}).get("default", [])
+            if len(pct_ranges) >= 2:
+                pct_expected_min, pct_expected_max = pct_ranges[0], pct_ranges[1]
+                # Check if PDF range matches percentage expected range
+                if (pct_expected_min > 0 and pct_expected_max > 0):
+                    pct_ratio_min = abs(ref_min / pct_expected_min) if pct_expected_min != 0 else 0
+                    pct_ratio_max = abs(ref_max / pct_expected_max) if pct_expected_max != 0 else 0
+                    # If ratios are close to 1, the range is from the percentage variant
+                    # Use 0.3-3.0 tolerance to handle slight lab-to-lab variations
+                    if (0.3 < pct_ratio_min < 3.0 and 0.3 < pct_ratio_max < 3.0):
+                        logger.info(
+                            f"[range_validation] Detected percentage range for {lab_name_standardized}: "
+                            f"PDF=({ref_min:.2f}, {ref_max:.2f}) matches {pct_lab_name} range "
+                            f"({pct_expected_min}, {pct_expected_max}) - nullifying (cannot convert % to g/dL)"
+                        )
+                        return None, None, True
+
+    # Strategy 3: Check reverse - if lab is "Blood - X (%)" and range fits g/dL variant
+    if lab_name_standardized.endswith("(%)"):
+        base_lab_name = lab_name_standardized[:-4].strip()  # Remove " (%)"
+        if base_lab_name in lab_specs._specs:
+            base_config = lab_specs._specs[base_lab_name]
+            base_ranges = base_config.get("ranges", {}).get("default", [])
+            if len(base_ranges) >= 2:
+                base_expected_min, base_expected_max = base_ranges[0], base_ranges[1]
+                # Check if PDF range matches absolute expected range
+                if (base_expected_min > 0 and base_expected_max > 0):
+                    base_ratio_min = abs(ref_min / base_expected_min) if base_expected_min != 0 else 0
+                    base_ratio_max = abs(ref_max / base_expected_max) if base_expected_max != 0 else 0
+                    # If ratios are close to 1, the range is from the absolute variant
+                    # Use 0.3-3.0 tolerance to handle slight lab-to-lab variations
+                    if (0.3 < base_ratio_min < 3.0 and 0.3 < base_ratio_max < 3.0):
+                        logger.info(
+                            f"[range_validation] Detected g/dL range for {lab_name_standardized}: "
+                            f"PDF=({ref_min:.2f}, {ref_max:.2f}) matches {base_lab_name} range "
+                            f"({base_expected_min}, {base_expected_max}) - nullifying (cannot convert g/dL to %)"
+                        )
+                        return None, None, True
+
+    return None, None, False
 
 
 def apply_normalizations(

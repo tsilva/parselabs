@@ -1030,7 +1030,7 @@ def main():
     unknown_mask = merged_df["lab_name_standardized"] == UNKNOWN_VALUE
     if unknown_mask.any():
         unknown_count = unknown_mask.sum()
-        logger.warning(f"Filtering {unknown_count} rows with unknown lab names")
+        logger.error(f"Filtering {unknown_count} rows with unknown lab names")
         merged_df = merged_df[~unknown_mask].reset_index(drop=True)
 
     # Deduplicate

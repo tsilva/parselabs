@@ -68,6 +68,7 @@ json_path = f"{OUTPUT_PATH}/{source_file}/{source_file}.{page_number:03d}.json"
 | "unknowns", "unmapped", "$UNKNOWN$" | Run `python utils/analyze_unknowns.py`, show source context |
 | "stats", "summary", "statistics" | Load `all.csv`, compute and show statistics |
 | "verify accuracy", "accuracy report", "quality check", "batch verify" | Systematic accuracy verification with intelligent sampling and vision verification |
+| "analyze logs", "extraction logs", "log analysis", "processing errors" | Parse logs, show patterns, identify issues |
 
 ## Skill Scripts
 
@@ -78,6 +79,7 @@ This skill includes helper scripts in `.claude/skills/labs/`:
 | `create_sample.py` | Create intelligent sample for verification | `python .claude/skills/labs/create_sample.py <profile> [--sample-size N]` |
 | `analyze_stats.py` | Generate statistical analysis report | `python .claude/skills/labs/analyze_stats.py <profile> [--output file.md]` |
 | `verify_sample.py` | Track verification workflow | See verification workflow below |
+| `analyze_logs.py` | Analyze extraction logs for patterns | `python .claude/skills/labs/analyze_logs.py <profile> [--output file.md]` |
 
 ## Workflow Details
 
@@ -368,7 +370,7 @@ Example:
 ### Immediate Actions (Critical)
 1. **Re-extract specific files:**
    - 2024-01-15-labs.pdf - 3 critical errors found (decimal errors in glucose)
-   - Command: `python extract.py --profile {profile} --document 2024-01-15-labs`
+   - Command: `python extract.py --profile {profile} --pattern "*2024-01-15-labs*"`
 
 2. **Review specific labs:**
    - Blood - Creatinine - systematic rounding detected
@@ -421,6 +423,80 @@ Provide progress updates during batch verification:
 - "Found discrepancy: Expected 14.2, source shows 142 (decimal error)"
 - "Match: Blood - Hemoglobin 14.5 g/dL verified correct"
 
+### 6. Log Analysis Workflow
+
+When asked about extraction logs, processing errors, or pipeline history:
+
+```bash
+python .claude/skills/labs/analyze_logs.py <profile_name>
+```
+
+This analyzes extraction logs (`{OUTPUT_PATH}/logs/info.log` and `error.log`) and provides:
+
+**Processing Summary:**
+- PDFs started, completed, and failed
+- Pages processed and cached
+- Overall success rate
+
+**Strategy Breakdown:**
+- TEXT vs VISION extraction counts
+- TEXT→VISION fallback frequency
+- Cache hit rates
+
+**Extraction Failures:**
+- Failed pages with reasons
+- Grouped by failure type
+- Timestamps for debugging
+
+**Standardization Stats:**
+- Unique test names standardized
+- Unique units standardized
+
+**Validation Results:**
+- Rows flagged for review
+- Flags grouped by reason code
+
+**Errors and Warnings:**
+- Categorized error types
+- Recent errors with timestamps
+- Warning summaries
+
+**Recommendations:**
+- PDFs requiring re-extraction
+- Investigation suggestions
+- Configuration improvements
+
+#### Example Output
+
+```markdown
+## Processing Summary
+
+| Metric | Count |
+|--------|-------|
+| PDFs Started | 45 |
+| PDFs Completed | 43 |
+| PDFs Failed | 2 |
+| Pages Processed | 156 |
+| Pages From Cache | 89 |
+
+**Success Rate:** 95.6%
+
+## Strategy Breakdown
+
+| Strategy | Count | Percentage |
+|----------|-------|------------|
+| TEXT (total) | 38 | 84.4% |
+| VISION | 7 | 15.6% |
+| TEXT→VISION fallback | 3 | 6.7% |
+```
+
+#### Use Cases
+
+1. **After a batch extraction**: Run to summarize what happened
+2. **Debugging failures**: Identify which PDFs/pages failed and why
+3. **Performance analysis**: Check cache hit rates and strategy selection
+4. **Before re-extraction**: Identify specific documents needing attention
+
 ## Issue-Specific Guidance
 
 ### Outliers (>3 std from mean)
@@ -462,7 +538,7 @@ Provide progress updates during batch verification:
 
 | Determination | Action |
 |---------------|--------|
-| Extraction error on single page | Delete the JSON, re-run `python extract.py --profile X --document STEM` |
+| Extraction error on single page | Delete the JSON, re-run `python extract.py --profile X --pattern "*STEM*"` |
 | Systematic extraction error | Review extraction prompts, re-run affected documents |
 | Real unusual data | Keep it, optionally add note |
 | Unknown lab name | Add mapping to `normalization.py` KNOWN_LAB_NAMES dict |
@@ -478,12 +554,7 @@ To re-extract specific pages:
 rm "{OUTPUT_PATH}/{doc_stem}/{doc_stem}.{page:03d}.json"
 
 # Re-run extraction for that document
-python extract.py --profile {profile} --document {doc_stem}
-```
-
-To re-extract with verification:
-```bash
-python extract.py --profile {profile} --document {doc_stem} --verify
+python extract.py --profile {profile} --pattern "*{doc_stem}*"
 ```
 
 ## Example Investigation Session
