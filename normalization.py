@@ -143,6 +143,31 @@ def infer_missing_unit(
                     f"value={value}, ref_range=({ref_min}, {ref_max})")
         return "%"
 
+    # Strategy 3b: Biological plausibility check
+    # Before using primary unit, verify value is plausible for that unit
+    # This catches cases where ref ranges are null but value is clearly a percentage
+    if lab_specs.exists and has_percentage_variant and value is not None:
+        primary_unit = lab_specs.get_primary_unit(lab_name_standardized)
+        expected_ranges = lab_specs._specs.get(lab_name_standardized, {}).get("ranges", {})
+        expected_default = expected_ranges.get("default", [])
+
+        if len(expected_default) >= 2:
+            expected_min, expected_max = expected_default[0], expected_default[1]
+
+            # Check if value is impossibly high for primary unit (>5x max)
+            if expected_max and value > expected_max * 5:
+                # Check if value fits percentage range instead
+                pct_ranges = lab_specs._specs.get(percentage_lab_name, {}).get("ranges", {})
+                pct_default = pct_ranges.get("default", [])
+
+                if len(pct_default) >= 2:
+                    pct_min, pct_max = pct_default[0], pct_default[1]
+                    # Allow some margin (0.5x to 2x) for percentage range
+                    if pct_min and pct_max and (pct_min * 0.5) <= value <= (pct_max * 2):
+                        logger.debug(f"[unit_inference] Value {value} implausible for {primary_unit} "
+                                   f"(expected {expected_min}-{expected_max}), assigning '%' instead")
+                        return "%"
+
     # Strategy 4: Fallback to lab specs primary unit
     if lab_specs.exists:
         primary_unit = lab_specs.get_primary_unit(lab_name_standardized)

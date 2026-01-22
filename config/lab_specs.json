@@ -1517,51 +1517,6 @@
     },
     "loinc_code": "11089-0"
   },
-  "Blood - Erythrocyte Sedimentation Rate (ESR, 1 Hour)": {
-    "lab_type": "blood",
-    "primary_unit": "mm/h",
-    "alternatives": [
-      {
-        "unit": "mm",
-        "factor": 1.0
-      }
-    ],
-    "ranges": {
-      "default": [
-        0.0,
-        30.0
-      ],
-      "male": [
-        0,
-        15
-      ],
-      "male:50+": [
-        0,
-        20
-      ],
-      "female": [
-        0,
-        20
-      ],
-      "female:50+": [
-        0,
-        30
-      ]
-    },
-    "loinc_code": "30341-2"
-  },
-  "Blood - Erythrocyte Sedimentation Rate (ESR, 2 Hour)": {
-    "lab_type": "blood",
-    "primary_unit": "mm/h",
-    "alternatives": [],
-    "ranges": {
-      "default": [
-        0.0,
-        30.0
-      ]
-    },
-    "loinc_code": "11089-0"
-  },
   "Blood - Erythrocytes": {
     "lab_type": "blood",
     "primary_unit": "10¹²/L",
@@ -3640,18 +3595,6 @@
       ]
     },
     "loinc_code": "3052-8"
-  },
-  "Blood - Rheumatoid Arthritis Test (RA Test)": {
-    "lab_type": "blood",
-    "primary_unit": "IU/mL",
-    "alternatives": [],
-    "ranges": {
-      "default": [
-        0.0,
-        14.0
-      ]
-    },
-    "loinc_code": "11572-5"
   },
   "Blood - Rheumatoid Factor (RF)": {
     "lab_type": "blood",
