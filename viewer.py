@@ -136,7 +136,7 @@ CUSTOM_CSS = """
 
 /* Quick filter pills - dark mode compatible */
 .quick-filter-pills {
-    padding: 4px 0;
+    padding: 20px 15px;
 }
 .quick-filter-pills .wrap {
     gap: 8px !important;
@@ -151,6 +151,9 @@ CUSTOM_CSS = """
     color: #e5e7eb !important;
     cursor: pointer !important;
     transition: all 0.15s ease !important;
+    min-height: 32px !important;
+    display: inline-flex !important;
+    align-items: center !important;
 }
 .quick-filter-pills label:hover {
     background-color: rgba(75, 85, 99, 0.8) !important;
@@ -164,7 +167,7 @@ CUSTOM_CSS = """
 
 /* Toggle pill checkbox styling (for Latest Only) */
 .toggle-pill {
-    padding: 4px 0;
+    padding: 26px 15px;
 }
 .toggle-pill label {
     padding: 6px 14px !important;
@@ -200,6 +203,9 @@ CUSTOM_CSS = """
     color: #e5e7eb !important;
     cursor: pointer !important;
     transition: all 0.15s ease !important;
+    min-height: 32px !important;
+    display: inline-flex !important;
+    align-items: center !important;
 }
 .toggle-pill > label > span:hover {
     background-color: rgba(75, 85, 99, 0.8) !important;
@@ -217,6 +223,22 @@ CUSTOM_CSS = """
 }
 .lab-dropdown-compact .wrap {
     padding: 0 !important;
+}
+.lab-dropdown-compact input {
+    padding: 6px 14px !important;
+    font-size: 0.85em !important;
+    min-height: 32px !important;
+}
+
+/* Filter row vertical alignment */
+.filter-row {
+    display: flex;
+    align-items: center !important;
+    gap: 16px;
+}
+.filter-row > div {
+    display: flex;
+    align-items: center;
 }
 
 /* Compact table display - dark mode compatible */
@@ -1681,7 +1703,7 @@ def create_app():
         gr.Markdown("Browse, analyze, and review extracted lab results.")
 
         # Unified filter row: Lab dropdown | Status pills | Latest toggle
-        with gr.Row():
+        with gr.Row(elem_classes="filter-row"):
             with gr.Column(scale=1, min_width=200):
                 lab_name_filter = gr.Dropdown(
                     choices=lab_name_choices,
@@ -1691,7 +1713,7 @@ def create_app():
                     allow_custom_value=False,
                     elem_classes="lab-dropdown-compact"
                 )
-            with gr.Column(scale=3):
+            with gr.Column(scale=2):
                 review_filter = gr.Radio(
                     choices=['All', 'Needs Review', 'Abnormal', 'Unhealthy', 'Unreviewed'],
                     value='All',
