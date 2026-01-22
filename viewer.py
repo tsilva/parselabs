@@ -846,8 +846,19 @@ def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
 # Plotting
 # =============================================================================
 
-def create_single_lab_plot(df: pd.DataFrame, lab_name: str) -> tuple[go.Figure, str]:
-    """Generate a single plot for one lab test. Returns (figure, unit)."""
+def create_single_lab_plot(
+    df: pd.DataFrame,
+    lab_name: str,
+    selected_ref: Optional[tuple[float, float]] = None
+) -> tuple[go.Figure, str]:
+    """Generate a single plot for one lab test. Returns (figure, unit).
+
+    Args:
+        df: DataFrame with lab data
+        lab_name: Name of the lab test to plot
+        selected_ref: Optional (ref_min, ref_max) from the selected row. When provided,
+                      this is used for the PDF reference range instead of computing the mode.
+    """
     lab_df = df[df['lab_name'] == lab_name].copy()
 
     if lab_df.empty:
@@ -927,10 +938,20 @@ def create_single_lab_plot(df: pd.DataFrame, lab_name: str) -> tuple[go.Figure, 
 
         ref_min = None
         ref_max = None
-        if not min_vals.empty:
-            ref_min = float(min_vals.mode().iloc[0]) if len(min_vals.mode()) > 0 else float(min_vals.iloc[0])
-        if not max_vals.empty:
-            ref_max = float(max_vals.mode().iloc[0]) if len(max_vals.mode()) > 0 else float(max_vals.iloc[0])
+
+        # Use selected row's reference range if provided
+        if selected_ref is not None:
+            sel_min, sel_max = selected_ref
+            if sel_min is not None and pd.notna(sel_min):
+                ref_min = float(sel_min)
+            if sel_max is not None and pd.notna(sel_max):
+                ref_max = float(sel_max)
+        else:
+            # Fallback to mode-based logic for historical view
+            if not min_vals.empty:
+                ref_min = float(min_vals.mode().iloc[0]) if len(min_vals.mode()) > 0 else float(min_vals.iloc[0])
+            if not max_vals.empty:
+                ref_max = float(max_vals.mode().iloc[0]) if len(max_vals.mode()) > 0 else float(max_vals.iloc[0])
 
         if ref_min is not None or ref_max is not None:
             has_pdf_range = True
@@ -1017,8 +1038,19 @@ def create_single_lab_plot(df: pd.DataFrame, lab_name: str) -> tuple[go.Figure, 
     return fig, unit
 
 
-def create_interactive_plot(df: pd.DataFrame, lab_names: Optional[list]) -> go.Figure:
-    """Generate interactive Plotly plot(s) for selected lab tests."""
+def create_interactive_plot(
+    df: pd.DataFrame,
+    lab_names: Optional[list],
+    selected_ref: Optional[tuple[float, float]] = None
+) -> go.Figure:
+    """Generate interactive Plotly plot(s) for selected lab tests.
+
+    Args:
+        df: DataFrame with lab data
+        lab_names: List of lab names to plot
+        selected_ref: Optional (ref_min, ref_max) from the selected row. Only applies
+                      to single-lab plots or the first lab in multi-lab plots.
+    """
     if not lab_names or df.empty:
         fig = go.Figure()
         fig.add_annotation(
@@ -1034,7 +1066,7 @@ def create_interactive_plot(df: pd.DataFrame, lab_names: Optional[list]) -> go.F
         return fig
 
     if len(lab_names) == 1:
-        fig, _ = create_single_lab_plot(df, lab_names[0])
+        fig, _ = create_single_lab_plot(df, lab_names[0], selected_ref=selected_ref)
         fig.update_layout(height=400)
         return fig
 
@@ -1113,10 +1145,20 @@ def create_interactive_plot(df: pd.DataFrame, lab_names: Optional[list]) -> go.F
 
             ref_min = None
             ref_max = None
-            if not min_vals.empty:
-                ref_min = float(min_vals.mode().iloc[0]) if len(min_vals.mode()) > 0 else float(min_vals.iloc[0])
-            if not max_vals.empty:
-                ref_max = float(max_vals.mode().iloc[0]) if len(max_vals.mode()) > 0 else float(max_vals.iloc[0])
+
+            # Use selected row's reference range for the first lab (primary selection)
+            if i == 0 and selected_ref is not None:
+                sel_min, sel_max = selected_ref
+                if sel_min is not None and pd.notna(sel_min):
+                    ref_min = float(sel_min)
+                if sel_max is not None and pd.notna(sel_max):
+                    ref_max = float(sel_max)
+            else:
+                # Fallback to mode-based logic for other labs or when no selection
+                if not min_vals.empty:
+                    ref_min = float(min_vals.mode().iloc[0]) if len(min_vals.mode()) > 0 else float(min_vals.iloc[0])
+                if not max_vals.empty:
+                    ref_max = float(max_vals.mode().iloc[0]) if len(max_vals.mode()) > 0 else float(max_vals.iloc[0])
 
             if ref_min is not None and ref_max is not None:
                 fig.add_hrect(
@@ -1240,6 +1282,7 @@ def handle_filter_change(
     else:
         plot_labs = []
 
+    selected_ref = None
     if not filtered_df.empty:
         first_row = filtered_df.iloc[0]
         position_text = f"**Row 1 of {len(filtered_df)}**"
@@ -1247,8 +1290,12 @@ def handle_filter_change(
         details_html = build_details_html(first_row.to_dict())
         status_html = build_review_status_html(first_row.to_dict())
         banner_html = build_review_reason_banner(first_row.to_dict())
+        # Extract first row's reference range for the plot
+        ref_min = first_row.get('reference_min')
+        ref_max = first_row.get('reference_max')
+        selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
 
-    plot = create_interactive_plot(full_df, plot_labs)
+    plot = create_interactive_plot(full_df, plot_labs, selected_ref=selected_ref)
 
     return display_df, summary, plot, filtered_df, current_idx, position_text, image_path, details_html, status_html, banner_html
 
@@ -1283,7 +1330,12 @@ def handle_row_select(
     else:
         plot_labs = [row.get('lab_name')]
 
-    return create_interactive_plot(full_df, plot_labs), row_idx, position_text, image_path, details_html, status_html, banner_html
+    # Extract selected row's reference range for the plot
+    ref_min = row.get('reference_min')
+    ref_max = row.get('reference_max')
+    selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
+
+    return create_interactive_plot(full_df, plot_labs, selected_ref=selected_ref), row_idx, position_text, image_path, details_html, status_html, banner_html
 
 
 def handle_previous(
@@ -1312,7 +1364,12 @@ def handle_previous(
     else:
         plot_labs = [row.get('lab_name')]
 
-    return create_interactive_plot(full_df, plot_labs), new_idx, position_text, image_path, details_html, status_html, banner_html
+    # Extract selected row's reference range for the plot
+    ref_min = row.get('reference_min')
+    ref_max = row.get('reference_max')
+    selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
+
+    return create_interactive_plot(full_df, plot_labs, selected_ref=selected_ref), new_idx, position_text, image_path, details_html, status_html, banner_html
 
 
 def handle_next(
@@ -1341,7 +1398,12 @@ def handle_next(
     else:
         plot_labs = [row.get('lab_name')]
 
-    return create_interactive_plot(full_df, plot_labs), new_idx, position_text, image_path, details_html, status_html, banner_html
+    # Extract selected row's reference range for the plot
+    ref_min = row.get('reference_min')
+    ref_max = row.get('reference_max')
+    selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
+
+    return create_interactive_plot(full_df, plot_labs, selected_ref=selected_ref), new_idx, position_text, image_path, details_html, status_html, banner_html
 
 
 def handle_review_action(
@@ -1427,7 +1489,12 @@ def handle_review_action(
     else:
         plot_labs = [row.get('lab_name')]
 
-    plot = create_interactive_plot(full_df, plot_labs)
+    # Extract selected row's reference range for the plot
+    ref_min = row.get('reference_min')
+    ref_max = row.get('reference_max')
+    selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
+
+    plot = create_interactive_plot(full_df, plot_labs, selected_ref=selected_ref)
 
     return (
         full_df,
