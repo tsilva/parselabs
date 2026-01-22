@@ -490,6 +490,23 @@ def load_data(output_path: Path) -> pd.DataFrame:
         df['lab_specs_min'] = range_df['lab_specs_min']
         df['lab_specs_max'] = range_df['lab_specs_max']
 
+    # Compute is_out_of_healthy_range (based on lab_specs healthy ranges)
+    if 'value' in df.columns and 'lab_specs_min' in df.columns and 'lab_specs_max' in df.columns:
+        def check_out_of_healthy_range(row):
+            val = row.get('value')
+            spec_min = row.get('lab_specs_min')
+            spec_max = row.get('lab_specs_max')
+            if pd.isna(val):
+                return None
+            if pd.isna(spec_min) and pd.isna(spec_max):
+                return None  # No healthy range defined
+            if pd.notna(spec_min) and val < spec_min:
+                return True
+            if pd.notna(spec_max) and val > spec_max:
+                return True
+            return False
+        df['is_out_of_healthy_range'] = df.apply(check_out_of_healthy_range, axis=1)
+
     return df
 
 
@@ -563,10 +580,15 @@ def build_summary_cards(df: pd.DataFrame) -> str:
         if pd.notna(min_date) and pd.notna(max_date):
             date_range = f"{min_date.strftime('%Y')}-{max_date.strftime('%Y')}"
 
-    # Abnormal count
+    # Abnormal count (outside PDF reference range)
     abnormal_count = 0
     if 'is_out_of_reference' in df.columns:
         abnormal_count = int(df['is_out_of_reference'].sum())
+
+    # Unhealthy count (outside lab specs healthy range)
+    unhealthy_count = 0
+    if 'is_out_of_healthy_range' in df.columns:
+        unhealthy_count = int(df['is_out_of_healthy_range'].sum())
 
     # Review counts
     reviewed_count = 0
@@ -593,6 +615,9 @@ def build_summary_cards(df: pd.DataFrame) -> str:
 
     if abnormal_count > 0:
         cards.append(f'<span class="stat-card danger">{abnormal_count} abnormal</span>')
+
+    if unhealthy_count > 0:
+        cards.append(f'<span class="stat-card warning">{unhealthy_count} unhealthy</span>')
 
     if reviewed_count > 0:
         cards.append(f'<span class="stat-card success">{reviewed_count} reviewed</span>')
@@ -705,6 +730,9 @@ def apply_filters(
                 (filtered['review_needed'] == True) &
                 (filtered['review_status'].isna() | (filtered['review_status'] == ''))
             ]
+    elif review_filter == 'Unhealthy':
+        if 'is_out_of_healthy_range' in filtered.columns:
+            filtered = filtered[filtered['is_out_of_healthy_range'] == True]
 
     # Sort by date descending, then by lab_name ascending
     if 'date' in filtered.columns:
@@ -1535,7 +1563,7 @@ def create_app():
         # Quick filter pills row
         with gr.Row():
             review_filter = gr.Radio(
-                choices=['All', 'Needs Review', 'Abnormal', 'Unreviewed'],
+                choices=['All', 'Needs Review', 'Abnormal', 'Unhealthy', 'Unreviewed'],
                 value='All',
                 label="Quick Filters",
                 elem_classes="quick-filter-pills"

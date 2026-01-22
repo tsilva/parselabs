@@ -411,6 +411,118 @@ def _try_convert_mismatched_range(
     return None, None, False
 
 
+def fix_misassigned_percentage_units(
+    df: pd.DataFrame,
+    lab_specs: LabSpecsConfig
+) -> pd.DataFrame:
+    """
+    Fix values where unit is g/dL but should be % based on biological plausibility.
+
+    This handles protein electrophoresis cases where the source document shows
+    g/dL in the unit column but the value and reference range indicate it's
+    actually a percentage (e.g., Albumin 61.5 "g/dL" with ref 55-64 is clearly 61.5%).
+
+    Detection criteria (ALL must be true):
+    1. Lab has both absolute (g/dL) and percentage (%) variants in lab_specs
+    2. Current unit is g/dL (or similar absolute unit)
+    3. Value exceeds biological_max for the absolute variant
+    4. Value fits within percentage variant's expected range
+    5. Reference range (if present) matches percentage variant's range
+
+    Args:
+        df: DataFrame with lab results
+        lab_specs: Lab specifications configuration
+
+    Returns:
+        DataFrame with corrected units and lab names
+    """
+    if df.empty or not lab_specs.exists:
+        return df
+
+    corrections_made = 0
+
+    for idx in df.index:
+        lab_name_std = df.at[idx, "lab_name_standardized"]
+        value = df.at[idx, "value_raw"]
+        unit = df.at[idx, "lab_unit_standardized"]
+        ref_min = df.at[idx, "reference_min_raw"]
+        ref_max = df.at[idx, "reference_max_raw"]
+
+        # Skip if missing key data
+        if pd.isna(lab_name_std) or pd.isna(value) or pd.isna(unit):
+            continue
+
+        # Skip if already a percentage variant
+        if lab_name_std.endswith("(%)"):
+            continue
+
+        # Check if percentage variant exists
+        pct_lab_name = f"{lab_name_std} (%)"
+        if pct_lab_name not in lab_specs._specs:
+            continue
+
+        # Get configs for both variants
+        abs_config = lab_specs._specs.get(lab_name_std, {})
+        pct_config = lab_specs._specs.get(pct_lab_name, {})
+
+        # Check if current unit is an absolute unit (g/dL, g/L, etc.)
+        abs_primary_unit = abs_config.get("primary_unit", "")
+        if unit not in [abs_primary_unit, "g/dL", "g/L"]:
+            continue
+
+        # Convert value to float for comparison
+        try:
+            value_float = float(str(value).replace(',', '.'))
+        except (ValueError, TypeError):
+            continue
+
+        # Check 1: Value exceeds biological_max for absolute variant
+        bio_max = abs_config.get("biological_max")
+        if bio_max is None:
+            # Fall back to expected range max * 3
+            abs_ranges = abs_config.get("ranges", {}).get("default", [])
+            if len(abs_ranges) >= 2:
+                bio_max = abs_ranges[1] * 3
+
+        if bio_max is None or value_float <= bio_max:
+            continue  # Value is plausible for absolute unit
+
+        # Check 2: Value fits percentage range
+        pct_ranges = pct_config.get("ranges", {}).get("default", [])
+        if len(pct_ranges) < 2:
+            continue
+
+        pct_min, pct_max = pct_ranges[0], pct_ranges[1]
+        # Allow some margin (0.5x to 1.5x) for percentage range
+        if not (pct_min * 0.5 <= value_float <= pct_max * 1.5):
+            continue  # Value doesn't fit percentage range either
+
+        # Check 3: Reference range matches percentage range (if present)
+        if pd.notna(ref_min) and pd.notna(ref_max):
+            # Reference range should be close to percentage expected range
+            ref_matches_pct = (
+                abs(ref_min - pct_min) / max(pct_min, 1) < 0.5 and
+                abs(ref_max - pct_max) / max(pct_max, 1) < 0.5
+            )
+            if not ref_matches_pct:
+                continue  # Reference range doesn't match percentage variant
+
+        # All checks passed - fix the unit and lab name
+        logger.info(
+            f"[unit_fix] Correcting {lab_name_std}: value {value_float} with unit '{unit}' "
+            f"exceeds biological max ({bio_max}), reassigning to {pct_lab_name} with unit '%'"
+        )
+
+        df.at[idx, "lab_unit_standardized"] = "%"
+        df.at[idx, "lab_name_standardized"] = pct_lab_name
+        corrections_made += 1
+
+    if corrections_made > 0:
+        logger.info(f"[unit_fix] Corrected {corrections_made} misassigned percentage units")
+
+    return df
+
+
 def apply_normalizations(
     df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
@@ -437,6 +549,11 @@ def apply_normalizations(
 
     # Ensure required columns exist
     ensure_columns(df, ["lab_name_standardized", "lab_unit_standardized", "lab_name_raw"], default=None)
+
+    # Fix misassigned percentage units BEFORE other normalizations
+    # This catches cases like Albumin 61.5 "g/dL" that should be 61.5 "%"
+    if lab_specs.exists:
+        df = fix_misassigned_percentage_units(df, lab_specs)
 
     # Look up lab_type from config (vectorized)
     if lab_specs.exists:
