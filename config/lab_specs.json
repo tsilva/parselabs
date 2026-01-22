@@ -498,12 +498,7 @@
     "lab_type": "blood",
     "primary_unit": "unitless",
     "alternatives": [],
-    "ranges": {
-      "default": [
-        1.0,
-        9999
-      ]
-    },
+    "ranges": {},
     "loinc_code": "5192-0"
   },
   "Blood - Anti-HBs Antibody": {
@@ -512,8 +507,8 @@
     "alternatives": [],
     "ranges": {
       "default": [
-        0.0,
-        9.0
+        10.0,
+        10000
       ]
     },
     "loinc_code": "5195-3"
@@ -630,8 +625,8 @@
     ],
     "ranges": {
       "default": [
-        5.0,
-        100.0
+        0,
+        40
       ]
     },
     "loinc_code": "8098-6"
@@ -1586,7 +1581,11 @@
       }
     ],
     "ranges": {
-      "default": [
+      "female": [
+        3.0,
+        12.0
+      ],
+      "female:50+": [
         25.8,
         134.8
       ],
@@ -2048,15 +2047,15 @@
     "ranges": {
       "default": [
         40.0,
-        100.0
+        150.0
       ],
       "male": [
         40,
-        60
+        150
       ],
       "female": [
         50,
-        70
+        150
       ]
     },
     "biological_min": 0,
@@ -2451,7 +2450,11 @@
       }
     ],
     "ranges": {
-      "default": [
+      "female": [
+        2.0,
+        15.0
+      ],
+      "female:50+": [
         15.9,
         54.0
       ],
@@ -3086,7 +3089,7 @@
       }
     ],
     "ranges": {
-      "default": [
+      "female": [
         2.8,
         29.2
       ],
@@ -3479,20 +3482,20 @@
     ],
     "ranges": {
       "male": [
-        270,
-        1070
+        2.7,
+        10.7
       ],
       "male:0-17": [
-        10,
-        800
+        0.1,
+        8.0
       ],
       "male:65+": [
-        200,
-        700
+        2.0,
+        7.0
       ],
       "female": [
-        15,
-        70
+        0.15,
+        0.70
       ]
     },
     "loinc_code": "2986-8"
@@ -3587,12 +3590,12 @@
         45
       ],
       "male": [
-        8,
-        24
+        13,
+        40
       ],
       "female": [
-        6,
-        21
+        10,
+        38
       ]
     },
     "loinc_code": "3094-0"
