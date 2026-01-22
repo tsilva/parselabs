@@ -51,8 +51,8 @@
     ],
     "ranges": {
       "default": [
-        20.0,
-        50.0
+        30.0,
+        100.0
       ]
     },
     "loinc_code": "1989-3"
@@ -1205,7 +1205,7 @@
       ]
     },
     "biological_min": 0,
-    "biological_max": 30,
+    "biological_max": 15,
     "max_daily_change": 3,
     "loinc_code": "2160-0"
   },
@@ -1490,7 +1490,7 @@
     "ranges": {
       "default": [
         70,
-        126
+        120
       ]
     },
     "loinc_code": "75414-8"
@@ -1723,7 +1723,7 @@
       ]
     },
     "biological_min": 0,
-    "biological_max": 1000,
+    "biological_max": 650,
     "max_daily_change": 200,
     "loinc_code": "1558-6"
   },
@@ -1740,7 +1740,12 @@
         "factor": 1.0
       }
     ],
-    "ranges": {},
+    "ranges": {
+      "default": [
+        4.0,
+        22.0
+      ]
+    },
     "loinc_code": "2739-1"
   },
   "Blood - HIV (Antibody + p24 Antigen)": {
@@ -1831,7 +1836,7 @@
       ]
     },
     "biological_min": 0,
-    "biological_max": 70,
+    "biological_max": 57,
     "max_daily_change": 5,
     "loinc_code": "4544-3"
   },
@@ -1871,7 +1876,7 @@
       ]
     },
     "biological_min": 0,
-    "biological_max": 25,
+    "biological_max": 20,
     "max_daily_change": 2.0,
     "loinc_code": "718-7"
   },
@@ -2047,15 +2052,15 @@
     "ranges": {
       "default": [
         40.0,
-        150.0
+        100.0
       ],
       "male": [
         40,
-        150
+        100
       ],
       "female": [
         50,
-        150
+        100
       ]
     },
     "biological_min": 0,
@@ -2091,7 +2096,12 @@
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {},
+    "ranges": {
+      "default": [
+        0,
+        3
+      ]
+    },
     "loinc_code": "58994-9"
   },
   "Blood - INR (Prothrombin Time)": {
@@ -2122,7 +2132,12 @@
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {},
+    "ranges": {
+      "default": [
+        0,
+        1
+      ]
+    },
     "loinc_code": "33516-6"
   },
   "Blood - Immunoglobulin A (IgA)": {
@@ -2289,7 +2304,7 @@
     ],
     "ranges": {
       "default": [
-        1.0,
+        0.5,
         3.5
       ]
     },
@@ -2361,6 +2376,8 @@
         11.0
       ]
     },
+    "biological_min": 0,
+    "biological_max": 350,
     "loinc_code": "6690-2"
   },
   "Blood - Lipase": {
@@ -2550,6 +2567,8 @@
         2.6
       ]
     },
+    "biological_min": 0,
+    "biological_max": 12,
     "loinc_code": "2601-3"
   },
   "Blood - Magnesium (Erythrocytes)": {
@@ -3017,7 +3036,7 @@
       ]
     },
     "biological_min": 0,
-    "biological_max": 2000,
+    "biological_max": 1500,
     "max_daily_change": 100,
     "loinc_code": "777-3"
   },
@@ -3048,6 +3067,8 @@
         5.0
       ]
     },
+    "biological_min": 0,
+    "biological_max": 10,
     "loinc_code": "2823-3"
   },
   "Blood - Progesterone (PRG)": {
@@ -3277,7 +3298,12 @@
     "lab_type": "blood",
     "primary_unit": "%",
     "alternatives": [],
-    "ranges": {},
+    "ranges": {
+      "default": [
+        0,
+        1.5
+      ]
+    },
     "loinc_code": "61438-7"
   },
   "Blood - Reticulocytes - Low RNA (%)": {
@@ -3395,7 +3421,7 @@
     ],
     "ranges": {
       "default": [
-        125.0,
+        100.0,
         200.0
       ]
     },
@@ -3631,6 +3657,8 @@
         6.0
       ]
     },
+    "biological_min": 0,
+    "biological_max": 25,
     "loinc_code": "3084-1"
   },
   "Blood - VDRL": {
@@ -3858,7 +3886,7 @@
     "ranges": {
       "default": [
         90.0,
-        120.0
+        150.0
       ]
     },
     "loinc_code": "98979-8"

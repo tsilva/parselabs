@@ -162,6 +162,63 @@ CUSTOM_CSS = """
     color: white !important;
 }
 
+/* Toggle pill checkbox styling (for Latest Only) */
+.toggle-pill {
+    padding: 4px 0;
+}
+.toggle-pill label {
+    padding: 6px 14px !important;
+    border-radius: 20px !important;
+    font-size: 0.85em !important;
+    font-weight: 500 !important;
+    border: 1px solid rgba(107, 114, 128, 0.5) !important;
+    background-color: rgba(55, 65, 81, 0.6) !important;
+    color: #e5e7eb !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+}
+.toggle-pill label:hover {
+    background-color: rgba(75, 85, 99, 0.8) !important;
+    border-color: rgba(156, 163, 175, 0.6) !important;
+}
+.toggle-pill input:checked + span {
+    background-color: #3b82f6 !important;
+    border-color: #3b82f6 !important;
+    color: white !important;
+}
+/* Hide the checkbox itself, style the container */
+.toggle-pill .wrap {
+    gap: 0 !important;
+}
+.toggle-pill > label > span {
+    padding: 6px 14px !important;
+    border-radius: 20px !important;
+    font-size: 0.85em !important;
+    font-weight: 500 !important;
+    border: 1px solid rgba(107, 114, 128, 0.5) !important;
+    background-color: rgba(55, 65, 81, 0.6) !important;
+    color: #e5e7eb !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+}
+.toggle-pill > label > span:hover {
+    background-color: rgba(75, 85, 99, 0.8) !important;
+    border-color: rgba(156, 163, 175, 0.6) !important;
+}
+.toggle-pill input[type="checkbox"]:checked + span {
+    background-color: #3b82f6 !important;
+    border-color: #3b82f6 !important;
+    color: white !important;
+}
+
+/* Compact lab dropdown in filter row */
+.lab-dropdown-compact {
+    min-width: 200px;
+}
+.lab-dropdown-compact .wrap {
+    padding: 0 !important;
+}
+
 /* Compact table display - dark mode compatible */
 #lab-data-table table {
     font-size: 0.85em;
@@ -274,6 +331,16 @@ def get_available_profiles() -> list[str]:
     """Get list of available profile names (excluding templates)."""
     profiles = ProfileConfig.list_profiles()
     return [p for p in profiles if not p.startswith('_')]
+
+
+def get_lab_name_choices(df: pd.DataFrame) -> list[str]:
+    """Get sorted list of unique lab names from DataFrame, excluding unknowns."""
+    if df.empty or 'lab_name' not in df.columns:
+        return []
+    return sorted([
+        name for name in df['lab_name'].dropna().unique()
+        if name and not str(name).startswith('$UNKNOWN')
+    ])
 
 
 # =============================================================================
@@ -691,7 +758,6 @@ def build_review_reason_banner(entry: dict) -> str:
 def apply_filters(
     df: pd.DataFrame,
     lab_names: Optional[str],
-    abnormal_only: bool,
     latest_only: bool,
     review_filter: str
 ) -> pd.DataFrame:
@@ -699,10 +765,9 @@ def apply_filters(
 
     Args:
         df: Full DataFrame
-        lab_names: Lab name to filter by (from advanced filters)
-        abnormal_only: Whether to show only abnormal results (from advanced filters)
-        latest_only: Whether to show only latest result per lab (from advanced filters)
-        review_filter: Quick filter option ('All', 'Needs Review', 'Abnormal', 'Unreviewed')
+        lab_names: Lab name to filter by
+        latest_only: Whether to show only latest result per lab
+        review_filter: Filter option ('All', 'Needs Review', 'Abnormal', 'Unhealthy', 'Unreviewed')
     """
     if df.empty:
         return df
@@ -713,11 +778,7 @@ def apply_filters(
     if lab_names:
         filtered = filtered[filtered['lab_name'] == lab_names]
 
-    # Filter abnormal only (from advanced filters checkbox)
-    if abnormal_only and 'is_out_of_reference' in filtered.columns:
-        filtered = filtered[filtered['is_out_of_reference'] == True]
-
-    # Quick filter pills options
+    # Status filter pills options
     if review_filter == 'Unreviewed':
         filtered = filtered[filtered['review_status'].isna() | (filtered['review_status'] == '')]
     elif review_filter == 'Abnormal':
@@ -1155,13 +1216,12 @@ def build_review_status_html(entry: dict) -> str:
 
 def handle_filter_change(
     lab_names: Optional[str],
-    abnormal_only: bool,
     latest_only: bool,
     review_filter: str,
     full_df: pd.DataFrame
 ):
     """Handle filter changes and update display."""
-    filtered_df = apply_filters(full_df, lab_names, abnormal_only, latest_only, review_filter)
+    filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter)
     display_df = prepare_display_df(filtered_df)
     summary = build_summary_cards(filtered_df)
 
@@ -1289,7 +1349,6 @@ def handle_review_action(
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
     lab_names: Optional[str],
-    abnormal_only: bool,
     latest_only: bool,
     review_filter: str,
     status: str
@@ -1332,7 +1391,7 @@ def handle_review_action(
         full_df.loc[mask, 'review_status'] = status
 
     # Re-filter
-    filtered_df = apply_filters(full_df, lab_names, abnormal_only, latest_only, review_filter)
+    filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter)
     display_df = prepare_display_df(filtered_df)
     summary = build_summary_cards(full_df)
 
@@ -1390,14 +1449,13 @@ def handle_accept(
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
     lab_names: Optional[list],
-    abnormal_only: bool,
     latest_only: bool,
     review_filter: str
 ):
     """Mark current entry as accepted."""
     return handle_review_action(
         current_idx, filtered_df, full_df, lab_names,
-        abnormal_only, latest_only, review_filter, "accepted"
+        latest_only, review_filter, "accepted"
     )
 
 
@@ -1406,14 +1464,13 @@ def handle_reject(
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
     lab_names: Optional[list],
-    abnormal_only: bool,
     latest_only: bool,
     review_filter: str
 ):
     """Mark current entry as rejected."""
     return handle_review_action(
         current_idx, filtered_df, full_df, lab_names,
-        abnormal_only, latest_only, review_filter, "rejected"
+        latest_only, review_filter, "rejected"
     )
 
 
@@ -1469,9 +1526,7 @@ def handle_profile_change(profile_name: str):
     if not full_df.empty and 'date' in full_df.columns:
         full_df = full_df.sort_values(['date', 'lab_name'], ascending=[False, True], na_position='last').reset_index(drop=True)
 
-    lab_name_choices = []
-    if not full_df.empty and 'lab_name' in full_df.columns:
-        lab_name_choices = sorted(full_df['lab_name'].dropna().unique().tolist())
+    lab_name_choices = get_lab_name_choices(full_df)
 
     display_df = prepare_display_df(full_df)
     summary = build_summary_cards(full_df)
@@ -1519,9 +1574,7 @@ def create_app():
     if not full_df.empty and 'date' in full_df.columns:
         full_df = full_df.sort_values(['date', 'lab_name'], ascending=[False, True], na_position='last').reset_index(drop=True)
 
-    lab_name_choices = []
-    if not full_df.empty and 'lab_name' in full_df.columns:
-        lab_name_choices = sorted(full_df['lab_name'].dropna().unique().tolist())
+    lab_name_choices = get_lab_name_choices(full_df)
 
     initial_position = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
     initial_image = get_image_path(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
@@ -1560,32 +1613,33 @@ def create_app():
 
         gr.Markdown("Browse, analyze, and review extracted lab results.")
 
-        # Quick filter pills row
+        # Unified filter row: Lab dropdown | Status pills | Latest toggle
         with gr.Row():
-            review_filter = gr.Radio(
-                choices=['All', 'Needs Review', 'Abnormal', 'Unhealthy', 'Unreviewed'],
-                value='All',
-                label="Quick Filters",
-                elem_classes="quick-filter-pills"
-            )
+            with gr.Column(scale=1, min_width=200):
+                lab_name_filter = gr.Dropdown(
+                    choices=lab_name_choices,
+                    multiselect=False,
+                    value=None,
+                    label="Lab",
+                    allow_custom_value=False,
+                    elem_classes="lab-dropdown-compact"
+                )
+            with gr.Column(scale=3):
+                review_filter = gr.Radio(
+                    choices=['All', 'Needs Review', 'Abnormal', 'Unhealthy', 'Unreviewed'],
+                    value='All',
+                    label="Status",
+                    elem_classes="quick-filter-pills"
+                )
+            with gr.Column(scale=1, min_width=120):
+                latest_filter = gr.Checkbox(
+                    label="Latest Only",
+                    value=False,
+                    elem_classes="toggle-pill"
+                )
 
         # Summary cards
         summary_display = gr.HTML(build_summary_cards(full_df))
-
-        # Collapsible advanced filters
-        with gr.Accordion("Advanced Filters", open=False):
-            with gr.Row():
-                with gr.Column(scale=2):
-                    lab_name_filter = gr.Dropdown(
-                        choices=lab_name_choices,
-                        multiselect=False,
-                        value=None,
-                        label="Lab Names",
-                        allow_custom_value=False
-                    )
-                with gr.Column(scale=1):
-                    abnormal_filter = gr.Checkbox(label="Abnormal Only", value=False)
-                    latest_filter = gr.Checkbox(label="Latest Only", value=False)
 
         gr.Markdown("---")
 
@@ -1683,11 +1737,10 @@ def create_app():
         )
 
         # Filter inputs and outputs
-        filter_inputs = [lab_name_filter, abnormal_filter, latest_filter, review_filter, full_df_state]
+        filter_inputs = [lab_name_filter, latest_filter, review_filter, full_df_state]
         filter_outputs = [data_table, summary_display, plot_display, filtered_df_state, current_idx_state, position_display, source_image, details_display, review_status_display, review_reason_banner]
 
         lab_name_filter.change(fn=handle_filter_change, inputs=filter_inputs, outputs=filter_outputs)
-        abnormal_filter.change(fn=handle_filter_change, inputs=filter_inputs, outputs=filter_outputs)
         latest_filter.change(fn=handle_filter_change, inputs=filter_inputs, outputs=filter_outputs)
         review_filter.change(fn=handle_filter_change, inputs=filter_inputs, outputs=filter_outputs)
 
@@ -1706,7 +1759,7 @@ def create_app():
         next_btn.click(fn=handle_next, inputs=nav_inputs, outputs=nav_outputs)
 
         # Review action buttons
-        review_inputs = [current_idx_state, filtered_df_state, full_df_state, lab_name_filter, abnormal_filter, latest_filter, review_filter]
+        review_inputs = [current_idx_state, filtered_df_state, full_df_state, lab_name_filter, latest_filter, review_filter]
         review_outputs = [full_df_state, filtered_df_state, data_table, plot_display, current_idx_state, position_display, source_image, details_display, review_status_display, summary_display, review_reason_banner]
 
         accept_btn.click(fn=handle_accept, inputs=review_inputs, outputs=review_outputs)
@@ -1806,19 +1859,22 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Build allowed paths for serving files from all profiles
+    # Read profile configs directly without modifying global state
     available = get_available_profiles()
     print(f"Available profiles: {', '.join(available)}")
 
     allowed_paths = set()
     for pname in available:
-        p = load_profile(pname)
-        if p and p.output_path:
-            allowed_paths.add(str(p.output_path))
-            if p.output_path.parent != p.output_path:
-                allowed_paths.add(str(p.output_path.parent))
+        for ext in ('.yaml', '.yml', '.json'):
+            profile_path = Path(f"profiles/{pname}{ext}")
+            if profile_path.exists():
+                p = ProfileConfig.from_file(profile_path)
+                if p.output_path:
+                    allowed_paths.add(str(p.output_path))
+                    if p.output_path.parent != p.output_path:
+                        allowed_paths.add(str(p.output_path.parent))
+                break
 
-    # Reload the original profile before creating app
-    load_profile(profile_name)
     allowed_paths = list(allowed_paths)
 
     print(f"Output path: {output_path}")
