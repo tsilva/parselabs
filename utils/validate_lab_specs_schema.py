@@ -7,8 +7,9 @@ Validates:
 2. Required fields for each lab entry
 3. Data types and value ranges
 4. LOINC code presence (with known exceptions)
-5. Relationship configurations
-6. Lab name prefixes match lab_type
+5. LOINC code uniqueness (no duplicates across labs)
+6. Relationship configurations
+7. Lab name prefixes match lab_type
 """
 
 import json
@@ -123,6 +124,7 @@ class LabSpecsValidator:
         """Validate individual lab entries."""
         lab_count = 0
         missing_loinc_count = 0
+        loinc_codes: dict[str, list[str]] = {}  # loinc_code -> [lab_names]
 
         for lab_name, spec in self.config.items():
             # Skip special keys
@@ -153,12 +155,29 @@ class LabSpecsValidator:
             # Validate LOINC code
             if not self._validate_loinc_code(lab_name, spec):
                 missing_loinc_count += 1
+            else:
+                # Track LOINC codes for uniqueness check
+                loinc_code = spec.get("loinc_code")
+                if loinc_code:
+                    if loinc_code not in loinc_codes:
+                        loinc_codes[loinc_code] = []
+                    loinc_codes[loinc_code].append(lab_name)
 
             # Validate optional biological limits
             self._validate_biological_limits(lab_name, spec)
 
             # Validate optional temporal constraints
             self._validate_temporal_constraints(lab_name, spec)
+
+            # Validate optional ranges_vary_with_cycle flag
+            self._validate_ranges_vary_with_cycle(lab_name, spec)
+
+        # Check for duplicate LOINC codes
+        for loinc_code, lab_names in loinc_codes.items():
+            if len(lab_names) > 1:
+                self.errors.append(
+                    f"Duplicate LOINC code '{loinc_code}' used by: {', '.join(sorted(lab_names))}"
+                )
 
         # Summary
         if lab_count == 0:
@@ -368,6 +387,20 @@ class LabSpecsValidator:
             elif max_daily_change <= 0:
                 self.errors.append(
                     f"Lab '{lab_name}': 'max_daily_change' must be positive"
+                )
+
+    def _validate_ranges_vary_with_cycle(self, lab_name: str, spec: dict) -> None:
+        """Validate optional ranges_vary_with_cycle field.
+
+        This flag indicates labs where reference ranges legitimately vary
+        by menstrual cycle phase (e.g., FSH, LH, Progesterone, Estradiol).
+        """
+        ranges_vary = spec.get("ranges_vary_with_cycle")
+
+        if ranges_vary is not None:
+            if not isinstance(ranges_vary, bool):
+                self.errors.append(
+                    f"Lab '{lab_name}': 'ranges_vary_with_cycle' must be a boolean"
                 )
 
     def print_report(self) -> None:

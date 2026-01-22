@@ -28,6 +28,7 @@ class ValueValidator:
     REASON_CODES = {
         "IMPOSSIBLE_VALUE": 0.3,       # Biologically impossible
         "RELATIONSHIP_MISMATCH": 0.5,  # Calculated vs extracted mismatch
+        "COMPONENT_EXCEEDS_TOTAL": 0.3,  # Component value exceeds its total
         "TEMPORAL_ANOMALY": 0.6,       # Implausible change rate
         "FORMAT_ARTIFACT": 0.7,        # Parsing/format issue
         "RANGE_INCONSISTENCY": 0.7,    # Reference range issues
@@ -35,6 +36,16 @@ class ValueValidator:
         "NEGATIVE_VALUE": 0.3,         # Negative concentration
         "EXTREME_DEVIATION": 0.5,      # Value far outside reference range
     }
+
+    # Component-total constraints: component value must not exceed total value
+    # Format: (component_lab, total_lab)
+    COMPONENT_TOTAL_CONSTRAINTS = [
+        ("Blood - Albumin", "Blood - Total Protein"),
+        ("Blood - Bilirubin Direct", "Blood - Bilirubin Total"),
+        ("Blood - Bilirubin Indirect", "Blood - Bilirubin Total"),
+        ("Blood - High-Density Lipoprotein Cholesterol (HDL Cholesterol)", "Blood - Total Cholesterol"),
+        ("Blood - Low-Density Lipoprotein Cholesterol (LDL Cholesterol)", "Blood - Total Cholesterol"),
+    ]
 
     # Column name mappings: (preferred_name, fallback_name)
     COLUMN_MAPPINGS = {
@@ -123,6 +134,7 @@ class ValueValidator:
         # Run validation checks in order
         df = self._check_biological_plausibility(df)
         df = self._check_inter_lab_relationships(df)
+        df = self._check_component_total_constraints(df)
         df = self._check_temporal_consistency(df)
         df = self._check_format_artifacts(df)
         df = self._check_reference_ranges(df)
@@ -327,6 +339,57 @@ class ValueValidator:
 
                 except Exception as e:
                     logger.debug(f"Error evaluating relationship {rel.get('name')}: {e}")
+
+        return df
+
+    def _check_component_total_constraints(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Check that component values don't exceed their totals.
+
+        For example: Albumin should not exceed Total Protein,
+        Direct Bilirubin should not exceed Total Bilirubin.
+        """
+        if self._date_col not in df.columns:
+            return df
+
+        component_exceeds_indices: list = []
+
+        # Group by date to check constraints within same test date
+        for date_val, date_group in df.groupby(self._date_col):
+            if pd.isna(date_val):
+                continue
+
+            # Build lookup of lab values and indices for this date
+            lab_values: dict[str, float] = {}
+            lab_indices: dict[str, int] = {}
+            for idx, row in date_group.iterrows():
+                lab_name = row.get(self._lab_name_col)
+                value = row.get(self._value_col)
+                if pd.notna(lab_name) and pd.notna(value):
+                    lab_values[lab_name] = value
+                    lab_indices[lab_name] = idx
+
+            # Check each constraint
+            for component_lab, total_lab in self.COMPONENT_TOTAL_CONSTRAINTS:
+                component_value = lab_values.get(component_lab)
+                total_value = lab_values.get(total_lab)
+
+                if component_value is None or total_value is None:
+                    continue
+
+                # Component should not exceed total (with small tolerance for rounding)
+                if component_value > total_value * 1.05:  # 5% tolerance
+                    component_idx = lab_indices.get(component_lab)
+                    if component_idx is not None:
+                        component_exceeds_indices.append(component_idx)
+                        logger.debug(
+                            f"Component exceeds total on {date_val}: "
+                            f"{component_lab}={component_value} > {total_lab}={total_value}"
+                        )
+
+        # Batch flag all collected indices
+        if component_exceeds_indices:
+            mask = df.index.isin(component_exceeds_indices)
+            df = self._flag_row(df, mask, "COMPONENT_EXCEEDS_TOTAL")
 
         return df
 
