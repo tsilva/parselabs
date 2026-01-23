@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.png" alt="labs-parser" width="280"/>
+  <img src="logo.png" alt="labs-parser" width="512"/>
 
   # labs-parser
 
