@@ -187,3 +187,6 @@ profiles/*.yml
 
 # Cache files (contain PII in mapping keys)
 config/cache/
+
+# Claude sandbox config (contains user-specific paths)
+.claude-sandbox.json
