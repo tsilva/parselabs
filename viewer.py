@@ -7,9 +7,13 @@ Shows data table with interactive plots and review actions side-by-side.
 Usage:
   python viewer.py --profile tiago
   python viewer.py --list-profiles
+  python viewer.py --profile tiago --env local
 
 Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate
 """
+
+from utils import load_dotenv_with_env
+load_dotenv_with_env()
 
 import os
 import sys
@@ -22,12 +26,8 @@ from plotly.subplots import make_subplots
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Tuple
-from dotenv import load_dotenv
 
 from config import ProfileConfig, Demographics, LabSpecsConfig
-
-# Load .env from repo root
-load_dotenv(Path(__file__).parent / '.env')
 
 # =============================================================================
 # Keyboard Shortcuts (JavaScript)
@@ -1877,6 +1877,7 @@ Examples:
   python viewer.py --profile tiago     # Start with specific profile
   python viewer.py                     # Uses first available profile
   python viewer.py --list-profiles     # List available profiles
+  python viewer.py --profile tiago --env local  # Use .env.local
         """
     )
     parser.add_argument(
@@ -1888,6 +1889,12 @@ Examples:
         '--list-profiles',
         action='store_true',
         help='List available profiles and exit'
+    )
+    parser.add_argument(
+        '--env',
+        type=str,
+        default=None,
+        help='Environment name to load (loads .env.{name} after .env)'
     )
     return parser.parse_args()
 

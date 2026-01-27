@@ -1,10 +1,11 @@
 """Main entry point for lab results extraction and processing."""
 
-from dotenv import load_dotenv
-load_dotenv(override=True)
+from utils import load_dotenv_with_env
+load_dotenv_with_env()
 
 import os
 import sys
+from pathlib import Path
 import re
 import json
 import shutil
@@ -14,7 +15,6 @@ import hashlib
 import subprocess
 import pandas as pd
 import pdf2image
-from pathlib import Path
 from multiprocessing import Pool
 from openai import OpenAI
 from tqdm import tqdm
@@ -788,13 +788,16 @@ def parse_args():
         epilog="""
 Examples:
   # Using a profile (required):
-  python main.py --profile tsilva
+  python extract.py --profile tsilva
 
   # List available profiles:
-  python main.py --list-profiles
+  python extract.py --list-profiles
 
   # Override settings:
-  python main.py --profile tsilva --model google/gemini-2.5-pro
+  python extract.py --profile tsilva --model google/gemini-2.5-pro
+
+  # Use alternate environment (loads .env.local after .env):
+  python extract.py --profile tsilva --env local
         """
     )
     # Profile-based
@@ -825,6 +828,12 @@ Examples:
         type=str,
         default=None,
         help='Glob pattern for input files (overrides profile, default: *.pdf)'
+    )
+    parser.add_argument(
+        '--env',
+        type=str,
+        default=None,
+        help='Environment name to load (loads .env.{name} after .env)'
     )
 
     return parser.parse_args()
