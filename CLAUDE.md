@@ -216,9 +216,10 @@ Final outputs in `OUTPUT_PATH`:
 
 Required:
 - `OPENROUTER_API_KEY` - API key for OpenRouter
+- `EXTRACT_MODEL_ID` - Vision model for extraction
+- `SELF_CONSISTENCY_MODEL_ID` - Model for self-consistency checks
 
-Optional (with smart defaults):
-- `EXTRACT_MODEL_ID` - Vision model (default: `google/gemini-3-flash-preview`)
+Optional:
 - `N_EXTRACTIONS` - Self-consistency extractions (default: 1)
 - `MAX_WORKERS` - Parallel workers (default: CPU count)
 

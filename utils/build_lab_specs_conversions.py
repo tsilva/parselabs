@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 import os
+import sys
 import csv
 import json
 from collections import defaultdict
@@ -9,8 +10,13 @@ from openai import OpenAI, APIError
 import concurrent.futures
 
 
+# Validate required environment variables
+if not os.getenv("EXTRACT_MODEL_ID"):
+    print("Error: EXTRACT_MODEL_ID environment variable not set")
+    sys.exit(1)
+
 client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
+    base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
     api_key=os.getenv("OPENROUTER_API_KEY")
 )
 
@@ -31,7 +37,7 @@ def get_conversion_factor(lab_name, from_unit, to_unit, temperature=0.0):
         "What is the numeric conversion factor? Respond with only the number."
     )
     completion = client.chat.completions.create(
-        model="openai/gpt-4.1",
+        model=os.getenv("EXTRACT_MODEL_ID"),
         messages=[
             {
                 "role": "system",

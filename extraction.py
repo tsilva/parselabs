@@ -446,7 +446,7 @@ def vote_on_best_result(results: list, model_id: str, fn_name: str):
     import os
 
     client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
+        base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
         api_key=os.getenv("OPENROUTER_API_KEY")
     )
 

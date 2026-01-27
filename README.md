@@ -36,8 +36,9 @@ uv sync
 cp profiles/_template.yaml profiles/myname.yaml
 # Edit profiles/myname.yaml with your input/output paths
 
-# Set your API key
-export OPENROUTER_API_KEY=your_key_here
+# Configure environment (copy .env.example and edit)
+cp .env.example .env
+# Edit .env with your API key and model settings
 
 # Extract lab results
 python extract.py --profile myname
@@ -73,12 +74,14 @@ brew install poppler
 Create a `.env` file:
 
 ```bash
+# Required
 OPENROUTER_API_KEY=your_key_here
+EXTRACT_MODEL_ID=google/gemini-3-flash-preview       # Vision model for extraction
+SELF_CONSISTENCY_MODEL_ID=google/gemini-3-flash-preview  # Model for self-consistency
 
-# Optional:
-EXTRACT_MODEL_ID=google/gemini-3-flash-preview  # Vision model
-N_EXTRACTIONS=1                                  # Self-consistency extractions
-MAX_WORKERS=4                                    # Parallel workers
+# Optional
+N_EXTRACTIONS=1    # Self-consistency extractions
+MAX_WORKERS=4      # Parallel workers
 ```
 
 ## Configuration
