@@ -11,9 +11,6 @@ logger = logging.getLogger(__name__)
 
 UNKNOWN_VALUE = "$UNKNOWN$"
 
-# Default model - fast, cheap, good quality
-DEFAULT_MODEL = "google/gemini-3-flash-preview"
-
 
 @dataclass
 class ExtractionConfig:
@@ -25,9 +22,9 @@ class ExtractionConfig:
     output_path: Path
     openrouter_api_key: str
 
-    # Model settings (with smart defaults)
-    extract_model_id: str = DEFAULT_MODEL
-    self_consistency_model_id: str = DEFAULT_MODEL
+    # Model settings (required - set via .env)
+    extract_model_id: str
+    self_consistency_model_id: str
 
     # Processing settings
     input_file_regex: str = "*.pdf"
@@ -36,15 +33,19 @@ class ExtractionConfig:
 
     @classmethod
     def from_env(cls) -> 'ExtractionConfig':
-        """Load configuration from environment variables with smart defaults."""
+        """Load configuration from environment variables."""
         # Required
         openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
         if not openrouter_api_key:
             raise ValueError("OPENROUTER_API_KEY not set")
 
-        # Models (smart defaults)
-        extract_model_id = os.getenv("EXTRACT_MODEL_ID", DEFAULT_MODEL)
-        self_consistency_model_id = os.getenv("SELF_CONSISTENCY_MODEL_ID", DEFAULT_MODEL)
+        # Models (required - no defaults)
+        extract_model_id = os.getenv("EXTRACT_MODEL_ID")
+        if not extract_model_id:
+            raise ValueError("EXTRACT_MODEL_ID not set")
+        self_consistency_model_id = os.getenv("SELF_CONSISTENCY_MODEL_ID")
+        if not self_consistency_model_id:
+            raise ValueError("SELF_CONSISTENCY_MODEL_ID not set")
 
         # Processing settings (smart defaults)
         input_file_regex = os.getenv("INPUT_FILE_REGEX", "*.pdf")

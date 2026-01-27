@@ -20,7 +20,7 @@ from openai import OpenAI
 from tqdm import tqdm
 
 # Local imports
-from config import ExtractionConfig, LabSpecsConfig, ProfileConfig, UNKNOWN_VALUE, DEFAULT_MODEL
+from config import ExtractionConfig, LabSpecsConfig, ProfileConfig, UNKNOWN_VALUE
 from utils import preprocess_page_image, setup_logging, ensure_columns
 from extraction import (
     LabResult, HealthLabReport, extract_labs_from_page_image, extract_labs_from_text, self_consistency
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize OpenAI client for OpenRouter
 client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
+    base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
     api_key=os.getenv("OPENROUTER_API_KEY")
 )
 
@@ -161,7 +161,7 @@ def _save_viability_cache(cache: dict):
 def text_extraction_is_viable(
     text: str,
     client: OpenAI,
-    model_id: str = "google/gemini-3-flash-preview",
+    model_id: str,
     min_chars: int = 200,
 ) -> bool:
     """
@@ -337,7 +337,7 @@ def process_single_pdf(
         if text_extraction_data is None:
             pdf_text, pdftotext_success = extract_text_from_pdf(copied_pdf)
 
-            if pdftotext_success and text_extraction_is_viable(pdf_text, client):
+            if pdftotext_success and text_extraction_is_viable(pdf_text, client, config.extract_model_id):
                 logger.info(f"[{pdf_stem}] Strategy: TEXT (LLM classified as lab data, {len(pdf_text)} chars)")
 
                 try:
@@ -813,7 +813,7 @@ Examples:
     parser.add_argument(
         '--model', '-m',
         type=str,
-        help='Model ID for extraction (default: google/gemini-3-flash-preview)'
+        help='Model ID for extraction (overrides EXTRACT_MODEL_ID from .env)'
     )
     parser.add_argument(
         '--workers', '-w',
@@ -862,13 +862,23 @@ def build_config(args) -> ExtractionConfig:
         print("Error: OPENROUTER_API_KEY environment variable not set")
         sys.exit(1)
 
+    # Get model IDs from environment (required)
+    extract_model_id = os.getenv("EXTRACT_MODEL_ID")
+    if not extract_model_id:
+        print("Error: EXTRACT_MODEL_ID environment variable not set")
+        sys.exit(1)
+    self_consistency_model_id = os.getenv("SELF_CONSISTENCY_MODEL_ID")
+    if not self_consistency_model_id:
+        print("Error: SELF_CONSISTENCY_MODEL_ID environment variable not set")
+        sys.exit(1)
+
     # Build config from profile
     config = ExtractionConfig(
         input_path=profile.input_path,
         output_path=profile.output_path,
         openrouter_api_key=openrouter_api_key,
-        extract_model_id=os.getenv("EXTRACT_MODEL_ID", DEFAULT_MODEL),
-        self_consistency_model_id=os.getenv("SELF_CONSISTENCY_MODEL_ID", DEFAULT_MODEL),
+        extract_model_id=extract_model_id,
+        self_consistency_model_id=self_consistency_model_id,
         input_file_regex=profile.input_file_regex or "*.pdf",
         n_extractions=int(os.getenv("N_EXTRACTIONS", "1")),
         max_workers=profile.workers or int(os.getenv("MAX_WORKERS", "0")) or (os.cpu_count() or 1),
