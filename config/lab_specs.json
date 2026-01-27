@@ -350,8 +350,17 @@
   },
   "Blood - Anti-Cardiolipin IgG": {
     "lab_type": "blood",
-    "primary_unit": "pg",
-    "alternatives": [],
+    "primary_unit": "GPL/mL",
+    "alternatives": [
+      {
+        "unit": "GPLO/ML",
+        "factor": 1.0
+      },
+      {
+        "unit": "GPL U/mL",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "default": [
         0.0,
@@ -362,8 +371,17 @@
   },
   "Blood - Anti-Cardiolipin IgM": {
     "lab_type": "blood",
-    "primary_unit": "pg",
-    "alternatives": [],
+    "primary_unit": "MPL/mL",
+    "alternatives": [
+      {
+        "unit": "MPLO/ml",
+        "factor": 1.0
+      },
+      {
+        "unit": "MPL U/mL",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "default": [
         0.0,
@@ -778,6 +796,14 @@
       {
         "unit": "cells/mm³",
         "factor": 0.001
+      },
+      {
+        "unit": "x 103/µl",
+        "factor": 1.0
+      },
+      {
+        "unit": "x10³/µL",
+        "factor": 1.0
       }
     ],
     "ranges": {
@@ -1295,6 +1321,14 @@
       {
         "unit": "cells/mm³",
         "factor": 0.001
+      },
+      {
+        "unit": "x 103/µl",
+        "factor": 1.0
+      },
+      {
+        "unit": "x10³/µL",
+        "factor": 1.0
       }
     ],
     "ranges": {
@@ -2247,8 +2281,21 @@
   },
   "Blood - Intrinsic Factor Ab (IgG)": {
     "lab_type": "blood",
-    "primary_unit": "IU/L",
-    "alternatives": [],
+    "primary_unit": "U/mL",
+    "alternatives": [
+      {
+        "unit": "RU/ml",
+        "factor": 1.0
+      },
+      {
+        "unit": "RU/mL",
+        "factor": 1.0
+      },
+      {
+        "unit": "IU/L",
+        "factor": 0.001
+      }
+    ],
     "ranges": {
       "default": [
         0.0,
@@ -2501,6 +2548,14 @@
       {
         "unit": "cells/mm³",
         "factor": 0.001
+      },
+      {
+        "unit": "x 103/µl",
+        "factor": 1.0
+      },
+      {
+        "unit": "x10³/µL",
+        "factor": 1.0
       }
     ],
     "ranges": {
@@ -2677,6 +2732,14 @@
       {
         "unit": "cells/mm³",
         "factor": 0.001
+      },
+      {
+        "unit": "x 103/µl",
+        "factor": 1.0
+      },
+      {
+        "unit": "x10³/µL",
+        "factor": 1.0
       }
     ],
     "ranges": {
@@ -2732,6 +2795,14 @@
       {
         "unit": "cells/mm³",
         "factor": 0.001
+      },
+      {
+        "unit": "x 103/µl",
+        "factor": 1.0
+      },
+      {
+        "unit": "x10³/µL",
+        "factor": 1.0
       }
     ],
     "ranges": {
@@ -3273,7 +3344,12 @@
   "Blood - Reticulocyte Hemoglobin Content": {
     "lab_type": "blood",
     "primary_unit": "pg",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "pg/L",
+        "factor": 1.0
+      }
+    ],
     "ranges": {
       "default": [
         28,

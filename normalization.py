@@ -789,6 +789,21 @@ def apply_unit_conversions(
             df.loc[unit_mask, "reference_max_primary"] = df.loc[unit_mask, "reference_max_raw"] * factor
             df.loc[unit_mask, "lab_unit_primary"] = primary_unit
 
+    # Fix specific gravity values that are missing decimal point (1012 → 1.012)
+    # Some labs report specific gravity as integer (1000-1040) instead of decimal (1.000-1.040)
+    specific_gravity_labs = [
+        "Urine Type II - Specific Gravity",
+        "Urine - Specific Gravity",
+    ]
+    sg_mask = (
+        df["lab_name_standardized"].isin(specific_gravity_labs) &
+        df["value_primary"].notna() &
+        (df["value_primary"] > 100)  # Values like 1012, 1020 need fixing
+    )
+    if sg_mask.any():
+        df.loc[sg_mask, "value_primary"] = df.loc[sg_mask, "value_primary"] / 1000
+        logger.info(f"[normalization] Fixed {sg_mask.sum()} specific gravity values (divided by 1000)")
+
     # Validate reference ranges against lab_specs (detect wrong-unit assignments)
     if lab_specs.exists:
         validation_count = 0

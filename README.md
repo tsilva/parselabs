@@ -122,7 +122,10 @@ The `config/lab_specs.json` file contains 335+ standardized lab tests with:
 ### Extract Lab Results
 
 ```bash
-# Using a profile (required)
+# Run all profiles (default)
+python extract.py
+
+# Run specific profile
 python extract.py --profile myname
 
 # Override model
