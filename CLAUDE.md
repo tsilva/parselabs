@@ -12,7 +12,10 @@ Labs Parser is a Python tool that uses AI (via OpenRouter API) to extract labora
 
 ### Running the Parser
 ```bash
-# Using a profile (required):
+# Run all profiles:
+python extract.py
+
+# Run specific profile:
 python extract.py --profile tsilva
 
 # List available profiles:

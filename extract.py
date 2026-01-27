@@ -787,7 +787,10 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Using a profile (required):
+  # Run all profiles:
+  python extract.py
+
+  # Run specific profile:
   python extract.py --profile tsilva
 
   # List available profiles:
@@ -804,7 +807,7 @@ Examples:
     parser.add_argument(
         '--profile', '-p',
         type=str,
-        help='Profile name (without extension)'
+        help='Profile name (without extension). If not specified, runs all profiles.'
     )
     parser.add_argument(
         '--list-profiles',
@@ -917,30 +920,19 @@ def build_config(args) -> ExtractionConfig:
 # Main Pipeline
 # ========================================
 
-def main():
-    """Main pipeline orchestration."""
-    args = parse_args()
+def run_for_profile(args, profile_name: str) -> bool:
+    """Run extraction pipeline for a single profile.
 
-    # Handle --list-profiles
-    if args.list_profiles:
-        profiles = ProfileConfig.list_profiles()
-        if profiles:
-            print("Available profiles:")
-            for name in profiles:
-                print(f"  - {name}")
-        else:
-            print("No profiles found. Create profiles in the 'profiles/' directory.")
-        return
+    Returns True if successful, False otherwise.
+    """
+    # Temporarily set args.profile for build_config
+    original_profile = args.profile
+    args.profile = profile_name
 
-    # Profile is required for all other operations
-    if not args.profile:
-        print("Error: --profile is required.")
-        print("Use --list-profiles to see available profiles.")
-        print("Example: python main.py --profile tsilva")
-        sys.exit(1)
-
-    # Build configuration from env + profile + CLI args
-    config = build_config(args)
+    try:
+        config = build_config(args)
+    finally:
+        args.profile = original_profile
 
     # Setup logging to output folder for later review
     global logger
@@ -969,8 +961,8 @@ def main():
     logger.info(f"Found {len(pdf_files)} PDF(s) matching '{config.input_file_regex}'")
 
     if not pdf_files:
-        logger.warning("No PDF files found. Exiting.")
-        return
+        logger.warning("No PDF files found.")
+        return False
 
     # Check for empty extractions and prompt user to reprocess
     _prompt_reprocess_empty(config.output_path, matching_stems)
@@ -1018,8 +1010,8 @@ def main():
         csv_paths = [p for pdf in pdf_files if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))]
 
     if not csv_paths:
-        logger.error("No PDFs successfully processed. Exiting.")
-        return
+        logger.error("No PDFs successfully processed.")
+        return False
 
     logger.info(f"Successfully processed {len(csv_paths)} PDFs")
 
@@ -1031,7 +1023,7 @@ def main():
 
     if merged_df.empty:
         logger.error("No data to process")
-        return
+        return False
 
     # Filter out legacy columns that are not in current schema
     # (e.g., verification_status, verified, cross_model_verified, etc. from old versions)
@@ -1120,6 +1112,56 @@ def main():
             print(f"    - {failure['page']}: {failure['reason']}")
     else:
         logger.info("  Extraction failures: 0")
+
+    return True
+
+
+def main():
+    """Main pipeline orchestration."""
+    args = parse_args()
+
+    # Handle --list-profiles
+    if args.list_profiles:
+        profiles = ProfileConfig.list_profiles()
+        if profiles:
+            print("Available profiles:")
+            for name in profiles:
+                print(f"  - {name}")
+        else:
+            print("No profiles found. Create profiles in the 'profiles/' directory.")
+        return
+
+    # Determine which profiles to run
+    if args.profile:
+        profiles_to_run = [args.profile]
+    else:
+        profiles_to_run = ProfileConfig.list_profiles()
+        if not profiles_to_run:
+            print("No profiles found. Create profiles in the 'profiles/' directory.")
+            print("Or use --profile to specify one.")
+            sys.exit(1)
+        print(f"Running all profiles: {', '.join(profiles_to_run)}")
+
+    # Run extraction for each profile
+    results = {}
+    for profile_name in profiles_to_run:
+        print(f"\n{'='*60}")
+        print(f"Processing profile: {profile_name}")
+        print(f"{'='*60}")
+        try:
+            success = run_for_profile(args, profile_name)
+            results[profile_name] = "success" if success else "failed"
+        except Exception as e:
+            print(f"Error processing profile {profile_name}: {e}")
+            results[profile_name] = f"error: {e}"
+
+    # Summary if multiple profiles
+    if len(profiles_to_run) > 1:
+        print(f"\n{'='*60}")
+        print("Summary:")
+        print(f"{'='*60}")
+        for profile_name, status in results.items():
+            print(f"  {profile_name}: {status}")
 
 
 if __name__ == "__main__":

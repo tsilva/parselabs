@@ -226,6 +226,23 @@ class ValueValidator:
         # Labs allowed to have negative values
         negative_allowed = {'Blood - Anion Gap'}
 
+        # Labs where percentage values can legitimately exceed 100%
+        # (e.g., prothrombin activity is measured relative to normal, not as fraction of total)
+        percentage_exceeds_100_allowed = {
+            'Blood - Prothrombin Time (PT) (%)',
+            'Blood - Factor II Activity (%)',
+            'Blood - Factor V Activity (%)',
+            'Blood - Factor VII Activity (%)',
+            'Blood - Factor VIII Activity (%)',
+            'Blood - Factor IX Activity (%)',
+            'Blood - Factor X Activity (%)',
+            'Blood - Factor XI Activity (%)',
+            'Blood - Factor XII Activity (%)',
+            'Blood - Protein C Activity (%)',
+            'Blood - Protein S Activity (%)',
+            'Blood - Antithrombin III Activity (%)',
+        }
+
         flags: dict[str, list] = {
             "NEGATIVE_VALUE": [],
             "PERCENTAGE_BOUNDS": [],
@@ -250,9 +267,12 @@ class ValueValidator:
 
             # Check percentage bounds
             unit = getattr(row, self._unit_col, None) if has_unit_col else None
-            if unit == '%' and (value < 0 or value > 100):
-                flags["PERCENTAGE_BOUNDS"].append(idx)
-                continue
+            if unit == '%':
+                # Some labs (coagulation factors) can legitimately exceed 100%
+                max_pct = 200 if lab_name in percentage_exceeds_100_allowed else 100
+                if value < 0 or value > max_pct:
+                    flags["PERCENTAGE_BOUNDS"].append(idx)
+                    continue
 
             # Check biological limits from lab_specs
             spec = self.lab_specs.specs.get(lab_name, {})
