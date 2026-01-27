@@ -14,13 +14,13 @@ from dotenv import load_dotenv
 
 
 def load_dotenv_with_env() -> str | None:
-    """Load .env file, with optional overlay from --env flag.
+    """Load .env file, or .env.{name} if --env flag is specified.
 
     Parses --env from sys.argv before full argument parsing to allow
     loading the correct environment before module-level initialization.
 
     Returns:
-        The environment name if an overlay was loaded, None otherwise.
+        The environment name if specified, None otherwise.
     """
     # Extract --env value from sys.argv
     env_name = None
@@ -32,17 +32,18 @@ def load_dotenv_with_env() -> str | None:
             env_name = arg.split('=', 1)[1]
             break
 
-    # Load base .env first
-    load_dotenv(override=True)
-
-    # Overlay with .env.{name} if specified
+    # Load environment file (standalone behavior)
     if env_name:
+        # Only load .env.{name} when specified
         env_file = Path(f".env.{env_name}")
         if env_file.exists():
             load_dotenv(env_file, override=True)
             print(f"Loaded environment: .env.{env_name}")
         else:
-            print(f"Warning: .env.{env_name} not found, using default .env")
+            print(f"Warning: .env.{env_name} not found")
+    else:
+        # Load base .env when no env specified
+        load_dotenv(override=True)
 
     return env_name
 
