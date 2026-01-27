@@ -1,5 +1,6 @@
 """Shared utility functions for the labs parser."""
 
+import sys
 import json
 import unicodedata
 import re
@@ -9,6 +10,41 @@ from pathlib import Path
 from typing import Any
 from PIL import Image, ImageEnhance
 import pandas as pd
+from dotenv import load_dotenv
+
+
+def load_dotenv_with_env() -> str | None:
+    """Load .env file, with optional overlay from --env flag.
+
+    Parses --env from sys.argv before full argument parsing to allow
+    loading the correct environment before module-level initialization.
+
+    Returns:
+        The environment name if an overlay was loaded, None otherwise.
+    """
+    # Extract --env value from sys.argv
+    env_name = None
+    for i, arg in enumerate(sys.argv):
+        if arg == '--env' and i + 1 < len(sys.argv):
+            env_name = sys.argv[i + 1]
+            break
+        if arg.startswith('--env='):
+            env_name = arg.split('=', 1)[1]
+            break
+
+    # Load base .env first
+    load_dotenv(override=True)
+
+    # Overlay with .env.{name} if specified
+    if env_name:
+        env_file = Path(f".env.{env_name}")
+        if env_file.exists():
+            load_dotenv(env_file, override=True)
+            print(f"Loaded environment: .env.{env_name}")
+        else:
+            print(f"Warning: .env.{env_name} not found, using default .env")
+
+    return env_name
 
 
 def preprocess_page_image(image: Image.Image) -> Image.Image:

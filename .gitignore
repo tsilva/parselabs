@@ -123,6 +123,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.local
 .venv
 env/
 venv/
@@ -190,3 +191,4 @@ config/cache/
 
 # Claude sandbox config (contains user-specific paths)
 .claude-sandbox.json
+
