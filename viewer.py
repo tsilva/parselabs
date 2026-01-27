@@ -1894,7 +1894,7 @@ Examples:
         '--env',
         type=str,
         default=None,
-        help='Environment name to load (loads .env.{name} after .env)'
+        help='Environment name to load (loads .env.{name} instead of .env)'
     )
     return parser.parse_args()
 
