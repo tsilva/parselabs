@@ -14,16 +14,16 @@ from dotenv import load_dotenv
 
 
 def load_dotenv_with_env() -> str | None:
-    """Load .env file, or .env.{name} if --env flag is specified.
+    """Load .env.{name} file based on --env flag (default: "local").
 
     Parses --env from sys.argv before full argument parsing to allow
     loading the correct environment before module-level initialization.
 
     Returns:
-        The environment name if specified, None otherwise.
+        The environment name (defaults to "local").
     """
-    # Extract --env value from sys.argv
-    env_name = None
+    # Extract --env value from sys.argv (default: "local")
+    env_name = "local"
     for i, arg in enumerate(sys.argv):
         if arg == '--env' and i + 1 < len(sys.argv):
             env_name = sys.argv[i + 1]
@@ -32,18 +32,13 @@ def load_dotenv_with_env() -> str | None:
             env_name = arg.split('=', 1)[1]
             break
 
-    # Load environment file (standalone behavior)
-    if env_name:
-        # Only load .env.{name} when specified
-        env_file = Path(f".env.{env_name}")
-        if env_file.exists():
-            load_dotenv(env_file, override=True)
-            print(f"Loaded environment: .env.{env_name}")
-        else:
-            print(f"Warning: .env.{env_name} not found")
+    # Load .env.{name} file
+    env_file = Path(f".env.{env_name}")
+    if env_file.exists():
+        load_dotenv(env_file, override=True)
+        print(f"Loaded environment: .env.{env_name}")
     else:
-        # Load base .env when no env specified
-        load_dotenv(override=True)
+        print(f"Warning: .env.{env_name} not found")
 
     return env_name
 
