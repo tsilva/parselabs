@@ -192,3 +192,43 @@ config/cache/
 # Claude sandbox config (contains user-specific paths)
 .claude-sandbox.json
 
+
+# Sensitive data - credentials and secrets
+.env.*
+.env.*.local
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.json
+service-account*.json
+*-credentials.json
+.aws/
+.ssh/
+*.gpg
+
+# API keys and tokens often in these
+config.local.*
+*.secret
+.secrets/
+
+# Logs (may contain sensitive data)
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build artifacts and caches
+.venv/
+node_modules/
+.npm/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
