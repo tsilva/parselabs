@@ -97,7 +97,7 @@ class ProfileConfig:
             data = yaml.safe_load(content)
         else:
             # Default to JSON for backwards compatibility
-            data = json.load(open(profile_path, 'r', encoding='utf-8'))
+            data = json.loads(profile_path.read_text(encoding='utf-8'))
 
         # Extract paths
         paths = data.get('paths', {})

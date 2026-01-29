@@ -155,22 +155,20 @@ class HealthLabReport(BaseModel):
     )
     source_file: Optional[str] = Field(default=None, description="Source PDF filename")
 
+    @staticmethod
+    def _clear_empty_strings(model: BaseModel):
+        """Set empty string optional fields to None on a Pydantic model."""
+        for field_name in model.model_fields:
+            value = getattr(model, field_name)
+            field_info = model.model_fields[field_name]
+            if value == "" and not field_info.is_required():
+                setattr(model, field_name, None)
+
     def normalize_empty_optionals(self):
         """Convert empty strings to None for optional fields."""
-        for field_name in self.model_fields:
-            value = getattr(self, field_name)
-            field_info = self.model_fields[field_name]
-            is_optional_type = field_info.is_required() is False
-            if value == "" and is_optional_type:
-                setattr(self, field_name, None)
-
+        self._clear_empty_strings(self)
         for lab_result in self.lab_results:
-            for field_name in lab_result.model_fields:
-                value = getattr(lab_result, field_name)
-                field_info = lab_result.model_fields[field_name]
-                is_optional_type = field_info.is_required() is False
-                if value == "" and is_optional_type:
-                    setattr(lab_result, field_name, None)
+            self._clear_empty_strings(lab_result)
 
 
 # Tool definition for function calling
@@ -301,6 +299,17 @@ E) Tests with NO visible unit but result is text:
    Example: "Urine Color: AMARELA"
    → lab_name="Urine Color", value="AMARELA", unit=null
    → Don't invent or assume units - only extract what you see
+
+G) Tests with numeric value followed by "=" and qualitative interpretation:
+   Some Portuguese labs show results as "number= interpretation" where the number IS the result
+   and the text after "=" is just the lab's classification (e.g., NR=Non-Reactive, R=Reactive).
+   → ALWAYS extract the NUMERIC value, NOT the interpretation text.
+   Example: "ANTICORPO ANTI SCL 70      9= NR       < 19 U"
+   → value_raw="9", unit="U", reference_range="< 19 U", comments="NR (Não reactivo)"
+   Example: "FACTOR REUMATOIDE          84          ate 30 UI/ml"
+   → value_raw="84", unit="UI/ml"
+   The "=" sign separates the numeric result from its qualitative interpretation.
+   The numeric value is ALWAYS preferred over the interpretation.
 
 F) White blood cell differentials with BOTH absolute count AND percentage:
    These tests often show TWO values on the SAME LINE - one absolute count and one percentage.
@@ -442,7 +451,6 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
 
 def vote_on_best_result(results: list, model_id: str, fn_name: str):
     """Use LLM to vote on the most consistent result."""
-    from openai import OpenAI
     import os
 
     client = OpenAI(
@@ -903,7 +911,7 @@ def _reassemble_flattened_key_values(items: list) -> list:
     return reassembled
 
 
-def _clean_numeric_field(value: any) -> Optional[float]:
+def _clean_numeric_field(value) -> Optional[float]:
     """Strip embedded metadata from numeric fields.
 
     Some LLMs embed extra field data into numeric reference fields:
