@@ -348,7 +348,7 @@ def process_single_pdf(
                     )
 
                     # Validate text extraction results
-                    if text_extraction_data and len(text_extraction_data.get("lab_results", [])) > 0:
+                    if text_extraction_data and text_extraction_data.get("lab_results"):
                         used_text_extraction = True
                         # Cache the text extraction results
                         text_json_path.write_text(
@@ -829,13 +829,11 @@ Examples:
     parser.add_argument(
         '--pattern',
         type=str,
-        default=None,
         help='Glob pattern for input files (overrides profile, default: *.pdf)'
     )
     parser.add_argument(
         '--env',
         type=str,
-        default=None,
         help='Environment name to load (loads .env.{name} instead of .env)'
     )
 
@@ -956,7 +954,7 @@ def run_for_profile(args, profile_name: str) -> bool:
     export_cols, hidden_cols, widths, dtypes = get_column_lists(COLUMN_SCHEMA)
 
     # Find PDFs to process
-    pdf_files = sorted(list(config.input_path.glob(config.input_file_regex)))
+    pdf_files = sorted(config.input_path.glob(config.input_file_regex))
     matching_stems = {p.stem for p in pdf_files}
     logger.info(f"Found {len(pdf_files)} PDF(s) matching '{config.input_file_regex}'")
 

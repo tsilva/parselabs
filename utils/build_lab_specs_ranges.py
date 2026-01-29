@@ -3,11 +3,10 @@ load_dotenv(override=True)
 
 import os
 import sys
-import csv
 import json
 import re
 from collections import defaultdict
-from openai import OpenAI, APIError
+from openai import OpenAI
 import concurrent.futures
 
 

@@ -3,7 +3,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 import pandas as pd
 
 from config import UNKNOWN_VALUE
@@ -45,9 +44,9 @@ class PipelineMetrics:
     validation_warnings: list = field(default_factory=list)
 
     # Output paths
-    csv_path: Optional[Path] = None
-    excel_path: Optional[Path] = None
-    report_path: Optional[Path] = None
+    csv_path: Path | None = None
+    excel_path: Path | None = None
+    report_path: Path | None = None
 
 
 class RunReportGenerator:
@@ -209,28 +208,28 @@ class RunReportGenerator:
         status = self.get_status()
 
         lines = [
-            f"# Pipeline Run Report",
-            f"",
+            "# Pipeline Run Report",
+            "",
             f"**Status**: {status}",
             f"**Timestamp**: {self.metrics.run_timestamp}",
-            f"",
-            f"## Summary",
-            f"",
-            f"| Metric | Value |",
-            f"|--------|-------|",
+            "",
+            "## Summary",
+            "",
+            "| Metric | Value |",
+            "|--------|-------|",
             f"| PDFs Found | {self.metrics.pdfs_found} |",
             f"| PDFs Processed | {self.metrics.pdfs_processed} |",
             f"| PDFs Skipped (cached) | {self.metrics.pdfs_skipped} |",
             f"| PDFs Failed | {self.metrics.pdfs_failed} |",
             f"| Rows After Merge | {self.metrics.rows_after_merge} |",
             f"| Rows After Dedup | {self.metrics.rows_after_dedup} |",
-            f"",
+            "",
         ]
 
         # Standardization section
         lines.extend([
-            f"## Standardization",
-            f"",
+            "## Standardization",
+            "",
         ])
 
         if self.metrics.unknown_names_count == 0 and self.metrics.unknown_units_count == 0:
@@ -239,9 +238,9 @@ class RunReportGenerator:
             if self.metrics.unknown_names_count > 0:
                 lines.extend([
                     f"### Unknown Lab Names ({self.metrics.unknown_names_count} rows)",
-                    f"",
-                    f"Add these to `config/lab_specs.json`:",
-                    f"",
+                    "",
+                    "Add these to `config/lab_specs.json`:",
+                    "",
                 ])
                 for name in self.metrics.unknown_names[:20]:
                     lines.append(f"- `{name}`")
@@ -252,9 +251,9 @@ class RunReportGenerator:
             if self.metrics.unknown_units_count > 0:
                 lines.extend([
                     f"### Unknown Units ({self.metrics.unknown_units_count} rows)",
-                    f"",
-                    f"Add these to `config/lab_specs.json`:",
-                    f"",
+                    "",
+                    "Add these to `config/lab_specs.json`:",
+                    "",
                 ])
                 for item in self.metrics.unknown_units[:20]:
                     lines.append(f"- `{item.get('lab_unit_raw')}` for `{item.get('lab_name_raw')}`")
@@ -264,8 +263,8 @@ class RunReportGenerator:
 
         # Edge cases section
         lines.extend([
-            f"## Quality Review",
-            f"",
+            "## Quality Review",
+            "",
         ])
 
         if self.metrics.review_needed_count == 0:
@@ -274,16 +273,16 @@ class RunReportGenerator:
             lines.extend([
                 f"**{self.metrics.review_needed_count}** items need review",
                 f"**{self.metrics.high_priority_count}** high priority (confidence < 0.7)",
-                f"",
+                "",
             ])
 
             # Value validation flags (from validation.py)
             if self.metrics.validation_flags_count > 0:
                 lines.extend([
                     f"### Value Validation Flags ({self.metrics.validation_flags_count})",
-                    f"",
-                    f"| Issue Type | Count |",
-                    f"|------------|-------|",
+                    "",
+                    "| Issue Type | Count |",
+                    "|------------|-------|",
                 ])
                 for category, count in self.metrics.validation_flags_breakdown.items():
                     lines.append(f"| {category} | {count} |")
@@ -296,10 +295,10 @@ class RunReportGenerator:
             }
             if other_flags:
                 lines.extend([
-                    f"### Other Review Flags",
-                    f"",
-                    f"| Category | Count |",
-                    f"|----------|-------|",
+                    "### Other Review Flags",
+                    "",
+                    "| Category | Count |",
+                    "|----------|-------|",
                 ])
                 for category, count in other_flags.items():
                     lines.append(f"| {category} | {count} |")
@@ -309,8 +308,8 @@ class RunReportGenerator:
 
         # Validation section
         lines.extend([
-            f"## Data Validation",
-            f"",
+            "## Data Validation",
+            "",
         ])
 
         if not self.metrics.validation_errors and not self.metrics.validation_warnings:
@@ -319,7 +318,7 @@ class RunReportGenerator:
             if self.metrics.validation_errors:
                 lines.extend([
                     f"### Errors ({len(self.metrics.validation_errors)})",
-                    f"",
+                    "",
                 ])
                 for err in self.metrics.validation_errors[:10]:
                     lines.append(f"- {err}")
@@ -330,7 +329,7 @@ class RunReportGenerator:
             if self.metrics.validation_warnings:
                 lines.extend([
                     f"### Warnings ({len(self.metrics.validation_warnings)})",
-                    f"",
+                    "",
                 ])
                 for warn in self.metrics.validation_warnings[:10]:
                     lines.append(f"- {warn}")
@@ -339,9 +338,9 @@ class RunReportGenerator:
 
         # Output files section
         lines.extend([
-            f"",
-            f"## Output Files",
-            f"",
+            "",
+            "## Output Files",
+            "",
             f"- CSV: `{self.metrics.csv_path}`",
             f"- Excel: `{self.metrics.excel_path}`",
             f"- Report: `{self.metrics.report_path}`",
