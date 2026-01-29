@@ -7,7 +7,7 @@ from dotenv import dotenv_values
 import sys
 
 # Load OUTPUT_PATH from .env
-env = dotenv_values(".env")
+env = dotenv_values(".env.local")
 OUTPUT_PATH = env.get("OUTPUT_PATH", "output")
 ALL_FINAL_CSV = f"{OUTPUT_PATH}/all.csv"
 

@@ -16,7 +16,7 @@ from collections import defaultdict
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(".env.local"), override=True)
 
 
 def load_data():

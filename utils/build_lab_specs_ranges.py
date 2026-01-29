@@ -1,5 +1,6 @@
+from pathlib import Path
 from dotenv import load_dotenv
-load_dotenv(override=True)
+load_dotenv(Path(".env.local"), override=True)
 
 import os
 import sys
