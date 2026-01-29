@@ -396,44 +396,43 @@ COLUMN_LABELS = {
 # Path Resolution
 # =============================================================================
 
-def get_image_path(entry: dict, output_path: Path) -> Optional[str]:
-    """Get page image path from source_file and page_number."""
-    source_file = entry.get('source_file', '')
-    page_number = entry.get('page_number')
+def _resolve_page_path(entry: dict, output_path: Path, suffix: str) -> Path:
+    """Resolve page-level file path from entry metadata.
 
+    Args:
+        entry: Dict with 'source_file' and 'page_number' keys
+        output_path: Base output directory
+        suffix: File extension including dot (e.g., '.jpg', '.json')
+
+    Returns:
+        Resolved Path (may not exist on disk)
+    """
+    source_file = entry.get('source_file', '')
     if not source_file:
-        return None
+        return Path()
 
     stem = source_file.rsplit('.', 1)[0] if '.' in source_file else source_file
+    page_number = entry.get('page_number')
 
     if page_number is not None and pd.notna(page_number):
         page_str = f"{int(page_number):03d}"
     else:
         page_str = "001"
 
-    image_path = output_path / stem / f"{stem}.{page_str}.jpg"
+    return output_path / stem / f"{stem}.{page_str}{suffix}"
 
-    if image_path.exists():
+
+def get_image_path(entry: dict, output_path: Path) -> Optional[str]:
+    """Get page image path from source_file and page_number."""
+    image_path = _resolve_page_path(entry, output_path, '.jpg')
+    if image_path != Path() and image_path.exists():
         return str(image_path)
     return None
 
 
 def get_json_path(entry: dict, output_path: Path) -> Path:
     """Get the JSON file path for an entry."""
-    source_file = entry.get('source_file', '')
-    page_number = entry.get('page_number')
-
-    if not source_file:
-        return Path()
-
-    stem = source_file.rsplit('.', 1)[0] if '.' in source_file else source_file
-
-    if page_number is not None and pd.notna(page_number):
-        page_str = f"{int(page_number):03d}"
-    else:
-        page_str = "001"
-
-    return output_path / stem / f"{stem}.{page_str}.json"
+    return _resolve_page_path(entry, output_path, '.json')
 
 
 # =============================================================================
@@ -475,6 +474,15 @@ def save_review_to_json(entry: dict, status: str, output_path: Path) -> Tuple[bo
 # =============================================================================
 # Data Loading
 # =============================================================================
+
+def _is_out_of_range(value: float, range_min, range_max) -> bool:
+    """Check if a value falls outside a min/max range."""
+    if pd.notna(range_min) and value < range_min:
+        return True
+    if pd.notna(range_max) and value > range_max:
+        return True
+    return False
+
 
 def load_data(output_path: Path) -> pd.DataFrame:
     """Load lab results from all.csv and sync review status from JSON files."""
@@ -555,11 +563,7 @@ def load_data(output_path: Path) -> pd.DataFrame:
                 if row.get('unit') == 'boolean':
                     return val > 0
                 return None
-            if pd.notna(ref_min) and val < ref_min:
-                return True
-            if pd.notna(ref_max) and val > ref_max:
-                return True
-            return False
+            return _is_out_of_range(val, ref_min, ref_max)
         df['is_out_of_reference'] = df.apply(check_out_of_range, axis=1)
 
     # Compute lab_specs healthy ranges based on demographics
@@ -589,11 +593,7 @@ def load_data(output_path: Path) -> pd.DataFrame:
                 return None
             if pd.isna(spec_min) and pd.isna(spec_max):
                 return None  # No healthy range defined
-            if pd.notna(spec_min) and val < spec_min:
-                return True
-            if pd.notna(spec_max) and val > spec_max:
-                return True
-            return False
+            return _is_out_of_range(val, spec_min, spec_max)
         df['is_out_of_healthy_range'] = df.apply(check_out_of_healthy_range, axis=1)
 
     return df
@@ -1278,6 +1278,38 @@ def build_review_status_html(entry: dict) -> str:
 # Event Handlers
 # =============================================================================
 
+def _build_row_context(
+    filtered_df: pd.DataFrame,
+    row_idx: int,
+    full_df: pd.DataFrame,
+    lab_names: Optional[str]
+) -> tuple:
+    """Build common row context for navigation/selection handlers.
+
+    Returns:
+        Tuple of (plot, row_idx, position_text, image_path, details_html, status_html, banner_html)
+    """
+    row = filtered_df.iloc[row_idx]
+    position_text = f"**Row {row_idx + 1} of {len(filtered_df)}**"
+    image_path = get_image_path(row.to_dict(), get_output_path())
+    details_html = build_details_html(row.to_dict())
+    status_html = build_review_status_html(row.to_dict())
+    banner_html = build_review_reason_banner(row.to_dict())
+
+    if lab_names:
+        plot_labs = [lab_names]
+    else:
+        plot_labs = [row.get('lab_name')]
+
+    ref_min = row.get('reference_min')
+    ref_max = row.get('reference_max')
+    selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
+
+    plot = create_interactive_plot(full_df, plot_labs, selected_ref=selected_ref)
+
+    return plot, row_idx, position_text, image_path, details_html, status_html, banner_html
+
+
 def handle_filter_change(
     lab_names: Optional[str],
     latest_only: bool,
@@ -1289,35 +1321,17 @@ def handle_filter_change(
     display_df = prepare_display_df(filtered_df)
     summary = build_summary_cards(filtered_df)
 
-    current_idx = 0
-    position_text = "No results"
-    image_path = None
-    details_html = "<p>No entry selected</p>"
-    status_html = ""
-    banner_html = ""
-
-    # Determine which labs to plot
-    if lab_names:
-        plot_labs = [lab_names]
-    elif not filtered_df.empty:
-        plot_labs = [filtered_df.iloc[0].get('lab_name')]
-    else:
-        plot_labs = []
-
-    selected_ref = None
     if not filtered_df.empty:
-        first_row = filtered_df.iloc[0]
-        position_text = f"**Row 1 of {len(filtered_df)}**"
-        image_path = get_image_path(first_row.to_dict(), get_output_path())
-        details_html = build_details_html(first_row.to_dict())
-        status_html = build_review_status_html(first_row.to_dict())
-        banner_html = build_review_reason_banner(first_row.to_dict())
-        # Extract first row's reference range for the plot
-        ref_min = first_row.get('reference_min')
-        ref_max = first_row.get('reference_max')
-        selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
-
-    plot = create_interactive_plot(full_df, plot_labs, selected_ref=selected_ref)
+        plot, current_idx, position_text, image_path, details_html, status_html, banner_html = \
+            _build_row_context(filtered_df, 0, full_df, lab_names)
+    else:
+        current_idx = 0
+        position_text = "No results"
+        image_path = None
+        details_html = "<p>No entry selected</p>"
+        status_html = ""
+        banner_html = ""
+        plot = create_interactive_plot(full_df, [lab_names] if lab_names else [])
 
     return display_df, summary, plot, filtered_df, current_idx, position_text, image_path, details_html, status_html, banner_html
 
@@ -1340,24 +1354,7 @@ def handle_row_select(
     if row_idx < 0 or row_idx >= len(filtered_df):
         row_idx = 0
 
-    row = filtered_df.iloc[row_idx]
-    position_text = f"**Row {row_idx + 1} of {len(filtered_df)}**"
-    image_path = get_image_path(row.to_dict(), get_output_path())
-    details_html = build_details_html(row.to_dict())
-    status_html = build_review_status_html(row.to_dict())
-    banner_html = build_review_reason_banner(row.to_dict())
-
-    if lab_names:
-        plot_labs = [lab_names]
-    else:
-        plot_labs = [row.get('lab_name')]
-
-    # Extract selected row's reference range for the plot
-    ref_min = row.get('reference_min')
-    ref_max = row.get('reference_max')
-    selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
-
-    return create_interactive_plot(full_df, plot_labs, selected_ref=selected_ref), row_idx, position_text, image_path, details_html, status_html, banner_html
+    return _build_row_context(filtered_df, row_idx, full_df, lab_names)
 
 
 def handle_previous(
@@ -1374,24 +1371,7 @@ def handle_previous(
     if new_idx < 0:
         new_idx = len(filtered_df) - 1
 
-    row = filtered_df.iloc[new_idx]
-    position_text = f"**Row {new_idx + 1} of {len(filtered_df)}**"
-    image_path = get_image_path(row.to_dict(), get_output_path())
-    details_html = build_details_html(row.to_dict())
-    status_html = build_review_status_html(row.to_dict())
-    banner_html = build_review_reason_banner(row.to_dict())
-
-    if lab_names:
-        plot_labs = [lab_names]
-    else:
-        plot_labs = [row.get('lab_name')]
-
-    # Extract selected row's reference range for the plot
-    ref_min = row.get('reference_min')
-    ref_max = row.get('reference_max')
-    selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
-
-    return create_interactive_plot(full_df, plot_labs, selected_ref=selected_ref), new_idx, position_text, image_path, details_html, status_html, banner_html
+    return _build_row_context(filtered_df, new_idx, full_df, lab_names)
 
 
 def handle_next(
@@ -1408,24 +1388,7 @@ def handle_next(
     if new_idx >= len(filtered_df):
         new_idx = 0
 
-    row = filtered_df.iloc[new_idx]
-    position_text = f"**Row {new_idx + 1} of {len(filtered_df)}**"
-    image_path = get_image_path(row.to_dict(), get_output_path())
-    details_html = build_details_html(row.to_dict())
-    status_html = build_review_status_html(row.to_dict())
-    banner_html = build_review_reason_banner(row.to_dict())
-
-    if lab_names:
-        plot_labs = [lab_names]
-    else:
-        plot_labs = [row.get('lab_name')]
-
-    # Extract selected row's reference range for the plot
-    ref_min = row.get('reference_min')
-    ref_max = row.get('reference_max')
-    selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
-
-    return create_interactive_plot(full_df, plot_labs, selected_ref=selected_ref), new_idx, position_text, image_path, details_html, status_html, banner_html
+    return _build_row_context(filtered_df, new_idx, full_df, lab_names)
 
 
 def handle_review_action(
@@ -1499,24 +1462,8 @@ def handle_review_action(
     if current_idx >= len(filtered_df):
         current_idx = max(0, len(filtered_df) - 1)
 
-    row = filtered_df.iloc[current_idx]
-    position_text = f"**Row {current_idx + 1} of {len(filtered_df)}**"
-    image_path = get_image_path(row.to_dict(), get_output_path())
-    details_html = build_details_html(row.to_dict())
-    status_html = build_review_status_html(row.to_dict())
-    banner_html = build_review_reason_banner(row.to_dict())
-
-    if lab_names:
-        plot_labs = [lab_names]
-    else:
-        plot_labs = [row.get('lab_name')]
-
-    # Extract selected row's reference range for the plot
-    ref_min = row.get('reference_min')
-    ref_max = row.get('reference_max')
-    selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
-
-    plot = create_interactive_plot(full_df, plot_labs, selected_ref=selected_ref)
+    plot, current_idx, position_text, image_path, details_html, status_html, banner_html = \
+        _build_row_context(filtered_df, current_idx, full_df, lab_names)
 
     return (
         full_df,
