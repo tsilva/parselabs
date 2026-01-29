@@ -5,6 +5,8 @@ Identifies extraction results that may need human review based on
 various quality indicators and assigns confidence scores.
 """
 
+import re
+
 import pandas as pd
 
 
@@ -146,7 +148,6 @@ class EdgeCaseDetector:
         For ranges with Deficiency/Insufficiency/Sufficiency/Toxicity tiers,
         extract the Sufficiency range as the normal reference range.
         """
-        import re
 
         # Convert to string for string operations
         ref_range_str = df['reference_range'].astype(str)

@@ -12,6 +12,8 @@ Usage:
 Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate
 """
 
+from __future__ import annotations
+
 from utils import load_dotenv_with_env
 load_dotenv_with_env()
 
@@ -25,7 +27,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Tuple
 
 from config import ProfileConfig, Demographics, LabSpecsConfig
 
@@ -266,16 +267,16 @@ CUSTOM_CSS = """
 # =============================================================================
 
 # Global output path (set from profile or environment)
-_configured_output_path: Optional[Path] = None
+_configured_output_path: Path | None = None
 
 # Demographics for personalized healthy ranges (set from profile)
-_configured_demographics: Optional[Demographics] = None
+_configured_demographics: Demographics | None = None
 
 # Lab specs config (loaded once)
-_lab_specs: Optional[LabSpecsConfig] = None
+_lab_specs: LabSpecsConfig | None = None
 
 # Current profile name
-_current_profile_name: Optional[str] = None
+_current_profile_name: str | None = None
 
 
 def set_output_path(path: Path) -> None:
@@ -298,18 +299,18 @@ def set_current_profile(name: str) -> None:
     _current_profile_name = name
 
 
-def get_current_profile() -> Optional[str]:
+def get_current_profile() -> str | None:
     """Get the current profile name."""
     return _current_profile_name
 
 
-def set_demographics(demographics: Optional[Demographics]) -> None:
+def set_demographics(demographics: Demographics | None) -> None:
     """Set demographics for personalized range selection."""
     global _configured_demographics
     _configured_demographics = demographics
 
 
-def get_demographics() -> Optional[Demographics]:
+def get_demographics() -> Demographics | None:
     """Get configured demographics."""
     return _configured_demographics
 
@@ -322,7 +323,7 @@ def get_lab_specs() -> LabSpecsConfig:
     return _lab_specs
 
 
-def load_profile(profile_name: str) -> Optional[ProfileConfig]:
+def load_profile(profile_name: str) -> ProfileConfig | None:
     """Load a profile by name and update global configuration."""
     profile_path = None
     for ext in ('.yaml', '.yml', '.json'):
@@ -422,10 +423,10 @@ def _resolve_page_path(entry: dict, output_path: Path, suffix: str) -> Path:
     return output_path / stem / f"{stem}.{page_str}{suffix}"
 
 
-def get_image_path(entry: dict, output_path: Path) -> Optional[str]:
+def get_image_path(entry: dict, output_path: Path) -> str | None:
     """Get page image path from source_file and page_number."""
     image_path = _resolve_page_path(entry, output_path, '.jpg')
-    if image_path != Path() and image_path.exists():
+    if image_path.parts and image_path.exists():
         return str(image_path)
     return None
 
@@ -439,7 +440,7 @@ def get_json_path(entry: dict, output_path: Path) -> Path:
 # JSON File Operations (Review Persistence)
 # =============================================================================
 
-def save_review_to_json(entry: dict, status: str, output_path: Path) -> Tuple[bool, str]:
+def save_review_to_json(entry: dict, status: str, output_path: Path) -> tuple[bool, str]:
     """Save review status directly to the source JSON file."""
     json_path = get_json_path(entry, output_path)
     result_index = entry.get('result_index')
@@ -477,11 +478,7 @@ def save_review_to_json(entry: dict, status: str, output_path: Path) -> Tuple[bo
 
 def _is_out_of_range(value: float, range_min, range_max) -> bool:
     """Check if a value falls outside a min/max range."""
-    if pd.notna(range_min) and value < range_min:
-        return True
-    if pd.notna(range_max) and value > range_max:
-        return True
-    return False
+    return (pd.notna(range_min) and value < range_min) or (pd.notna(range_max) and value > range_max)
 
 
 def load_data(output_path: Path) -> pd.DataFrame:
@@ -609,7 +606,7 @@ def is_reviewed(entry: dict) -> bool:
     return status is not None and pd.notna(status) and str(status).strip() != ''
 
 
-def get_review_status(entry: dict) -> Optional[str]:
+def get_review_status(entry: dict) -> str | None:
     """Get review status for an entry (accepted/rejected/None)."""
     status = entry.get('review_status')
     if status is not None and pd.notna(status) and str(status).strip():
@@ -779,7 +776,7 @@ def build_review_reason_banner(entry: dict) -> str:
 
 def apply_filters(
     df: pd.DataFrame,
-    lab_names: Optional[str],
+    lab_names: str | None,
     latest_only: bool,
     review_filter: str
 ) -> pd.DataFrame:
@@ -871,7 +868,7 @@ def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
 def create_single_lab_plot(
     df: pd.DataFrame,
     lab_name: str,
-    selected_ref: Optional[tuple[float, float]] = None
+    selected_ref: tuple[float, float] | None = None
 ) -> tuple[go.Figure, str]:
     """Generate a single plot for one lab test. Returns (figure, unit).
 
@@ -1062,8 +1059,8 @@ def create_single_lab_plot(
 
 def create_interactive_plot(
     df: pd.DataFrame,
-    lab_names: Optional[list],
-    selected_ref: Optional[tuple[float, float]] = None
+    lab_names: list | None,
+    selected_ref: tuple[float, float] | None = None
 ) -> go.Figure:
     """Generate interactive Plotly plot(s) for selected lab tests.
 
@@ -1282,7 +1279,7 @@ def _build_row_context(
     filtered_df: pd.DataFrame,
     row_idx: int,
     full_df: pd.DataFrame,
-    lab_names: Optional[str]
+    lab_names: str | None
 ) -> tuple:
     """Build common row context for navigation/selection handlers.
 
@@ -1311,7 +1308,7 @@ def _build_row_context(
 
 
 def handle_filter_change(
-    lab_names: Optional[str],
+    lab_names: str | None,
     latest_only: bool,
     review_filter: str,
     full_df: pd.DataFrame
@@ -1340,7 +1337,7 @@ def handle_row_select(
     evt: gr.SelectData,
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
-    lab_names: Optional[str]
+    lab_names: str | None
 ):
     """Handle row selection to update plot, details, and current index."""
     if evt is None or filtered_df.empty:
@@ -1361,7 +1358,7 @@ def handle_previous(
     current_idx: int,
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
-    lab_names: Optional[str]
+    lab_names: str | None
 ):
     """Navigate to previous row."""
     if filtered_df.empty:
@@ -1378,7 +1375,7 @@ def handle_next(
     current_idx: int,
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
-    lab_names: Optional[str]
+    lab_names: str | None
 ):
     """Navigate to next row."""
     if filtered_df.empty:
@@ -1395,7 +1392,7 @@ def handle_review_action(
     current_idx: int,
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
-    lab_names: Optional[str],
+    lab_names: str | None,
     latest_only: bool,
     review_filter: str,
     status: str
@@ -1484,7 +1481,7 @@ def handle_accept(
     current_idx: int,
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
-    lab_names: Optional[list],
+    lab_names: list | None,
     latest_only: bool,
     review_filter: str
 ):
@@ -1499,7 +1496,7 @@ def handle_reject(
     current_idx: int,
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
-    lab_names: Optional[list],
+    lab_names: list | None,
     latest_only: bool,
     review_filter: str
 ):
@@ -1840,7 +1837,6 @@ Examples:
     parser.add_argument(
         '--env',
         type=str,
-        default=None,
         help='Environment name to load (loads .env.{name} instead of .env)'
     )
     return parser.parse_args()

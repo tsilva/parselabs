@@ -8,7 +8,6 @@ using review_needed, review_reason, and review_confidence fields.
 
 import re
 import logging
-from typing import Optional
 
 import pandas as pd
 
@@ -413,7 +412,7 @@ class ValueValidator:
 
         return df
 
-    def _evaluate_formula(self, formula: str, lab_values: dict) -> Optional[float]:
+    def _evaluate_formula(self, formula: str, lab_values: dict) -> float | None:
         """Evaluate a formula string with lab values.
 
         Args:

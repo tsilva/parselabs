@@ -5,7 +5,6 @@ import re
 import base64
 import logging
 from pathlib import Path
-from typing import List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from pydantic import BaseModel, Field, field_validator
@@ -29,65 +28,65 @@ class LabResult(BaseModel):
                     "DO NOT include values, units, reference ranges, or field labels. "
                     "WRONG: 'Glucose, value_raw: 100' CORRECT: 'Glucose'"
     )
-    value_raw: Optional[str] = Field(
+    value_raw: str | None = Field(
         default=None,
         description="Result value ONLY. Must contain ONLY the numeric or text result - "
                     "DO NOT include test names, units, or field labels. "
                     "Examples: '5.2', '14.8', 'NEGATIVO', 'POSITIVO'"
     )
-    lab_unit_raw: Optional[str] = Field(
+    lab_unit_raw: str | None = Field(
         default=None,
         description="Unit ONLY as written in PDF. Must contain ONLY the unit symbol - "
                     "DO NOT include values or test names. Examples: 'mg/dL', '%', 'U/L'"
     )
-    reference_range: Optional[str] = Field(
+    reference_range: str | None = Field(
         default=None,
         description="Complete reference range text EXACTLY as shown."
     )
-    reference_notes: Optional[str] = Field(
+    reference_notes: str | None = Field(
         default=None,
         description="Any notes, comments, or additional context about the reference range. "
                     "Examples: 'Confirmado por duplo ensaio', 'Criança<400', 'valores podem variar'. "
                     "Put methodology notes, population-specific ranges, or validation comments HERE."
     )
-    reference_min_raw: Optional[float] = Field(
+    reference_min_raw: float | None = Field(
         default=None,
         description="Minimum reference value as a PLAIN NUMBER ONLY. Parse from reference_range. "
                     "Put any comments or notes in reference_notes instead. "
                     "Examples: '< 40' → null, '150 - 400' → 150, '26.5-32.6' → 26.5"
     )
-    reference_max_raw: Optional[float] = Field(
+    reference_max_raw: float | None = Field(
         default=None,
         description="Maximum reference value as a PLAIN NUMBER ONLY. Parse from reference_range. "
                     "Put any comments or notes in reference_notes instead. "
                     "Examples: '< 40' → 40, '150 - 400' → 400, '26.5-32.6' → 32.6"
     )
-    is_abnormal: Optional[bool] = Field(
+    is_abnormal: bool | None = Field(
         default=None,
         description="Whether result is marked/flagged as abnormal in PDF"
     )
-    comments: Optional[str] = Field(
+    comments: str | None = Field(
         default=None,
         description="Additional notes or remarks about the test (NOT the test result itself). Only use for extra information like methodology notes or special conditions."
     )
-    source_text: Optional[str] = Field(
+    source_text: str | None = Field(
         default="",
         description="Exact row or section from PDF containing this result"
     )
 
     # Internal fields (added by pipeline, not by LLM)
-    page_number: Optional[int] = Field(default=None, ge=1, description="Page number in PDF")
-    source_file: Optional[str] = Field(default=None, description="Source file identifier")
-    lab_name_standardized: Optional[str] = Field(default=None, description="Standardized lab name")
-    lab_unit_standardized: Optional[str] = Field(default=None, description="Standardized lab unit")
+    page_number: int | None = Field(default=None, ge=1, description="Page number in PDF")
+    source_file: str | None = Field(default=None, description="Source file identifier")
+    lab_name_standardized: str | None = Field(default=None, description="Standardized lab name")
+    lab_unit_standardized: str | None = Field(default=None, description="Standardized lab unit")
 
     # Review tracking fields (all prefixed with review_)
-    result_index: Optional[int] = Field(default=None, description="Index of this result in the source JSON lab_results array")
-    review_needed: Optional[bool] = Field(default=False, description="Whether this result needs human review (auto-flagged)")
-    review_reason: Optional[str] = Field(default=None, description="Reason why review is needed (auto-generated)")
-    review_confidence: Optional[float] = Field(default=1.0, description="Confidence score 0-1 (auto-generated)")
-    review_status: Optional[str] = Field(default=None, description="Human review status: 'accepted', 'rejected', or null")
-    review_completed_at: Optional[str] = Field(default=None, description="ISO timestamp when review was completed")
+    result_index: int | None = Field(default=None, description="Index of this result in the source JSON lab_results array")
+    review_needed: bool | None = Field(default=False, description="Whether this result needs human review (auto-flagged)")
+    review_reason: str | None = Field(default=None, description="Reason why review is needed (auto-generated)")
+    review_confidence: float | None = Field(default=1.0, description="Confidence score 0-1 (auto-generated)")
+    review_status: str | None = Field(default=None, description="Human review status: 'accepted', 'rejected', or null")
+    review_completed_at: str | None = Field(default=None, description="ISO timestamp when review was completed")
 
     @field_validator('value_raw', mode='before')
     @classmethod
@@ -131,29 +130,29 @@ class LabResult(BaseModel):
 class HealthLabReport(BaseModel):
     """Document-level lab report metadata."""
 
-    collection_date: Optional[str] = Field(
+    collection_date: str | None = Field(
         default=None,
         pattern=r"^\d{4}-\d{2}-\d{2}$",
         description="Specimen collection date in YYYY-MM-DD format"
     )
-    report_date: Optional[str] = Field(
+    report_date: str | None = Field(
         default=None,
         pattern=r"^\d{4}-\d{2}-\d{2}$",
         description="Report issue date in YYYY-MM-DD format"
     )
-    lab_facility: Optional[str] = Field(
+    lab_facility: str | None = Field(
         default=None,
         description="Name of laboratory that performed tests"
     )
-    page_has_lab_data: Optional[bool] = Field(
+    page_has_lab_data: bool | None = Field(
         default=None,
         description="True if page contains lab test results, False if page is cover/instructions/administrative with no lab data"
     )
-    lab_results: List[LabResult] = Field(
+    lab_results: list[LabResult] = Field(
         default_factory=list,
         description="List of all lab test results extracted from this page/document"
     )
-    source_file: Optional[str] = Field(default=None, description="Source PDF filename")
+    source_file: str | None = Field(default=None, description="Source PDF filename")
 
     @staticmethod
     def _clear_empty_strings(model: BaseModel):
@@ -565,7 +564,7 @@ def extract_labs_from_page_image(
             raise RuntimeError(f"Lab extraction failed for {image_path.name}: {e}")
 
         # Check for valid response structure
-        if not completion or not completion.choices or len(completion.choices) == 0:
+        if not completion or not completion.choices:
             logger.error(f"Invalid completion response structure")
             return HealthLabReport(lab_results=[]).model_dump(mode='json')
 
@@ -718,7 +717,7 @@ Also set page_has_lab_data:
         raise RuntimeError(f"Text-based lab extraction failed: {e}")
 
     # Check for valid response structure
-    if not completion or not completion.choices or len(completion.choices) == 0:
+    if not completion or not completion.choices:
         logger.error("Invalid completion response structure for text extraction")
         return HealthLabReport(lab_results=[]).model_dump(mode='json')
 
@@ -756,7 +755,7 @@ Also set page_has_lab_data:
         return _salvage_lab_results(tool_result_dict)
 
 
-def _normalize_date_format(date_str: Optional[str]) -> Optional[str]:
+def _normalize_date_format(date_str: str | None) -> str | None:
     """
     Normalize date strings to YYYY-MM-DD format.
 
@@ -795,7 +794,7 @@ _LAB_RESULT_FIELDS = {
     'reference_min_raw', 'reference_max_raw', 'is_abnormal', 'comments', 'source_text'
 }
 
-def _parse_labresult_repr(s: str) -> Optional[dict]:
+def _parse_labresult_repr(s: str) -> dict | None:
     """
     Parse Python repr() format of LabResult objects.
 
@@ -911,7 +910,7 @@ def _reassemble_flattened_key_values(items: list) -> list:
     return reassembled
 
 
-def _clean_numeric_field(value) -> Optional[float]:
+def _clean_numeric_field(value) -> float | None:
     """Strip embedded metadata from numeric fields.
 
     Some LLMs embed extra field data into numeric reference fields:
@@ -1022,7 +1021,7 @@ def _fix_lab_results_format(tool_result_dict: dict, client: OpenAI, model_id: st
     return tool_result_dict
 
 
-def _parse_string_results_with_llm(string_results: List[str], client: OpenAI, model_id: str) -> List[Optional[dict]]:
+def _parse_string_results_with_llm(string_results: list[str], client: OpenAI, model_id: str) -> list[dict | None]:
     """
     Use LLM to parse string-formatted lab results into structured format.
 

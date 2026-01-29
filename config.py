@@ -1,11 +1,11 @@
 """Configuration management for lab parser."""
+from __future__ import annotations
 
 import os
 import json
 import logging
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -73,15 +73,15 @@ class ProfileConfig:
     Supports both YAML and JSON formats.
     """
     name: str
-    input_path: Optional[Path] = None
-    output_path: Optional[Path] = None
-    input_file_regex: Optional[str] = None
+    input_path: Path | None = None
+    output_path: Path | None = None
+    input_file_regex: str | None = None
 
     # Optional overrides
-    workers: Optional[int] = None
+    workers: int | None = None
 
     # Demographics for personalized healthy ranges
-    demographics: Optional['Demographics'] = None
+    demographics: Demographics | None = None
 
     @classmethod
     def from_file(cls, profile_path: Path) -> 'ProfileConfig':
@@ -96,8 +96,7 @@ class ProfileConfig:
             import yaml
             data = yaml.safe_load(content)
         else:
-            # Default to JSON for backwards compatibility
-            data = json.loads(profile_path.read_text(encoding='utf-8'))
+            data = json.loads(content)
 
         # Extract paths
         paths = data.get('paths', {})
@@ -148,13 +147,13 @@ class Demographics:
 
     Note: This is kept for the review tool, not used in extraction.
     """
-    gender: Optional[str] = None  # "male", "female", "other"
-    date_of_birth: Optional[str] = None  # ISO format: "YYYY-MM-DD"
-    height_cm: Optional[float] = None
-    weight_kg: Optional[float] = None
+    gender: str | None = None  # "male", "female", "other"
+    date_of_birth: str | None = None  # ISO format: "YYYY-MM-DD"
+    height_cm: float | None = None
+    weight_kg: float | None = None
 
     @property
-    def age(self) -> Optional[int]:
+    def age(self) -> int | None:
         """Calculate current age from date_of_birth."""
         if not self.date_of_birth:
             return None
@@ -245,13 +244,13 @@ class LabSpecsConfig:
         """Get lab type for a given lab name."""
         return self._lab_type_map.get(lab_name, "blood")
 
-    def get_primary_unit(self, lab_name: str) -> Optional[str]:
+    def get_primary_unit(self, lab_name: str) -> str | None:
         """Get primary unit for a lab."""
         if lab_name not in self._specs:
             return None
         return self._specs[lab_name].get('primary_unit')
 
-    def get_conversion_factor(self, lab_name: str, from_unit: str) -> Optional[float]:
+    def get_conversion_factor(self, lab_name: str, from_unit: str) -> float | None:
         """Get conversion factor from given unit to primary unit."""
         if lab_name not in self._specs:
             return None
@@ -270,7 +269,7 @@ class LabSpecsConfig:
 
         return None
 
-    def get_healthy_range(self, lab_name: str) -> tuple[Optional[float], Optional[float]]:
+    def get_healthy_range(self, lab_name: str) -> tuple[float | None, float | None]:
         """Get default healthy range (min, max) for a lab."""
         if lab_name not in self._specs:
             return (None, None)
@@ -292,9 +291,9 @@ class LabSpecsConfig:
     def get_healthy_range_for_demographics(
         self,
         lab_name: str,
-        gender: Optional[str] = None,
-        age: Optional[int] = None
-    ) -> tuple[Optional[float], Optional[float]]:
+        gender: str | None = None,
+        age: int | None = None
+    ) -> tuple[float | None, float | None]:
         """Get healthy range for a lab, considering demographics.
 
         Selection priority:
@@ -349,21 +348,18 @@ class LabSpecsConfig:
         - "18-64" (inclusive range)
         """
         if '+' in age_spec:
-            # Format: "65+"
             threshold = int(age_spec.replace('+', ''))
             return age >= threshold
-        elif '-' in age_spec:
-            # Format: "0-17" or "18-64"
+        if '-' in age_spec:
             parts = age_spec.split('-')
             if len(parts) == 2:
                 try:
-                    min_age, max_age = int(parts[0]), int(parts[1])
-                    return min_age <= age <= max_age
+                    return int(parts[0]) <= age <= int(parts[1])
                 except ValueError:
                     return False
         return False
 
-    def get_percentage_variant(self, lab_name: str) -> Optional[str]:
+    def get_percentage_variant(self, lab_name: str) -> str | None:
         """Get the (%) variant of a lab name if it exists."""
         if lab_name.endswith("(%)"):
             return None  # Already a percentage variant
@@ -373,7 +369,7 @@ class LabSpecsConfig:
             return percentage_variant
         return None
 
-    def get_non_percentage_variant(self, lab_name: str) -> Optional[str]:
+    def get_non_percentage_variant(self, lab_name: str) -> str | None:
         """Get the non-(%) variant of a lab name if it exists.
 
         For example: "Blood - Neutrophils (%)" -> "Blood - Neutrophils"
@@ -387,7 +383,7 @@ class LabSpecsConfig:
             return non_percentage_variant
         return None
 
-    def get_loinc_code(self, lab_name: str) -> Optional[str]:
+    def get_loinc_code(self, lab_name: str) -> str | None:
         """Get LOINC code for a lab test if available.
 
         LOINC (Logical Observation Identifiers Names and Codes) is a

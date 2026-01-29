@@ -20,7 +20,8 @@ def load_cache(name: str) -> dict:
     path = CACHE_DIR / f"{name}.json"
     if path.exists():
         try:
-            return json.load(open(path, encoding='utf-8'))
+            with open(path, encoding='utf-8') as f:
+                return json.load(f)
         except (json.JSONDecodeError, IOError) as e:
             logger.warning(f"Failed to load cache {name}: {e}")
     return {}
@@ -59,24 +60,21 @@ def standardize_with_llm(
     if not items:
         return {} if isinstance(items, dict) else []
 
-    # Determine if items is a list or dict
     is_list_input = isinstance(items, list)
+
+    def fallback():
+        return items if is_list_input else {key: UNKNOWN_VALUE for key in items.keys()}
 
     if not candidates:
         logger.warning("No candidates available, returning $UNKNOWN$ for all")
-        if is_list_input:
-            return items  # Return as-is for list
-        else:
-            return {key: UNKNOWN_VALUE for key in items.keys()}
+        return fallback()
 
-    # Build system prompt with candidates
     system_prompt = system_prompt_template.format(
         num_candidates=len(candidates),
         candidates=json.dumps(candidates, ensure_ascii=False, indent=2),
         unknown=UNKNOWN_VALUE
     )
 
-    # Build user prompt with items to standardize
     user_prompt = f"""Map these items to standardized values:
 
 {json.dumps(items, ensure_ascii=False, indent=2)}
@@ -94,21 +92,18 @@ Return a JSON object/array with the standardized values."""
             max_tokens=4000
         )
 
-        if not completion or not completion.choices or len(completion.choices) == 0:
+        if not completion or not completion.choices:
             logger.error("Invalid completion response for standardization")
-            return {key: UNKNOWN_VALUE for key in items.keys()}
+            return fallback()
 
         response_text = completion.choices[0].message.content.strip()
         result = parse_llm_json_response(response_text, fallback={})
 
         if not result:
             logger.error("Failed to parse standardization response")
-            if is_list_input:
-                return items
-            else:
-                return {key: UNKNOWN_VALUE for key in items.keys()}
+            return fallback()
 
-        # For list input, return as-is (it's already validated by the calling function)
+        # For list input, return as-is (already validated by the calling function)
         if is_list_input:
             return result
 
@@ -130,16 +125,10 @@ Return a JSON object/array with the standardized values."""
 
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse standardization response as JSON: {e}")
-        if is_list_input:
-            return items
-        else:
-            return {key: UNKNOWN_VALUE for key in items.keys()}
+        return fallback()
     except Exception as e:
         logger.error(f"Error during standardization: {e}")
-        if is_list_input:
-            return items
-        else:
-            return {key: UNKNOWN_VALUE for key in items.keys()}
+        return fallback()
 
 
 def standardize_lab_names(

@@ -3,7 +3,6 @@
 import logging
 import re
 import pandas as pd
-from typing import Optional, Tuple
 
 from openai import OpenAI
 
@@ -83,10 +82,10 @@ def extract_comparison_value(value) -> tuple[str, bool, bool]:
 def infer_missing_unit(
     lab_name_standardized: str,
     value: float,
-    ref_min: Optional[float],
-    ref_max: Optional[float],
+    ref_min: float | None,
+    ref_max: float | None,
     lab_specs: LabSpecsConfig
-) -> Optional[str]:
+) -> str | None:
     """
     Infer missing unit when lab_unit_raw is null using generic heuristics.
 
@@ -182,10 +181,10 @@ def validate_reference_range(
     lab_name_standardized: str,
     value: float,
     unit: str,
-    ref_min: Optional[float],
-    ref_max: Optional[float],
+    ref_min: float | None,
+    ref_max: float | None,
     lab_specs: LabSpecsConfig
-) -> Tuple[Optional[float], Optional[float]]:
+) -> tuple[float | None, float | None]:
     """
     Validate reference range against expected ranges from lab_specs.
 
@@ -312,7 +311,7 @@ def _try_convert_mismatched_range(
     ratio_max: float,
     lab_config: dict,
     lab_specs: LabSpecsConfig
-) -> Tuple[Optional[float], Optional[float], bool]:
+) -> tuple[float | None, float | None, bool]:
     """
     Attempt to convert a mismatched reference range using known conversion factors.
 
@@ -526,8 +525,8 @@ def fix_misassigned_percentage_units(
 def apply_normalizations(
     df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
-    client: Optional[OpenAI] = None,
-    model_id: Optional[str] = None,
+    client: OpenAI | None = None,
+    model_id: str | None = None,
 ) -> pd.DataFrame:
     """
     Apply normalization transformations to the DataFrame.
@@ -588,8 +587,8 @@ def apply_normalizations(
 def apply_unit_conversions(
     df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
-    client: Optional[OpenAI] = None,
-    model_id: Optional[str] = None
+    client: OpenAI | None = None,
+    model_id: str | None = None
 ) -> pd.DataFrame:
     """
     Convert values to primary units defined in lab specs.
@@ -916,7 +915,7 @@ def deduplicate_results(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataF
     # Group and apply deduplication
     import warnings
     with warnings.catch_warnings():
-        warnings.filterwarnings('ignore', category=FutureWarning)
+        warnings.simplefilter('ignore', FutureWarning)
         deduplicated = (
             df
             .groupby(["date", "lab_name_standardized"], dropna=False, as_index=False, group_keys=False)

@@ -6,7 +6,7 @@ import sys
 import csv
 import json
 from collections import defaultdict
-from openai import OpenAI, APIError
+from openai import OpenAI
 import concurrent.futures
 
 
