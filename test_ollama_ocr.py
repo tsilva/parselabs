@@ -44,30 +44,117 @@ def normalize_date(date_str: str) -> str | None:
     return None
 
 
+def parse_reference_bounds(result: dict) -> dict:
+    """Parse reference_min_raw and reference_max_raw from various formats.
+
+    Handles cases where the model puts full range text into these fields,
+    e.g., "4.5 a 5.9" instead of separate numeric values.
+    """
+    ref_min = result.get("reference_min_raw")
+    ref_max = result.get("reference_max_raw")
+    ref_range = result.get("reference_range", "")
+
+    # If both are already valid numbers, return as-is
+    if isinstance(ref_min, (int, float)) and isinstance(ref_max, (int, float)):
+        return result
+
+    # Source of truth for parsing: prefer existing ref_range, fallback to ref_min/ref_max values
+    range_text = ref_range or str(ref_min or ref_max or "")
+
+    parsed_min = None
+    parsed_max = None
+
+    # Try range pattern: "X a Y", "X - Y", "X-Y"
+    match = re.search(r"(\d+\.?\d*)\s*[-aA]\s*(\d+\.?\d*)", range_text)
+    if match:
+        parsed_min = float(match.group(1))
+        parsed_max = float(match.group(2))
+    else:
+        # Try "< X" pattern
+        match = re.search(r"<\s*(\d+\.?\d*)", range_text)
+        if match:
+            parsed_max = float(match.group(1))
+        else:
+            # Try "> X" pattern
+            match = re.search(r">\s*(\d+\.?\d*)", range_text)
+            if match:
+                parsed_min = float(match.group(1))
+
+    result["reference_min_raw"] = parsed_min
+    result["reference_max_raw"] = parsed_max
+    return result
+
+
+def clean_lab_results(result_dict: dict) -> dict:
+    """Clean and fix common model output issues before Pydantic validation."""
+    if "lab_results" not in result_dict:
+        return result_dict
+
+    cleaned_results = []
+    for result in result_dict["lab_results"]:
+        if isinstance(result, dict):
+            # Parse reference bounds
+            result = parse_reference_bounds(result)
+            cleaned_results.append(result)
+
+    result_dict["lab_results"] = cleaned_results
+    return result_dict
+
+
+def get_extraction_prompt() -> str:
+    """Generate extraction prompt from Pydantic model schema."""
+    schema = HealthLabReport.model_json_schema()
+    defs = schema.get("$defs", {})
+
+    # Get HealthLabReport fields (top-level)
+    report_props = schema.get("properties", {})
+
+    # Get LabResult fields from $defs
+    lab_result_schema = defs.get("LabResult", {})
+    lab_result_props = lab_result_schema.get("properties", {})
+
+    # Fields to include in extraction (exclude internal/pipeline fields)
+    report_fields = ["collection_date", "lab_facility", "page_has_lab_data", "lab_results"]
+    lab_result_fields = [
+        "lab_name_raw", "value_raw", "lab_unit_raw", "reference_range",
+        "reference_min_raw", "reference_max_raw", "is_abnormal"
+    ]
+
+    # Build report field descriptions
+    report_desc = []
+    for field in report_fields:
+        if field in report_props:
+            desc = report_props[field].get("description", "")
+            report_desc.append(f"- {field}: {desc}")
+
+    # Build lab result field descriptions
+    lab_result_desc = []
+    for field in lab_result_fields:
+        if field in lab_result_props:
+            desc = lab_result_props[field].get("description", "")
+            lab_result_desc.append(f"- {field}: {desc}")
+
+    return f"""Information Extraction:
+
+Extract ALL lab test results from this document into JSON format.
+
+Required JSON structure:
+{chr(10).join(report_desc)}
+
+Each lab_results item must have:
+{chr(10).join(lab_result_desc)}
+
+IMPORTANT: Extract EVERY test visible in the document. Do not skip any.
+Return ONLY valid JSON, no other text."""
+
+
 def extract_structured(image_path: Path) -> HealthLabReport:
     """Single-pass extraction using GLM-OCR's Information Extraction mode."""
     print(f"Loading image: {image_path.name}")
     with open(image_path, "rb") as f:
         img_b64 = base64.standard_b64encode(f.read()).decode()
 
-    # Simplified prompt - show only the structure without placeholders
-    extraction_prompt = """Information Extraction:
-
-Extract all lab test results from this medical document into JSON.
-
-Return JSON like this example:
-{"collection_date":"2001-12-27","lab_facility":"Lab Name","page_has_lab_data":true,"lab_results":[{"lab_name_raw":"Glucose","value_raw":"95","lab_unit_raw":"mg/dL","reference_range":"70-100","reference_min_raw":70,"reference_max_raw":100,"is_abnormal":false}]}
-
-For each test found in the image, add an object to lab_results with:
-- lab_name_raw: exact test name from image
-- value_raw: exact result value from image
-- lab_unit_raw: exact unit from image (or null)
-- reference_range: exact reference text from image (or null)
-- reference_min_raw: lower bound as number (or null)
-- reference_max_raw: upper bound as number (or null)
-- is_abnormal: true if flagged abnormal, else false
-
-Date format must be YYYY-MM-DD. Extract every test you see."""
+    extraction_prompt = get_extraction_prompt()
 
     print(f"Sending to {MODEL}...")
 
@@ -95,13 +182,21 @@ Date format must be YYYY-MM-DD. Extract every test you see."""
     elif "```" in content:
         content = content.split("```")[1].split("```")[0].strip()
 
-    result_dict = json.loads(content)
+    try:
+        result_dict = json.loads(content)
+    except json.JSONDecodeError as e:
+        print(f"JSON parse error: {e}")
+        print(f"Content around error:\n{content[max(0, e.pos-100):e.pos+100]}")
+        raise
 
     # Normalize date format if needed
     if result_dict.get("collection_date"):
         result_dict["collection_date"] = normalize_date(result_dict["collection_date"])
     if result_dict.get("report_date"):
         result_dict["report_date"] = normalize_date(result_dict["report_date"])
+
+    # Clean lab results before Pydantic validation
+    result_dict = clean_lab_results(result_dict)
 
     report = HealthLabReport(**result_dict)
     report.normalize_empty_optionals()
