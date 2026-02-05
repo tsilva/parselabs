@@ -233,3 +233,9 @@ Thumbs.db
 *.swp
 *.swo
 *.code-workspace
+
+
+# Managed by tsilva/.github
+# Do not remove - synced automatically
+.claude/
+*.pyc

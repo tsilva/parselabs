@@ -6,7 +6,7 @@
   [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
   [![Python](https://img.shields.io/badge/Python-≥3.8-3776ab.svg)](https://python.org)
 
-  **Extract structured lab test results from medical documents with AI precision**
+  **🔬 Extract lab results from medical PDFs using AI vision with self-consistency 📊**
 
   [Documentation](docs/pipeline.md) · [Issues](https://github.com/tsilva/labs-parser/issues)
 </div>
