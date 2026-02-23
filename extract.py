@@ -1,6 +1,7 @@
 """Main entry point for lab results extraction and processing."""
 
 from utils import load_dotenv_with_env
+
 load_dotenv_with_env()
 
 import os
@@ -23,10 +24,18 @@ from tqdm import tqdm
 from config import ExtractionConfig, LabSpecsConfig, ProfileConfig, UNKNOWN_VALUE
 from utils import preprocess_page_image, setup_logging, ensure_columns
 from extraction import (
-    LabResult, HealthLabReport, extract_labs_from_page_image, extract_labs_from_text, self_consistency
+    LabResult,
+    HealthLabReport,
+    extract_labs_from_page_image,
+    extract_labs_from_text,
+    self_consistency,
 )
 from standardization import standardize_lab_names, standardize_lab_units
-from normalization import apply_normalizations, deduplicate_results, apply_dtype_conversions
+from normalization import (
+    apply_normalizations,
+    deduplicate_results,
+    apply_dtype_conversions,
+)
 from validation import ValueValidator
 
 # Module-level logger (file handlers added after config is loaded)
@@ -35,7 +44,7 @@ logger = logging.getLogger(__name__)
 # Initialize OpenAI client for OpenRouter
 client = OpenAI(
     base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-    api_key=os.getenv("OPENROUTER_API_KEY")
+    api_key=os.getenv("OPENROUTER_API_KEY"),
 )
 
 
@@ -48,33 +57,26 @@ COLUMN_SCHEMA = {
     "date": {"dtype": "datetime64[ns]", "excel_width": 13},
     "source_file": {"dtype": "str", "excel_width": 25},
     "page_number": {"dtype": "Int64", "excel_width": 8},
-
     # Extracted values (standardized)
     "lab_name": {"dtype": "str", "excel_width": 35},
     "value": {"dtype": "float64", "excel_width": 12},
     "unit": {"dtype": "str", "excel_width": 15},
-
     # Reference ranges from PDF
     "reference_min": {"dtype": "float64", "excel_width": 12},
     "reference_max": {"dtype": "float64", "excel_width": 12},
-
     # Raw values (for audit)
     "lab_name_raw": {"dtype": "str", "excel_width": 35},
     "value_raw": {"dtype": "str", "excel_width": 12},
     "unit_raw": {"dtype": "str", "excel_width": 15},
-
     # Quality
     "confidence": {"dtype": "float64", "excel_width": 12},
-
     # Review flags (from validation)
     "review_needed": {"dtype": "boolean", "excel_width": 12},
     "review_reason": {"dtype": "str", "excel_width": 30},
     "review_confidence": {"dtype": "float64", "excel_width": 14},
-
     # Limit indicators (for values like <0.05 or >738)
     "is_below_limit": {"dtype": "boolean", "excel_width": 12},
     "is_above_limit": {"dtype": "boolean", "excel_width": 12},
-
     # Internal (hidden in Excel)
     "lab_type": {"dtype": "str", "excel_width": 10, "excel_hidden": True},
     "result_index": {"dtype": "Int64", "excel_width": 10, "excel_hidden": True},
@@ -85,18 +87,33 @@ def get_column_lists(schema: dict):
     """Extract ordered lists from schema."""
     ordered = [
         # Core columns in logical order
-        "date", "source_file", "page_number",
-        "lab_name", "value", "unit",
-        "reference_min", "reference_max",
-        "lab_name_raw", "value_raw", "unit_raw",
+        "date",
+        "source_file",
+        "page_number",
+        "lab_name",
+        "value",
+        "unit",
+        "reference_min",
+        "reference_max",
+        "lab_name_raw",
+        "value_raw",
+        "unit_raw",
         "confidence",
-        "review_needed", "review_reason", "review_confidence",
-        "is_below_limit", "is_above_limit",
-        "lab_type", "result_index",
+        "review_needed",
+        "review_reason",
+        "review_confidence",
+        "is_below_limit",
+        "is_above_limit",
+        "lab_type",
+        "result_index",
     ]
     export_cols = [k for k in ordered if k in schema]
     hidden_cols = [col for col, props in schema.items() if props.get("excel_hidden")]
-    widths = {col: props["excel_width"] for col, props in schema.items() if "excel_width" in props}
+    widths = {
+        col: props["excel_width"]
+        for col, props in schema.items()
+        if "excel_width" in props
+    }
     dtypes = {col: props["dtype"] for col, props in schema.items() if "dtype" in props}
 
     return export_cols, hidden_cols, widths, dtypes
@@ -105,6 +122,7 @@ def get_column_lists(schema: dict):
 # ========================================
 # PDF Text Extraction (Cost Optimization)
 # ========================================
+
 
 def extract_text_from_pdf(pdf_path: Path) -> tuple[str, bool]:
     """
@@ -119,7 +137,7 @@ def extract_text_from_pdf(pdf_path: Path) -> tuple[str, bool]:
             ["pdftotext", "-layout", str(pdf_path), "-"],
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
         )
         if result.returncode != 0:
             logger.debug(f"pdftotext returned non-zero exit code: {result.returncode}")
@@ -143,7 +161,7 @@ def _load_viability_cache() -> dict:
     """Load viability check cache from disk."""
     if VIABILITY_CACHE_PATH.exists():
         try:
-            return json.loads(VIABILITY_CACHE_PATH.read_text(encoding='utf-8'))
+            return json.loads(VIABILITY_CACHE_PATH.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, IOError) as e:
             logger.warning(f"Failed to load viability cache: {e}")
     return {}
@@ -153,8 +171,7 @@ def _save_viability_cache(cache: dict):
     """Save viability check cache to disk."""
     VIABILITY_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
     VIABILITY_CACHE_PATH.write_text(
-        json.dumps(cache, indent=2, sort_keys=True),
-        encoding='utf-8'
+        json.dumps(cache, indent=2, sort_keys=True), encoding="utf-8"
     )
 
 
@@ -215,10 +232,10 @@ Return ONLY a JSON object: {"is_lab_data": true} or {"is_lab_data": false}"""
             model=model_id,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text[:1000]}
+                {"role": "user", "content": text[:1000]},
             ],
             temperature=0.0,
-            max_tokens=50
+            max_tokens=50,
         )
 
         response = completion.choices[0].message.content.strip()
@@ -247,7 +264,10 @@ Return ONLY a JSON object: {"is_lab_data": true} or {"is_lab_data": false}"""
 # PDF Processing
 # ========================================
 
-def correct_percentage_lab_names(results: list[dict], lab_specs: LabSpecsConfig) -> list[dict]:
+
+def correct_percentage_lab_names(
+    results: list[dict], lab_specs: LabSpecsConfig
+) -> list[dict]:
     """Correct lab names based on unit: add (%) when unit is %, remove (%) when unit is not %.
 
     This handles cases where:
@@ -268,7 +288,9 @@ def correct_percentage_lab_names(results: list[dict], lab_specs: LabSpecsConfig)
         if std_unit == "%" and not std_name.endswith("(%)"):
             percentage_variant = lab_specs.get_percentage_variant(std_name)
             if percentage_variant:
-                logger.debug(f"Correcting lab name '{std_name}' -> '{percentage_variant}' (unit is %)")
+                logger.debug(
+                    f"Correcting lab name '{std_name}' -> '{percentage_variant}' (unit is %)"
+                )
                 result["lab_name_standardized"] = percentage_variant
                 corrected_to_pct += 1
 
@@ -276,12 +298,16 @@ def correct_percentage_lab_names(results: list[dict], lab_specs: LabSpecsConfig)
         elif std_unit != "%" and std_name.endswith("(%)"):
             non_percentage_variant = lab_specs.get_non_percentage_variant(std_name)
             if non_percentage_variant:
-                logger.debug(f"Correcting lab name '{std_name}' -> '{non_percentage_variant}' (unit is {std_unit})")
+                logger.debug(
+                    f"Correcting lab name '{std_name}' -> '{non_percentage_variant}' (unit is {std_unit})"
+                )
                 result["lab_name_standardized"] = non_percentage_variant
                 corrected_to_abs += 1
 
     if corrected_to_pct > 0 or corrected_to_abs > 0:
-        logger.info(f"Corrected {corrected_to_pct} to percentage, {corrected_to_abs} to absolute lab names")
+        logger.info(
+            f"Corrected {corrected_to_pct} to percentage, {corrected_to_abs} to absolute lab names"
+        )
 
     return results
 
@@ -290,7 +316,7 @@ def process_single_pdf(
     pdf_path: Path,
     output_dir: Path,
     config: ExtractionConfig,
-    lab_specs: LabSpecsConfig
+    lab_specs: LabSpecsConfig,
 ) -> tuple[Path | None, list[dict]]:
     """Process a single PDF file: extract, standardize, and save results.
 
@@ -310,7 +336,10 @@ def process_single_pdf(
 
         # Copy PDF to output directory
         copied_pdf = doc_out_dir / pdf_path.name
-        if not copied_pdf.exists() or copied_pdf.stat().st_size != pdf_path.stat().st_size:
+        if (
+            not copied_pdf.exists()
+            or copied_pdf.stat().st_size != pdf_path.stat().st_size
+        ):
             shutil.copy2(pdf_path, copied_pdf)
 
         # ========================================
@@ -326,25 +355,31 @@ def process_single_pdf(
         text_json_path = doc_out_dir / f"{pdf_stem}.text.json"
         if text_json_path.exists():
             try:
-                text_extraction_data = json.loads(text_json_path.read_text(encoding='utf-8'))
+                text_extraction_data = json.loads(
+                    text_json_path.read_text(encoding="utf-8")
+                )
                 used_text_extraction = True
                 logger.info(f"[{pdf_stem}] Strategy: TEXT (cached)")
             except Exception as e:
-                logger.warning(f"[{pdf_stem}] Failed to load text extraction cache: {e}")
+                logger.warning(
+                    f"[{pdf_stem}] Failed to load text extraction cache: {e}"
+                )
                 text_extraction_data = None
 
         # Try text extraction if no cache
         if text_extraction_data is None:
             pdf_text, pdftotext_success = extract_text_from_pdf(copied_pdf)
 
-            if pdftotext_success and text_extraction_is_viable(pdf_text, client, config.extract_model_id):
-                logger.info(f"[{pdf_stem}] Strategy: TEXT (LLM classified as lab data, {len(pdf_text)} chars)")
+            if pdftotext_success and text_extraction_is_viable(
+                pdf_text, client, config.extract_model_id
+            ):
+                logger.info(
+                    f"[{pdf_stem}] Strategy: TEXT (LLM classified as lab data, {len(pdf_text)} chars)"
+                )
 
                 try:
                     text_extraction_data = extract_labs_from_text(
-                        pdf_text,
-                        config.extract_model_id,
-                        client
+                        pdf_text, config.extract_model_id, client
                     )
 
                     # Validate text extraction results
@@ -352,25 +387,35 @@ def process_single_pdf(
                         used_text_extraction = True
                         # Cache the text extraction results
                         text_json_path.write_text(
-                            json.dumps(text_extraction_data, indent=2, ensure_ascii=False),
-                            encoding='utf-8'
+                            json.dumps(
+                                text_extraction_data, indent=2, ensure_ascii=False
+                            ),
+                            encoding="utf-8",
                         )
                         logger.info(
                             f"[{pdf_stem}] Text extraction complete: "
                             f"{len(text_extraction_data['lab_results'])} results"
                         )
                     else:
-                        logger.warning(f"[{pdf_stem}] Strategy: TEXT -> VISION (no results from text, falling back)")
+                        logger.warning(
+                            f"[{pdf_stem}] Strategy: TEXT -> VISION (no results from text, falling back)"
+                        )
                         text_extraction_data = None
 
                 except Exception as e:
-                    logger.warning(f"[{pdf_stem}] Strategy: TEXT -> VISION (text failed: {e})")
+                    logger.warning(
+                        f"[{pdf_stem}] Strategy: TEXT -> VISION (text failed: {e})"
+                    )
                     text_extraction_data = None
             else:
                 if pdftotext_success:
-                    logger.info(f"[{pdf_stem}] Strategy: VISION (LLM classified as non-lab data)")
+                    logger.info(
+                        f"[{pdf_stem}] Strategy: VISION (LLM classified as non-lab data)"
+                    )
                 else:
-                    logger.info(f"[{pdf_stem}] Strategy: VISION (no embedded text in PDF)")
+                    logger.info(
+                        f"[{pdf_stem}] Strategy: VISION (no embedded text in PDF)"
+                    )
 
         # ========================================
         # Vision-Based Extraction (Fallback)
@@ -385,7 +430,9 @@ def process_single_pdf(
             doc_date = _extract_document_date(text_extraction_data, pdf_stem)
 
             # Add page metadata to results (all from "page 1" since text extraction is whole-document)
-            for result_idx, result in enumerate(text_extraction_data.get("lab_results", [])):
+            for result_idx, result in enumerate(
+                text_extraction_data.get("lab_results", [])
+            ):
                 result["result_index"] = result_idx
                 result["page_number"] = 1
                 result["source_file"] = f"{pdf_stem}.text"  # Mark as text extraction
@@ -400,13 +447,17 @@ def process_single_pdf(
                 logger.error(f"[{pdf_stem}] Failed to convert PDF: {e}")
                 return None, failed_pages
 
-            logger.info(f"[{pdf_stem}] Processing {len(pil_pages)} page(s) with vision...")
+            logger.info(
+                f"[{pdf_stem}] Processing {len(pil_pages)} page(s) with vision..."
+            )
             for page_idx, page_image in enumerate(pil_pages):
-                page_name = f"{pdf_stem}.{page_idx+1:03d}"
+                page_name = f"{pdf_stem}.{page_idx + 1:03d}"
                 jpg_path = doc_out_dir / f"{page_name}.jpg"
                 json_path = doc_out_dir / f"{page_name}.json"
 
-                logger.info(f"[{page_name}] Processing page {page_idx+1}/{len(pil_pages)}...")
+                logger.info(
+                    f"[{page_name}] Processing page {page_idx + 1}/{len(pil_pages)}..."
+                )
 
                 # Preprocess and save image
                 if not jpg_path.exists():
@@ -424,33 +475,48 @@ def process_single_pdf(
                             config.n_extractions,
                             jpg_path,
                             config.extract_model_id,
-                            client
+                            client,
                         )
                         logger.info(f"[{page_name}] Extraction completed")
 
                         # Check for extraction failure (temperature retry exhausted)
                         if page_data.get("_extraction_failed"):
-                            failure_reason = page_data.get("_failure_reason", "Unknown error")
-                            failed_pages.append({
-                                "page": f"{pdf_stem} page {page_idx + 1}",
-                                "reason": failure_reason
-                            })
-                            logger.error(f"[{page_name}] EXTRACTION FAILED: {failure_reason}")
+                            failure_reason = page_data.get(
+                                "_failure_reason", "Unknown error"
+                            )
+                            failed_pages.append(
+                                {
+                                    "page": f"{pdf_stem} page {page_idx + 1}",
+                                    "reason": failure_reason,
+                                }
+                            )
+                            logger.error(
+                                f"[{page_name}] EXTRACTION FAILED: {failure_reason}"
+                            )
 
-                        json_path.write_text(json.dumps(page_data, indent=2, ensure_ascii=False), encoding='utf-8')
+                        json_path.write_text(
+                            json.dumps(page_data, indent=2, ensure_ascii=False),
+                            encoding="utf-8",
+                        )
                     except Exception as e:
                         logger.error(f"[{page_name}] Extraction failed: {e}")
-                        page_data = HealthLabReport(lab_results=[]).model_dump(mode='json')
+                        page_data = HealthLabReport(lab_results=[]).model_dump(
+                            mode="json"
+                        )
                 else:
                     logger.info(f"[{page_name}] Loading cached extraction data")
-                    page_data = json.loads(json_path.read_text(encoding='utf-8'))
+                    page_data = json.loads(json_path.read_text(encoding="utf-8"))
                     # Check for cached extraction failure
                     if page_data.get("_extraction_failed"):
-                        failure_reason = page_data.get("_failure_reason", "Unknown error")
-                        failed_pages.append({
-                            "page": f"{pdf_stem} page {page_idx + 1}",
-                            "reason": failure_reason
-                        })
+                        failure_reason = page_data.get(
+                            "_failure_reason", "Unknown error"
+                        )
+                        failed_pages.append(
+                            {
+                                "page": f"{pdf_stem} page {page_idx + 1}",
+                                "reason": failure_reason,
+                            }
+                        )
 
                 # Extract date from first page
                 if page_idx == 0:
@@ -470,7 +536,9 @@ def process_single_pdf(
 
         # Standardize lab names
         logger.info(f"[{pdf_stem}] Standardizing lab names...")
-        raw_names = [r.get("lab_name_raw") for r in all_results if r.get("lab_name_raw")]
+        raw_names = [
+            r.get("lab_name_raw") for r in all_results if r.get("lab_name_raw")
+        ]
         if raw_names and lab_specs.exists:
             try:
                 unique_names = list(set(raw_names))
@@ -478,12 +546,18 @@ def process_single_pdf(
                     unique_names,
                     config.self_consistency_model_id,
                     lab_specs.standardized_names,
-                    client
+                    client,
                 )
                 for result in all_results:
                     raw_name = result.get("lab_name_raw")
-                    result["lab_name_standardized"] = name_mapping.get(raw_name, UNKNOWN_VALUE) if raw_name else UNKNOWN_VALUE
-                logger.info(f"[{pdf_stem}] Standardized {len(unique_names)} unique test names")
+                    result["lab_name_standardized"] = (
+                        name_mapping.get(raw_name, UNKNOWN_VALUE)
+                        if raw_name
+                        else UNKNOWN_VALUE
+                    )
+                logger.info(
+                    f"[{pdf_stem}] Standardized {len(unique_names)} unique test names"
+                )
             except Exception as e:
                 logger.error(f"[{pdf_stem}] Name standardization failed: {e}")
                 for result in all_results:
@@ -505,7 +579,10 @@ def process_single_pdf(
             return raw_unit
 
         unit_contexts = [
-            (normalize_raw_unit(r.get("lab_unit_raw")), r.get("lab_name_standardized", ""))
+            (
+                normalize_raw_unit(r.get("lab_unit_raw")),
+                r.get("lab_name_standardized", ""),
+            )
             for r in all_results
         ]
         if unit_contexts and lab_specs.exists:
@@ -515,22 +592,32 @@ def process_single_pdf(
                     config.self_consistency_model_id,
                     lab_specs.standardized_units,
                     client,
-                    lab_specs
+                    lab_specs,
                 )
                 for result in all_results:
                     raw_unit = normalize_raw_unit(result.get("lab_unit_raw"))
                     lab_name = result.get("lab_name_standardized", "")
-                    standardized_unit = unit_mapping.get((raw_unit, lab_name), UNKNOWN_VALUE)
+                    standardized_unit = unit_mapping.get(
+                        (raw_unit, lab_name), UNKNOWN_VALUE
+                    )
 
                     # Post-process: If LLM returned $UNKNOWN$ for a null unit, use lab spec primary unit
-                    if standardized_unit == UNKNOWN_VALUE and raw_unit == "null" and lab_name != UNKNOWN_VALUE:
+                    if (
+                        standardized_unit == UNKNOWN_VALUE
+                        and raw_unit == "null"
+                        and lab_name != UNKNOWN_VALUE
+                    ):
                         primary_unit = lab_specs.get_primary_unit(lab_name)
                         if primary_unit:
                             standardized_unit = primary_unit
-                            logger.debug(f"[{pdf_stem}] Used primary unit '{primary_unit}' for null unit in '{lab_name}'")
+                            logger.debug(
+                                f"[{pdf_stem}] Used primary unit '{primary_unit}' for null unit in '{lab_name}'"
+                            )
 
                     result["lab_unit_standardized"] = standardized_unit
-                logger.info(f"[{pdf_stem}] Standardized {len(set(r.get('lab_unit_raw') for r in all_results))} unique units")
+                logger.info(
+                    f"[{pdf_stem}] Standardized {len(set(r.get('lab_unit_raw') for r in all_results))} unique units"
+                )
             except Exception as e:
                 logger.error(f"[{pdf_stem}] Unit standardization failed: {e}")
                 for result in all_results:
@@ -555,7 +642,7 @@ def process_single_pdf(
         ensure_columns(df, core_cols, default=None)
 
         df = df[[col for col in core_cols if col in df.columns]]
-        df.to_csv(csv_path, index=False, encoding='utf-8')
+        df.to_csv(csv_path, index=False, encoding="utf-8")
 
         logger.info(f"[{pdf_stem}] Completed successfully")
         return csv_path, failed_pages
@@ -569,14 +656,15 @@ def process_single_pdf(
 # Data Merging & Export
 # ========================================
 
+
 def merge_csv_files(csv_paths: list[Path]) -> pd.DataFrame:
     """Merge multiple CSV files into a single DataFrame."""
     dataframes = []
     for csv_path in csv_paths:
         try:
             if csv_path.stat().st_size > 0:
-                df = pd.read_csv(csv_path, encoding='utf-8')
-                df['source_file'] = csv_path.name
+                df = pd.read_csv(csv_path, encoding="utf-8")
+                df["source_file"] = csv_path.name
                 dataframes.append(df)
         except Exception as e:
             logger.error(f"Failed to read {csv_path}: {e}")
@@ -594,13 +682,18 @@ def export_excel(
     widths: dict,
 ) -> None:
     """Export DataFrame to Excel with formatting."""
-    with pd.ExcelWriter(excel_path, engine="xlsxwriter", datetime_format='yyyy-mm-dd', date_format='yyyy-mm-dd') as writer:
+    with pd.ExcelWriter(
+        excel_path,
+        engine="xlsxwriter",
+        datetime_format="yyyy-mm-dd",
+        date_format="yyyy-mm-dd",
+    ) as writer:
         df.to_excel(writer, sheet_name="Data", index=False)
         ws = writer.sheets["Data"]
         ws.freeze_panes(1, 0)
         for idx, col_name in enumerate(df.columns):
             width = widths.get(col_name, 12)
-            options = {'hidden': True} if col_name in hidden_cols else {}
+            options = {"hidden": True} if col_name in hidden_cols else {}
             ws.set_column(idx, idx, width, None, options)
 
     logger.info(f"Saved Excel: {excel_path}")
@@ -609,6 +702,7 @@ def export_excel(
 # ========================================
 # Helpers
 # ========================================
+
 
 def _extract_document_date(data_dict: dict, pdf_stem: str) -> str | None:
     """Extract document date from extraction data or filename.
@@ -635,7 +729,9 @@ def _get_csv_path(pdf_path: Path, output_path: Path) -> Path:
     return output_path / pdf_path.stem / f"{pdf_path.stem}.csv"
 
 
-def _update_json_with_standardized_values(all_results: list[dict], doc_out_dir: Path) -> None:
+def _update_json_with_standardized_values(
+    all_results: list[dict], doc_out_dir: Path
+) -> None:
     """Update JSON files with standardized lab names and units."""
     # Group results by page number to minimize file I/O
     results_by_page: dict[int, list[dict]] = {}
@@ -653,16 +749,22 @@ def _update_json_with_standardized_values(all_results: list[dict], doc_out_dir: 
         json_path = json_files[0]
 
         try:
-            data = json.loads(json_path.read_text(encoding='utf-8'))
+            data = json.loads(json_path.read_text(encoding="utf-8"))
 
             # Update each result by result_index
             for result in page_results:
                 idx = result.get("result_index")
                 if idx is not None and 0 <= idx < len(data.get("lab_results", [])):
-                    data["lab_results"][idx]["lab_name_standardized"] = result.get("lab_name_standardized")
-                    data["lab_results"][idx]["lab_unit_standardized"] = result.get("lab_unit_standardized")
+                    data["lab_results"][idx]["lab_name_standardized"] = result.get(
+                        "lab_name_standardized"
+                    )
+                    data["lab_results"][idx]["lab_unit_standardized"] = result.get(
+                        "lab_unit_standardized"
+                    )
 
-            json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
+            json_path.write_text(
+                json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
         except Exception as e:
             logger.warning(f"Failed to update JSON {json_path}: {e}")
 
@@ -694,7 +796,9 @@ def _process_pdf_wrapper(args):
     return process_single_pdf(*args)
 
 
-def _find_empty_extractions(output_path: Path, matching_stems: set[str]) -> list[tuple[Path, list[Path]]]:
+def _find_empty_extractions(
+    output_path: Path, matching_stems: set[str]
+) -> list[tuple[Path, list[Path]]]:
     """Find all PDFs that have empty extraction JSONs.
 
     Only considers output directories that match the input file pattern.
@@ -704,7 +808,7 @@ def _find_empty_extractions(output_path: Path, matching_stems: set[str]) -> list
     for pdf_dir in output_path.iterdir():
         if not pdf_dir.is_dir():
             continue
-        if pdf_dir.name.startswith('.'):
+        if pdf_dir.name.startswith("."):
             continue
         # Only check directories that match the input pattern
         if pdf_dir.name not in matching_stems:
@@ -713,8 +817,12 @@ def _find_empty_extractions(output_path: Path, matching_stems: set[str]) -> list
         empty_jsons = []
         for json_path in pdf_dir.glob("*.json"):
             try:
-                data = json.loads(json_path.read_text(encoding='utf-8'))
-                if isinstance(data, dict) and not data.get("lab_results") and data.get("page_has_lab_data") is not False:
+                data = json.loads(json_path.read_text(encoding="utf-8"))
+                if (
+                    isinstance(data, dict)
+                    and not data.get("lab_results")
+                    and data.get("page_has_lab_data") is not False
+                ):
                     empty_jsons.append(json_path)
             except (json.JSONDecodeError, UnicodeDecodeError):
                 pass
@@ -743,17 +851,21 @@ def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list
         for json_path in empty_jsons:
             print(f"  - {json_path.name}")
 
-        response = input(f"Reprocess {pdf_dir.name}? [y/N/a(ll)/q(uit)]: ").strip().lower()
+        response = (
+            input(f"Reprocess {pdf_dir.name}? [y/N/a(ll)/q(uit)]: ").strip().lower()
+        )
 
-        if response == 'q':
+        if response == "q":
             print("Skipping remaining files.")
             break
-        elif response == 'a':
+        elif response == "a":
             pdfs_to_reprocess.append(pdf_dir)
-            for remaining_pdf_dir, _ in empty_extractions[empty_extractions.index((pdf_dir, empty_jsons)) + 1:]:
+            for remaining_pdf_dir, _ in empty_extractions[
+                empty_extractions.index((pdf_dir, empty_jsons)) + 1 :
+            ]:
                 pdfs_to_reprocess.append(remaining_pdf_dir)
             break
-        elif response == 'y':
+        elif response == "y":
             pdfs_to_reprocess.append(pdf_dir)
 
     if pdfs_to_reprocess:
@@ -761,8 +873,12 @@ def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list
         for pdf_dir in pdfs_to_reprocess:
             for json_path in pdf_dir.glob("*.json"):
                 try:
-                    data = json.loads(json_path.read_text(encoding='utf-8'))
-                    if isinstance(data, dict) and not data.get("lab_results") and data.get("page_has_lab_data") is not False:
+                    data = json.loads(json_path.read_text(encoding="utf-8"))
+                    if (
+                        isinstance(data, dict)
+                        and not data.get("lab_results")
+                        and data.get("page_has_lab_data") is not False
+                    ):
                         json_path.unlink()
                         logger.info(f"Deleted empty JSON: {json_path.name}")
                 except (json.JSONDecodeError, UnicodeDecodeError):
@@ -780,10 +896,11 @@ def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list
 # Argument Parsing
 # ========================================
 
+
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description='Lab Results Parser - Extract lab results from PDFs',
+        description="Lab Results Parser - Extract lab results from PDFs",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -801,40 +918,36 @@ Examples:
 
   # Use alternate environment (loads .env.local after .env):
   python extract.py --profile tsilva --env local
-        """
+        """,
     )
     # Profile-based
     parser.add_argument(
-        '--profile', '-p',
+        "--profile",
+        "-p",
         type=str,
-        help='Profile name (without extension). If not specified, runs all profiles.'
+        help="Profile name (without extension). If not specified, runs all profiles.",
     )
     parser.add_argument(
-        '--list-profiles',
-        action='store_true',
-        help='List available profiles and exit'
+        "--list-profiles", action="store_true", help="List available profiles and exit"
     )
 
     # Overrides
     parser.add_argument(
-        '--model', '-m',
+        "--model",
+        "-m",
         type=str,
-        help='Model ID for extraction (overrides EXTRACT_MODEL_ID from .env)'
+        help="Model ID for extraction (overrides EXTRACT_MODEL_ID from .env)",
+    )
+    parser.add_argument("--workers", "-w", type=int, help="Number of parallel workers")
+    parser.add_argument(
+        "--pattern",
+        type=str,
+        help="Glob pattern for input files (overrides profile, default: *.pdf)",
     )
     parser.add_argument(
-        '--workers', '-w',
-        type=int,
-        help='Number of parallel workers'
-    )
-    parser.add_argument(
-        '--pattern',
+        "--env",
         type=str,
-        help='Glob pattern for input files (overrides profile, default: *.pdf)'
-    )
-    parser.add_argument(
-        '--env',
-        type=str,
-        help='Environment name to load (loads .env.{name} instead of .env)'
+        help="Environment name to load (loads .env.{name} instead of .env)",
     )
 
     return parser.parse_args()
@@ -844,7 +957,7 @@ def build_config(args) -> ExtractionConfig:
     """Build ExtractionConfig from args and env."""
     # Load profile (required)
     profile_path = None
-    for ext in ('.yaml', '.yml', '.json'):
+    for ext in (".yaml", ".yml", ".json"):
         p = Path(f"profiles/{args.profile}{ext}")
         if p.exists():
             profile_path = p
@@ -891,7 +1004,9 @@ def build_config(args) -> ExtractionConfig:
         self_consistency_model_id=self_consistency_model_id,
         input_file_regex=profile.input_file_regex or "*.pdf",
         n_extractions=int(os.getenv("N_EXTRACTIONS", "1")),
-        max_workers=profile.workers or int(os.getenv("MAX_WORKERS", "0")) or (os.cpu_count() or 1),
+        max_workers=profile.workers
+        or int(os.getenv("MAX_WORKERS", "0"))
+        or (os.cpu_count() or 1),
     )
 
     # Override from CLI args (highest priority)
@@ -918,6 +1033,40 @@ def build_config(args) -> ExtractionConfig:
 # Main Pipeline
 # ========================================
 
+
+def check_server_availability(
+    client: OpenAI, model_id: str, timeout: int = 10
+) -> tuple[bool, str]:
+    """Check if OpenRouter API server is available and responsive.
+
+    Args:
+        client: OpenAI client configured for OpenRouter
+        model_id: Model ID to check availability for
+        timeout: Timeout in seconds for the check
+
+    Returns:
+        Tuple of (is_available, message)
+    """
+    try:
+        # Just check that the server is reachable with a lightweight request
+        # Try models.list first, but don't validate model existence
+        client.models.list(timeout=timeout)
+        return True, "Server is available"
+    except Exception as e:
+        error_msg = str(e)
+        if "401" in error_msg or "Unauthorized" in error_msg:
+            return (
+                False,
+                f"Authentication failed - check your OPENROUTER_API_KEY: {error_msg}",
+            )
+        elif "timeout" in error_msg.lower():
+            return False, f"Server timeout after {timeout}s - server may be unreachable"
+        else:
+            # Server responded but models.list failed - still consider it available
+            # This handles local servers that don't implement /models endpoint
+            return True, "Server is available (model validation skipped)"
+
+
 def run_for_profile(args, profile_name: str) -> bool:
     """Run extraction pipeline for a single profile.
 
@@ -936,6 +1085,16 @@ def run_for_profile(args, profile_name: str) -> bool:
     global logger
     log_dir = config.output_path / "logs"
     logger = setup_logging(log_dir, clear_logs=True)
+
+    # Check server availability before processing
+    logger.info("Checking OpenRouter server availability...")
+    is_available, message = check_server_availability(client, config.extract_model_id)
+    if not is_available:
+        logger.error(f"Server check failed: {message}")
+        print(f"\nError: Cannot start extraction - {message}")
+        print("Please check your internet connection and API key, then try again.")
+        return False
+    logger.info(f"Server check passed: {message}")
 
     logger.info(f"Input: {config.input_path}")
     logger.info(f"Output: {config.output_path}")
@@ -974,7 +1133,9 @@ def run_for_profile(args, profile_name: str) -> bool:
             skipped_count += 1
         else:
             if csv_path.exists():
-                logger.warning(f"Re-processing {pdf_path.name}: CSV missing required columns")
+                logger.warning(
+                    f"Re-processing {pdf_path.name}: CSV missing required columns"
+                )
             pdfs_to_process.append(pdf_path)
 
     logger.info(f"Skipping {skipped_count} already-processed PDF(s)")
@@ -984,16 +1145,24 @@ def run_for_profile(args, profile_name: str) -> bool:
 
     if not pdfs_to_process:
         logger.info("All PDFs already processed. Moving to merge step...")
-        csv_paths = [p for pdf in pdf_files if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))]
+        csv_paths = [
+            p
+            for pdf in pdf_files
+            if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))
+        ]
         pdfs_failed = 0
     else:
         # Process PDFs in parallel
         n_workers = min(config.max_workers, len(pdfs_to_process))
         logger.info(f"Using {n_workers} worker(s) for PDF processing")
 
-        tasks = [(pdf, config.output_path, config, lab_specs) for pdf in pdfs_to_process]
+        tasks = [
+            (pdf, config.output_path, config, lab_specs) for pdf in pdfs_to_process
+        ]
 
-        with Pool(n_workers, initializer=_init_worker_logging, initargs=(log_dir,)) as pool:
+        with Pool(
+            n_workers, initializer=_init_worker_logging, initargs=(log_dir,)
+        ) as pool:
             results = []
             with tqdm(total=len(tasks), desc="Processing PDFs", unit="pdf") as pbar:
                 for result in pool.imap(_process_pdf_wrapper, tasks):
@@ -1005,7 +1174,11 @@ def run_for_profile(args, profile_name: str) -> bool:
         for _, failed_pages in results:
             all_failed_pages.extend(failed_pages)
 
-        csv_paths = [p for pdf in pdf_files if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))]
+        csv_paths = [
+            p
+            for pdf in pdf_files
+            if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))
+        ]
 
     if not csv_paths:
         logger.error("No PDFs successfully processed.")
@@ -1023,17 +1196,11 @@ def run_for_profile(args, profile_name: str) -> bool:
         logger.error("No data to process")
         return False
 
-    # Filter out legacy columns that are not in current schema
-    # (e.g., verification_status, verified, cross_model_verified, etc. from old versions)
-    expected_cols = list(LabResult.model_fields.keys()) + ["date"]
-    legacy_cols = [col for col in merged_df.columns if col not in expected_cols]
-    if legacy_cols:
-        logger.info(f"Removing {len(legacy_cols)} legacy columns: {', '.join(legacy_cols)}")
-        merged_df = merged_df.drop(columns=legacy_cols)
-
     # Apply normalizations (no demographics - moved to review tool)
     logger.info("Applying normalizations...")
-    merged_df = apply_normalizations(merged_df, lab_specs, client, config.self_consistency_model_id)
+    merged_df = apply_normalizations(
+        merged_df, lab_specs, client, config.self_consistency_model_id
+    )
 
     # Filter out non-lab-test rows
     unknown_mask = merged_df["lab_name_standardized"] == UNKNOWN_VALUE
@@ -1064,29 +1231,37 @@ def run_for_profile(args, profile_name: str) -> bool:
     validator = ValueValidator(lab_specs)
     merged_df = validator.validate(merged_df)
     validation_stats = validator.validation_stats
-    if validation_stats.get('rows_flagged', 0) > 0:
-        logger.info(f"Validation flagged {validation_stats['rows_flagged']} rows for review")
-        for reason, count in validation_stats.get('flags_by_reason', {}).items():
+    if validation_stats.get("rows_flagged", 0) > 0:
+        logger.info(
+            f"Validation flagged {validation_stats['rows_flagged']} rows for review"
+        )
+        for reason, count in validation_stats.get("flags_by_reason", {}).items():
             logger.info(f"  - {reason}: {count}")
 
     # Add confidence column (default to 1.0)
     merged_df["confidence"] = 1.0
-    logger.debug(f"After setting confidence=1.0: NaN count = {merged_df['confidence'].isna().sum()}")
+    logger.debug(
+        f"After setting confidence=1.0: NaN count = {merged_df['confidence'].isna().sum()}"
+    )
 
     # Select final columns
     final_cols = [col for col in export_cols if col in merged_df.columns]
     merged_df = merged_df[final_cols]
-    logger.debug(f"After column filtering: confidence NaN count = {merged_df['confidence'].isna().sum() if 'confidence' in merged_df.columns else 'column missing'}")
+    logger.debug(
+        f"After column filtering: confidence NaN count = {merged_df['confidence'].isna().sum() if 'confidence' in merged_df.columns else 'column missing'}"
+    )
 
     # Apply dtype conversions
     logger.info("Applying data type conversions...")
     merged_df = apply_dtype_conversions(merged_df, dtypes)
-    logger.debug(f"After dtype conversion: confidence NaN count = {merged_df['confidence'].isna().sum()}")
+    logger.debug(
+        f"After dtype conversion: confidence NaN count = {merged_df['confidence'].isna().sum()}"
+    )
 
     # Save merged CSV
     logger.info("Saving merged CSV...")
     csv_path = config.output_path / "all.csv"
-    merged_df.to_csv(csv_path, index=False, encoding='utf-8')
+    merged_df.to_csv(csv_path, index=False, encoding="utf-8")
     logger.info(f"Saved merged CSV: {csv_path}")
 
     # Export Excel
@@ -1143,9 +1318,9 @@ def main():
     # Run extraction for each profile
     results = {}
     for profile_name in profiles_to_run:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Processing profile: {profile_name}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         try:
             success = run_for_profile(args, profile_name)
             results[profile_name] = "success" if success else "failed"
@@ -1155,9 +1330,9 @@ def main():
 
     # Summary if multiple profiles
     if len(profiles_to_run) > 1:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Summary:")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         for profile_name, status in results.items():
             print(f"  {profile_name}: {status}")
 

@@ -2,31 +2,41 @@
 
 Helper scripts for building and maintaining the labs-parser configuration and validation.
 
-## Configuration Building
+## Lab Specifications Manager
 
-### build_lab_specs_conversions.py
-Generate unit conversion factors for lab_specs.json.
+### lab_specs_manager.py
+Consolidated utility for managing lab_specs.json operations.
 
-Usage:
-```bash
-python utils/build_lab_specs_conversions.py
-```
+**Commands:**
 
-### build_lab_specs_ranges.py
-Generate healthy ranges for lab_specs.json.
-
-Usage:
-```bash
-python utils/build_lab_specs_ranges.py
-```
-
-### sort_lab_specs.py
-Sort lab specifications alphabetically in lab_specs.json.
+| Command | Description |
+|---------|-------------|
+| `sort` | Sort lab_specs.json alphabetically by lab name |
+| `fix-encoding` | Convert Unicode escape sequences to UTF-8 characters |
+| `build-conversions` | Generate unit conversion factors from extracted CSV data |
+| `build-ranges` | Generate healthy reference ranges using LLM |
 
 Usage:
 ```bash
-python utils/sort_lab_specs.py
+# Sort lab specifications alphabetically
+python utils/lab_specs_manager.py sort
+
+# Fix encoding issues (creates backup by default)
+python utils/lab_specs_manager.py fix-encoding
+
+# Build conversion factors from extracted data
+python utils/lab_specs_manager.py build-conversions --input output/all.csv
+
+# Build healthy ranges using LLM
+python utils/lab_specs_manager.py build-ranges --user-stats user_stats.json
 ```
+
+Options:
+- `--workers, -w`: Number of parallel workers (default: auto)
+- `--input, -i`: Input CSV file for build-conversions
+- `--output, -o`: Output JSON file
+- `--user-stats, -u`: User stats JSON file for build-ranges
+- `--no-backup`: Skip backup creation for fix-encoding
 
 ## Validation
 
@@ -67,18 +77,10 @@ Usage:
 python utils/analyze_unknowns.py
 ```
 
-### update_loinc_code.py
-Update LOINC codes for specific labs in lab_specs.json.
+## Legacy Scripts (Consolidated)
 
-Usage:
-```bash
-python utils/update_loinc_code.py
-```
-
-### verify_loinc_codes.py
-Verify LOINC codes are valid and correctly assigned.
-
-Usage:
-```bash
-python utils/verify_loinc_codes.py
-```
+The following scripts have been consolidated into `lab_specs_manager.py`:
+- `build_lab_specs_conversions.py` → Use `lab_specs_manager.py build-conversions`
+- `build_lab_specs_ranges.py` → Use `lab_specs_manager.py build-ranges`
+- `sort_lab_specs.py` → Use `lab_specs_manager.py sort`
+- `fix_lab_specs_encoding.py` → Use `lab_specs_manager.py fix-encoding`
