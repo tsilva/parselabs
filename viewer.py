@@ -98,13 +98,7 @@ def get_lab_specs() -> LabSpecsConfig:
 
 def load_profile(profile_name: str) -> ProfileConfig | None:
     """Load a profile by name and update global configuration."""
-    profile_path = None
-    for ext in (".yaml", ".yml", ".json"):
-        p = Path(f"profiles/{profile_name}{ext}")
-        if p.exists():
-            profile_path = p
-            break
-
+    profile_path = ProfileConfig.find_path(profile_name)
     if not profile_path:
         return None
 
@@ -1133,6 +1127,29 @@ def build_review_status_html(entry: dict) -> str:
 # =============================================================================
 
 
+def _empty_nav_state(full_df: pd.DataFrame) -> tuple:
+    """Return standard empty state tuple for navigation handlers."""
+    return (
+        create_interactive_plot(full_df, []),
+        0,
+        "No results",
+        None,
+        "<p>No entry selected</p>",
+        "",
+        "",
+    )
+
+
+def _load_output_data(output_path: Path) -> tuple[pd.DataFrame, list[str]]:
+    """Load and sort data from output path, return (full_df, lab_name_choices)."""
+    full_df = load_data(output_path)
+    if not full_df.empty and "date" in full_df.columns:
+        full_df = full_df.sort_values(
+            ["date", "lab_name"], ascending=[False, True], na_position="last"
+        ).reset_index(drop=True)
+    return full_df, get_lab_name_choices(full_df)
+
+
 def _build_row_context(
     filtered_df: pd.DataFrame,
     row_idx: int,
@@ -1224,15 +1241,7 @@ def handle_row_select(
 ):
     """Handle row selection to update plot, details, and current index."""
     if evt is None or filtered_df.empty:
-        return (
-            create_interactive_plot(full_df, []),
-            0,
-            "No results",
-            None,
-            "<p>No entry selected</p>",
-            "",
-            "",
-        )
+        return _empty_nav_state(full_df)
 
     if isinstance(evt.index, (list, tuple)):
         row_idx = evt.index[0]
@@ -1253,15 +1262,7 @@ def handle_previous(
 ):
     """Navigate to previous row."""
     if filtered_df.empty:
-        return (
-            create_interactive_plot(full_df, []),
-            0,
-            "No results",
-            None,
-            "<p>No entry selected</p>",
-            "",
-            "",
-        )
+        return _empty_nav_state(full_df)
 
     new_idx = current_idx - 1
     if new_idx < 0:
@@ -1278,15 +1279,7 @@ def handle_next(
 ):
     """Navigate to next row."""
     if filtered_df.empty:
-        return (
-            create_interactive_plot(full_df, []),
-            0,
-            "No results",
-            None,
-            "<p>No entry selected</p>",
-            "",
-            "",
-        )
+        return _empty_nav_state(full_df)
 
     new_idx = current_idx + 1
     if new_idx >= len(filtered_df):
@@ -1478,14 +1471,7 @@ def handle_profile_change(profile_name: str):
         )
 
     output_path = get_output_path()
-    full_df = load_data(output_path)
-
-    if not full_df.empty and "date" in full_df.columns:
-        full_df = full_df.sort_values(
-            ["date", "lab_name"], ascending=[False, True], na_position="last"
-        ).reset_index(drop=True)
-
-    lab_name_choices = get_lab_name_choices(full_df)
+    full_df, lab_name_choices = _load_output_data(output_path)
 
     display_df = prepare_display_df(full_df)
     summary = build_summary_cards(full_df)
@@ -1545,14 +1531,7 @@ def handle_profile_change(profile_name: str):
 def create_app():
     """Create and configure the Gradio app."""
     output_path = get_output_path()
-    full_df = load_data(output_path)
-
-    if not full_df.empty and "date" in full_df.columns:
-        full_df = full_df.sort_values(
-            ["date", "lab_name"], ascending=[False, True], na_position="last"
-        ).reset_index(drop=True)
-
-    lab_name_choices = get_lab_name_choices(full_df)
+    full_df, lab_name_choices = _load_output_data(output_path)
 
     initial_position = (
         f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
@@ -1918,15 +1897,13 @@ if __name__ == "__main__":
 
     allowed_paths = set()
     for pname in available:
-        for ext in (".yaml", ".yml", ".json"):
-            profile_path = Path(f"profiles/{pname}{ext}")
-            if profile_path.exists():
-                p = ProfileConfig.from_file(profile_path)
-                if p.output_path:
-                    allowed_paths.add(str(p.output_path))
-                    if p.output_path.parent != p.output_path:
-                        allowed_paths.add(str(p.output_path.parent))
-                break
+        profile_path = ProfileConfig.find_path(pname)
+        if profile_path:
+            p = ProfileConfig.from_file(profile_path)
+            if p.output_path:
+                allowed_paths.add(str(p.output_path))
+                if p.output_path.parent != p.output_path:
+                    allowed_paths.add(str(p.output_path.parent))
 
     allowed_paths = list(allowed_paths)
 
