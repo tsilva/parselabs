@@ -95,6 +95,15 @@ class ProfileConfig:
         )
 
     @classmethod
+    def find_path(cls, name: str, profiles_dir: Path = Path("profiles")) -> Path | None:
+        """Find profile file path by name, trying yaml/yml/json extensions."""
+        for ext in (".yaml", ".yml", ".json"):
+            p = profiles_dir / f"{name}{ext}"
+            if p.exists():
+                return p
+        return None
+
+    @classmethod
     def list_profiles(cls, profiles_dir: Path = Path("profiles")) -> list[str]:
         """List available profile names."""
         if not profiles_dir.exists():
