@@ -114,11 +114,7 @@ def get_column_lists(schema: dict):
     ]
     export_cols = [k for k in ordered if k in schema]
     hidden_cols = [col for col, props in schema.items() if props.get("excel_hidden")]
-    widths = {
-        col: props["excel_width"]
-        for col, props in schema.items()
-        if "excel_width" in props
-    }
+    widths = {col: props["excel_width"] for col, props in schema.items() if "excel_width" in props}
     dtypes = {col: props["dtype"] for col, props in schema.items() if "dtype" in props}
 
     return export_cols, hidden_cols, widths, dtypes
@@ -175,9 +171,7 @@ def _load_viability_cache() -> dict:
 def _save_viability_cache(cache: dict):
     """Save viability check cache to disk."""
     VIABILITY_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    VIABILITY_CACHE_PATH.write_text(
-        json.dumps(cache, indent=2, sort_keys=True), encoding="utf-8"
-    )
+    VIABILITY_CACHE_PATH.write_text(json.dumps(cache, indent=2, sort_keys=True), encoding="utf-8")
 
 
 def text_extraction_is_viable(
@@ -270,9 +264,7 @@ Return ONLY a JSON object: {"is_lab_data": true} or {"is_lab_data": false}"""
 # ========================================
 
 
-def correct_percentage_lab_names(
-    results: list[dict], lab_specs: LabSpecsConfig
-) -> list[dict]:
+def correct_percentage_lab_names(results: list[dict], lab_specs: LabSpecsConfig) -> list[dict]:
     """Correct lab names based on unit: add (%) when unit is %, remove (%) when unit is not %.
 
     This handles cases where:
@@ -341,10 +333,7 @@ def process_single_pdf(
 
         # Copy PDF to output directory
         copied_pdf = doc_out_dir / pdf_path.name
-        if (
-            not copied_pdf.exists()
-            or copied_pdf.stat().st_size != pdf_path.stat().st_size
-        ):
+        if not copied_pdf.exists() or copied_pdf.stat().st_size != pdf_path.stat().st_size:
             shutil.copy2(pdf_path, copied_pdf)
 
         # ========================================
@@ -360,15 +349,11 @@ def process_single_pdf(
         text_json_path = doc_out_dir / f"{pdf_stem}.text.json"
         if text_json_path.exists():
             try:
-                text_extraction_data = json.loads(
-                    text_json_path.read_text(encoding="utf-8")
-                )
+                text_extraction_data = json.loads(text_json_path.read_text(encoding="utf-8"))
                 used_text_extraction = True
                 logger.info(f"[{pdf_stem}] Strategy: TEXT (cached)")
             except Exception as e:
-                logger.warning(
-                    f"[{pdf_stem}] Failed to load text extraction cache: {e}"
-                )
+                logger.warning(f"[{pdf_stem}] Failed to load text extraction cache: {e}")
                 text_extraction_data = None
 
         # Try text extraction if no cache
@@ -392,9 +377,7 @@ def process_single_pdf(
                         used_text_extraction = True
                         # Cache the text extraction results
                         text_json_path.write_text(
-                            json.dumps(
-                                text_extraction_data, indent=2, ensure_ascii=False
-                            ),
+                            json.dumps(text_extraction_data, indent=2, ensure_ascii=False),
                             encoding="utf-8",
                         )
                         logger.info(
@@ -408,19 +391,13 @@ def process_single_pdf(
                         text_extraction_data = None
 
                 except Exception as e:
-                    logger.warning(
-                        f"[{pdf_stem}] Strategy: TEXT -> VISION (text failed: {e})"
-                    )
+                    logger.warning(f"[{pdf_stem}] Strategy: TEXT -> VISION (text failed: {e})")
                     text_extraction_data = None
             else:
                 if pdftotext_success:
-                    logger.info(
-                        f"[{pdf_stem}] Strategy: VISION (LLM classified as non-lab data)"
-                    )
+                    logger.info(f"[{pdf_stem}] Strategy: VISION (LLM classified as non-lab data)")
                 else:
-                    logger.info(
-                        f"[{pdf_stem}] Strategy: VISION (no embedded text in PDF)"
-                    )
+                    logger.info(f"[{pdf_stem}] Strategy: VISION (no embedded text in PDF)")
 
         # ========================================
         # Vision-Based Extraction (Fallback)
@@ -435,9 +412,7 @@ def process_single_pdf(
             doc_date = _extract_document_date(text_extraction_data, pdf_stem)
 
             # Add page metadata to results (all from "page 1" since text extraction is whole-document)
-            for result_idx, result in enumerate(
-                text_extraction_data.get("lab_results", [])
-            ):
+            for result_idx, result in enumerate(text_extraction_data.get("lab_results", [])):
                 result["result_index"] = result_idx
                 result["page_number"] = 1
                 result["source_file"] = f"{pdf_stem}.text"  # Mark as text extraction
@@ -452,17 +427,13 @@ def process_single_pdf(
                 logger.error(f"[{pdf_stem}] Failed to convert PDF: {e}")
                 return None, failed_pages
 
-            logger.info(
-                f"[{pdf_stem}] Processing {len(pil_pages)} page(s) with vision..."
-            )
+            logger.info(f"[{pdf_stem}] Processing {len(pil_pages)} page(s) with vision...")
             for page_idx, page_image in enumerate(pil_pages):
                 page_name = f"{pdf_stem}.{page_idx + 1:03d}"
                 jpg_path = doc_out_dir / f"{page_name}.jpg"
                 json_path = doc_out_dir / f"{page_name}.json"
 
-                logger.info(
-                    f"[{page_name}] Processing page {page_idx + 1}/{len(pil_pages)}..."
-                )
+                logger.info(f"[{page_name}] Processing page {page_idx + 1}/{len(pil_pages)}...")
 
                 # Preprocess and save image
                 if not jpg_path.exists():
@@ -486,18 +457,14 @@ def process_single_pdf(
 
                         # Check for extraction failure (temperature retry exhausted)
                         if page_data.get("_extraction_failed"):
-                            failure_reason = page_data.get(
-                                "_failure_reason", "Unknown error"
-                            )
+                            failure_reason = page_data.get("_failure_reason", "Unknown error")
                             failed_pages.append(
                                 {
                                     "page": f"{pdf_stem} page {page_idx + 1}",
                                     "reason": failure_reason,
                                 }
                             )
-                            logger.error(
-                                f"[{page_name}] EXTRACTION FAILED: {failure_reason}"
-                            )
+                            logger.error(f"[{page_name}] EXTRACTION FAILED: {failure_reason}")
 
                         json_path.write_text(
                             json.dumps(page_data, indent=2, ensure_ascii=False),
@@ -505,17 +472,13 @@ def process_single_pdf(
                         )
                     except Exception as e:
                         logger.error(f"[{page_name}] Extraction failed: {e}")
-                        page_data = HealthLabReport(lab_results=[]).model_dump(
-                            mode="json"
-                        )
+                        page_data = HealthLabReport(lab_results=[]).model_dump(mode="json")
                 else:
                     logger.info(f"[{page_name}] Loading cached extraction data")
                     page_data = json.loads(json_path.read_text(encoding="utf-8"))
                     # Check for cached extraction failure
                     if page_data.get("_extraction_failed"):
-                        failure_reason = page_data.get(
-                            "_failure_reason", "Unknown error"
-                        )
+                        failure_reason = page_data.get("_failure_reason", "Unknown error")
                         failed_pages.append(
                             {
                                 "page": f"{pdf_stem} page {page_idx + 1}",
@@ -541,9 +504,7 @@ def process_single_pdf(
 
         # Standardize lab names
         logger.info(f"[{pdf_stem}] Standardizing lab names...")
-        raw_names = [
-            r.get("lab_name_raw") for r in all_results if r.get("lab_name_raw")
-        ]
+        raw_names = [r.get("lab_name_raw") for r in all_results if r.get("lab_name_raw")]
         if raw_names and lab_specs.exists:
             try:
                 unique_names = list(set(raw_names))
@@ -556,13 +517,9 @@ def process_single_pdf(
                 for result in all_results:
                     raw_name = result.get("lab_name_raw")
                     result["lab_name_standardized"] = (
-                        name_mapping.get(raw_name, UNKNOWN_VALUE)
-                        if raw_name
-                        else UNKNOWN_VALUE
+                        name_mapping.get(raw_name, UNKNOWN_VALUE) if raw_name else UNKNOWN_VALUE
                     )
-                logger.info(
-                    f"[{pdf_stem}] Standardized {len(unique_names)} unique test names"
-                )
+                logger.info(f"[{pdf_stem}] Standardized {len(unique_names)} unique test names")
             except Exception as e:
                 logger.error(f"[{pdf_stem}] Name standardization failed: {e}")
                 for result in all_results:
@@ -602,9 +559,7 @@ def process_single_pdf(
                 for result in all_results:
                     raw_unit = normalize_raw_unit(result.get("lab_unit_raw"))
                     lab_name = result.get("lab_name_standardized", "")
-                    standardized_unit = unit_mapping.get(
-                        (raw_unit, lab_name), UNKNOWN_VALUE
-                    )
+                    standardized_unit = unit_mapping.get((raw_unit, lab_name), UNKNOWN_VALUE)
 
                     # Post-process: If LLM returned $UNKNOWN$ for a null unit, use lab spec primary unit
                     if (
@@ -734,9 +689,7 @@ def _get_csv_path(pdf_path: Path, output_path: Path) -> Path:
     return output_path / pdf_path.stem / f"{pdf_path.stem}.csv"
 
 
-def _update_json_with_standardized_values(
-    all_results: list[dict], doc_out_dir: Path
-) -> None:
+def _update_json_with_standardized_values(all_results: list[dict], doc_out_dir: Path) -> None:
     """Update JSON files with standardized lab names and units."""
     # Group results by page number to minimize file I/O
     results_by_page: dict[int, list[dict]] = {}
@@ -767,9 +720,7 @@ def _update_json_with_standardized_values(
                         "lab_unit_standardized"
                     )
 
-            json_path.write_text(
-                json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
+            json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         except Exception as e:
             logger.warning(f"Failed to update JSON {json_path}: {e}")
 
@@ -856,9 +807,7 @@ def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list
         for json_path in empty_jsons:
             print(f"  - {json_path.name}")
 
-        response = (
-            input(f"Reprocess {pdf_dir.name}? [y/N/a(ll)/q(uit)]: ").strip().lower()
-        )
+        response = input(f"Reprocess {pdf_dir.name}? [y/N/a(ll)/q(uit)]: ").strip().lower()
 
         if response == "q":
             print("Skipping remaining files.")
@@ -1004,9 +953,7 @@ def build_config(args) -> ExtractionConfig:
         self_consistency_model_id=self_consistency_model_id,
         input_file_regex=profile.input_file_regex or "*.pdf",
         n_extractions=int(os.getenv("N_EXTRACTIONS", "1")),
-        max_workers=profile.workers
-        or int(os.getenv("MAX_WORKERS", "0"))
-        or (os.cpu_count() or 1),
+        max_workers=profile.workers or int(os.getenv("MAX_WORKERS", "0")) or (os.cpu_count() or 1),
     )
 
     # Override from CLI args (highest priority)
@@ -1034,9 +981,7 @@ def build_config(args) -> ExtractionConfig:
 # ========================================
 
 
-def check_server_availability(
-    client: OpenAI, model_id: str, timeout: int = 10
-) -> tuple[bool, str]:
+def check_server_availability(client: OpenAI, model_id: str, timeout: int = 10) -> tuple[bool, str]:
     """Check if OpenRouter API server is available and responsive.
 
     Args:
@@ -1061,10 +1006,21 @@ def check_server_availability(
             )
         elif "timeout" in error_msg.lower():
             return False, f"Server timeout after {timeout}s - server may be unreachable"
+        elif "404" in error_msg:
+            # Server responded with 404 - endpoint not implemented (e.g., local servers)
+            # This is a valid response, so server is available
+            return True, "Server is available (models endpoint not implemented)"
+        elif (
+            "Connection" in error_msg
+            or "refused" in error_msg.lower()
+            or "reset" in error_msg.lower()
+            or "Name or service not known" in error_msg
+            or "getaddrinfo" in error_msg
+        ):
+            return False, f"Cannot connect to server: {error_msg}"
         else:
-            # Server responded but models.list failed - still consider it available
-            # This handles local servers that don't implement /models endpoint
-            return True, "Server is available (model validation skipped)"
+            # For any other error, assume server is unavailable to be safe
+            return False, f"Server check failed: {error_msg}"
 
 
 def run_for_profile(args, profile_name: str) -> bool:
@@ -1133,9 +1089,7 @@ def run_for_profile(args, profile_name: str) -> bool:
             skipped_count += 1
         else:
             if csv_path.exists():
-                logger.warning(
-                    f"Re-processing {pdf_path.name}: CSV missing required columns"
-                )
+                logger.warning(f"Re-processing {pdf_path.name}: CSV missing required columns")
             pdfs_to_process.append(pdf_path)
 
     logger.info(f"Skipping {skipped_count} already-processed PDF(s)")
@@ -1146,9 +1100,7 @@ def run_for_profile(args, profile_name: str) -> bool:
     if not pdfs_to_process:
         logger.info("All PDFs already processed. Moving to merge step...")
         csv_paths = [
-            p
-            for pdf in pdf_files
-            if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))
+            p for pdf in pdf_files if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))
         ]
         pdfs_failed = 0
     else:
@@ -1156,13 +1108,9 @@ def run_for_profile(args, profile_name: str) -> bool:
         n_workers = min(config.max_workers, len(pdfs_to_process))
         logger.info(f"Using {n_workers} worker(s) for PDF processing")
 
-        tasks = [
-            (pdf, config.output_path, config, lab_specs) for pdf in pdfs_to_process
-        ]
+        tasks = [(pdf, config.output_path, config, lab_specs) for pdf in pdfs_to_process]
 
-        with Pool(
-            n_workers, initializer=_init_worker_logging, initargs=(log_dir,)
-        ) as pool:
+        with Pool(n_workers, initializer=_init_worker_logging, initargs=(log_dir,)) as pool:
             results = []
             with tqdm(total=len(tasks), desc="Processing PDFs", unit="pdf") as pbar:
                 for result in pool.imap(_process_pdf_wrapper, tasks):
@@ -1175,9 +1123,7 @@ def run_for_profile(args, profile_name: str) -> bool:
             all_failed_pages.extend(failed_pages)
 
         csv_paths = [
-            p
-            for pdf in pdf_files
-            if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))
+            p for pdf in pdf_files if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))
         ]
 
     if not csv_paths:
@@ -1198,9 +1144,7 @@ def run_for_profile(args, profile_name: str) -> bool:
 
     # Apply normalizations (no demographics - moved to review tool)
     logger.info("Applying normalizations...")
-    merged_df = apply_normalizations(
-        merged_df, lab_specs, client, config.self_consistency_model_id
-    )
+    merged_df = apply_normalizations(merged_df, lab_specs, client, config.self_consistency_model_id)
 
     # Filter out non-lab-test rows
     unknown_mask = merged_df["lab_name_standardized"] == UNKNOWN_VALUE
@@ -1232,9 +1176,7 @@ def run_for_profile(args, profile_name: str) -> bool:
     merged_df = validator.validate(merged_df)
     validation_stats = validator.validation_stats
     if validation_stats.get("rows_flagged", 0) > 0:
-        logger.info(
-            f"Validation flagged {validation_stats['rows_flagged']} rows for review"
-        )
+        logger.info(f"Validation flagged {validation_stats['rows_flagged']} rows for review")
         for reason, count in validation_stats.get("flags_by_reason", {}).items():
             logger.info(f"  - {reason}: {count}")
 
