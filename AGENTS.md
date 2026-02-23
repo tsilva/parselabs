@@ -13,16 +13,16 @@ Labs Parser is a Python tool that uses AI (via OpenRouter API) to extract labora
 ### Running the Parser
 ```bash
 # Run all profiles:
-python extract.py
+python main.py
 
 # Run specific profile:
-python extract.py --profile tsilva
+python main.py --profile tsilva
 
 # List available profiles:
-python extract.py --list-profiles
+python main.py --list-profiles
 
 # Override settings:
-python extract.py --profile tsilva --model google/gemini-2.5-pro
+python main.py --profile tsilva --model google/gemini-2.5-pro
 
 # Data integrity validation:
 python test.py
@@ -48,7 +48,7 @@ Prompt templates live in `prompts/` as `.txt` files and are loaded at module lev
 
 ## Architecture
 
-### Core Pipeline (extract.py)
+### Core Pipeline (main.py)
 
 The processing pipeline has 3 main stages:
 
@@ -280,7 +280,7 @@ uv pip install <pkg> # If you must install directly
 Note: `uv sync` requires `dangerouslyDisableSandbox: true` in Claude Code sandbox mode (UV cache writes are blocked).
 
 ### Documentation Maintenance
-When modifying the extraction pipeline in `extract.py` or related modules:
+When modifying the extraction pipeline in `main.py` or related modules:
 - **Always update `docs/pipeline.md`** to reflect the changes
 - The pipeline diagram and step descriptions must stay in sync with the code
 

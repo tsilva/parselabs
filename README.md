@@ -41,7 +41,7 @@ cp .env.example .env
 # Edit .env with your API key and model settings
 
 # Extract lab results
-python extract.py --profile myname
+python main.py --profile myname
 
 # Review results
 python review.py --profile myname
@@ -106,7 +106,7 @@ demographics:
 List available profiles:
 
 ```bash
-python extract.py --list-profiles
+python main.py --list-profiles
 ```
 
 ### Lab Specifications
@@ -123,16 +123,16 @@ The `config/lab_specs.json` file contains 335+ standardized lab tests with:
 
 ```bash
 # Run all profiles (default)
-python extract.py
+python main.py
 
 # Run specific profile
-python extract.py --profile myname
+python main.py --profile myname
 
 # Override model
-python extract.py --profile myname --model google/gemini-2.5-pro
+python main.py --profile myname --model google/gemini-2.5-pro
 
 # Filter files
-python extract.py --profile myname --pattern "2024-*.pdf"
+python main.py --profile myname --pattern "2024-*.pdf"
 ```
 
 ### Review Extracted Data
