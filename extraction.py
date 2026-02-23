@@ -28,11 +28,11 @@ class LabResult(BaseModel):
                     "DO NOT include values, units, reference ranges, or field labels. "
                     "WRONG: 'Glucose, value_raw: 100' CORRECT: 'Glucose'"
     )
-    value_raw: str | None = Field(
-        default=None,
-        description="Result value ONLY. Must contain ONLY the numeric or text result - "
-                    "DO NOT include test names, units, or field labels. "
-                    "Examples: '5.2', '14.8', 'NEGATIVO', 'POSITIVO'"
+    value_raw: str = Field(
+        description="Result value ONLY - numeric OR text, exactly as shown. NEVER null. "
+                    "Must contain ONLY the result value - DO NOT include test names, units, or field labels. "
+                    "Examples: '5.2', '14.8', 'NEGATIVO', 'POSITIVO', '1 a 2/campo'. "
+                    "NOTE: Section headers (e.g., 'BIOQUIMICA', 'HEMOGRAMA') are NOT results - do not extract them."
     )
     lab_unit_raw: str | None = Field(
         default=None,
@@ -92,8 +92,6 @@ class LabResult(BaseModel):
     @classmethod
     def coerce_value_raw_to_string(cls, v):
         """Coerce numeric values to strings - LLMs often return floats instead of strings."""
-        if v is None:
-            return v
         if isinstance(v, (int, float)):
             # Format without unnecessary decimal places for integers
             return str(int(v)) if isinstance(v, float) and v.is_integer() else str(v)
@@ -265,6 +263,12 @@ CRITICAL RULES:
    - `source_text`: Copy the exact row/line containing this result
 
 8. DATES: Format as YYYY-MM-DD or leave null
+
+9. SECTION HEADERS ARE NOT RESULTS:
+   - Do NOT extract section headers, category titles, or group labels as lab results
+   - Examples: "Sedimento urinario - Citometria", "BIOQUIMICA", "HEMOGRAMA", "Ex. Microscopico do Sedimento"
+   - These have NO associated test result value
+   - Only extract rows that have an actual test result (numeric or qualitative text)
 
 SCHEMA FIELD NAMES:
 - Use `lab_name_raw` (raw test name from PDF)
@@ -587,19 +591,7 @@ def extract_labs_from_page_image(
             report_model = HealthLabReport(**tool_result_dict)
             report_model.normalize_empty_optionals()
 
-            # Check for extraction quality - warn if most values are null
-            if report_model.lab_results:
-                null_count = sum(1 for r in report_model.lab_results if r.value_raw is None)
-                total_count = len(report_model.lab_results)
-                null_pct = (null_count / total_count * 100) if total_count > 0 else 0
-
-                if null_pct > 50:
-                    logger.warning(
-                        f"Extraction quality issue: {null_count}/{total_count} ({null_pct:.0f}%) lab results have null values. "
-                        f"This suggests the model failed to extract numeric values from the image.\n"
-                        f"\t- {image_path}"
-                    )
-            else:
+            if not report_model.lab_results:
                 if report_model.page_has_lab_data is False:
                     logger.debug(f"Page confirmed to have no lab data:\n\t- {image_path}")
                 else:
@@ -1044,7 +1036,7 @@ def _parse_string_results_with_llm(string_results: list[str], client: OpenAI, mo
 
 For each string below, extract:
 - lab_name_raw: The name of the lab test
-- value_raw: Numeric value (null if text-only result like "Negative")
+- value_raw: Result value exactly as shown - numeric OR text (e.g., '5.2', 'NEGATIVO', 'POSITIVO', '1 a 2/campo'). NEVER null.
 - lab_unit_raw: Unit of measurement (null if none)
 - reference_range: Reference range text (null if none)
 - reference_min_raw: Min reference value (null if not available)
