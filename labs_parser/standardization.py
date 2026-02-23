@@ -6,14 +6,14 @@ from pathlib import Path
 from typing import Any
 from openai import OpenAI
 
-from config import UNKNOWN_VALUE
-from utils import parse_llm_json_response
+from labs_parser.config import UNKNOWN_VALUE
+from labs_parser.utils import parse_llm_json_response
 
 logger = logging.getLogger(__name__)
 
 # Cache directory for LLM standardization results (user-editable JSON files)
 CACHE_DIR = Path("config/cache")
-_PROMPTS_DIR = Path(__file__).parent / "prompts"
+_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
 def _load_prompt(name: str) -> str:
@@ -26,7 +26,7 @@ def load_cache(name: str) -> dict:
     path = CACHE_DIR / f"{name}.json"
     if path.exists():
         try:
-            with open(path, encoding='utf-8') as f:
+            with open(path, encoding="utf-8") as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError) as e:
             logger.warning(f"Failed to load cache {name}: {e}")
@@ -37,7 +37,7 @@ def save_cache(name: str, cache: dict):
     """Save cache to JSON, sorted alphabetically for easy editing."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path = CACHE_DIR / f"{name}.json"
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(cache, f, indent=2, ensure_ascii=False, sort_keys=True)
 
 
@@ -47,7 +47,7 @@ def standardize_with_llm(
     system_prompt_template: str,
     model_id: str,
     client: OpenAI,
-    temperature: float = 0.1
+    temperature: float = 0.1,
 ) -> dict[Any, str] | list[Any]:
     """
     Generic LLM-based standardization function.
@@ -78,7 +78,7 @@ def standardize_with_llm(
     system_prompt = system_prompt_template.format(
         num_candidates=len(candidates),
         candidates=json.dumps(candidates, ensure_ascii=False, indent=2),
-        unknown=UNKNOWN_VALUE
+        unknown=UNKNOWN_VALUE,
     )
 
     user_prompt = f"""Map these items to standardized values:
@@ -92,10 +92,10 @@ Return a JSON object/array with the standardized values."""
             model=model_id,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
             temperature=temperature,
-            max_tokens=4000
+            max_tokens=4000,
         )
 
         if not completion or not completion.choices:
@@ -121,10 +121,14 @@ Return a JSON object/array with the standardized values."""
                 if standardized == UNKNOWN_VALUE or standardized in candidates:
                     validated[key] = standardized
                 else:
-                    logger.warning(f"LLM returned invalid value: '{standardized}' for '{key}', using $UNKNOWN$")
+                    logger.warning(
+                        f"LLM returned invalid value: '{standardized}' for '{key}', using $UNKNOWN$"
+                    )
                     validated[key] = UNKNOWN_VALUE
             else:
-                logger.warning(f"LLM didn't return mapping for '{key}', using $UNKNOWN$")
+                logger.warning(
+                    f"LLM didn't return mapping for '{key}', using $UNKNOWN$"
+                )
                 validated[key] = UNKNOWN_VALUE
 
         return validated
@@ -141,7 +145,7 @@ def standardize_lab_names(
     raw_test_names: list[str],
     model_id: str,
     standardized_names: list[str],
-    client: OpenAI
+    client: OpenAI,
 ) -> dict[str, str]:
     """
     Map raw test names to standardized lab names using LLM with cache.
@@ -176,7 +180,9 @@ def standardize_lab_names(
 
     # Call LLM only for uncached names
     if uncached_names:
-        logger.info(f"[name_standardization] {len(uncached_names)} uncached names, calling LLM...")
+        logger.info(
+            f"[name_standardization] {len(uncached_names)} uncached names, calling LLM..."
+        )
         items = {name: name for name in uncached_names}
 
         system_prompt_template = _load_prompt("name_standardization")
@@ -186,14 +192,16 @@ def standardize_lab_names(
             candidates=standardized_names,
             system_prompt_template=system_prompt_template,
             model_id=model_id,
-            client=client
+            client=client,
         )
 
         # Update cache with LLM results
         for raw_name, std_name in llm_result.items():
             cache[cache_key(raw_name)] = std_name
         save_cache("name_standardization", cache)
-        logger.info(f"[name_standardization] Cache updated with {len(llm_result)} entries")
+        logger.info(
+            f"[name_standardization] Cache updated with {len(llm_result)} entries"
+        )
 
     # Return results for all names from cache
     return {name: cache.get(cache_key(name), UNKNOWN_VALUE) for name in raw_test_names}
@@ -204,7 +212,7 @@ def standardize_lab_units(
     model_id: str,
     standardized_units: list[str],
     client: OpenAI,
-    lab_specs_config=None
+    lab_specs_config=None,
 ) -> dict[tuple[str, str], str]:
     """
     Map raw lab units to standardized units using LLM with cache.
@@ -249,7 +257,9 @@ def standardize_lab_units(
     if not uncached_pairs:
         return {pair: cached_results.get(pair, UNKNOWN_VALUE) for pair in unit_contexts}
 
-    logger.info(f"[unit_standardization] {len(uncached_pairs)} uncached pairs, calling LLM...")
+    logger.info(
+        f"[unit_standardization] {len(uncached_pairs)} uncached pairs, calling LLM..."
+    )
 
     # Build primary units mapping for null unit inference (only for uncached)
     primary_units_map = {}
@@ -269,15 +279,21 @@ def standardize_lab_units(
     # Build primary units context for prompt
     primary_units_context = ""
     if primary_units_map:
-        primary_units_list = [f'  "{lab}": "{unit}"' for lab, unit in sorted(primary_units_map.items())]
+        primary_units_list = [
+            f'  "{lab}": "{unit}"' for lab, unit in sorted(primary_units_map.items())
+        ]
         # Build the mapping and escape curly braces for .format()
         mapping_content = "\n".join(primary_units_list)
-        primary_units_context = """
+        primary_units_context = (
+            """
 PRIMARY UNITS MAPPING (use this for null/missing units):
 {{
-""" + mapping_content + """
+"""
+            + mapping_content
+            + """
 }}
 """
+        )
 
     system_prompt_template = _load_prompt("unit_standardization").replace(
         "{primary_units_context}", primary_units_context
@@ -288,7 +304,7 @@ PRIMARY UNITS MAPPING (use this for null/missing units):
         candidates=standardized_units,
         system_prompt_template=system_prompt_template,
         model_id=model_id,
-        client=client
+        client=client,
     )
 
     # Convert list result to dict mapping (raw_unit, lab_name) -> standardized_unit
@@ -301,10 +317,14 @@ PRIMARY UNITS MAPPING (use this for null/missing units):
             standardized = item.get("standardized_unit")
 
             if raw_unit is not None and lab_name is not None:
-                if standardized and (standardized == UNKNOWN_VALUE or standardized in standardized_units):
+                if standardized and (
+                    standardized == UNKNOWN_VALUE or standardized in standardized_units
+                ):
                     llm_results[(raw_unit, lab_name)] = standardized
                 else:
-                    logger.warning(f"LLM returned invalid unit: '{standardized}' for ({raw_unit}, {lab_name})")
+                    logger.warning(
+                        f"LLM returned invalid unit: '{standardized}' for ({raw_unit}, {lab_name})"
+                    )
                     llm_results[(raw_unit, lab_name)] = UNKNOWN_VALUE
     else:
         logger.error("Expected list response from LLM for unit standardization")
@@ -329,9 +349,7 @@ PRIMARY UNITS MAPPING (use this for null/missing units):
 
 
 def standardize_qualitative_values(
-    raw_values: list[str],
-    model_id: str,
-    client: OpenAI
+    raw_values: list[str], model_id: str, client: OpenAI
 ) -> dict[str, int | None]:
     """
     Map qualitative lab result text to boolean values (0/1/None) using LLM with cache.
@@ -358,10 +376,15 @@ def standardize_qualitative_values(
         return str(value).lower().strip()
 
     # Get unique values, filter out empty/nan
-    unique_values = list(set(
-        cache_key(v) for v in raw_values
-        if v is not None and str(v).strip() and str(v).lower() not in ('nan', 'none', '')
-    ))
+    unique_values = list(
+        set(
+            cache_key(v)
+            for v in raw_values
+            if v is not None
+            and str(v).strip()
+            and str(v).lower() not in ("nan", "none", "")
+        )
+    )
 
     # Split into cached and uncached
     uncached_values = [v for v in unique_values if v not in cache]
@@ -370,7 +393,9 @@ def standardize_qualitative_values(
     if not uncached_values:
         return {v: cache.get(cache_key(v)) for v in raw_values if v is not None}
 
-    logger.info(f"[qualitative_to_boolean] {len(uncached_values)} uncached values, calling LLM...")
+    logger.info(
+        f"[qualitative_to_boolean] {len(uncached_values)} uncached values, calling LLM..."
+    )
 
     # Build items for LLM
     items = {v: v for v in uncached_values}
@@ -398,10 +423,13 @@ Return format: {{"value1": 0, "value2": 1, "value3": null, ...}}
             model=model_id,
             messages=[
                 {"role": "system", "content": system_prompt_template},
-                {"role": "user", "content": f"Classify these values:\n\n{json.dumps(items, ensure_ascii=False, indent=2)}"}
+                {
+                    "role": "user",
+                    "content": f"Classify these values:\n\n{json.dumps(items, ensure_ascii=False, indent=2)}",
+                },
             ],
             temperature=0.1,
-            max_tokens=2000
+            max_tokens=2000,
         )
 
         if not completion or not completion.choices:
@@ -422,14 +450,20 @@ Return format: {{"value1": 0, "value2": 1, "value3": null, ...}}
                 if classified in (0, 1, None):
                     cache[value] = classified
                 else:
-                    logger.warning(f"LLM returned invalid classification: '{classified}' for '{value}', using null")
+                    logger.warning(
+                        f"LLM returned invalid classification: '{classified}' for '{value}', using null"
+                    )
                     cache[value] = None
             else:
-                logger.warning(f"LLM didn't return classification for '{value}', using null")
+                logger.warning(
+                    f"LLM didn't return classification for '{value}', using null"
+                )
                 cache[value] = None
 
         save_cache("qualitative_to_boolean", cache)
-        logger.info(f"[qualitative_to_boolean] Cache updated with {len(uncached_values)} entries")
+        logger.info(
+            f"[qualitative_to_boolean] Cache updated with {len(uncached_values)} entries"
+        )
 
     except Exception as e:
         logger.error(f"Error during qualitative classification: {e}")

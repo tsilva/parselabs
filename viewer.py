@@ -14,7 +14,7 @@ Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate
 
 from __future__ import annotations
 
-from utils import load_dotenv_with_env
+from labs_parser.utils import load_dotenv_with_env
 
 load_dotenv_with_env()
 
@@ -29,7 +29,7 @@ from plotly.subplots import make_subplots
 from pathlib import Path
 from datetime import datetime
 
-from config import ProfileConfig, Demographics, LabSpecsConfig
+from labs_parser.config import ProfileConfig, Demographics, LabSpecsConfig
 
 _STATIC_DIR = Path(__file__).parent / "static"
 KEYBOARD_JS = (_STATIC_DIR / "viewer.js").read_text()
