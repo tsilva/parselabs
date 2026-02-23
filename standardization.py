@@ -13,6 +13,12 @@ logger = logging.getLogger(__name__)
 
 # Cache directory for LLM standardization results (user-editable JSON files)
 CACHE_DIR = Path("config/cache")
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
+
+
+def _load_prompt(name: str) -> str:
+    """Load a prompt template from the prompts directory."""
+    return (_PROMPTS_DIR / f"{name}.txt").read_text(encoding="utf-8")
 
 
 def load_cache(name: str) -> dict:
@@ -173,61 +179,7 @@ def standardize_lab_names(
         logger.info(f"[name_standardization] {len(uncached_names)} uncached names, calling LLM...")
         items = {name: name for name in uncached_names}
 
-        system_prompt_template = """You are a medical lab test name standardization expert.
-
-Your task: Map raw test names from lab reports to standardized lab names from a predefined list.
-
-CRITICAL RULES:
-1. Choose the BEST MATCH from the standardized names list
-2. Consider semantic similarity and medical terminology
-3. Account for language variations (Portuguese/English)
-4. If NO good match exists, use exactly: "{unknown}"
-5. Return a JSON object mapping each raw name to its standardized name
-
-IMPORTANT - Portuguese lab report patterns:
-Portuguese reports often have SECTION PREFIXES before the actual test name. Strip these prefixes when matching:
-- "bioquímica - {{test}}" → match "{{test}}" to standardized list
-- "bioquímica geral - {{test}}" → match "{{test}}"
-- "hematologia - hemograma - {{test}}" → match "{{test}}"
-- "hematologia - hemograma com contagem de plaquetas - {{test}}" → match "{{test}}"
-- "química clínica - sangue - {{test}}" → match "{{test}}"
-- "endocrinologia - {{test}}" → match "{{test}}"
-- "hemograma - {{test}}" → match "{{test}}"
-- "hemograma com fórmula - {{test}}" → match "{{test}}"
-- "fórmula leucocitária - {{test}}" → match "{{test}}"
-- "reticulócitos - {{test}}" → match "{{test}}"
-- "velocidade de sedimentação - {{test}}" → match "{{test}}"
-- "bilirrubina total e directa - {{test}}" → match "{{test}}"
-
-The actual test name is usually the LAST part after the final " - " separator.
-
-STANDARDIZED NAMES LIST ({num_candidates} names):
-{candidates}
-
-EXAMPLES:
-- "Hemoglobina" → "Blood - Hemoglobin (Hgb)"
-- "GLICOSE -jejum-" → "Blood - Glucose (Fasting)"
-- "URINA - pH" → "Urine Type II - pH"
-- "bioquímica - creatinina" → "Blood - Creatinine"
-- "bioquímica - glicose" → "Blood - Glucose (Fasting)"
-- "bioquímica - ureia" → "Blood - Urea"
-- "hematologia - hemograma com contagem de plaquetas - hemoglobina" → "Blood - Hemoglobin (Hgb)"
-- "hematologia - hemograma com contagem de plaquetas - leucócitos" → "Blood - Leukocytes"
-- "hemograma com fórmula - eritrócitos" → "Blood - Erythrocytes"
-- "hemograma com fórmula - hematócrito" → "Blood - Hematocrit (HCT) (%)"
-- "reticulócitos - % reticulócitos" → "Blood - Reticulocyte Count (%)"
-- "reticulócitos - conteúdo hemoglobina reticulócito" → "Blood - Reticulocyte Hemoglobin Content"
-- "reticulócitos - nº total reticulócitos" → "Blood - Reticulocyte Count"
-- "velocidade de sedimentação - 1ª hora" → "Blood - Erythrocyte Sedimentation Rate (ESR) - 1h"
-- "bilirrubina total e directa - bilirrubina directa" → "Blood - Bilirubin Direct"
-- "bilirrubina total e directa - bilirrubina total" → "Blood - Bilirubin Total"
-- "não-hdl colesterol" → "Blood - Non-HDL Cholesterol"
-- "plaquetócrito" → "Blood - Plateletcrit (PCT) (%)"
-- "volume plaquetario médio" → "Blood - Mean Platelet Volume (MPV)"
-- "indice distribuição plaquetas - pdw" → "Blood - Platelet Distribution Width (PDW)"
-- "eritroblastos por 100 leucócitos" → "Blood - Nucleated Red Blood Cells (NRBC)"
-- "Some Unknown Test" → "{unknown}"
-"""
+        system_prompt_template = _load_prompt("name_standardization")
 
         llm_result = standardize_with_llm(
             items=items,
@@ -327,59 +279,9 @@ PRIMARY UNITS MAPPING (use this for null/missing units):
 }}
 """
 
-    system_prompt_template = """You are a medical laboratory unit standardization expert.
-
-Your task: Map (raw_unit, lab_name) pairs to standardized units from a predefined list.
-
-CRITICAL RULES:
-1. Choose the BEST MATCH from the standardized units list
-2. Handle case variations (e.g., "mg/dl" → "mg/dL", "u/l" → "IU/L")
-3. Handle symbol variations (e.g., "µ" vs "μ", superscripts like ⁶ ⁹ ¹²)
-4. Handle spacing variations (e.g., "mg / dl" → "mg/dL")
-5. For null/missing units, look up the lab_name in the PRIMARY UNITS MAPPING (if provided)
-6. If NO good match exists or lab not in mapping, use exactly: "{unknown}"
-7. Return a JSON array with objects: {{"raw_unit": "...", "lab_name": "...", "standardized_unit": "..."}}
-
-CRITICAL: DO NOT CONVERT UNITS - ONLY NORMALIZE FORMAT
-The goal is to standardize unit NOTATION, NOT to convert between different units.
-Unit conversions are handled separately by the system using conversion factors.
-
-CORRECT FORMAT NORMALIZATION (same unit, different notation):
-- "/mm3", "/mm³", "cells/mm³" → "/mm3" (keep as /mm3, do NOT convert to 10⁹/L)
-- "x10E6/µl", "x10E6/ul", "x10^6/µL" → "x10E6/µL" (normalize symbols only)
-- "x10E3/ul", "x10ˆ3/ul", "x10^3/µL" → "x10E3/µL" (normalize symbols only)
-- "x10E9/L", "x10^9/L", "10^9/L", "10⁹/L", "109/L" → "10⁹/L" (these ARE the same unit)
-- "x10E12/L", "x10^12/L", "10¹²/L" → "10¹²/L" (these ARE the same unit)
-
-WRONG - DO NOT DO THIS:
-- "/mm3" → "10⁹/L" (WRONG! This is a unit CONVERSION, not format normalization)
-- "x10E3/µL" → "10⁹/L" (WRONG! These are different magnitude units)
-
-Case normalization:
-- "iu/l", "IU/l", "iu/L" → "IU/L"
-- "fl", "FL" → "fL"
-- "pg", "PG" → "pg"
-- "mg/dl", "MG/DL" → "mg/dL"
-- "g/dl", "G/DL" → "g/dL"
-
-Special handling:
-- "nan", "null", "None", empty string, "NaN" → look up from PRIMARY UNITS MAPPING
-- "U/L" and "IU/L" are often interchangeable for enzyme activities (prefer IU/L if in list)
-- "Leu/µL" for leukocytes → may need conversion context
-
-STANDARDIZED UNITS LIST ({num_candidates} units):
-{candidates}
-""" + primary_units_context + """
-EXAMPLES:
-- {{"raw_unit": "mg/dl", "lab_name": "Blood - Glucose", "standardized_unit": "mg/dL"}}
-- {{"raw_unit": "x10E6/µl", "lab_name": "Blood - Erythrocytes", "standardized_unit": "10¹²/L"}}
-- {{"raw_unit": "x10^9/L", "lab_name": "Blood - Leukocytes", "standardized_unit": "10⁹/L"}}
-- {{"raw_unit": "x10ˆ3/ul", "lab_name": "Blood - Platelets", "standardized_unit": "10⁹/L"}}
-- {{"raw_unit": "U/L", "lab_name": "Blood - AST", "standardized_unit": "IU/L"}}
-- {{"raw_unit": "fl", "lab_name": "Blood - MCV", "standardized_unit": "fL"}}
-- {{"raw_unit": "null", "lab_name": "Blood - Albumin", "standardized_unit": "g/dL"}} (from PRIMARY UNITS MAPPING)
-- {{"raw_unit": "nan", "lab_name": "Blood - Glucose", "standardized_unit": "mg/dL"}} (from PRIMARY UNITS MAPPING)
-"""
+    system_prompt_template = _load_prompt("unit_standardization").replace(
+        "{primary_units_context}", primary_units_context
+    )
 
     result_list = standardize_with_llm(
         items=items,
