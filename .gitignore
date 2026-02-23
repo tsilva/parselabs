@@ -46,6 +46,9 @@ logs/
 *.log
 # >>> END MANAGED <<<
 
+# Worktrees
+.worktrees/
+
 # Project-specific rules
 !profiles/_*
 *$py.class
