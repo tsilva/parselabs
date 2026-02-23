@@ -82,7 +82,7 @@ Priority: `collection_date` → `report_date` → filename pattern → None
 
 | File | Purpose |
 |------|---------|
-| `extract.py` | Pipeline orchestration |
+| `main.py` | Pipeline orchestration |
 | `extraction.py` | Vision/text LLM extraction |
 | `standardization.py` | Name/unit standardization |
 | `normalization.py` | Unit conversion, value normalization |

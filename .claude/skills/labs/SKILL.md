@@ -370,7 +370,7 @@ Example:
 ### Immediate Actions (Critical)
 1. **Re-extract specific files:**
    - 2024-01-15-labs.pdf - 3 critical errors found (decimal errors in glucose)
-   - Command: `python extract.py --profile {profile} --pattern "*2024-01-15-labs*"`
+   - Command: `python main.py --profile {profile} --pattern "*2024-01-15-labs*"`
 
 2. **Review specific labs:**
    - Blood - Creatinine - systematic rounding detected
@@ -538,7 +538,7 @@ This analyzes extraction logs (`{OUTPUT_PATH}/logs/info.log` and `error.log`) an
 
 | Determination | Action |
 |---------------|--------|
-| Extraction error on single page | Delete the JSON, re-run `python extract.py --profile X --pattern "*STEM*"` |
+| Extraction error on single page | Delete the JSON, re-run `python main.py --profile X --pattern "*STEM*"` |
 | Systematic extraction error | Review extraction prompts, re-run affected documents |
 | Real unusual data | Keep it, optionally add note |
 | Unknown lab name | Add mapping to `normalization.py` KNOWN_LAB_NAMES dict |
@@ -554,7 +554,7 @@ To re-extract specific pages:
 rm "{OUTPUT_PATH}/{doc_stem}/{doc_stem}.{page:03d}.json"
 
 # Re-run extraction for that document
-python extract.py --profile {profile} --pattern "*{doc_stem}*"
+python main.py --profile {profile} --pattern "*{doc_stem}*"
 ```
 
 ## Example Investigation Session
