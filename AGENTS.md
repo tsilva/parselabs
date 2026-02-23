@@ -41,6 +41,11 @@ The `utils/` directory contains helper scripts for building and maintaining conf
 
 See `utils/README.md` for detailed usage instructions.
 
+### LLM Prompts
+Prompt templates live in `prompts/` as `.txt` files and are loaded at module level:
+- `prompts/extraction_system.txt`, `prompts/extraction_user.txt` - vision extraction prompts
+- `prompts/name_standardization.txt`, `prompts/unit_standardization.txt` - standardization prompts
+
 ## Architecture
 
 ### Core Pipeline (extract.py)
@@ -272,6 +277,7 @@ uv add <package>     # Add a new dependency
 uv remove <package>  # Remove a dependency
 uv pip install <pkg> # If you must install directly
 ```
+Note: `uv sync` requires `dangerouslyDisableSandbox: true` in Claude Code sandbox mode (UV cache writes are blocked).
 
 ### Documentation Maintenance
 When modifying the extraction pipeline in `extract.py` or related modules:
