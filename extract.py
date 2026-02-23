@@ -956,12 +956,7 @@ Examples:
 def build_config(args) -> ExtractionConfig:
     """Build ExtractionConfig from args and env."""
     # Load profile (required)
-    profile_path = None
-    for ext in (".yaml", ".yml", ".json"):
-        p = Path(f"profiles/{args.profile}{ext}")
-        if p.exists():
-            profile_path = p
-            break
+    profile_path = ProfileConfig.find_path(args.profile)
 
     if not profile_path:
         print(f"Error: Profile '{args.profile}' not found")
