@@ -31,39 +31,6 @@ class ExtractionConfig:
     n_extractions: int = 1
     max_workers: int = field(default_factory=lambda: os.cpu_count() or 1)
 
-    @classmethod
-    def from_env(cls) -> 'ExtractionConfig':
-        """Load configuration from environment variables."""
-        # Required
-        openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-        if not openrouter_api_key:
-            raise ValueError("OPENROUTER_API_KEY not set")
-
-        # Models (required - no defaults)
-        extract_model_id = os.getenv("EXTRACT_MODEL_ID")
-        if not extract_model_id:
-            raise ValueError("EXTRACT_MODEL_ID not set")
-        self_consistency_model_id = os.getenv("SELF_CONSISTENCY_MODEL_ID")
-        if not self_consistency_model_id:
-            raise ValueError("SELF_CONSISTENCY_MODEL_ID not set")
-
-        # Processing settings (smart defaults)
-        input_file_regex = os.getenv("INPUT_FILE_REGEX", "*.pdf")
-        n_extractions = int(os.getenv("N_EXTRACTIONS", "1"))
-        max_workers_str = os.getenv("MAX_WORKERS", "")
-        max_workers = int(max_workers_str) if max_workers_str else (os.cpu_count() or 1)
-
-        return cls(
-            input_path=None,
-            output_path=None,
-            openrouter_api_key=openrouter_api_key,
-            extract_model_id=extract_model_id,
-            self_consistency_model_id=self_consistency_model_id,
-            input_file_regex=input_file_regex,
-            n_extractions=n_extractions,
-            max_workers=max_workers,
-        )
-
 
 @dataclass
 class ProfileConfig:
@@ -268,25 +235,6 @@ class LabSpecsConfig:
                 return alt.get('factor')
 
         return None
-
-    def get_healthy_range(self, lab_name: str) -> tuple[float | None, float | None]:
-        """Get default healthy range (min, max) for a lab."""
-        if lab_name not in self._specs:
-            return (None, None)
-
-        ranges = self._specs[lab_name].get('ranges', {})
-
-        # New format: "default": [min, max]
-        default = ranges.get('default')
-        if isinstance(default, list) and len(default) >= 2:
-            return (default[0], default[1])
-
-        # Legacy format: "healthy": {"min": X, "max": Y}
-        healthy = ranges.get('healthy')
-        if healthy:
-            return (healthy.get('min'), healthy.get('max'))
-
-        return (None, None)
 
     def get_healthy_range_for_demographics(
         self,

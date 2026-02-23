@@ -414,6 +414,18 @@
     "ranges": {},
     "loinc_code": "7851-9"
   },
+  "Blood - Anti-Cytomegalovirus IgG, Qualitative": {
+    "lab_type": "blood",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    },
+    "loinc_code": "7855-0"
+  },
   "Blood - Anti-Cytomegalovirus IgM": {
     "lab_type": "blood",
     "primary_unit": "index",
@@ -425,6 +437,18 @@
     ],
     "ranges": {},
     "loinc_code": "7852-7"
+  },
+  "Blood - Anti-Cytomegalovirus IgM, Qualitative": {
+    "lab_type": "blood",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    },
+    "loinc_code": "7856-8"
   },
   "Blood - Anti-Dopamine D2 Receptor Antibody (D2R)": {
     "lab_type": "blood",
@@ -476,6 +500,18 @@
     "ranges": {},
     "loinc_code": "7885-7"
   },
+  "Blood - Anti-Epstein-Barr Virus (EBV) VCA IgG, Qualitative": {
+    "lab_type": "blood",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    },
+    "loinc_code": "17763-2"
+  },
   "Blood - Anti-Epstein-Barr Virus (EBV) VCA IgM": {
     "lab_type": "blood",
     "primary_unit": "index",
@@ -487,6 +523,18 @@
     ],
     "ranges": {},
     "loinc_code": "7886-5"
+  },
+  "Blood - Anti-Epstein-Barr Virus (EBV) VCA IgM, Qualitative": {
+    "lab_type": "blood",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    },
+    "loinc_code": "17764-0"
   },
   "Blood - Anti-Gliadin IgA": {
     "lab_type": "blood",
@@ -500,6 +548,18 @@
     },
     "loinc_code": "16901-9"
   },
+  "Blood - Anti-Gliadin IgA, Qualitative": {
+    "lab_type": "blood",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    },
+    "loinc_code": "5188-8"
+  },
   "Blood - Anti-Gliadin IgG": {
     "lab_type": "blood",
     "primary_unit": "IU/mL",
@@ -512,9 +572,21 @@
     },
     "loinc_code": "16902-7"
   },
+  "Blood - Anti-Gliadin IgG, Qualitative": {
+    "lab_type": "blood",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    },
+    "loinc_code": "5189-6"
+  },
   "Blood - Anti-HBc (IgG + IgM)": {
     "lab_type": "blood",
-    "primary_unit": "unitless",
+    "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {},
     "loinc_code": "5192-0"
@@ -531,9 +603,21 @@
     },
     "loinc_code": "5195-3"
   },
+  "Blood - Anti-HBs Antibody, Qualitative": {
+    "lab_type": "blood",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    },
+    "loinc_code": "22322-2"
+  },
   "Blood - Anti-HCV Total": {
     "lab_type": "blood",
-    "primary_unit": "unitless",
+    "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
       "default": [
@@ -682,6 +766,18 @@
       ]
     },
     "loinc_code": "31017-7"
+  },
+  "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA), Qualitative": {
+    "lab_type": "blood",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    },
+    "loinc_code": "63298-5"
   },
   "Blood - Anti-Tissue Transglutaminase Antibody IgG (Anti-tTG IgG)": {
     "lab_type": "blood",
@@ -2036,21 +2132,21 @@
   },
   "Blood - Hepatitis A Antibody (IgM)": {
     "lab_type": "blood",
-    "primary_unit": "unitless",
+    "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {},
     "loinc_code": "22314-9"
   },
   "Blood - Hepatitis A Antibody Total": {
     "lab_type": "blood",
-    "primary_unit": "unitless",
+    "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {},
     "loinc_code": "20575-7"
   },
   "Blood - Hepatitis B Surface Antigen (HBsAg)": {
     "lab_type": "blood",
-    "primary_unit": "unitless",
+    "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
       "default": [
@@ -2062,14 +2158,14 @@
   },
   "Blood - Hepatitis B e Antibody (Anti-HBe)": {
     "lab_type": "blood",
-    "primary_unit": "unitless",
+    "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {},
     "loinc_code": "5193-8"
   },
   "Blood - Hepatitis B e Antigen (HBeAg)": {
     "lab_type": "blood",
-    "primary_unit": "unitless",
+    "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {},
     "loinc_code": "5194-6"
@@ -3597,7 +3693,7 @@
       ],
       "female": [
         0.15,
-        0.70
+        0.7
       ]
     },
     "loinc_code": "2986-8"

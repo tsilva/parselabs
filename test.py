@@ -53,78 +53,78 @@ def test_all_rows_have_dates_and_no_duplicates(df, report, errors):
 
 @integrity_test
 def test_lab_unit_percent_vs_lab_name(df, report, errors):
-    if 'lab_unit_primary' not in df.columns or 'lab_name_standardized' not in df.columns:
+    if 'unit' not in df.columns or 'lab_name' not in df.columns:
         return
-    mask = (df['lab_unit_primary'] == "%") & (~df['lab_name_standardized'].astype(str).str.endswith("(%)"))
+    mask = (df['unit'] == "%") & (~df['lab_name'].astype(str).str.endswith("(%)"))
     for idx in df[mask].index:
         row = df.loc[idx]
         source_file = row.get('source_file', 'unknown')
-        lab_name_standardized = row.get('lab_name_standardized', '')
+        lab_name = row.get('lab_name', '')
         report.setdefault(source_file, []).append(
-            f'Row at index {idx} (lab_name_standardized="{lab_name_standardized}") has lab_unit_primary="%" but lab_name_standardized="{lab_name_standardized}"'
+            f'Row at index {idx} (lab_name="{lab_name}") has unit="%" but lab_name="{lab_name}"'
         )
 
 
 @integrity_test
 def test_lab_unit_percent_value_range(df, report, errors):
-    if 'lab_unit_primary' not in df.columns or 'value_primary' not in df.columns:
+    if 'unit' not in df.columns or 'value' not in df.columns:
         return
-    mask = (df['lab_unit_primary'] == "%") & (
-        (df['value_primary'] < 0) | (df['value_primary'] > 100)
+    mask = (df['unit'] == "%") & (
+        (df['value'] < 0) | (df['value'] > 100)
     )
     for idx in df[mask].index:
         row = df.loc[idx]
         source_file = row.get('source_file', 'unknown')
-        val = row.get('value_primary')
-        lab_name_standardized = row.get('lab_name_standardized', '')
+        val = row.get('value')
+        lab_name = row.get('lab_name', '')
         report.setdefault(source_file, []).append(
-            f'Row at index {idx} (lab_name_standardized="{lab_name_standardized}") has lab_unit_primary="%" but value_primary={val} (should be between 0 and 100)'
+            f'Row at index {idx} (lab_name="{lab_name}") has unit="%" but value={val} (should be between 0 and 100)'
         )
 
 
 @integrity_test
 def test_lab_unit_boolean_value(df, report, errors):
-    if 'lab_unit_primary' not in df.columns or 'value_primary' not in df.columns:
+    if 'unit' not in df.columns or 'value' not in df.columns:
         return
-    mask = (df['lab_unit_primary'] == "boolean") & (~df['value_primary'].isin([0, 1]))
+    mask = (df['unit'] == "boolean") & (~df['value'].isin([0, 1]))
     for idx in df[mask].index:
         row = df.loc[idx]
         source_file = row.get('source_file', 'unknown')
-        val = row.get('value_primary')
-        lab_name_standardized = row.get('lab_name_standardized', '')
+        val = row.get('value')
+        lab_name = row.get('lab_name', '')
         report.setdefault(source_file, []).append(
-            f'Row at index {idx} (lab_name_standardized="{lab_name_standardized}") has lab_unit_primary="boolean" but value_primary={val} (should be 0 or 1)'
+            f'Row at index {idx} (lab_name="{lab_name}") has unit="boolean" but value={val} (should be 0 or 1)'
         )
 
 
 @integrity_test
-def test_lab_name_standardized_unit_consistency(df, report, errors):
-    if 'lab_name_standardized' not in df.columns or 'lab_unit_primary' not in df.columns:
+def test_lab_name_unit_consistency(df, report, errors):
+    if 'lab_name' not in df.columns or 'unit' not in df.columns:
         return
-    grouped = df.groupby('lab_name_standardized')['lab_unit_primary'].unique()
-    for lab_name_standardized, units in grouped.items():
+    grouped = df.groupby('lab_name')['unit'].unique()
+    for lab_name, units in grouped.items():
         units = [u for u in units if pd.notnull(u)]
         if len(units) > 1:
-            indices = df[df['lab_name_standardized'] == lab_name_standardized].index.tolist()
+            indices = df[df['lab_name'] == lab_name].index.tolist()
             errors.append(
-                f'lab_name_standardized="{lab_name_standardized}" has inconsistent lab_unit_primary values: {units} (rows: {indices})'
+                f'lab_name="{lab_name}" has inconsistent unit values: {units} (rows: {indices})'
             )
 
 
 @integrity_test
-def test_lab_value_outliers_by_lab_name_standardized(df, report, errors):
-    if 'value_primary' not in df.columns or 'lab_name_standardized' not in df.columns:
+def test_lab_value_outliers_by_lab_name(df, report, errors):
+    if 'value' not in df.columns or 'lab_name' not in df.columns:
         return
-    df = df[pd.notnull(df['value_primary'])]
-    for lab_name_standardized, group in df.groupby('lab_name_standardized'):
-        if 'lab_unit_primary' in group.columns:
-            unit_counts = group['lab_unit_primary'].value_counts()
+    df = df[pd.notnull(df['value'])]
+    for lab_name, group in df.groupby('lab_name'):
+        if 'unit' in group.columns:
+            unit_counts = group['unit'].value_counts()
             if unit_counts.empty:
                 continue
             most_freq_unit = unit_counts.idxmax()
-            values = group[group['lab_unit_primary'] == most_freq_unit]['value_primary']
+            values = group[group['unit'] == most_freq_unit]['value']
         else:
-            values = group['value_primary']
+            values = group['value']
             most_freq_unit = 'N/A'
 
         values = pd.to_numeric(values, errors='coerce').dropna()
@@ -135,43 +135,43 @@ def test_lab_value_outliers_by_lab_name_standardized(df, report, errors):
         if std == 0 or pd.isnull(std):
             continue
 
-        if 'lab_unit_primary' in group.columns:
+        if 'unit' in group.columns:
             outliers = group[
-                (group['lab_unit_primary'] == most_freq_unit) &
+                (group['unit'] == most_freq_unit) &
                 (
-                    (group['value_primary'] > mean + 3 * std) |
-                    (group['value_primary'] < mean - 3 * std)
+                    (group['value'] > mean + 3 * std) |
+                    (group['value'] < mean - 3 * std)
                 )
             ]
         else:
             outliers = group[
-                (group['value_primary'] > mean + 3 * std) |
-                (group['value_primary'] < mean - 3 * std)
+                (group['value'] > mean + 3 * std) |
+                (group['value'] < mean - 3 * std)
             ]
 
         if not outliers.empty:
             source_files = set(outliers['source_file'].dropna().astype(str))
-            outlier_values = outliers['value_primary'].tolist()
+            outlier_values = outliers['value'].tolist()
             page_numbers = outliers['page_number'].tolist() if 'page_number' in outliers.columns else ['unknown'] * len(outlier_values)
             errors.append(
-                f'lab_name_standardized="{lab_name_standardized}", lab_unit_primary="{most_freq_unit}" has outlier value_primary (>3 std from mean {mean:.2f}±{std:.2f}) '
+                f'lab_name="{lab_name}", unit="{most_freq_unit}" has outlier value (>3 std from mean {mean:.2f}±{std:.2f}) '
                 f'in files: {list(sorted(source_files))} outlier values: {outlier_values} page numbers: {page_numbers}'
             )
 
 
 @integrity_test
-def test_unique_date_lab_name_standardized(df, report, errors):
-    if 'date' not in df.columns or 'lab_name_standardized' not in df.columns:
+def test_unique_date_lab_name(df, report, errors):
+    if 'date' not in df.columns or 'lab_name' not in df.columns:
         return
-    duplicates = df.duplicated(subset=['date', 'lab_name_standardized'], keep=False)
+    duplicates = df.duplicated(subset=['date', 'lab_name'], keep=False)
     if duplicates.any():
         dup_df = df[duplicates]
         for row in dup_df.itertuples():
             source_file = getattr(row, 'source_file', 'unknown') or 'unknown'
             date_val = getattr(row, 'date', '')
-            lab_name = getattr(row, 'lab_name_standardized', '')
+            lab_name = getattr(row, 'lab_name', '')
             report.setdefault(source_file, []).append(
-                f"Duplicate (date, lab_name_standardized) at index {row.Index}: date={date_val}, lab_name_standardized={lab_name}"
+                f"Duplicate (date, lab_name) at index {row.Index}: date={date_val}, lab_name={lab_name}"
             )
 
 
@@ -290,9 +290,9 @@ def main():
     test_lab_unit_percent_vs_lab_name(report)
     test_lab_unit_percent_value_range(report)
     test_lab_unit_boolean_value(report)
-    test_lab_name_standardized_unit_consistency(report)
-    test_lab_value_outliers_by_lab_name_standardized(report)
-    test_unique_date_lab_name_standardized(report)
+    test_lab_name_unit_consistency(report)
+    test_lab_value_outliers_by_lab_name(report)
+    test_unique_date_lab_name(report)
     print("\n=== Integrity Report ===")
     if not report:
         print("All checks passed.")

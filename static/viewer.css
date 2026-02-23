@@ -1,0 +1,188 @@
+/* Status badges */
+.status-accepted { background-color: #198754; color: #ffffff; padding: 8px 12px; border-radius: 5px; font-weight: 600; display: inline-block; }
+.status-rejected { background-color: #dc3545; color: #ffffff; padding: 8px 12px; border-radius: 5px; font-weight: 600; display: inline-block; }
+.status-pending { background-color: #6c757d; color: #ffffff; padding: 8px 12px; border-radius: 5px; font-weight: 600; display: inline-block; }
+.status-warning { background-color: #fd7e14; color: #ffffff; padding: 8px 12px; border-radius: 5px; font-weight: 600; display: inline-block; margin-top: 5px; }
+.status-info { background-color: #0d6efd; color: #ffffff; padding: 8px 12px; border-radius: 5px; font-weight: 600; display: inline-block; margin-top: 5px; }
+.review-actions { margin-top: 10px; }
+
+/* Summary cards - dark mode compatible */
+.summary-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; padding: 8px 0; }
+.stat-card {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 0.9em;
+    background-color: rgba(75, 85, 99, 0.6);
+    border: 1px solid rgba(107, 114, 128, 0.5);
+    color: #e5e7eb;
+}
+.stat-card.warning {
+    background-color: rgba(245, 158, 11, 0.25);
+    border-color: #f59e0b;
+    color: #fcd34d;
+}
+.stat-card.danger {
+    background-color: rgba(239, 68, 68, 0.25);
+    border-color: #ef4444;
+    color: #fca5a5;
+}
+.stat-card.success {
+    background-color: rgba(16, 185, 129, 0.25);
+    border-color: #10b981;
+    color: #6ee7b7;
+}
+
+/* Review reason banner - dark mode compatible */
+.review-banner {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    font-size: 0.9em;
+}
+.review-banner.warning {
+    background-color: rgba(245, 158, 11, 0.2);
+    border: 1px solid #f59e0b;
+    color: #fcd34d;
+}
+.review-banner.info {
+    background-color: rgba(59, 130, 246, 0.2);
+    border: 1px solid #3b82f6;
+    color: #93c5fd;
+}
+.review-banner-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+.review-banner-reasons {
+    font-size: 0.85em;
+    opacity: 0.9;
+}
+
+/* Quick filter pills - dark mode compatible */
+.quick-filter-pills {
+    padding: 20px 15px;
+}
+.quick-filter-pills .wrap {
+    gap: 8px !important;
+}
+.quick-filter-pills label {
+    padding: 6px 14px !important;
+    border-radius: 20px !important;
+    font-size: 0.85em !important;
+    font-weight: 500 !important;
+    border: 1px solid rgba(107, 114, 128, 0.5) !important;
+    background-color: rgba(55, 65, 81, 0.6) !important;
+    color: #e5e7eb !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    min-height: 32px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+}
+.quick-filter-pills label:hover {
+    background-color: rgba(75, 85, 99, 0.8) !important;
+    border-color: rgba(156, 163, 175, 0.6) !important;
+}
+.quick-filter-pills input:checked + label {
+    background-color: #3b82f6 !important;
+    border-color: #3b82f6 !important;
+    color: white !important;
+}
+
+/* Toggle pill checkbox styling (for Latest Only) */
+.toggle-pill {
+    padding: 26px 15px;
+}
+.toggle-pill label {
+    padding: 6px 14px !important;
+    border-radius: 20px !important;
+    font-size: 0.85em !important;
+    font-weight: 500 !important;
+    border: 1px solid rgba(107, 114, 128, 0.5) !important;
+    background-color: rgba(55, 65, 81, 0.6) !important;
+    color: #e5e7eb !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+}
+.toggle-pill label:hover {
+    background-color: rgba(75, 85, 99, 0.8) !important;
+    border-color: rgba(156, 163, 175, 0.6) !important;
+}
+.toggle-pill input:checked + span {
+    background-color: #3b82f6 !important;
+    border-color: #3b82f6 !important;
+    color: white !important;
+}
+/* Hide the checkbox itself, style the container */
+.toggle-pill .wrap {
+    gap: 0 !important;
+}
+.toggle-pill > label > span {
+    padding: 6px 14px !important;
+    border-radius: 20px !important;
+    font-size: 0.85em !important;
+    font-weight: 500 !important;
+    border: 1px solid rgba(107, 114, 128, 0.5) !important;
+    background-color: rgba(55, 65, 81, 0.6) !important;
+    color: #e5e7eb !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    min-height: 32px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+}
+.toggle-pill > label > span:hover {
+    background-color: rgba(75, 85, 99, 0.8) !important;
+    border-color: rgba(156, 163, 175, 0.6) !important;
+}
+.toggle-pill input[type="checkbox"]:checked + span {
+    background-color: #3b82f6 !important;
+    border-color: #3b82f6 !important;
+    color: white !important;
+}
+
+/* Compact lab dropdown in filter row */
+.lab-dropdown-compact {
+    min-width: 200px;
+}
+.lab-dropdown-compact .wrap {
+    padding: 0 !important;
+}
+.lab-dropdown-compact input {
+    padding: 6px 14px !important;
+    font-size: 0.85em !important;
+    min-height: 32px !important;
+}
+
+/* Filter row vertical alignment */
+.filter-row {
+    display: flex;
+    align-items: center !important;
+    gap: 16px;
+}
+.filter-row > div {
+    display: flex;
+    align-items: center;
+}
+
+/* Compact table display - dark mode compatible */
+#lab-data-table table {
+    font-size: 0.85em;
+}
+#lab-data-table td, #lab-data-table th {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+    padding: 6px 10px !important;
+}
+#lab-data-table tr:hover {
+    background-color: rgba(75, 85, 99, 0.5) !important;
+}
+#lab-data-table tr.selected {
+    background-color: rgba(59, 130, 246, 0.3) !important;
+    border-left: 3px solid #3b82f6;
+}

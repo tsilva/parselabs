@@ -7,7 +7,7 @@ import pandas as pd
 from openai import OpenAI
 
 from config import LabSpecsConfig, UNKNOWN_VALUE
-from utils import slugify, ensure_columns
+from utils import ensure_columns
 
 logger = logging.getLogger(__name__)
 
@@ -561,15 +561,6 @@ def apply_normalizations(
         )
     else:
         df["lab_type"] = "blood"
-
-    # Create lab_name_slug (vectorized)
-    if "lab_name_raw" in df.columns:
-        df["lab_name_slug"] = df.apply(
-            lambda row: f"{row.get('lab_type', 'blood')}-{slugify(row.get('lab_name_raw', ''))}",
-            axis=1
-        )
-    else:
-        df["lab_name_slug"] = ""
 
     # Convert to primary units (batched)
     if lab_specs.exists:

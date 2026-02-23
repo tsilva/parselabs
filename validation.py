@@ -647,17 +647,3 @@ class ValueValidator:
                         )
 
         return self._batch_flag_by_indices(df, flags)
-
-
-def validate_lab_results(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
-    """Convenience function to validate lab results DataFrame.
-
-    Args:
-        df: DataFrame with lab results
-        lab_specs: LabSpecsConfig instance
-
-    Returns:
-        DataFrame with validation flags applied
-    """
-    validator = ValueValidator(lab_specs)
-    return validator.validate(df)
