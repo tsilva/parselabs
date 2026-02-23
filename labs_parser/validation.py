@@ -11,7 +11,7 @@ import logging
 
 import pandas as pd
 
-from config import LabSpecsConfig
+from labs_parser.config import LabSpecsConfig
 
 logger = logging.getLogger(__name__)
 
@@ -25,15 +25,15 @@ class ValueValidator:
 
     # Reason codes with confidence multipliers (lower = more suspicious)
     REASON_CODES = {
-        "IMPOSSIBLE_VALUE": 0.3,       # Biologically impossible
+        "IMPOSSIBLE_VALUE": 0.3,  # Biologically impossible
         "RELATIONSHIP_MISMATCH": 0.5,  # Calculated vs extracted mismatch
         "COMPONENT_EXCEEDS_TOTAL": 0.3,  # Component value exceeds its total
-        "TEMPORAL_ANOMALY": 0.6,       # Implausible change rate
-        "FORMAT_ARTIFACT": 0.7,        # Parsing/format issue
-        "RANGE_INCONSISTENCY": 0.7,    # Reference range issues
-        "PERCENTAGE_BOUNDS": 0.4,      # Percentage outside 0-100
-        "NEGATIVE_VALUE": 0.3,         # Negative concentration
-        "EXTREME_DEVIATION": 0.5,      # Value far outside reference range
+        "TEMPORAL_ANOMALY": 0.6,  # Implausible change rate
+        "FORMAT_ARTIFACT": 0.7,  # Parsing/format issue
+        "RANGE_INCONSISTENCY": 0.7,  # Reference range issues
+        "PERCENTAGE_BOUNDS": 0.4,  # Percentage outside 0-100
+        "NEGATIVE_VALUE": 0.3,  # Negative concentration
+        "EXTREME_DEVIATION": 0.5,  # Value far outside reference range
     }
 
     # Component-total constraints: component value must not exceed total value
@@ -42,17 +42,23 @@ class ValueValidator:
         ("Blood - Albumin", "Blood - Total Protein"),
         ("Blood - Bilirubin Direct", "Blood - Bilirubin Total"),
         ("Blood - Bilirubin Indirect", "Blood - Bilirubin Total"),
-        ("Blood - High-Density Lipoprotein Cholesterol (HDL Cholesterol)", "Blood - Total Cholesterol"),
-        ("Blood - Low-Density Lipoprotein Cholesterol (LDL Cholesterol)", "Blood - Total Cholesterol"),
+        (
+            "Blood - High-Density Lipoprotein Cholesterol (HDL Cholesterol)",
+            "Blood - Total Cholesterol",
+        ),
+        (
+            "Blood - Low-Density Lipoprotein Cholesterol (LDL Cholesterol)",
+            "Blood - Total Cholesterol",
+        ),
     ]
 
     # Column name mappings: (preferred_name, fallback_name)
     COLUMN_MAPPINGS = {
-        'value': ('value', 'value_primary'),
-        'lab_name': ('lab_name', 'lab_name_standardized'),
-        'unit': ('unit', 'lab_unit_primary'),
-        'ref_min': ('reference_min', 'reference_min_primary'),
-        'ref_max': ('reference_max', 'reference_max_primary'),
+        "value": ("value", "value_primary"),
+        "lab_name": ("lab_name", "lab_name_standardized"),
+        "unit": ("unit", "lab_unit_primary"),
+        "ref_min": ("reference_min", "reference_min_primary"),
+        "ref_max": ("reference_max", "reference_max_primary"),
     }
 
     def __init__(self, lab_specs: LabSpecsConfig):
@@ -68,13 +74,13 @@ class ValueValidator:
             "flags_by_reason": {},
         }
         # Column name mappings (resolved once per validate() call)
-        self._value_col: str = ''
-        self._lab_name_col: str = ''
-        self._unit_col: str = ''
-        self._date_col: str = 'date'
-        self._ref_min_col: str = ''
-        self._ref_max_col: str = ''
-        self._value_raw_col: str = 'value_raw'
+        self._value_col: str = ""
+        self._lab_name_col: str = ""
+        self._unit_col: str = ""
+        self._date_col: str = "date"
+        self._ref_min_col: str = ""
+        self._ref_max_col: str = ""
+        self._value_raw_col: str = "value_raw"
 
     def _resolve_column(self, df: pd.DataFrame, key: str) -> str:
         """Resolve column name using preferred or fallback naming convention.
@@ -109,19 +115,19 @@ class ValueValidator:
         df = df.copy()
 
         # Initialize review columns if not present
-        if 'review_needed' not in df.columns:
-            df['review_needed'] = False
-        if 'review_reason' not in df.columns:
-            df['review_reason'] = ''
-        if 'review_confidence' not in df.columns:
-            df['review_confidence'] = 1.0
+        if "review_needed" not in df.columns:
+            df["review_needed"] = False
+        if "review_reason" not in df.columns:
+            df["review_reason"] = ""
+        if "review_confidence" not in df.columns:
+            df["review_confidence"] = 1.0
 
         # Resolve column names once (supports both naming conventions)
-        self._value_col = self._resolve_column(df, 'value')
-        self._lab_name_col = self._resolve_column(df, 'lab_name')
-        self._unit_col = self._resolve_column(df, 'unit')
-        self._ref_min_col = self._resolve_column(df, 'ref_min')
-        self._ref_max_col = self._resolve_column(df, 'ref_max')
+        self._value_col = self._resolve_column(df, "value")
+        self._lab_name_col = self._resolve_column(df, "lab_name")
+        self._unit_col = self._resolve_column(df, "unit")
+        self._ref_min_col = self._resolve_column(df, "ref_min")
+        self._ref_max_col = self._resolve_column(df, "ref_max")
 
         # Reset stats
         self._validation_stats = {
@@ -139,7 +145,7 @@ class ValueValidator:
         df = self._check_reference_ranges(df)
 
         # Update stats
-        self._validation_stats["rows_flagged"] = int(df['review_needed'].sum())
+        self._validation_stats["rows_flagged"] = int(df["review_needed"].sum())
 
         logger.info(
             f"Validation complete: {self._validation_stats['rows_flagged']}/{len(df)} "
@@ -149,10 +155,7 @@ class ValueValidator:
         return df
 
     def _flag_row(
-        self,
-        df: pd.DataFrame,
-        mask: pd.Series,
-        reason_code: str
+        self, df: pd.DataFrame, mask: pd.Series, reason_code: str
     ) -> pd.DataFrame:
         """Flag rows matching mask with given reason code.
 
@@ -169,12 +172,20 @@ class ValueValidator:
 
         confidence_mult = self.REASON_CODES.get(reason_code, 0.8)
 
-        df.loc[mask, 'review_needed'] = True
+        df.loc[mask, "review_needed"] = True
         # Handle NaN values in review_reason by converting to empty string first
-        df.loc[mask, 'review_reason'] = df.loc[mask, 'review_reason'].fillna('').apply(
-            lambda x: str(x) + f'{reason_code}; ' if reason_code not in str(x) else str(x)
+        df.loc[mask, "review_reason"] = (
+            df.loc[mask, "review_reason"]
+            .fillna("")
+            .apply(
+                lambda x: str(x) + f"{reason_code}; "
+                if reason_code not in str(x)
+                else str(x)
+            )
         )
-        df.loc[mask, 'review_confidence'] = df.loc[mask, 'review_confidence'] * confidence_mult
+        df.loc[mask, "review_confidence"] = (
+            df.loc[mask, "review_confidence"] * confidence_mult
+        )
 
         # Update stats
         count = int(mask.sum())
@@ -187,9 +198,7 @@ class ValueValidator:
         return df
 
     def _batch_flag_by_indices(
-        self,
-        df: pd.DataFrame,
-        flags: dict[str, list]
+        self, df: pd.DataFrame, flags: dict[str, list]
     ) -> pd.DataFrame:
         """Batch flag rows by collected indices for each reason code.
 
@@ -223,23 +232,23 @@ class ValueValidator:
             return df
 
         # Labs allowed to have negative values
-        negative_allowed = {'Blood - Anion Gap'}
+        negative_allowed = {"Blood - Anion Gap"}
 
         # Labs where percentage values can legitimately exceed 100%
         # (e.g., prothrombin activity is measured relative to normal, not as fraction of total)
         percentage_exceeds_100_allowed = {
-            'Blood - Prothrombin Time (PT) (%)',
-            'Blood - Factor II Activity (%)',
-            'Blood - Factor V Activity (%)',
-            'Blood - Factor VII Activity (%)',
-            'Blood - Factor VIII Activity (%)',
-            'Blood - Factor IX Activity (%)',
-            'Blood - Factor X Activity (%)',
-            'Blood - Factor XI Activity (%)',
-            'Blood - Factor XII Activity (%)',
-            'Blood - Protein C Activity (%)',
-            'Blood - Protein S Activity (%)',
-            'Blood - Antithrombin III Activity (%)',
+            "Blood - Prothrombin Time (PT) (%)",
+            "Blood - Factor II Activity (%)",
+            "Blood - Factor V Activity (%)",
+            "Blood - Factor VII Activity (%)",
+            "Blood - Factor VIII Activity (%)",
+            "Blood - Factor IX Activity (%)",
+            "Blood - Factor X Activity (%)",
+            "Blood - Factor XI Activity (%)",
+            "Blood - Factor XII Activity (%)",
+            "Blood - Protein C Activity (%)",
+            "Blood - Protein S Activity (%)",
+            "Blood - Antithrombin III Activity (%)",
         }
 
         flags: dict[str, list] = {
@@ -266,7 +275,7 @@ class ValueValidator:
 
             # Check percentage bounds
             unit = getattr(row, self._unit_col, None) if has_unit_col else None
-            if unit == '%':
+            if unit == "%":
                 # Some labs (coagulation factors) can legitimately exceed 100%
                 max_pct = 200 if lab_name in percentage_exceeds_100_allowed else 100
                 if value < 0 or value > max_pct:
@@ -275,11 +284,12 @@ class ValueValidator:
 
             # Check biological limits from lab_specs
             spec = self.lab_specs.specs.get(lab_name, {})
-            bio_min = spec.get('biological_min')
-            bio_max = spec.get('biological_max')
+            bio_min = spec.get("biological_min")
+            bio_max = spec.get("biological_max")
 
-            if (bio_min is not None and value < bio_min) or \
-               (bio_max is not None and value > bio_max):
+            if (bio_min is not None and value < bio_min) or (
+                bio_max is not None and value > bio_max
+            ):
                 flags["IMPOSSIBLE_VALUE"].append(idx)
 
         return self._batch_flag_by_indices(df, flags)
@@ -297,7 +307,7 @@ class ValueValidator:
         - Total Bilirubin = Direct + Indirect
         - MCHC = MCH/MCV * 100
         """
-        relationships = self.lab_specs.specs.get('_relationships', [])
+        relationships = self.lab_specs.specs.get("_relationships", [])
         if not relationships:
             return df
 
@@ -319,9 +329,9 @@ class ValueValidator:
 
             # Check each relationship
             for rel in relationships:
-                target = rel.get('target')
-                formula = rel.get('formula')
-                tolerance_pct = rel.get('tolerance_percent', 15)
+                target = rel.get("target")
+                formula = rel.get("formula")
+                tolerance_pct = rel.get("tolerance_percent", 15)
 
                 if not target or not formula:
                     continue
@@ -339,15 +349,18 @@ class ValueValidator:
 
                     # Check if within tolerance
                     if target_value != 0:
-                        pct_diff = abs(calculated - target_value) / abs(target_value) * 100
+                        pct_diff = (
+                            abs(calculated - target_value) / abs(target_value) * 100
+                        )
                     else:
-                        pct_diff = abs(calculated - target_value) * 100  # Use absolute diff for zero
+                        pct_diff = (
+                            abs(calculated - target_value) * 100
+                        )  # Use absolute diff for zero
 
                     if pct_diff > tolerance_pct:
                         # Flag the target row
-                        mask = (
-                            (df[self._date_col] == date_val) &
-                            (df[self._lab_name_col] == target)
+                        mask = (df[self._date_col] == date_val) & (
+                            df[self._lab_name_col] == target
                         )
                         df = self._flag_row(df, mask, "RELATIONSHIP_MISMATCH")
                         logger.debug(
@@ -357,7 +370,9 @@ class ValueValidator:
                         )
 
                 except Exception as e:
-                    logger.debug(f"Error evaluating relationship {rel.get('name')}: {e}")
+                    logger.debug(
+                        f"Error evaluating relationship {rel.get('name')}: {e}"
+                    )
 
         return df
 
@@ -423,13 +438,13 @@ class ValueValidator:
             Calculated value or None if missing components
         """
         # Extract lab names from formula (they're the parts that start with lab type prefix)
-        lab_prefixes = ('Blood - ', 'Urine - ', 'Feces - ')
+        lab_prefixes = ("Blood - ", "Urine - ", "Feces - ")
 
         # Replace lab names with their values
         result_formula = formula
         for prefix in lab_prefixes:
             # Find all lab names with this prefix
-            pattern = re.escape(prefix) + r'[^+\-*/()]+?(?=[+\-*/()]|$)'
+            pattern = re.escape(prefix) + r"[^+\-*/()]+?(?=[+\-*/()]|$)"
             matches = re.findall(pattern, formula)
 
             for match in matches:
@@ -442,7 +457,7 @@ class ValueValidator:
         # Safely evaluate the arithmetic expression
         try:
             # Only allow safe arithmetic operations
-            allowed = set('0123456789.+-*/() ')
+            allowed = set("0123456789.+-*/() ")
             if not all(c in allowed for c in result_formula):
                 return None
             return eval(result_formula)
@@ -464,7 +479,7 @@ class ValueValidator:
 
         # Ensure date is datetime
         if not pd.api.types.is_datetime64_any_dtype(df[self._date_col]):
-            df[self._date_col] = pd.to_datetime(df[self._date_col], errors='coerce')
+            df[self._date_col] = pd.to_datetime(df[self._date_col], errors="coerce")
 
         # Collect all indices to flag
         temporal_anomaly_indices: list = []
@@ -475,7 +490,7 @@ class ValueValidator:
                 continue
 
             spec = self.lab_specs.specs.get(lab_name, {})
-            max_daily_change = spec.get('max_daily_change')
+            max_daily_change = spec.get("max_daily_change")
 
             if max_daily_change is None:
                 continue
@@ -546,7 +561,9 @@ class ValueValidator:
             idx = row.Index
             value_raw = getattr(row, self._value_raw_col, None)
             value = getattr(row, self._value_col, None) if has_value_col else None
-            lab_name = getattr(row, self._lab_name_col, None) if has_lab_name_col else None
+            lab_name = (
+                getattr(row, self._lab_name_col, None) if has_lab_name_col else None
+            )
 
             if pd.isna(value_raw):
                 continue
@@ -554,9 +571,9 @@ class ValueValidator:
             value_raw_str = str(value_raw)
 
             # Check for excessive decimals (more than 4 decimal places is suspicious)
-            if '.' in value_raw_str:
-                decimal_part = value_raw_str.split('.')[-1]
-                decimal_digits = re.match(r'\d+', decimal_part)
+            if "." in value_raw_str:
+                decimal_part = value_raw_str.split(".")[-1]
+                decimal_digits = re.match(r"\d+", decimal_part)
                 if decimal_digits and len(decimal_digits.group()) > 4:
                     flags["FORMAT_ARTIFACT"].append(idx)
                     logger.debug(f"Excessive decimals in {lab_name}: {value_raw_str}")
@@ -564,24 +581,26 @@ class ValueValidator:
 
             # Check for concatenation errors (e.g., "52.6=1946" where reference got appended)
             if pd.notna(value) and isinstance(value_raw_str, str):
-                cleaned = value_raw_str.replace(',', '.').strip()
-                has_digits = bool(re.search(r'\d', cleaned))
-                starts_with_number = bool(re.match(r'^[\d\.\-\+<>≤≥]', cleaned))
+                cleaned = value_raw_str.replace(",", ".").strip()
+                has_digits = bool(re.search(r"\d", cleaned))
+                starts_with_number = bool(re.match(r"^[\d\.\-\+<>≤≥]", cleaned))
 
                 if has_digits and starts_with_number:
-                    concat_pattern = re.match(r'^[\d\.\-\+<>≤≥]+\s*=\s*\d+', cleaned)
+                    concat_pattern = re.match(r"^[\d\.\-\+<>≤≥]+\s*=\s*\d+", cleaned)
                     if concat_pattern:
                         flags["FORMAT_ARTIFACT"].append(idx)
-                        logger.debug(f"Concatenation error in {lab_name}: {value_raw_str}")
+                        logger.debug(
+                            f"Concatenation error in {lab_name}: {value_raw_str}"
+                        )
                         continue
 
             # Check for magnitude mismatch using defined biological limits only
             if pd.notna(value) and pd.notna(lab_name) and value > 0:
-                if not re.match(r'^[\d\.\-\+<>≤≥]', value_raw_str):
+                if not re.match(r"^[\d\.\-\+<>≤≥]", value_raw_str):
                     continue
 
                 spec = self.lab_specs.specs.get(lab_name, {})
-                bio_max = spec.get('biological_max')
+                bio_max = spec.get("biological_max")
 
                 if bio_max is not None and value > bio_max:
                     flags["IMPOSSIBLE_VALUE"].append(idx)
@@ -618,13 +637,17 @@ class ValueValidator:
             value = getattr(row, self._value_col, None) if has_value_col else None
             ref_min = getattr(row, self._ref_min_col, None)
             ref_max = getattr(row, self._ref_max_col, None)
-            lab_name = getattr(row, self._lab_name_col, None) if has_lab_name_col else None
+            lab_name = (
+                getattr(row, self._lab_name_col, None) if has_lab_name_col else None
+            )
 
             # Check ref_min > ref_max (inverted range)
             if pd.notna(ref_min) and pd.notna(ref_max):
                 if ref_min > ref_max:
                     flags["RANGE_INCONSISTENCY"].append(idx)
-                    logger.debug(f"Inverted range for {lab_name}: {ref_min} > {ref_max}")
+                    logger.debug(
+                        f"Inverted range for {lab_name}: {ref_min} > {ref_max}"
+                    )
                     continue
 
             # Check for extreme deviation from reference range

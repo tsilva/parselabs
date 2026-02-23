@@ -1,6 +1,6 @@
 """Main entry point for lab results extraction and processing."""
 
-from utils import load_dotenv_with_env
+from labs_parser.utils import load_dotenv_with_env
 
 load_dotenv_with_env()
 
@@ -21,22 +21,27 @@ from openai import OpenAI
 from tqdm import tqdm
 
 # Local imports
-from config import ExtractionConfig, LabSpecsConfig, ProfileConfig, UNKNOWN_VALUE
-from utils import preprocess_page_image, setup_logging, ensure_columns
-from extraction import (
+from labs_parser.config import (
+    ExtractionConfig,
+    LabSpecsConfig,
+    ProfileConfig,
+    UNKNOWN_VALUE,
+)
+from labs_parser.utils import preprocess_page_image, setup_logging, ensure_columns
+from labs_parser.extraction import (
     LabResult,
     HealthLabReport,
     extract_labs_from_page_image,
     extract_labs_from_text,
     self_consistency,
 )
-from standardization import standardize_lab_names, standardize_lab_units
-from normalization import (
+from labs_parser.standardization import standardize_lab_names, standardize_lab_units
+from labs_parser.normalization import (
     apply_normalizations,
     deduplicate_results,
     apply_dtype_conversions,
 )
-from validation import ValueValidator
+from labs_parser.validation import ValueValidator
 
 # Module-level logger (file handlers added after config is loaded)
 logger = logging.getLogger(__name__)
