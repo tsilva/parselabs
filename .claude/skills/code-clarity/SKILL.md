@@ -27,10 +27,26 @@ else:
     return False, "Unknown error"
 ```
 
-5. **Extract helpers** for logic >5 lines or complex conditionals. Name by intent: `_extract_via_vision()`, not `_convert_pdf()`.
-
-6. **Use guard clauses** for early returns:
+5. **All early exits (continue, break, return) must have comments** explaining the guard condition:
 ```python
+# Skip non-directory entries
+if not pdf_dir.is_dir():
+    continue
+
+# Ignore hidden directories
+if pdf_dir.name.startswith("."):
+    continue
+
+# Only process directories matching the input pattern
+if pdf_dir.name not in matching_stems:
+    continue
+```
+
+6. **Extract helpers** for logic >5 lines or complex conditionals. Name by intent: `_extract_via_vision()`, not `_convert_pdf()`.
+
+7. **Use guard clauses** for early returns:
+```python
+# Skip invalid data entries
 if not data:
     return None
 ```
@@ -47,6 +63,7 @@ if not data:
 | Silent try/except | Remove, propagate exceptions |
 | Missing comments | Add inline explanation |
 | Missing branch comments | Comment every if/elif/else path |
+| Early exits without comments | Add comment explaining guard condition |
 | Long functions >30 lines | Extract logical sections |
 
 ## Example

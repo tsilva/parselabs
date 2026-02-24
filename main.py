@@ -775,6 +775,23 @@ def _get_csv_path(pdf_path: Path, output_path: Path) -> Path:
     return output_path / pdf_path.stem / f"{pdf_path.stem}.csv"
 
 
+def _find_text_extraction_json(doc_out_dir: Path, page_results: list[dict]) -> list[Path]:
+    """Find JSON file for text extraction results."""
+    # Check if any results are from text extraction (marked with .text suffix)
+    is_text_extraction = any(str(r.get("source_file", "")).endswith(".text") for r in page_results)
+
+    # Return empty list if not text extraction
+    if not is_text_extraction:
+        return []
+
+    # Check if the document-level JSON exists for text extraction
+    candidate = doc_out_dir / f"{doc_out_dir.name}.json"
+    if candidate.exists():
+        return [candidate]
+
+    return []
+
+
 def _update_json_with_standardized_values(all_results: list[dict], doc_out_dir: Path) -> None:
     """Update JSON files with standardized lab names and units."""
     # Group results by page number to minimize file I/O
@@ -791,13 +808,7 @@ def _update_json_with_standardized_values(all_results: list[dict], doc_out_dir: 
 
         # Handle text extraction results which use {pdf_stem}.json naming
         if not json_files:
-            is_text_extraction = any(
-                str(r.get("source_file", "")).endswith(".text") for r in page_results
-            )
-            if is_text_extraction:
-                candidate = doc_out_dir / f"{doc_out_dir.name}.json"
-                if candidate.exists():
-                    json_files = [candidate]
+            json_files = _find_text_extraction_json(doc_out_dir, page_results)
 
         # Skip if no JSON file found
         if not json_files:
@@ -805,28 +816,50 @@ def _update_json_with_standardized_values(all_results: list[dict], doc_out_dir: 
 
         json_path = json_files[0]
 
-        try:
-            # Load existing JSON data
-            data = json.loads(json_path.read_text(encoding="utf-8"))
+        # Load and update JSON data - let exceptions propagate to orchestrator
+        data = json.loads(json_path.read_text(encoding="utf-8"))
 
-            # Update each result by result_index with standardized values
-            for result in page_results:
-                idx = result.get("result_index")
-                if idx is not None and 0 <= idx < len(data.get("lab_results", [])):
-                    data["lab_results"][idx]["lab_name_standardized"] = result.get(
-                        "lab_name_standardized"
-                    )
-                    data["lab_results"][idx]["lab_unit_standardized"] = result.get(
-                        "lab_unit_standardized"
-                    )
+        # Update each result by result_index with standardized values
+        for result in page_results:
+            idx = result.get("result_index")
+            if idx is not None and 0 <= idx < len(data.get("lab_results", [])):
+                data["lab_results"][idx]["lab_name_standardized"] = result.get(
+                    "lab_name_standardized"
+                )
+                data["lab_results"][idx]["lab_unit_standardized"] = result.get(
+                    "lab_unit_standardized"
+                )
 
-            # Write updated data back to JSON file
-            json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-        except Exception as e:
-            logger.warning(f"Failed to update JSON {json_path}: {e}")
+        # Write updated data back to JSON file
+        json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 REQUIRED_CSV_COLS = ["result_index", "page_number", "source_file"]
+
+
+def _filter_pdfs_to_process(pdf_files: list[Path], output_path: Path) -> tuple[list[Path], int]:
+    """Filter out PDFs that already have valid CSV outputs."""
+    # Initialize collections for tracking
+    pdfs_to_process = []
+    skipped_count = 0
+
+    # Check each PDF for existing valid CSV
+    for pdf_path in pdf_files:
+        csv_path = _get_csv_path(pdf_path, output_path)
+
+        if _is_csv_valid(csv_path):
+            # Skip PDFs with valid existing outputs (cache hit)
+            skipped_count += 1
+            continue
+
+        # Log warning if CSV exists but is invalid (missing columns, etc.)
+        if csv_path.exists():
+            logger.warning(f"Re-processing {pdf_path.name}: CSV missing required columns")
+
+        # Add to processing queue
+        pdfs_to_process.append(pdf_path)
+
+    return pdfs_to_process, skipped_count
 
 
 def _is_csv_valid(csv_path: Path, required_cols: list[str] = REQUIRED_CSV_COLS) -> bool:
@@ -844,6 +877,57 @@ def _is_csv_valid(csv_path: Path, required_cols: list[str] = REQUIRED_CSV_COLS) 
     except Exception:
         # Any error (corrupt file, permissions, etc.) means invalid
         return False
+
+
+def _filter_unknown_labs(merged_df: pd.DataFrame) -> pd.DataFrame:
+    """Filter out rows that couldn't be mapped to known lab tests."""
+    # Identify rows with unknown lab names
+    unknown_mask = merged_df["lab_name_standardized"] == UNKNOWN_VALUE
+
+    # Log and remove unknown lab rows
+    if unknown_mask.any():
+        unknown_count = unknown_mask.sum()
+        logger.error(f"Filtering {unknown_count} rows with unknown lab names")
+        merged_df = merged_df[~unknown_mask].reset_index(drop=True)
+
+    return merged_df
+
+
+def _rename_columns_for_export(merged_df: pd.DataFrame) -> pd.DataFrame:
+    """Rename columns from internal names to simplified export schema."""
+    # Define mapping from internal to export column names
+    column_renames = {
+        "lab_name_standardized": "lab_name",
+        "value_primary": "value",
+        "lab_unit_primary": "unit",
+        "lab_unit_raw": "unit_raw",
+        "reference_min_primary": "reference_min",
+        "reference_max_primary": "reference_max",
+    }
+
+    return merged_df.rename(columns=column_renames)
+
+
+def _run_value_validation(
+    merged_df: pd.DataFrame, lab_specs: LabSpecsConfig
+) -> tuple[pd.DataFrame, dict]:
+    """Run value-based validation and return validated DataFrame with stats."""
+    # Initialize validator and run validation checks
+    validator = ValueValidator(lab_specs)
+    merged_df = validator.validate(merged_df)
+
+    return merged_df, validator.validation_stats
+
+
+def _log_validation_stats(validation_stats: dict) -> None:
+    """Log validation statistics if any rows were flagged."""
+    # Check if any rows were flagged for review
+    flagged_count = validation_stats.get("rows_flagged", 0)
+    if flagged_count > 0:
+        logger.info(f"Validation flagged {flagged_count} rows for review")
+        # Log breakdown of flag reasons
+        for reason, count in validation_stats.get("flags_by_reason", {}).items():
+            logger.info(f"  - {reason}: {count}")
 
 
 def _process_pdfs_in_parallel(
@@ -1290,16 +1374,7 @@ def run_for_profile(args, profile_name: str) -> bool:
     _prompt_reprocess_empty(config.output_path, matching_stems)
 
     # Filter out PDFs that already have valid CSV outputs (cache check)
-    pdfs_to_process = []
-    skipped_count = 0
-    for pdf_path in pdf_files:
-        csv_path = _get_csv_path(pdf_path, config.output_path)
-        if _is_csv_valid(csv_path):
-            skipped_count += 1
-        else:
-            if csv_path.exists():
-                logger.warning(f"Re-processing {pdf_path.name}: CSV missing required columns")
-            pdfs_to_process.append(pdf_path)
+    pdfs_to_process, skipped_count = _filter_pdfs_to_process(pdf_files, config.output_path)
 
     logger.info(f"Skipping {skipped_count} already-processed PDF(s)")
     logger.info(f"Processing {len(pdfs_to_process)} PDF(s)")
@@ -1348,11 +1423,7 @@ def run_for_profile(args, profile_name: str) -> bool:
     merged_df = apply_normalizations(merged_df, lab_specs, client, config.self_consistency_model_id)
 
     # Filter out rows that couldn't be mapped to known lab tests
-    unknown_mask = merged_df["lab_name_standardized"] == UNKNOWN_VALUE
-    if unknown_mask.any():
-        unknown_count = unknown_mask.sum()
-        logger.error(f"Filtering {unknown_count} rows with unknown lab names")
-        merged_df = merged_df[~unknown_mask].reset_index(drop=True)
+    merged_df = _filter_unknown_labs(merged_df)
 
     # Remove duplicate results from same date/lab combinations
     if lab_specs.exists:
@@ -1361,25 +1432,12 @@ def run_for_profile(args, profile_name: str) -> bool:
         logger.info(f"After deduplication: {len(merged_df)} rows")
 
     # Rename columns from internal names to simplified export schema
-    column_renames = {
-        "lab_name_standardized": "lab_name",
-        "value_primary": "value",
-        "lab_unit_primary": "unit",
-        "lab_unit_raw": "unit_raw",
-        "reference_min_primary": "reference_min",
-        "reference_max_primary": "reference_max",
-    }
-    merged_df = merged_df.rename(columns=column_renames)
+    merged_df = _rename_columns_for_export(merged_df)
 
     # Run value-based validation to flag suspicious values
     logger.info("Running value-based validation...")
-    validator = ValueValidator(lab_specs)
-    merged_df = validator.validate(merged_df)
-    validation_stats = validator.validation_stats
-    if validation_stats.get("rows_flagged", 0) > 0:
-        logger.info(f"Validation flagged {validation_stats['rows_flagged']} rows for review")
-        for reason, count in validation_stats.get("flags_by_reason", {}).items():
-            logger.info(f"  - {reason}: {count}")
+    merged_df, validation_stats = _run_value_validation(merged_df, lab_specs)
+    _log_validation_stats(validation_stats)
 
     # Initialize confidence column (all values valid at this stage)
     merged_df["confidence"] = 1.0
@@ -1412,6 +1470,16 @@ def run_for_profile(args, profile_name: str) -> bool:
     excel_path = config.output_path / "all.xlsx"
     export_excel(merged_df, excel_path, hidden_cols, widths)
 
+    # Report extraction results and failures
+    _report_extraction_failures(all_failed_pages, csv_path, csv_paths)
+
+    return True
+
+
+def _report_extraction_failures(
+    all_failed_pages: list[dict], csv_path: Path, csv_paths: list[Path]
+) -> None:
+    """Log and report any extraction failures to user."""
     # Log final pipeline summary
     logger.info("=" * 50)
     logger.info("Pipeline completed")
@@ -1428,8 +1496,6 @@ def run_for_profile(args, profile_name: str) -> bool:
             print(f"    - {failure['page']}: {failure['reason']}")
     else:
         logger.info("  Extraction failures: 0")
-
-    return True
 
 
 def main():
