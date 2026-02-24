@@ -4,51 +4,51 @@ from labs_parser.utils import load_dotenv_with_env
 
 load_dotenv_with_env()
 
-import argparse
-import json
-import logging
-import os
-import re
-import shutil
-import subprocess
-import sys
-from multiprocessing import Pool
-from pathlib import Path
+import argparse  # noqa: E402
+import json  # noqa: E402
+import logging  # noqa: E402
+import os  # noqa: E402
+import re  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+from multiprocessing import Pool  # noqa: E402
+from pathlib import Path  # noqa: E402
 
-import pandas as pd
-import pdf2image
-from openai import OpenAI
-from tqdm import tqdm
+import pandas as pd  # noqa: E402
+import pdf2image  # noqa: E402
+from openai import OpenAI  # noqa: E402
+from tqdm import tqdm  # noqa: E402
 
 # Local imports
-from labs_parser.config import (
+from labs_parser.config import (  # noqa: E402
     UNKNOWN_VALUE,
     ExtractionConfig,
     LabSpecsConfig,
     ProfileConfig,
 )
-from labs_parser.extraction import (
+from labs_parser.extraction import (  # noqa: E402
     LabResult,
     _build_standardized_names_section,
     extract_labs_from_page_image,
     extract_labs_from_text,
     self_consistency,
 )
-from labs_parser.normalization import (
+from labs_parser.normalization import (  # noqa: E402
     apply_dtype_conversions,
     apply_normalizations,
     deduplicate_results,
 )
-from labs_parser.standardization import (
+from labs_parser.standardization import (  # noqa: E402
     standardize_lab_names,
     standardize_lab_units,
 )
-from labs_parser.utils import (
+from labs_parser.utils import (  # noqa: E402
     ensure_columns,
     preprocess_page_image,
     setup_logging,
 )
-from labs_parser.validation import ValueValidator
+from labs_parser.validation import ValueValidator  # noqa: E402
 
 # Module-level logger (file handlers added after config is loaded)
 logger = logging.getLogger(__name__)
@@ -129,23 +129,13 @@ def get_column_lists(schema: dict):
     export_cols = [k for k in ordered if k in schema]
 
     # Identify columns that should be hidden in Excel output
-    hidden_cols = [
-        col for col, props in schema.items() if props.get("excel_hidden")
-    ]
+    hidden_cols = [col for col, props in schema.items() if props.get("excel_hidden")]
 
     # Build column width mapping for Excel formatting
-    widths = {
-        col: props["excel_width"]
-        for col, props in schema.items()
-        if "excel_width" in props
-    }
+    widths = {col: props["excel_width"] for col, props in schema.items() if "excel_width" in props}
 
     # Build data type mapping for column conversion
-    dtypes = {
-        col: props["dtype"]
-        for col, props in schema.items()
-        if "dtype" in props
-    }
+    dtypes = {col: props["dtype"] for col, props in schema.items() if "dtype" in props}
 
     return export_cols, hidden_cols, widths, dtypes
 
@@ -173,22 +163,16 @@ def extract_text_from_pdf(pdf_path: Path) -> tuple[str, bool]:
 
     # Check if command succeeded
     if result.returncode != 0:
-        logger.debug(
-            f"pdftotext returned non-zero exit code: {result.returncode}"
-        )
+        logger.debug(f"pdftotext returned non-zero exit code: {result.returncode}")
         return "", False
 
     return result.stdout, True
 
 
-_MIN_TEXT_CHARS = (
-    200  # Minimum non-whitespace characters to attempt text extraction
-)
+_MIN_TEXT_CHARS = 200  # Minimum non-whitespace characters to attempt text extraction
 
 
-def _text_has_enough_content(
-    text: str, min_chars: int = _MIN_TEXT_CHARS
-) -> bool:
+def _text_has_enough_content(text: str, min_chars: int = _MIN_TEXT_CHARS) -> bool:
     """Check if extracted text has enough content to attempt LLM extraction."""
     clean_text = text.replace(" ", "").replace("\n", "").replace("\t", "")
     return len(clean_text) >= min_chars
@@ -199,22 +183,12 @@ def _text_has_enough_content(
 # ========================================
 
 
-def _setup_pdf_processing(
-    pdf_path: Path, output_dir: Path
-) -> tuple[Path, Path, list]:
+def _setup_pdf_processing(pdf_path: Path, output_dir: Path) -> tuple[Path, Path, list]:
     """Initialize processing: create directories, return paths."""
-    pdf_stem = (
-        pdf_path.stem
-    )  # Extract filename without extension for directory naming
-    doc_out_dir = (
-        output_dir / pdf_stem
-    )  # Create document-specific output directory
-    doc_out_dir.mkdir(
-        exist_ok=True, parents=True
-    )  # Ensure directory exists, create parents if needed
-    csv_path = (
-        doc_out_dir / f"{pdf_stem}.csv"
-    )  # Define CSV output path within document directory
+    pdf_stem = pdf_path.stem  # Extract filename without extension for directory naming
+    doc_out_dir = output_dir / pdf_stem  # Create document-specific output directory
+    doc_out_dir.mkdir(exist_ok=True, parents=True)  # Ensure directory exists, create parents if needed
+    csv_path = doc_out_dir / f"{pdf_stem}.csv"  # Define CSV output path within document directory
     return (
         doc_out_dir,
         csv_path,
@@ -224,23 +198,14 @@ def _setup_pdf_processing(
 
 def _copy_pdf_to_output(pdf_path: Path, doc_out_dir: Path) -> Path:
     """Copy PDF to output directory if not already present."""
-    copied_pdf = (
-        doc_out_dir / pdf_path.name
-    )  # Define destination path for PDF copy
+    copied_pdf = doc_out_dir / pdf_path.name  # Define destination path for PDF copy
     # Copy only if missing or file size differs (ensures we have latest version)
-    if (
-        not copied_pdf.exists()
-        or copied_pdf.stat().st_size != pdf_path.stat().st_size
-    ):
-        shutil.copy2(
-            pdf_path, copied_pdf
-        )  # copy2 preserves metadata like timestamps
+    if not copied_pdf.exists() or copied_pdf.stat().st_size != pdf_path.stat().st_size:
+        shutil.copy2(pdf_path, copied_pdf)  # copy2 preserves metadata like timestamps
     return copied_pdf  # Return path to the copied PDF (whether newly copied or existing)
 
 
-def _try_load_cached_text_extraction(
-    doc_out_dir: Path, pdf_stem: str
-) -> dict | None:
+def _try_load_cached_text_extraction(doc_out_dir: Path, pdf_stem: str) -> dict | None:
     """Try to load cached text extraction results."""
     # Build path to cached JSON results
     text_json_path = doc_out_dir / f"{pdf_stem}.json"
@@ -276,12 +241,8 @@ def _cache_text_extraction(
 ) -> None:
     """Cache text extraction results and raw PDF text."""
     # Build paths for both structured results and raw text
-    text_json_path = (
-        doc_out_dir / f"{pdf_stem}.json"
-    )  # Path for structured extraction results
-    text_txt_path = (
-        doc_out_dir / f"{pdf_stem}.txt"
-    )  # Path for raw text content
+    text_json_path = doc_out_dir / f"{pdf_stem}.json"  # Path for structured extraction results
+    text_txt_path = doc_out_dir / f"{pdf_stem}.txt"  # Path for raw text content
 
     # Serialize and save structured extraction data
     text_json_path.write_text(
@@ -323,20 +284,14 @@ def _try_text_extraction(
 
     # Guard: Fall back to vision if text content is too sparse for reliable extraction
     if not _text_has_enough_content(pdf_text):
-        logger.info(
-            f"[{pdf_stem}] Strategy: VISION (insufficient text content)"
-        )
+        logger.info(f"[{pdf_stem}] Strategy: VISION (insufficient text content)")
         return False, None
 
-    logger.info(
-        f"[{pdf_stem}] Strategy: TEXT (sufficient content, {len(pdf_text)} chars)"
-    )
+    logger.info(f"[{pdf_stem}] Strategy: TEXT (sufficient content, {len(pdf_text)} chars)")
 
     # Attempt LLM-based extraction from extracted text
     try:
-        text_extraction_data = _extract_labs_from_pdf_text(
-            pdf_text, config, standardization_section
-        )
+        text_extraction_data = _extract_labs_from_pdf_text(pdf_text, config, standardization_section)
     except Exception as e:
         # Text extraction failed - log and fall back to vision
         logger.warning(f"[{pdf_stem}] Text extraction failed: {e}")
@@ -344,24 +299,16 @@ def _try_text_extraction(
 
     # Guard: Fall back to vision if extraction succeeded but returned no lab results
     if not text_extraction_data or not text_extraction_data.get("lab_results"):
-        logger.warning(
-            f"[{pdf_stem}] Strategy: TEXT -> VISION (no results from text)"
-        )
+        logger.warning(f"[{pdf_stem}] Strategy: TEXT -> VISION (no results from text)")
         return False, None
 
     # Cache successful text extraction for future runs
-    _cache_text_extraction(
-        text_extraction_data, pdf_text, doc_out_dir, pdf_stem
-    )
-    logger.info(
-        f"[{pdf_stem}] Text extraction complete: {len(text_extraction_data['lab_results'])} results"
-    )
+    _cache_text_extraction(text_extraction_data, pdf_text, doc_out_dir, pdf_stem)
+    logger.info(f"[{pdf_stem}] Text extraction complete: {len(text_extraction_data['lab_results'])} results")
     return True, text_extraction_data
 
 
-def _process_text_results(
-    text_extraction_data: dict, pdf_stem: str
-) -> tuple[list, str | None]:
+def _process_text_results(text_extraction_data: dict, pdf_stem: str) -> tuple[list, str | None]:
     """Process text extraction results into standardized format."""
     # Initialize collection for all extracted results
     all_results = []
@@ -370,16 +317,10 @@ def _process_text_results(
     doc_date = _extract_document_date(text_extraction_data, pdf_stem)
 
     # Iterate through each lab result and add metadata
-    for result_idx, result in enumerate(
-        text_extraction_data.get("lab_results", [])
-    ):
+    for result_idx, result in enumerate(text_extraction_data.get("lab_results", [])):
         result["result_index"] = result_idx  # Track position within document
-        result["page_number"] = (
-            1  # Text extraction treats entire PDF as single page
-        )
-        result["source_file"] = (
-            f"{pdf_stem}.text"  # Mark as text-based extraction
-        )
+        result["page_number"] = 1  # Text extraction treats entire PDF as single page
+        result["source_file"] = f"{pdf_stem}.text"  # Mark as text-based extraction
         all_results.append(result)
 
     return all_results, doc_date
@@ -391,9 +332,7 @@ def _convert_pdf_to_images(copied_pdf: Path, pdf_stem: str) -> list:
     return pdf2image.convert_from_path(str(copied_pdf))
 
 
-def _preprocess_and_save_image(
-    page_image, page_name: str, jpg_path: Path
-) -> None:
+def _preprocess_and_save_image(page_image, page_name: str, jpg_path: Path) -> None:
     """Preprocess page image and save if not cached."""
     # Skip processing if image already exists (cache hit)
     if jpg_path.exists():
@@ -439,9 +378,7 @@ def _extract_or_load_page_data(
     logger.info(f"[{page_name}] Extraction completed")
 
     # Record any extraction failures for reporting
-    _check_and_record_failure(
-        page_data, pdf_stem, page_idx, failed_pages, page_name
-    )
+    _check_and_record_failure(page_data, pdf_stem, page_idx, failed_pages, page_name)
 
     # Cache extraction results for future runs
     json_path.write_text(
@@ -467,9 +404,7 @@ def _check_and_record_failure(
     failure_reason = page_data.get("_failure_reason", "Unknown error")
 
     # Record failure for summary reporting
-    failed_pages.append(
-        {"page": f"{pdf_stem} page {page_idx + 1}", "reason": failure_reason}
-    )
+    failed_pages.append({"page": f"{pdf_stem} page {page_idx + 1}", "reason": failure_reason})
 
     # Log failure if page name available
     if page_name:
@@ -510,9 +445,7 @@ def _process_single_page(
     jpg_path = doc_out_dir / f"{page_name}.jpg"
     json_path = doc_out_dir / f"{page_name}.json"
 
-    logger.info(
-        f"[{page_name}] Processing page {page_idx + 1}/{total_pages}..."
-    )
+    logger.info(f"[{page_name}] Processing page {page_idx + 1}/{total_pages}...")
 
     # Preprocess and cache page image
     _preprocess_and_save_image(page_image, page_name, jpg_path)
@@ -530,9 +463,7 @@ def _process_single_page(
     )
 
     # Add page metadata to results
-    page_results = _add_page_metadata(
-        page_data.get("lab_results", []), page_idx, page_name
-    )
+    page_results = _add_page_metadata(page_data.get("lab_results", []), page_idx, page_name)
 
     return page_results, page_data
 
@@ -553,9 +484,7 @@ def _extract_via_vision(
     if pil_pages is None:
         return [], None
 
-    logger.info(
-        f"[{pdf_stem}] Processing {len(pil_pages)} page(s) with vision..."
-    )
+    logger.info(f"[{pdf_stem}] Processing {len(pil_pages)} page(s) with vision...")
 
     # Initialize collection for all extracted results
     all_results = []
@@ -593,12 +522,7 @@ def _apply_name_standardization(
 ) -> int:
     """Apply name standardization fallback. Returns count of updated results."""
     # Collect raw names that need standardization (not already standardized or marked as unknown)
-    names_to_standardize = [
-        result.get("lab_name_raw", "")
-        for result in all_results
-        if not result.get("lab_name_standardized")
-        or result.get("lab_name_standardized") == UNKNOWN_VALUE
-    ]
+    names_to_standardize = [result.get("lab_name_raw", "") for result in all_results if not result.get("lab_name_standardized") or result.get("lab_name_standardized") == UNKNOWN_VALUE]
 
     # Guard: Skip if no names need standardization
     if not names_to_standardize:
@@ -629,9 +553,7 @@ def _apply_name_standardization(
 
     # Log summary if any mappings were applied
     if fallback_count > 0:
-        logger.info(
-            f"[{pdf_stem}] Name standardization applied to {fallback_count} results"
-        )
+        logger.info(f"[{pdf_stem}] Name standardization applied to {fallback_count} results")
     return fallback_count
 
 
@@ -649,9 +571,7 @@ def _apply_unit_standardization(
             result.get("lab_name_standardized", ""),
         )
         for result in all_results
-        if not result.get("lab_unit_standardized")
-        and result.get("lab_name_standardized")
-        and result.get("lab_name_standardized") != UNKNOWN_VALUE
+        if not result.get("lab_unit_standardized") and result.get("lab_name_standardized") and result.get("lab_name_standardized") != UNKNOWN_VALUE
     ]
 
     # Guard: Skip if no units need standardization
@@ -688,9 +608,7 @@ def _apply_unit_standardization(
 
     # Log summary if any mappings were applied
     if unit_count > 0:
-        logger.info(
-            f"[{pdf_stem}] Unit standardization applied to {unit_count} results"
-        )
+        logger.info(f"[{pdf_stem}] Unit standardization applied to {unit_count} results")
     return unit_count
 
 
@@ -761,16 +679,12 @@ def _extract_data_from_pdf(
     Returns tuple of (all_results, doc_date) or raises exception on failure.
     """
     # Attempt text-first extraction (cheaper), fall back to vision if needed
-    used_text, text_data = _try_text_extraction(
-        copied_pdf, config, standardization_section, doc_out_dir, pdf_stem
-    )
+    used_text, text_data = _try_text_extraction(copied_pdf, config, standardization_section, doc_out_dir, pdf_stem)
 
     if used_text:
         # Guard: Ensure text_data is valid before processing
         if not text_data:
-            raise ValueError(
-                "Text extraction indicated success but returned no data"
-            )
+            raise ValueError("Text extraction indicated success but returned no data")
         # Process text extraction results
         return _process_text_results(text_data, pdf_stem)
 
@@ -801,9 +715,7 @@ def process_single_pdf(
     """
     # Initialize output directory structure and paths
     pdf_stem = pdf_path.stem
-    doc_out_dir, csv_path, failed_pages = _setup_pdf_processing(
-        pdf_path, output_dir
-    )
+    doc_out_dir, csv_path, failed_pages = _setup_pdf_processing(pdf_path, output_dir)
 
     try:
         logger.info(f"[{pdf_stem}] Processing...")
@@ -830,9 +742,7 @@ def process_single_pdf(
             return _handle_empty_results(csv_path, pdf_stem)[0], failed_pages
 
         # Apply standardization fallbacks for any missing standardized names/units
-        _apply_standardization_fallbacks(
-            all_results, lab_specs, config, pdf_stem
-        )
+        _apply_standardization_fallbacks(all_results, lab_specs, config, pdf_stem)
 
         # Persist standardized values back to per-page JSON files for future runs
         _update_json_with_standardized_values(all_results, doc_out_dir)
@@ -939,14 +849,10 @@ def _get_csv_path(pdf_path: Path, output_path: Path) -> Path:
     return output_path / pdf_path.stem / f"{pdf_path.stem}.csv"
 
 
-def _find_text_extraction_json(
-    doc_out_dir: Path, page_results: list[dict]
-) -> list[Path]:
+def _find_text_extraction_json(doc_out_dir: Path, page_results: list[dict]) -> list[Path]:
     """Find JSON file for text extraction results."""
     # Check if any results are from text extraction (marked with .text suffix)
-    is_text_extraction = any(
-        str(r.get("source_file", "")).endswith(".text") for r in page_results
-    )
+    is_text_extraction = any(str(r.get("source_file", "")).endswith(".text") for r in page_results)
 
     # Return empty list if not text extraction
     if not is_text_extraction:
@@ -960,9 +866,7 @@ def _find_text_extraction_json(
     return []
 
 
-def _update_json_with_standardized_values(
-    all_results: list[dict], doc_out_dir: Path
-) -> None:
+def _update_json_with_standardized_values(all_results: list[dict], doc_out_dir: Path) -> None:
     """Update JSON files with standardized lab names and units."""
     # Group results by page number to minimize file I/O
     results_by_page: dict[int, list[dict]] = {}
@@ -993,25 +897,17 @@ def _update_json_with_standardized_values(
         for result in page_results:
             idx = result.get("result_index")
             if idx is not None and 0 <= idx < len(data.get("lab_results", [])):
-                data["lab_results"][idx]["lab_name_standardized"] = result.get(
-                    "lab_name_standardized"
-                )
-                data["lab_results"][idx]["lab_unit_standardized"] = result.get(
-                    "lab_unit_standardized"
-                )
+                data["lab_results"][idx]["lab_name_standardized"] = result.get("lab_name_standardized")
+                data["lab_results"][idx]["lab_unit_standardized"] = result.get("lab_unit_standardized")
 
         # Write updated data back to JSON file
-        json_path.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 REQUIRED_CSV_COLS = ["result_index", "page_number", "source_file"]
 
 
-def _filter_pdfs_to_process(
-    pdf_files: list[Path], output_path: Path
-) -> tuple[list[Path], int]:
+def _filter_pdfs_to_process(pdf_files: list[Path], output_path: Path) -> tuple[list[Path], int]:
     """Filter out PDFs that already have valid CSV outputs."""
     # Initialize collections for tracking
     pdfs_to_process = []
@@ -1028,9 +924,7 @@ def _filter_pdfs_to_process(
 
         # Log warning if CSV exists but is invalid (missing columns, etc.)
         if csv_path.exists():
-            logger.warning(
-                f"Re-processing {pdf_path.name}: CSV missing required columns"
-            )
+            logger.warning(f"Re-processing {pdf_path.name}: CSV missing required columns")
 
         # Add to processing queue
         pdfs_to_process.append(pdf_path)
@@ -1038,9 +932,7 @@ def _filter_pdfs_to_process(
     return pdfs_to_process, skipped_count
 
 
-def _is_csv_valid(
-    csv_path: Path, required_cols: list[str] = REQUIRED_CSV_COLS
-) -> bool:
+def _is_csv_valid(csv_path: Path, required_cols: list[str] = REQUIRED_CSV_COLS) -> bool:
     """Check if CSV exists and has all required columns."""
     # Guard: File must exist
     if not csv_path.exists():
@@ -1086,9 +978,7 @@ def _rename_columns_for_export(merged_df: pd.DataFrame) -> pd.DataFrame:
     return merged_df.rename(columns=column_renames)
 
 
-def _run_value_validation(
-    merged_df: pd.DataFrame, lab_specs: LabSpecsConfig
-) -> tuple[pd.DataFrame, dict]:
+def _run_value_validation(merged_df: pd.DataFrame, lab_specs: LabSpecsConfig) -> tuple[pd.DataFrame, dict]:
     """Run value-based validation and return validated DataFrame with stats."""
     # Initialize validator and run validation checks
     validator = ValueValidator(lab_specs)
@@ -1104,9 +994,7 @@ def _log_validation_stats(validation_stats: dict) -> None:
     if flagged_count > 0:
         logger.info(f"Validation flagged {flagged_count} rows for review")
         # Log breakdown of flag reasons
-        for reason, count in validation_stats.get(
-            "flags_by_reason", {}
-        ).items():
+        for reason, count in validation_stats.get("flags_by_reason", {}).items():
             logger.info(f"  - {reason}: {count}")
 
 
@@ -1129,21 +1017,14 @@ def _process_pdfs_in_parallel(
     logger.info(f"Using {n_workers} worker(s) for PDF processing")
 
     # Build task tuples for each PDF to process
-    tasks = [
-        (pdf, config.output_path, config, lab_specs, standardization_section)
-        for pdf in pdfs_to_process
-    ]
+    tasks = [(pdf, config.output_path, config, lab_specs, standardization_section) for pdf in pdfs_to_process]
 
     # Execute parallel processing with progress bar
-    with Pool(
-        n_workers, initializer=_init_worker_logging, initargs=(log_dir,)
-    ) as pool:
+    with Pool(n_workers, initializer=_init_worker_logging, initargs=(log_dir,)) as pool:
         results = []
 
         # Track progress with tqdm as tasks complete
-        with tqdm(
-            total=len(tasks), desc="Processing PDFs", unit="pdf"
-        ) as pbar:
+        with tqdm(total=len(tasks), desc="Processing PDFs", unit="pdf") as pbar:
             for result in pool.imap(_process_pdf_wrapper, tasks):
                 results.append(result)
                 pbar.update(1)
@@ -1155,11 +1036,7 @@ def _process_pdfs_in_parallel(
         all_failed_pages.extend(failed_pages)
 
     # Build list of valid CSV paths from all PDFs (processed + skipped)
-    csv_paths = [
-        p
-        for pdf in pdf_files
-        if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))
-    ]
+    csv_paths = [p for pdf in pdf_files if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))]
 
     return csv_paths, all_failed_pages, pdfs_failed
 
@@ -1177,9 +1054,7 @@ def _process_pdf_wrapper(args):
     return process_single_pdf(*args)
 
 
-def _find_empty_extractions(
-    output_path: Path, matching_stems: set[str]
-) -> list[tuple[Path, list[Path]]]:
+def _find_empty_extractions(output_path: Path, matching_stems: set[str]) -> list[tuple[Path, list[Path]]]:
     """Find all PDFs that have empty extraction JSONs.
 
     Only considers output directories that match the input file pattern.
@@ -1206,11 +1081,7 @@ def _find_empty_extractions(
                 # Parse JSON extraction result
                 data = json.loads(json_path.read_text(encoding="utf-8"))
                 # Identify empty extractions: valid dict with no lab_results but not explicitly marked as no-lab-data
-                if (
-                    isinstance(data, dict)
-                    and not data.get("lab_results")
-                    and data.get("page_has_lab_data") is not False
-                ):
+                if isinstance(data, dict) and not data.get("lab_results") and data.get("page_has_lab_data") is not False:
                     empty_jsons.append(json_path)
             except (json.JSONDecodeError, UnicodeDecodeError):
                 # Skip corrupted or unreadable JSON files
@@ -1224,9 +1095,7 @@ def _find_empty_extractions(
     return sorted(empty_by_pdf, key=lambda x: x[0].name)
 
 
-def _prompt_reprocess_empty(
-    output_path: Path, matching_stems: set[str]
-) -> list[Path]:
+def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list[Path]:
     """Check for empty extractions and prompt user to reprocess each one.
 
     Interactive prompt allows user to choose which PDFs with empty extractions to reprocess.
@@ -1242,9 +1111,7 @@ def _prompt_reprocess_empty(
         return []
 
     # Display summary of PDFs with empty extractions
-    print(
-        f"\nFound {len(empty_extractions)} PDF(s) with empty extraction pages:"
-    )
+    print(f"\nFound {len(empty_extractions)} PDF(s) with empty extraction pages:")
     for pdf_dir, empty_jsons in empty_extractions:
         print(f"  - {pdf_dir.name}: {len(empty_jsons)} empty page(s)")
 
@@ -1259,11 +1126,7 @@ def _prompt_reprocess_empty(
             print(f"  - {json_path.name}")
 
         # Prompt user for decision (y=yes, N=no, a=all, q=quit)
-        response = (
-            input(f"Reprocess {pdf_dir.name}? [y/N/a(ll)/q(uit)]: ")
-            .strip()
-            .lower()
-        )
+        response = input(f"Reprocess {pdf_dir.name}? [y/N/a(ll)/q(uit)]: ").strip().lower()
 
         # Handle quit response - stop processing remaining PDFs
         if response == "q":
@@ -1272,9 +1135,7 @@ def _prompt_reprocess_empty(
         # Handle accept-all response - add current and all remaining PDFs
         elif response == "a":
             pdfs_to_reprocess.append(pdf_dir)
-            for remaining_pdf_dir, _ in empty_extractions[
-                empty_extractions.index((pdf_dir, empty_jsons)) + 1 :
-            ]:
+            for remaining_pdf_dir, _ in empty_extractions[empty_extractions.index((pdf_dir, empty_jsons)) + 1 :]:
                 pdfs_to_reprocess.append(remaining_pdf_dir)
             break
         # Handle yes response - add only this PDF to reprocess list
@@ -1283,20 +1144,14 @@ def _prompt_reprocess_empty(
 
     # Delete extraction files for selected PDFs to trigger reprocessing
     if pdfs_to_reprocess:
-        print(
-            f"\nDeleting empty extractions for {len(pdfs_to_reprocess)} PDF(s)..."
-        )
+        print(f"\nDeleting empty extractions for {len(pdfs_to_reprocess)} PDF(s)...")
         for pdf_dir in pdfs_to_reprocess:
             # Delete empty JSON files (removes cached extraction results)
             for json_path in pdf_dir.glob("*.json"):
                 try:
                     data = json.loads(json_path.read_text(encoding="utf-8"))
                     # Only delete if still empty (has no lab_results)
-                    if (
-                        isinstance(data, dict)
-                        and not data.get("lab_results")
-                        and data.get("page_has_lab_data") is not False
-                    ):
+                    if isinstance(data, dict) and not data.get("lab_results") and data.get("page_has_lab_data") is not False:
                         json_path.unlink()
                         logger.info(f"Deleted empty JSON: {json_path.name}")
                 except (json.JSONDecodeError, UnicodeDecodeError):
@@ -1360,9 +1215,7 @@ Examples:
         type=str,
         help="Model ID for extraction (overrides EXTRACT_MODEL_ID from .env)",
     )
-    parser.add_argument(
-        "--workers", "-w", type=int, help="Number of parallel workers"
-    )
+    parser.add_argument("--workers", "-w", type=int, help="Number of parallel workers")
     parser.add_argument(
         "--pattern",
         type=str,
@@ -1391,9 +1244,7 @@ def _validate_profile_and_env(args) -> tuple[ProfileConfig | None, list[str]]:
     # Find and validate profile exists
     profile_path = ProfileConfig.find_path(args.profile)
     if not profile_path:
-        errors.append(
-            f"Profile '{args.profile}' not found. Use --list-profiles to see available profiles."
-        )
+        errors.append(f"Profile '{args.profile}' not found. Use --list-profiles to see available profiles.")
         return None, errors
 
     # Load profile configuration
@@ -1411,9 +1262,7 @@ def _validate_profile_and_env(args) -> tuple[ProfileConfig | None, list[str]]:
     if not os.getenv("EXTRACT_MODEL_ID"):
         errors.append("EXTRACT_MODEL_ID environment variable not set.")
     if not os.getenv("SELF_CONSISTENCY_MODEL_ID"):
-        errors.append(
-            "SELF_CONSISTENCY_MODEL_ID environment variable not set."
-        )
+        errors.append("SELF_CONSISTENCY_MODEL_ID environment variable not set.")
 
     # Return profile if no errors, otherwise None with error list
     if errors:
@@ -1421,9 +1270,7 @@ def _validate_profile_and_env(args) -> tuple[ProfileConfig | None, list[str]]:
     return profile, []
 
 
-def _build_config_from_profile(
-    profile: ProfileConfig, args
-) -> ExtractionConfig:
+def _build_config_from_profile(profile: ProfileConfig, args) -> ExtractionConfig:
     """Build ExtractionConfig from validated profile and CLI args."""
     # Load required environment variables
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
@@ -1439,9 +1286,7 @@ def _build_config_from_profile(
         self_consistency_model_id=self_consistency_model_id,
         input_file_regex=profile.input_file_regex or "*.pdf",
         n_extractions=int(os.getenv("N_EXTRACTIONS", "1")),
-        max_workers=profile.workers
-        or int(os.getenv("MAX_WORKERS", "0"))
-        or (os.cpu_count() or 1),
+        max_workers=profile.workers or int(os.getenv("MAX_WORKERS", "0")) or (os.cpu_count() or 1),
     )
 
     # Apply CLI argument overrides (highest priority)
@@ -1488,9 +1333,7 @@ def build_config(args) -> tuple[ExtractionConfig | None, list[str]]:
 # ========================================
 
 
-def check_server_availability(
-    client: OpenAI, model_id: str, timeout: int = 10
-) -> tuple[bool, str]:
+def check_server_availability(client: OpenAI, model_id: str, timeout: int = 10) -> tuple[bool, str]:
     """Check if OpenRouter API server is available and responsive.
 
     Args:
@@ -1531,13 +1374,7 @@ def check_server_availability(
                 "Server is available (models endpoint not implemented)",
             )
         # Check for connection failures (network issues, DNS problems, server down)
-        elif (
-            "Connection" in error_msg
-            or "refused" in error_msg.lower()
-            or "reset" in error_msg.lower()
-            or "Name or service not known" in error_msg
-            or "getaddrinfo" in error_msg
-        ):
+        elif "Connection" in error_msg or "refused" in error_msg.lower() or "reset" in error_msg.lower() or "Name or service not known" in error_msg or "getaddrinfo" in error_msg:
             return False, f"Cannot connect to server: {error_msg}"
         # Handle all other errors conservatively - assume unavailable to be safe
         else:
@@ -1545,9 +1382,7 @@ def check_server_availability(
             return False, f"Server check failed: {error_msg}"
 
 
-def _build_and_validate_config(
-    args, profile_name: str
-) -> tuple[ExtractionConfig | None, list[str]]:
+def _build_and_validate_config(args, profile_name: str) -> tuple[ExtractionConfig | None, list[str]]:
     """Build and validate configuration for a profile.
 
     Returns tuple of (config, errors) where config is None if validation fails.
@@ -1583,11 +1418,7 @@ def _process_pdfs_or_use_cache(
     # All PDFs already have valid CSVs - just collect paths
     if not pdfs_to_process:
         logger.info("All PDFs already processed. Moving to merge step...")
-        csv_paths = [
-            p
-            for pdf in pdf_files
-            if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))
-        ]
+        csv_paths = [p for pdf in pdf_files if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))]
         return csv_paths, [], 0
 
     # Process remaining PDFs using parallel worker pool
@@ -1601,11 +1432,7 @@ def _process_pdfs_or_use_cache(
     )
 
 
-def _setup_profile_environment(
-    args, profile_name: str
-) -> tuple[
-    ExtractionConfig | None, LabSpecsConfig | None, str | None, list[str]
-]:
+def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfig | None, LabSpecsConfig | None, str | None, list[str]]:
     """Setup environment for a profile: config, logging, server check.
 
     Returns tuple of (config, lab_specs, standardization_section, errors).
@@ -1623,9 +1450,7 @@ def _setup_profile_environment(
 
     # Guard: Config should exist if no errors were reported
     if not config:
-        print(
-            "\nUnexpected error: Configuration failed but no errors reported"
-        )
+        print("\nUnexpected error: Configuration failed but no errors reported")
         return None, None, None, ["Configuration failed"]
 
     # Setup logging to output folder for later review
@@ -1635,15 +1460,11 @@ def _setup_profile_environment(
 
     # Check server availability before processing
     logger.info("Checking OpenRouter server availability...")
-    is_available, message = check_server_availability(
-        client, config.extract_model_id
-    )
+    is_available, message = check_server_availability(client, config.extract_model_id)
     if not is_available:
         logger.error(f"Server check failed: {message}")
         print(f"\nError: Cannot start extraction - {message}")
-        print(
-            "Please check your internet connection and API key, then try again."
-        )
+        print("Please check your internet connection and API key, then try again.")
         return None, None, None, [f"Server unavailable: {message}"]
     logger.info(f"Server check passed: {message}")
 
@@ -1664,12 +1485,8 @@ def _setup_profile_environment(
     # Build standardization section for inline standardization during extraction
     standardization_section: str | None = None
     if lab_specs.exists:
-        standardization_section = _build_standardized_names_section(
-            lab_specs.standardized_names, lab_specs._specs
-        )
-        logger.info(
-            f"Built standardization section: {len(lab_specs.standardized_names)} lab names"
-        )
+        standardization_section = _build_standardized_names_section(lab_specs.standardized_names, lab_specs._specs)
+        logger.info(f"Built standardization section: {len(lab_specs.standardized_names)} lab names")
 
     return config, lab_specs, standardization_section, []
 
@@ -1752,9 +1569,7 @@ def run_for_profile(args, profile_name: str) -> bool:
     Returns True if successful, False otherwise.
     """
     # Setup environment: config, logging, server check, lab specs
-    config, lab_specs, standardization_section, errors = (
-        _setup_profile_environment(args, profile_name)
-    )
+    config, lab_specs, standardization_section, errors = _setup_profile_environment(args, profile_name)
 
     # Guard: Exit if setup failed or returned None values
     if errors or not config or not lab_specs:
@@ -1766,9 +1581,7 @@ def run_for_profile(args, profile_name: str) -> bool:
     # Discover PDF files matching the input pattern
     pdf_files = sorted(config.input_path.glob(config.input_file_regex))
     matching_stems = {p.stem for p in pdf_files}
-    logger.info(
-        f"Found {len(pdf_files)} PDF(s) matching '{config.input_file_regex}'"
-    )
+    logger.info(f"Found {len(pdf_files)} PDF(s) matching '{config.input_file_regex}'")
 
     # Guard: Exit if no PDFs found
     if not pdf_files:
@@ -1779,9 +1592,7 @@ def run_for_profile(args, profile_name: str) -> bool:
     _prompt_reprocess_empty(config.output_path, matching_stems)
 
     # Filter out PDFs that already have valid CSV outputs (cache check)
-    pdfs_to_process, skipped_count = _filter_pdfs_to_process(
-        pdf_files, config.output_path
-    )
+    pdfs_to_process, skipped_count = _filter_pdfs_to_process(pdf_files, config.output_path)
 
     logger.info(f"Skipping {skipped_count} already-processed PDF(s)")
     logger.info(f"Processing {len(pdfs_to_process)} PDF(s)")
@@ -1844,9 +1655,7 @@ def run_for_profile(args, profile_name: str) -> bool:
     return True
 
 
-def _report_extraction_failures(
-    all_failed_pages: list[dict], csv_path: Path, csv_paths: list[Path]
-) -> None:
+def _report_extraction_failures(all_failed_pages: list[dict], csv_path: Path, csv_paths: list[Path]) -> None:
     """Log and report any extraction failures to user."""
     # Log final pipeline summary
     logger.info("=" * 50)
@@ -1856,14 +1665,10 @@ def _report_extraction_failures(
 
     # Report any extraction failures to user and log
     if all_failed_pages:
-        logger.warning(
-            f"  Pages with extraction failures: {len(all_failed_pages)}"
-        )
+        logger.warning(f"  Pages with extraction failures: {len(all_failed_pages)}")
         for failure in all_failed_pages:
             logger.warning(f"    - {failure['page']}: {failure['reason']}")
-        print(
-            f"\n⚠️  Extraction failures detected ({len(all_failed_pages)} pages):"
-        )
+        print(f"\n⚠️  Extraction failures detected ({len(all_failed_pages)} pages):")
         for failure in all_failed_pages:
             print(f"    - {failure['page']}: {failure['reason']}")
     else:
@@ -1883,9 +1688,7 @@ def main():
             for name in profiles:
                 print(f"  - {name}")
         else:
-            print(
-                "No profiles found. Create profiles in the 'profiles/' directory."
-            )
+            print("No profiles found. Create profiles in the 'profiles/' directory.")
         return
 
     # Determine which profiles to run (single specified or all available)
@@ -1894,9 +1697,7 @@ def main():
     else:
         profiles_to_run = ProfileConfig.list_profiles()
         if not profiles_to_run:
-            print(
-                "No profiles found. Create profiles in the 'profiles/' directory."
-            )
+            print("No profiles found. Create profiles in the 'profiles/' directory.")
             print("Or use --profile to specify one.")
             sys.exit(1)
         print(f"Running all profiles: {', '.join(profiles_to_run)}")

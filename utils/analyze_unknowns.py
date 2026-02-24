@@ -40,18 +40,12 @@ def mode_search(df: pd.DataFrame):
         print(f"UNKNOWN LAB NAMES: {len(unknown_names)} rows")
         print(f"{'=' * 80}")
 
-        name_counts = (
-            unknown_names.groupby(["lab_name_raw", "lab_type"])
-            .size()
-            .reset_index(name="count")
-        )
+        name_counts = unknown_names.groupby(["lab_name_raw", "lab_type"]).size().reset_index(name="count")
         name_counts = name_counts.sort_values("count", ascending=False)
 
         print("\nRaw test names that couldn't be standardized:")
         for _, row in name_counts.iterrows():
-            print(
-                f"  [{row['lab_type']}] {row['lab_name_raw']:60s} ({row['count']} occurrences)"
-            )
+            print(f"  [{row['lab_type']}] {row['lab_name_raw']:60s} ({row['count']} occurrences)")
     else:
         print("\n No unknown lab names found!")
 
@@ -62,18 +56,12 @@ def mode_search(df: pd.DataFrame):
         print(f"UNKNOWN UNITS: {len(unknown_units)} rows")
         print(f"{'=' * 80}")
 
-        unit_counts = (
-            unknown_units.groupby(["lab_name_raw", "lab_unit_raw", "lab_type"])
-            .size()
-            .reset_index(name="count")
-        )
+        unit_counts = unknown_units.groupby(["lab_name_raw", "lab_unit_raw", "lab_type"]).size().reset_index(name="count")
         unit_counts = unit_counts.sort_values("count", ascending=False)
 
         print("\nRaw units that couldn't be standardized:")
         for _, row in unit_counts.iterrows():
-            print(
-                f"  [{row['lab_type']}] {row['lab_name_raw']:50s} | Unit: {row['lab_unit_raw']:15s} ({row['count']} occurrences)"
-            )
+            print(f"  [{row['lab_type']}] {row['lab_name_raw']:50s} | Unit: {row['lab_unit_raw']:15s} ({row['count']} occurrences)")
     else:
         print("\n No unknown units found!")
 
@@ -82,16 +70,10 @@ def mode_search(df: pd.DataFrame):
     print("SUMMARY")
     print(f"{'=' * 80}")
     print(f"Total rows: {len(df)}")
-    print(
-        f"Rows with unknown lab names: {len(unknown_names)} ({len(unknown_names) / len(df) * 100:.1f}%)"
-    )
-    print(
-        f"Rows with unknown units: {len(unknown_units)} ({len(unknown_units) / len(df) * 100:.1f}%)"
-    )
+    print(f"Rows with unknown lab names: {len(unknown_names)} ({len(unknown_names) / len(df) * 100:.1f}%)")
+    print(f"Rows with unknown units: {len(unknown_units)} ({len(unknown_units) / len(df) * 100:.1f}%)")
     print(f"Unique lab names in data: {df['lab_name_raw'].nunique()}")
-    print(
-        f"Unique standardized names: {df[df['lab_name_standardized'] != '$UNKNOWN$']['lab_name_standardized'].nunique()}"
-    )
+    print(f"Unique standardized names: {df[df['lab_name_standardized'] != '$UNKNOWN$']['lab_name_standardized'].nunique()}")
 
 
 def mode_analyze(df: pd.DataFrame):
@@ -143,18 +125,14 @@ def mode_analyze(df: pd.DataFrame):
         print(f"\nTotal standardized labs in config: {len(lab_specs)}")
 
         if len(unknown_units) > 0:
-            standardized_names_with_unknown_units = unknown_units[
-                "lab_name_standardized"
-            ].unique()
+            standardized_names_with_unknown_units = unknown_units["lab_name_standardized"].unique()
             print("\nStandardized names with unknown units:")
             for name in standardized_names_with_unknown_units:
                 if name in lab_specs:
                     spec = lab_specs[name]
                     print(f"\n  '{name}' EXISTS in config")
                     print(f"    Primary unit: {spec.get('primary_unit')}")
-                    print(
-                        f"    Alternatives: {[alt['unit'] for alt in spec.get('alternatives', [])]}"
-                    )
+                    print(f"    Alternatives: {[alt['unit'] for alt in spec.get('alternatives', [])]}")
                 else:
                     print(f"\n  '{name}' NOT FOUND in config")
     else:
@@ -232,11 +210,7 @@ def mode_categorize(df: pd.DataFrame):
             category = "Enzyme Assays"
         elif "coombs" in name_lower or "antiglobulina" in name_lower:
             category = "Blood Bank Tests"
-        elif (
-            "hemoglobinúria" in name_lower
-            or "hpn" in name_lower
-            or "gpi" in name_lower
-        ):
+        elif "hemoglobinúria" in name_lower or "hpn" in name_lower or "gpi" in name_lower:
             category = "Paroxysmal Nocturnal Hemoglobinuria"
         elif "hplc" in name_lower:
             category = "Hemoglobin HPLC"
@@ -285,11 +259,7 @@ def mode_categorize(df: pd.DataFrame):
     print("=" * 80)
 
     unknown_units = df[df["lab_unit_standardized"] == "$UNKNOWN$"]
-    unit_combos = (
-        unknown_units.groupby(["lab_unit_raw"])
-        .size()
-        .reset_index(name="count")
-    )
+    unit_combos = unknown_units.groupby(["lab_unit_raw"]).size().reset_index(name="count")
     unit_combos = unit_combos.sort_values("count", ascending=False)
 
     print("\nUnits that need to be added to lab_specs.json:")

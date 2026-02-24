@@ -73,9 +73,7 @@ class ProfileConfig:
         paths = data.get("paths", {})
         input_path_str = paths.get("input_path") or data.get("input_path")
         output_path_str = paths.get("output_path") or data.get("output_path")
-        input_file_regex = paths.get("input_file_regex") or data.get(
-            "input_file_regex"
-        )
+        input_file_regex = paths.get("input_file_regex") or data.get("input_file_regex")
 
         # Extract optional overrides
         workers = data.get("workers")
@@ -101,9 +99,7 @@ class ProfileConfig:
         )
 
     @classmethod
-    def find_path(
-        cls, name: str, profiles_dir: Path = Path("profiles")
-    ) -> Path | None:
+    def find_path(cls, name: str, profiles_dir: Path = Path("profiles")) -> Path | None:
         """Find profile file path by name, trying yaml/yml/json extensions."""
         for ext in (".yaml", ".yml", ".json"):
             p = profiles_dir / f"{name}{ext}"
@@ -147,11 +143,7 @@ class Demographics:
 
             dob = date.fromisoformat(self.date_of_birth)
             today = date.today()
-            return (
-                today.year
-                - dob.year
-                - ((today.month, today.day) < (dob.month, dob.day))
-            )
+            return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
         except ValueError:
             return None
 
@@ -178,9 +170,7 @@ class LabSpecsConfig:
             self._specs = json.load(f)
 
         # Pre-compute all views (filter out meta keys starting with _)
-        self._standardized_names = sorted(
-            key for key in self._specs.keys() if not key.startswith("_")
-        )
+        self._standardized_names = sorted(key for key in self._specs.keys() if not key.startswith("_"))
 
         # Collect unique units from primary_unit and alternatives
         all_units = set()
@@ -201,16 +191,9 @@ class LabSpecsConfig:
         self._standardized_units = sorted(all_units)
 
         # Build lab_type mapping
-        self._lab_type_map = {
-            lab_name: spec.get("lab_type", "blood")
-            for lab_name, spec in self._specs.items()
-            if not lab_name.startswith("_") and isinstance(spec, dict)
-        }
+        self._lab_type_map = {lab_name: spec.get("lab_type", "blood") for lab_name, spec in self._specs.items() if not lab_name.startswith("_") and isinstance(spec, dict)}
 
-        logger.info(
-            f"Loaded {len(self._standardized_names)} lab specs, "
-            f"{len(self._standardized_units)} units"
-        )
+        logger.info(f"Loaded {len(self._standardized_names)} lab specs, {len(self._standardized_units)} units")
 
     @property
     def exists(self) -> bool:
@@ -242,9 +225,7 @@ class LabSpecsConfig:
             return None
         return self._specs[lab_name].get("primary_unit")
 
-    def get_conversion_factor(
-        self, lab_name: str, from_unit: str
-    ) -> float | None:
+    def get_conversion_factor(self, lab_name: str, from_unit: str) -> float | None:
         """Get conversion factor from given unit to primary unit."""
         if lab_name not in self._specs:
             return None
@@ -263,9 +244,7 @@ class LabSpecsConfig:
 
         return None
 
-    def get_healthy_range_for_demographics(
-        self, lab_name: str, gender: str | None = None, age: int | None = None
-    ) -> tuple[float | None, float | None]:
+    def get_healthy_range_for_demographics(self, lab_name: str, gender: str | None = None, age: int | None = None) -> tuple[float | None, float | None]:
         """Get healthy range for a lab, considering demographics.
 
         Selection priority:
