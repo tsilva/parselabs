@@ -6,6 +6,7 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import Any
 
 from openai import APIError, OpenAI
 from pydantic import BaseModel, Field, field_validator
@@ -344,35 +345,19 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
     Returns:
         Tuple of (best_result, all_results)
     """
+    # Guard: Single extraction requires no voting
     if n == 1:
         result = fn(*args, **kwargs)
         return result, [result]
-
-    results = []
 
     # Fixed temperature for i.i.d. sampling (aligned with self-consistency research)
     # T=0.5 provides good diversity without being too creative
     SELF_CONSISTENCY_TEMPERATURE = 0.5
 
-    with ThreadPoolExecutor(max_workers=n) as executor:
-        futures = []
-        for i in range(n):
-            effective_kwargs = kwargs.copy()
-            # Use fixed temperature if function accepts it and not already set
-            if "temperature" in fn.__code__.co_varnames and "temperature" not in kwargs:
-                effective_kwargs["temperature"] = SELF_CONSISTENCY_TEMPERATURE
-            futures.append(executor.submit(fn, *args, **effective_kwargs))
+    # Collect results from parallel extractions
+    results = _run_parallel_extractions(fn, args, kwargs, n, SELF_CONSISTENCY_TEMPERATURE)
 
-        for future in as_completed(futures):
-            try:
-                results.append(future.result())
-            except Exception as e:
-                logger.error(f"Error during self-consistency task execution: {e}")
-                for f_cancel in futures:
-                    if not f_cancel.done():
-                        f_cancel.cancel()
-                raise
-
+    # Guard: All parallel calls failed
     if not results:
         raise RuntimeError("All self-consistency calls failed.")
 
@@ -382,6 +367,33 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
 
     # Vote on best result using LLM
     return vote_on_best_result(results, model_id, fn.__name__)
+
+
+def _run_parallel_extractions(fn, args, kwargs, n: int, temperature: float) -> list:
+    """Execute multiple extractions in parallel with error propagation."""
+    results = []
+
+    with ThreadPoolExecutor(max_workers=n) as executor:
+        futures = []
+        for i in range(n):
+            effective_kwargs = kwargs.copy()
+            # Use fixed temperature if function accepts it and not already set
+            if "temperature" in fn.__code__.co_varnames and "temperature" not in kwargs:
+                effective_kwargs["temperature"] = temperature
+            futures.append(executor.submit(fn, *args, **effective_kwargs))
+
+        for future in as_completed(futures):
+            try:
+                results.append(future.result())
+            except Exception as e:
+                # Cancel remaining futures on first error
+                logger.error(f"Error during self-consistency task execution: {e}")
+                for f_cancel in futures:
+                    if not f_cancel.done():
+                        f_cancel.cancel()
+                raise
+
+    return results
 
 
 def vote_on_best_result(results: list, model_id: str, fn_name: str):
@@ -414,7 +426,14 @@ def vote_on_best_result(results: list, model_id: str, fn_name: str):
                 {"role": "user", "content": prompt},
             ],
         )
-        voted_raw = completion.choices[0].message.content.strip()
+        voted_raw = completion.choices[0].message.content
+
+        # Guard: Empty response from model
+        if not voted_raw:
+            logger.error("Empty response from voting model")
+            return results[0], results
+
+        voted_raw = voted_raw.strip()
 
         if fn_name == "extract_labs_from_page_image":
             voted_result = parse_llm_json_response(voted_raw, fallback=None)
@@ -467,111 +486,86 @@ def extract_labs_from_page_image(
         Dictionary with extracted report data (validated by Pydantic).
         On failure, includes _extraction_failed=True and _failure_reason.
     """
+    # Load image data for API call
     with open(image_path, "rb") as img_file:
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
 
+    # Build effective system prompt with optional standardization section
     effective_system_prompt = EXTRACTION_SYSTEM_PROMPT + standardization_section if standardization_section else EXTRACTION_SYSTEM_PROMPT
 
+    # Attempt extraction with retry logic
+    result = _attempt_extraction_with_retries(
+        image_path=image_path,
+        img_data=img_data,
+        model_id=model_id,
+        client=client,
+        effective_system_prompt=effective_system_prompt,
+        temperature=temperature,
+        max_retries=max_retries,
+        temperature_step=temperature_step,
+    )
+
+    return result
+
+
+def _attempt_extraction_with_retries(
+    image_path: Path,
+    img_data: str,
+    model_id: str,
+    client: OpenAI,
+    effective_system_prompt: str,
+    temperature: float,
+    max_retries: int,
+    temperature_step: float,
+) -> dict:
+    """Execute extraction with temperature escalation retry logic."""
     current_temp = temperature
     last_error = None
 
     for attempt in range(max_retries + 1):  # +1 for initial attempt
+        # Log retry attempt with escalated temperature
         if attempt > 0:
             current_temp = temperature + (attempt * temperature_step)
             logger.info(f"[{image_path.name}] Retry {attempt}/{max_retries} with temperature={current_temp:.1f} (previous error: malformed output)")
 
-        try:
-            completion = client.chat.completions.create(
-                model=model_id,
-                messages=[
-                    {"role": "system", "content": effective_system_prompt},
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": EXTRACTION_USER_PROMPT},
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:image/jpeg;base64,{img_data}"},
-                            },
-                        ],
-                    },
-                ],
-                temperature=current_temp,
-                max_tokens=16384,
-                tools=TOOLS,
-                tool_choice={
-                    "type": "function",
-                    "function": {"name": "extract_lab_results"},
-                },
-            )
-        except APIError as e:
-            logger.error(f"API Error during lab extraction from {image_path.name}: {e}")
-            raise RuntimeError(f"Lab extraction failed for {image_path.name}: {e}")
+        # Attempt single extraction
+        tool_result_dict = _execute_single_extraction(
+            image_path=image_path,
+            img_data=img_data,
+            model_id=model_id,
+            client=client,
+            effective_system_prompt=effective_system_prompt,
+            current_temp=current_temp,
+        )
 
-        # Check for valid response structure
-        if not completion or not completion.choices:
-            logger.error("Invalid completion response structure")
+        # Guard: Extraction failed at API level
+        if tool_result_dict is None:
             return _empty_report()
 
-        if not completion.choices[0].message.tool_calls:
-            logger.warning(f"No tool call by model for lab extraction from {image_path.name}")
-            return _empty_report()
-
-        tool_args_raw = completion.choices[0].message.tool_calls[0].function.arguments
-        try:
-            tool_result_dict = json.loads(tool_args_raw)
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error for tool args: {e}")
-            return _empty_report()
-
-        # Pre-process: Fix common LLM issues before Pydantic validation (using LLM for soft parsing)
+        # Pre-process: Fix common LLM issues before Pydantic validation
         tool_result_dict = _fix_lab_results_format(tool_result_dict, client, model_id)
 
-        # Validate with Pydantic
-        try:
-            report_model = HealthLabReport(**tool_result_dict)
-            report_model.normalize_empty_optionals()
+        # Validate and process the extraction result
+        validation_result = _validate_extraction_result(
+            tool_result_dict=tool_result_dict,
+            image_path=image_path,
+            attempt=attempt,
+            current_temp=current_temp,
+        )
 
-            # Check for extraction quality - warn if most values are null
-            if report_model.lab_results:
-                null_count = sum(1 for r in report_model.lab_results if r.value_raw is None)
-                total_count = len(report_model.lab_results)
-                null_pct = (null_count / total_count * 100) if total_count > 0 else 0
+        # Guard: Validation succeeded, return the result
+        if validation_result["success"]:
+            return validation_result["data"]
 
-                if null_pct > 50:
-                    logger.warning(f"Extraction quality issue: {null_count}/{total_count} ({null_pct:.0f}%) lab results have null values. This suggests the model failed to extract numeric values from the image.\n\t- {image_path}")
-            else:
-                if report_model.page_has_lab_data is False:
-                    logger.debug(f"Page confirmed to have no lab data:\n\t- {image_path}")
-                else:
-                    logger.warning(f"Extraction returned 0 lab results. This may indicate a model extraction failure - image should be manually reviewed.\n\t- {image_path}")
-
-            # Success - return the validated result
-            result = report_model.model_dump(mode="json")
-            if attempt > 0:
-                logger.info(f"[{image_path.name}] Extraction succeeded on retry {attempt} with temp={current_temp:.1f}")
-            return result
-
-        except ValueError as e:
-            error_msg = str(e)
-            # Check if this is a malformed output error that warrants retry
-            if "MALFORMED OUTPUT" in error_msg:
-                last_error = error_msg
-                num_results = len(tool_result_dict.get("lab_results", []))
-                logger.warning(f"[{image_path.name}] Malformed output detected ({num_results} results), attempt {attempt + 1}/{max_retries + 1}")
-                # Continue to next retry attempt
-                continue
-            else:
-                # Non-retryable validation error - try to salvage
-                num_results = len(tool_result_dict.get("lab_results", []))
-                logger.error(f"Model validation error for report with {num_results} lab_results: {e}")
-                return _salvage_lab_results(tool_result_dict)
-
-        except Exception as e:
+        # Check if this is a malformed output error that warrants retry
+        if validation_result["should_retry"]:
+            last_error = validation_result["error_msg"]
             num_results = len(tool_result_dict.get("lab_results", []))
-            logger.error(f"Model validation error for report with {num_results} lab_results: {e}")
-            # Try to salvage individual results
-            return _salvage_lab_results(tool_result_dict)
+            logger.warning(f"[{image_path.name}] Malformed output detected ({num_results} results), attempt {attempt + 1}/{max_retries + 1}")
+            continue
+
+        # Non-retryable validation error - try to salvage what we can
+        return validation_result["data"]
 
     # All retries exhausted - return failure marker
     logger.error(f"[{image_path.name}] Extraction failed after {max_retries + 1} attempts. Last error: {last_error[:200] if last_error else 'unknown'}")
@@ -580,6 +574,129 @@ def extract_labs_from_page_image(
     result["_failure_reason"] = f"Malformed output after {max_retries + 1} attempts"
     result["_retry_count"] = max_retries + 1
     return result
+
+
+def _execute_single_extraction(
+    image_path: Path,
+    img_data: str,
+    model_id: str,
+    client: OpenAI,
+    effective_system_prompt: str,
+    current_temp: float,
+) -> dict | None:
+    """Execute a single extraction attempt via API.
+
+    Returns:
+        Dict with tool result data, or None if extraction failed
+    """
+    # Call the vision model API
+    try:
+        completion = client.chat.completions.create(
+            model=model_id,
+            messages=[
+                {"role": "system", "content": effective_system_prompt},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": EXTRACTION_USER_PROMPT},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{img_data}"},
+                        },
+                    ],
+                },
+            ],
+            temperature=current_temp,
+            max_tokens=16384,
+            tools=TOOLS,
+            tool_choice={
+                "type": "function",
+                "function": {"name": "extract_lab_results"},
+            },
+        )
+    except APIError as e:
+        logger.error(f"API Error during lab extraction from {image_path.name}: {e}")
+        raise RuntimeError(f"Lab extraction failed for {image_path.name}: {e}")
+
+    # Guard: Invalid response structure from API
+    if not completion or not completion.choices:
+        logger.error("Invalid completion response structure")
+        return None
+
+    # Guard: Model did not use tool call
+    if not completion.choices[0].message.tool_calls:
+        logger.warning(f"No tool call by model for lab extraction from {image_path.name}")
+        return None
+
+    # Extract and parse tool arguments
+    tool_args_raw = completion.choices[0].message.tool_calls[0].function.arguments
+    try:
+        return json.loads(tool_args_raw)
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error for tool args: {e}")
+        return None
+
+
+def _validate_extraction_result(
+    tool_result_dict: dict,
+    image_path: Path,
+    attempt: int,
+    current_temp: float,
+) -> dict:
+    """Validate extraction result with Pydantic and check quality.
+
+    Returns:
+        Dict with keys: success (bool), data (dict), should_retry (bool), error_msg (str)
+    """
+    # Validate with Pydantic
+    try:
+        report_model = HealthLabReport(**tool_result_dict)
+        report_model.normalize_empty_optionals()
+
+        # Check extraction quality and log warnings
+        _log_extraction_quality(report_model, image_path)
+
+        # Success - return the validated result
+        result = report_model.model_dump(mode="json")
+        if attempt > 0:
+            logger.info(f"[{image_path.name}] Extraction succeeded on retry {attempt} with temp={current_temp:.1f}")
+        return {"success": True, "data": result, "should_retry": False, "error_msg": None}
+
+    except ValueError as e:
+        error_msg = str(e)
+        # Check if this is a malformed output error that warrants retry
+        if "MALFORMED OUTPUT" in error_msg:
+            return {"success": False, "data": None, "should_retry": True, "error_msg": error_msg}
+        else:
+            # Non-retryable validation error - try to salvage
+            num_results = len(tool_result_dict.get("lab_results", []))
+            logger.error(f"Model validation error for report with {num_results} lab_results: {e}")
+            return {"success": False, "data": _salvage_lab_results(tool_result_dict), "should_retry": False, "error_msg": error_msg}
+
+    except Exception as e:
+        num_results = len(tool_result_dict.get("lab_results", []))
+        logger.error(f"Model validation error for report with {num_results} lab_results: {e}")
+        return {"success": False, "data": _salvage_lab_results(tool_result_dict), "should_retry": False, "error_msg": str(e)}
+
+
+def _log_extraction_quality(report_model: HealthLabReport, image_path: Path) -> None:
+    """Log warnings if extraction quality is poor."""
+    # Guard: No lab results extracted
+    if not report_model.lab_results:
+        if report_model.page_has_lab_data is False:
+            logger.debug(f"Page confirmed to have no lab data:\n\t- {image_path}")
+        else:
+            logger.warning(f"Extraction returned 0 lab results. This may indicate a model extraction failure - image should be manually reviewed.\n\t- {image_path}")
+        return
+
+    # Calculate percentage of null values
+    null_count = sum(1 for r in report_model.lab_results if r.value_raw is None)
+    total_count = len(report_model.lab_results)
+    null_pct = (null_count / total_count * 100) if total_count > 0 else 0
+
+    # Guard: Warn if too many null values
+    if null_pct > 50:
+        logger.warning(f"Extraction quality issue: {null_count}/{total_count} ({null_pct:.0f}%) lab results have null values. This suggests the model failed to extract numeric values from the image.\n\t- {image_path}")
 
 
 def extract_labs_from_text(
@@ -605,11 +722,39 @@ def extract_labs_from_text(
     Returns:
         Dictionary with extracted report data (validated by Pydantic)
     """
+    # Build effective system prompt with optional standardization section
     effective_system_prompt = EXTRACTION_SYSTEM_PROMPT + standardization_section if standardization_section else EXTRACTION_SYSTEM_PROMPT
 
-    # Use same prompts but adapted for text input
+    # Build user prompt for text extraction
+    user_prompt = _build_text_extraction_prompt(text, standardization_section)
+
+    # Attempt extraction via API
+    extraction_result = _execute_text_extraction_api_call(
+        model_id=model_id,
+        client=client,
+        effective_system_prompt=effective_system_prompt,
+        user_prompt=user_prompt,
+        temperature=temperature,
+    )
+
+    # Guard: Extraction failed at API level
+    if extraction_result is None:
+        return HealthLabReport(lab_results=[]).model_dump(mode="json")
+
+    tool_result_dict = extraction_result
+
+    # Pre-process: Fix common LLM issues before Pydantic validation
+    tool_result_dict = _fix_lab_results_format(tool_result_dict, client, model_id)
+
+    # Validate and return results
+    return _validate_text_extraction_result(tool_result_dict)
+
+
+def _build_text_extraction_prompt(text: str, standardization_section: str | None) -> str:
+    """Build the user prompt for text-based extraction."""
     std_reminder = "\nAlso set lab_name (standardized name from the provided list) and unit (standardized unit format) for each result.\n" if standardization_section else ""
-    user_prompt = f"""Please extract ALL lab test results from this medical lab report text.
+
+    return f"""Please extract ALL lab test results from this medical lab report text.
 
 CRITICAL: For EACH lab test you find, you MUST extract:
 1. lab_name_raw - The test name EXACTLY as shown (required)
@@ -636,6 +781,19 @@ Also set page_has_lab_data:
 {text}
 --- END OF DOCUMENT ---"""
 
+
+def _execute_text_extraction_api_call(
+    model_id: str,
+    client: OpenAI,
+    effective_system_prompt: str,
+    user_prompt: str,
+    temperature: float,
+) -> dict | None:
+    """Execute the API call for text extraction.
+
+    Returns:
+        Parsed tool result dict or None on failure
+    """
     try:
         completion = client.chat.completions.create(
             model=model_id,
@@ -655,30 +813,32 @@ Also set page_has_lab_data:
         logger.error(f"API Error during text-based lab extraction: {e}")
         raise RuntimeError(f"Text-based lab extraction failed: {e}")
 
-    # Check for valid response structure
+    # Guard: Invalid response structure
     if not completion or not completion.choices:
         logger.error("Invalid completion response structure for text extraction")
-        return HealthLabReport(lab_results=[]).model_dump(mode="json")
+        return None
 
+    # Guard: No tool call from model
     if not completion.choices[0].message.tool_calls:
         logger.warning("No tool call by model for text-based lab extraction")
-        return HealthLabReport(lab_results=[]).model_dump(mode="json")
+        return None
 
+    # Parse tool arguments
     tool_args_raw = completion.choices[0].message.tool_calls[0].function.arguments
     try:
-        tool_result_dict = json.loads(tool_args_raw)
+        return json.loads(tool_args_raw)
     except json.JSONDecodeError as e:
         logger.error(f"JSON decode error for text extraction tool args: {e}")
-        return HealthLabReport(lab_results=[]).model_dump(mode="json")
+        return None
 
-    # Pre-process: Fix common LLM issues before Pydantic validation
-    tool_result_dict = _fix_lab_results_format(tool_result_dict, client, model_id)
 
-    # Validate with Pydantic
+def _validate_text_extraction_result(tool_result_dict: dict) -> dict:
+    """Validate text extraction result with Pydantic."""
     try:
         report_model = HealthLabReport(**tool_result_dict)
         report_model.normalize_empty_optionals()
 
+        # Log extraction results
         if report_model.lab_results:
             logger.info(f"Text extraction successful: {len(report_model.lab_results)} lab results")
         else:
@@ -709,6 +869,7 @@ def _normalize_date_format(date_str: str | None) -> str | None:
     Returns:
         Date string in YYYY-MM-DD format, or None if invalid/null
     """
+    # Guard: Empty or invalid date string
     if not date_str or date_str == "0000-00-00":
         return None
 
@@ -722,7 +883,7 @@ def _normalize_date_format(date_str: str | None) -> str | None:
         day, month, year = match.groups()
         return f"{year}-{month}-{day}"
 
-    # If we can't parse it, log and return None
+    # Unable to parse - log and return None
     logger.warning(f"Unable to normalize date format: {date_str}")
     return None
 
@@ -752,6 +913,7 @@ def _parse_labresult_repr(s: str) -> dict | None:
 
     Returns a dict if parseable, None otherwise.
     """
+    # Guard: Not a LabResult repr string
     if not s.startswith("LabResult("):
         return None
 
@@ -759,9 +921,8 @@ def _parse_labresult_repr(s: str) -> dict | None:
         # Extract the content inside LabResult(...)
         content = s[10:-1]  # Remove 'LabResult(' and ')'
 
-        # Parse key=value pairs
+        # Parse key=value pairs using regex
         result = {}
-        # Use regex to find key=value patterns, handling quoted strings and None values
         pattern = r"(\w+)=(?:'([^']*)'|\"([^\"]*)\"|(\d+\.?\d*)|None|(True|False))"
         for match in re.finditer(pattern, content):
             key = match.group(1)
@@ -785,6 +946,7 @@ def _parse_labresult_repr(s: str) -> dict | None:
 
 def _detects_flattened_format(items: list, kv_pattern: re.Pattern, fields: set) -> bool:
     """Check if items match the flattened key-value pattern."""
+    # Guard: Empty input
     if not items:
         return False
 
@@ -803,7 +965,7 @@ def _detects_flattened_format(items: list, kv_pattern: re.Pattern, fields: set) 
     return kv_matches >= sample_size * 0.5
 
 
-def _convert_kv_value(key: str, value: str) -> any:
+def _convert_kv_value(key: str, value: str) -> Any:
     """Convert a key-value pair value to the appropriate type."""
     # Handle null/empty values
     if value.lower() == "null" or value == "":
@@ -927,10 +1089,27 @@ def _fix_lab_results_format(tool_result_dict: dict, client: OpenAI, model_id: st
         if date_field in tool_result_dict:
             tool_result_dict[date_field] = _normalize_date_format(tool_result_dict[date_field])
 
+    # Guard: No lab_results to process
     if "lab_results" not in tool_result_dict or not isinstance(tool_result_dict["lab_results"], list):
         return tool_result_dict
 
     # Map LLM-populated standardization fields to internal fields
+    _map_standardization_fields(tool_result_dict)
+
+    # First, try to reassemble flattened key-value format (common LLM issue)
+    tool_result_dict["lab_results"] = _reassemble_flattened_key_values(tool_result_dict["lab_results"])
+
+    # Clean numeric reference fields (strip embedded metadata like ", comments: ...")
+    _clean_numeric_reference_fields(tool_result_dict)
+
+    # Parse any string-based lab results using LLM
+    tool_result_dict["lab_results"] = _parse_string_based_results(tool_result_dict["lab_results"], client, model_id)
+
+    return tool_result_dict
+
+
+def _map_standardization_fields(tool_result_dict: dict) -> None:
+    """Map LLM-populated standardization fields to internal field names."""
     # lab_name (standardized name) → lab_name_standardized
     # unit (standardized unit) → lab_unit_standardized
     for item in tool_result_dict["lab_results"]:
@@ -943,11 +1122,9 @@ def _fix_lab_results_format(tool_result_dict: dict, client: OpenAI, model_id: st
                 # Map $UNKNOWN$ to None so unit inference in normalization can handle it
                 item["lab_unit_standardized"] = std_unit if (std_unit and std_unit != _UNKNOWN_VALUE) else None
 
-    # First, try to reassemble flattened key-value format (common LLM issue)
-    # e.g., ['lab_name_raw: Glucose', 'value_raw: 100', ...] -> [{'lab_name_raw': 'Glucose', 'value_raw': '100', ...}]
-    tool_result_dict["lab_results"] = _reassemble_flattened_key_values(tool_result_dict["lab_results"])
 
-    # Clean numeric reference fields (strip embedded metadata like ", comments: ...")
+def _clean_numeric_reference_fields(tool_result_dict: dict) -> None:
+    """Clean numeric reference fields by stripping embedded metadata."""
     for item in tool_result_dict["lab_results"]:
         if isinstance(item, dict):
             if "reference_min_raw" in item:
@@ -955,22 +1132,23 @@ def _fix_lab_results_format(tool_result_dict: dict, client: OpenAI, model_id: st
             if "reference_max_raw" in item:
                 item["reference_max_raw"] = _clean_numeric_field(item["reference_max_raw"])
 
+
+def _parse_string_based_results(lab_results: list, client: OpenAI, model_id: str) -> list:
+    """Parse any string-based lab results into structured format."""
     # Collect all string-based lab results that need parsing
     string_results = []
     string_indices = []
     parsed_lab_results = []
 
-    for i, lr_data in enumerate(tool_result_dict["lab_results"]):
+    for i, lr_data in enumerate(lab_results):
         if isinstance(lr_data, str):
             # Try to parse as JSON first (simple case)
-            try:
-                parsed_lr = json.loads(lr_data)
-                parsed_lab_results.append(parsed_lr)
+            parsed = _try_parse_string_as_json(lr_data)
+            if parsed:
+                parsed_lab_results.append(parsed)
                 continue
-            except json.JSONDecodeError:
-                pass
 
-            # Try to parse LabResult repr format: "LabResult(lab_name_raw='...', ...)"
+            # Try to parse LabResult repr format
             parsed_repr = _parse_labresult_repr(lr_data)
             if parsed_repr:
                 parsed_lab_results.append(parsed_repr)
@@ -987,26 +1165,43 @@ def _fix_lab_results_format(tool_result_dict: dict, client: OpenAI, model_id: st
     if string_results:
         logger.info(f"Found {len(string_results)} lab results as strings, using LLM to parse them")
         parsed = _parse_string_results_with_llm(string_results, client, model_id)
-
-        # Insert parsed results back
-        skipped_count = 0
-        for idx, parsed_result in zip(string_indices, parsed):
-            if parsed_result:
-                parsed_lab_results[idx] = parsed_result
-            else:
-                # Failed to parse, remove from results
-                logger.debug(f"Failed to parse lab_result[{idx}], skipping. Data: {string_results[string_indices.index(idx)][:200]}")
-                skipped_count += 1
-
-        # Log summary if any failed
-        if skipped_count > 0:
-            logger.warning(f"Skipped {skipped_count}/{len(string_results)} unparseable lab results. This is normal during self-consistency voting - other extraction attempts may have proper structure.")
+        _insert_parsed_results(parsed_lab_results, string_indices, parsed, string_results)
 
     # Remove None placeholders
-    parsed_lab_results = [r for r in parsed_lab_results if r is not None]
+    return [r for r in parsed_lab_results if r is not None]
 
-    tool_result_dict["lab_results"] = parsed_lab_results
-    return tool_result_dict
+
+def _try_parse_string_as_json(s: str) -> dict | None:
+    """Try to parse a string as JSON."""
+    # Guard: None or empty input
+    if not s:
+        return None
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        return None
+
+
+def _insert_parsed_results(
+    parsed_lab_results: list,
+    string_indices: list,
+    parsed: list,
+    string_results: list,
+) -> None:
+    """Insert parsed results back into the list, tracking failures."""
+    skipped_count = 0
+    for idx, parsed_result in zip(string_indices, parsed):
+        if parsed_result:
+            parsed_lab_results[idx] = parsed_result
+        else:
+            # Failed to parse, log for debugging
+            string_idx = string_indices.index(idx)
+            logger.debug(f"Failed to parse lab_result[{idx}], skipping. Data: {string_results[string_idx][:200]}")
+            skipped_count += 1
+
+    # Log summary if any failed
+    if skipped_count > 0:
+        logger.warning(f"Skipped {skipped_count}/{len(string_results)} unparseable lab results. This is normal during self-consistency voting - other extraction attempts may have proper structure.")
 
 
 def _parse_string_results_with_llm(string_results: list[str], client: OpenAI, model_id: str) -> list[dict | None]:
@@ -1024,11 +1219,46 @@ def _parse_string_results_with_llm(string_results: list[str], client: OpenAI, mo
     Returns:
         List of parsed dictionaries (None for unparseable results)
     """
+    # Guard: Empty input
     if not string_results:
         return []
 
     # Build prompt for LLM to parse the strings
-    prompt = f"""You are parsing lab test result strings into structured format.
+    prompt = _build_string_parsing_prompt(string_results)
+
+    try:
+        completion = client.chat.completions.create(
+            model=model_id,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a medical data parser. Parse lab result strings into structured JSON format.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.0,
+            response_format={"type": "json_object"},
+        )
+
+        response_text = completion.choices[0].message.content
+
+        # Guard: Empty response from model
+        if not response_text:
+            logger.error("Empty response from LLM for string parsing")
+            return [None] * len(string_results)
+
+        parsed_json = json.loads(response_text)
+
+        return _extract_results_from_parsed_json(parsed_json, len(string_results))
+
+    except Exception as e:
+        logger.error(f"Failed to parse string results with LLM: {e}")
+        return [None] * len(string_results)
+
+
+def _build_string_parsing_prompt(string_results: list[str]) -> str:
+    """Build the prompt for LLM-based string parsing."""
+    return f"""You are parsing lab test result strings into structured format.
 
 For each string below, extract:
 - lab_name_raw: The name of the lab test
@@ -1046,54 +1276,38 @@ Input strings:
 Return a JSON array of parsed lab results matching the LabResult schema.
 Each result must have at minimum: lab_name_raw, value_raw, lab_unit_raw, and source_text fields."""
 
-    try:
-        completion = client.chat.completions.create(
-            model=model_id,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a medical data parser. Parse lab result strings into structured JSON format.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.0,
-            response_format={"type": "json_object"},
-        )
 
-        response_text = completion.choices[0].message.content
-        parsed_json = json.loads(response_text)
+def _extract_results_from_parsed_json(parsed_json: dict | list, expected_count: int) -> list[dict | None]:
+    """Extract results from various possible LLM response formats."""
+    # Handle different possible response formats
+    if isinstance(parsed_json, dict) and "results" in parsed_json:
+        results = parsed_json["results"]
+    elif isinstance(parsed_json, dict) and "lab_results" in parsed_json:
+        results = parsed_json["lab_results"]
+    elif isinstance(parsed_json, list):
+        results = parsed_json
+    else:
+        logger.error(f"Unexpected LLM response format for string parsing: {parsed_json}")
+        return [None] * expected_count
 
-        # Handle different possible response formats
-        if isinstance(parsed_json, dict) and "results" in parsed_json:
-            results = parsed_json["results"]
-        elif isinstance(parsed_json, dict) and "lab_results" in parsed_json:
-            results = parsed_json["lab_results"]
-        elif isinstance(parsed_json, list):
-            results = parsed_json
-        else:
-            logger.error(f"Unexpected LLM response format for string parsing: {parsed_json}")
-            return [None] * len(string_results)
+    # Validate we got the right number of results
+    if len(results) != expected_count:
+        logger.warning(f"LLM returned {len(results)} results but expected {expected_count}")
+        # Pad or trim to match
+        while len(results) < expected_count:
+            results.append(None)
+        results = results[:expected_count]
 
-        # Validate we got the right number of results
-        if len(results) != len(string_results):
-            logger.warning(f"LLM returned {len(results)} results but expected {len(string_results)}")
-            # Pad or trim to match
-            while len(results) < len(string_results):
-                results.append(None)
-            results = results[: len(string_results)]
-
-        return results
-
-    except Exception as e:
-        logger.error(f"Failed to parse string results with LLM: {e}")
-        return [None] * len(string_results)
+    return results
 
 
 def _salvage_lab_results(tool_result_dict: dict) -> dict:
     """Try to salvage valid lab results even if report validation fails."""
+    # Guard: No lab_results to salvage
     if "lab_results" not in tool_result_dict or not isinstance(tool_result_dict["lab_results"], list):
         return HealthLabReport(lab_results=[]).model_dump(mode="json")
 
+    # Validate each lab result individually
     valid_results = []
     for i, lr_data in enumerate(tool_result_dict["lab_results"]):
         if isinstance(lr_data, str):
