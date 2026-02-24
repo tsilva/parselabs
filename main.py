@@ -248,41 +248,50 @@ def _try_text_extraction(
     doc_out_dir: Path,
     pdf_stem: str,
 ) -> tuple[bool, dict | None]:
-    """
-    Attempt text-first extraction with fallback to vision.
+    """Attempt text-first extraction with fallback to vision.
+
+    Strategy: Text extraction is cheaper than vision, so we try it first.
+    Falls back to vision if PDF has no text, insufficient content, or extraction fails.
+
     Returns (used_text_extraction, extraction_data).
     """
-    # Check cache first
+    # Check for cached text extraction results from previous runs
     cached_data = _try_load_cached_text_extraction(doc_out_dir, pdf_stem)
     if cached_data:
         logger.info(f"[{pdf_stem}] Strategy: TEXT (cached)")
         return True, cached_data
 
-    # Try fresh text extraction
+    # Extract raw text from PDF using pdftotext (fast, no AI cost)
     pdf_text, pdftotext_success = extract_text_from_pdf(copied_pdf)
 
+    # Guard: Fall back to vision if PDF has no extractable text layer
     if not pdftotext_success:
         logger.info(f"[{pdf_stem}] Strategy: VISION (no embedded text in PDF)")
         return False, None
 
+    # Guard: Fall back to vision if text content is too sparse for reliable extraction
     if not _text_has_enough_content(pdf_text):
         logger.info(f"[{pdf_stem}] Strategy: VISION (insufficient text content)")
         return False, None
 
     logger.info(f"[{pdf_stem}] Strategy: TEXT (sufficient content, {len(pdf_text)} chars)")
 
+    # Attempt LLM-based extraction from extracted text
     try:
         text_extraction_data = _extract_labs_from_pdf_text(
             pdf_text, config, standardization_section
         )
     except Exception as e:
+        # Text extraction failed - log and fall back to vision
         logger.warning(f"[{pdf_stem}] Text extraction failed: {e}")
         return False, None
 
+    # Guard: Fall back to vision if extraction succeeded but returned no lab results
     if not text_extraction_data or not text_extraction_data.get("lab_results"):
         logger.warning(f"[{pdf_stem}] Strategy: TEXT -> VISION (no results from text)")
         return False, None
 
+    # Cache successful text extraction for future runs
     _cache_text_extraction(text_extraction_data, pdf_text, doc_out_dir, pdf_stem)
     logger.info(
         f"[{pdf_stem}] Text extraction complete: {len(text_extraction_data['lab_results'])} results"
@@ -998,21 +1007,28 @@ def _find_empty_extractions(
 
     Only considers output directories that match the input file pattern.
     """
+    # Initialize collection for PDFs with empty extractions
     empty_by_pdf = []
 
+    # Iterate through all subdirectories in output path
     for pdf_dir in output_path.iterdir():
+        # Skip non-directory entries (files, symlinks, etc.)
         if not pdf_dir.is_dir():
             continue
+        # Skip hidden directories (e.g., .git, .DS_Store)
         if pdf_dir.name.startswith("."):
             continue
-        # Only check directories that match the input pattern
+        # Only check directories that match the input file pattern
         if pdf_dir.name not in matching_stems:
             continue
 
+        # Collect JSON files that have empty lab_results
         empty_jsons = []
         for json_path in pdf_dir.glob("*.json"):
             try:
+                # Parse JSON extraction result
                 data = json.loads(json_path.read_text(encoding="utf-8"))
+                # Identify empty extractions: valid dict with no lab_results but not explicitly marked as no-lab-data
                 if (
                     isinstance(data, dict)
                     and not data.get("lab_results")
@@ -1020,37 +1036,55 @@ def _find_empty_extractions(
                 ):
                     empty_jsons.append(json_path)
             except (json.JSONDecodeError, UnicodeDecodeError):
+                # Skip corrupted or unreadable JSON files
                 pass
 
+        # Record this PDF if it has any empty extraction files
         if empty_jsons:
             empty_by_pdf.append((pdf_dir, sorted(empty_jsons)))
 
+    # Return sorted by PDF name for consistent ordering
     return sorted(empty_by_pdf, key=lambda x: x[0].name)
 
 
 def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list[Path]:
-    """Check for empty extractions and prompt user to reprocess each one."""
+    """Check for empty extractions and prompt user to reprocess each one.
+
+    Interactive prompt allows user to choose which PDFs with empty extractions to reprocess.
+    Deleting the empty JSON/CSV files triggers reprocessing on next pipeline run.
+
+    Returns list of PDF directories selected for reprocessing.
+    """
+    # Scan output directory for PDFs with empty extraction files
     empty_extractions = _find_empty_extractions(output_path, matching_stems)
 
+    # Guard: Exit early if no empty extractions found
     if not empty_extractions:
         return []
 
+    # Display summary of PDFs with empty extractions
     print(f"\nFound {len(empty_extractions)} PDF(s) with empty extraction pages:")
     for pdf_dir, empty_jsons in empty_extractions:
         print(f"  - {pdf_dir.name}: {len(empty_jsons)} empty page(s)")
 
+    # Collect user responses for which PDFs to reprocess
     pdfs_to_reprocess = []
 
+    # Iterate through each PDF and prompt user for reprocess decision
     for pdf_dir, empty_jsons in empty_extractions:
+        # Display detailed list of empty extraction files for this PDF
         print(f"\n{pdf_dir.name}:")
         for json_path in empty_jsons:
             print(f"  - {json_path.name}")
 
+        # Prompt user for decision (y=yes, N=no, a=all, q=quit)
         response = input(f"Reprocess {pdf_dir.name}? [y/N/a(ll)/q(uit)]: ").strip().lower()
 
+        # Handle quit response - stop processing remaining PDFs
         if response == "q":
             print("Skipping remaining files.")
             break
+        # Handle accept-all response - add current and all remaining PDFs
         elif response == "a":
             pdfs_to_reprocess.append(pdf_dir)
             for remaining_pdf_dir, _ in empty_extractions[
@@ -1058,15 +1092,19 @@ def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list
             ]:
                 pdfs_to_reprocess.append(remaining_pdf_dir)
             break
+        # Handle yes response - add only this PDF to reprocess list
         elif response == "y":
             pdfs_to_reprocess.append(pdf_dir)
 
+    # Delete extraction files for selected PDFs to trigger reprocessing
     if pdfs_to_reprocess:
         print(f"\nDeleting empty extractions for {len(pdfs_to_reprocess)} PDF(s)...")
         for pdf_dir in pdfs_to_reprocess:
+            # Delete empty JSON files (removes cached extraction results)
             for json_path in pdf_dir.glob("*.json"):
                 try:
                     data = json.loads(json_path.read_text(encoding="utf-8"))
+                    # Only delete if still empty (has no lab_results)
                     if (
                         isinstance(data, dict)
                         and not data.get("lab_results")
@@ -1075,8 +1113,10 @@ def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list
                         json_path.unlink()
                         logger.info(f"Deleted empty JSON: {json_path.name}")
                 except (json.JSONDecodeError, UnicodeDecodeError):
+                    # Skip corrupted files (don't delete what we can't parse)
                     pass
 
+            # Delete the CSV file to ensure clean reprocessing
             csv_path = pdf_dir / f"{pdf_dir.name}.csv"
             if csv_path.exists():
                 csv_path.unlink()
@@ -1268,18 +1308,24 @@ def check_server_availability(client: OpenAI, model_id: str, timeout: int = 10) 
         client.models.list(timeout=timeout)
         return True, "Server is available"
     except Exception as e:
+        # Classify the error type to provide helpful diagnostic messages
         error_msg = str(e)
+
+        # Check for authentication errors (invalid or missing API key)
         if "401" in error_msg or "Unauthorized" in error_msg:
             return (
                 False,
                 f"Authentication failed - check your OPENROUTER_API_KEY: {error_msg}",
             )
+        # Check for timeout errors (server slow or unreachable)
         elif "timeout" in error_msg.lower():
             return False, f"Server timeout after {timeout}s - server may be unreachable"
+        # Check for 404 errors (endpoint not implemented, common with local servers)
         elif "404" in error_msg:
             # Server responded with 404 - endpoint not implemented (e.g., local servers)
             # This is a valid response, so server is available
             return True, "Server is available (models endpoint not implemented)"
+        # Check for connection failures (network issues, DNS problems, server down)
         elif (
             "Connection" in error_msg
             or "refused" in error_msg.lower()
@@ -1288,9 +1334,64 @@ def check_server_availability(client: OpenAI, model_id: str, timeout: int = 10) 
             or "getaddrinfo" in error_msg
         ):
             return False, f"Cannot connect to server: {error_msg}"
+        # Handle all other errors conservatively - assume unavailable to be safe
         else:
             # For any other error, assume server is unavailable to be safe
             return False, f"Server check failed: {error_msg}"
+
+
+def _build_and_validate_config(
+    args, profile_name: str
+) -> tuple[ExtractionConfig | None, list[str]]:
+    """Build and validate configuration for a profile.
+
+    Returns tuple of (config, errors) where config is None if validation fails.
+    """
+    # Temporarily override args.profile for config building
+    original_profile = args.profile
+    args.profile = profile_name
+
+    try:
+        # Build and validate configuration
+        config, errors = build_config(args)
+        # Guard: Return errors if validation failed (config will be None)
+        if errors:
+            return None, errors
+        return config, []
+    finally:
+        # Restore original profile name regardless of outcome
+        args.profile = original_profile
+
+
+def _process_pdfs_or_use_cache(
+    pdf_files: list[Path],
+    pdfs_to_process: list[Path],
+    config: ExtractionConfig,
+    lab_specs: LabSpecsConfig,
+    standardization_section: str | None,
+    log_dir: Path,
+) -> tuple[list[Path], list[dict], int]:
+    """Process PDFs or use cached results if all already processed.
+
+    Returns tuple of (csv_paths, all_failed_pages, pdfs_failed).
+    """
+    # All PDFs already have valid CSVs - just collect paths
+    if not pdfs_to_process:
+        logger.info("All PDFs already processed. Moving to merge step...")
+        csv_paths = [
+            p for pdf in pdf_files if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))
+        ]
+        return csv_paths, [], 0
+
+    # Process remaining PDFs using parallel worker pool
+    return _process_pdfs_in_parallel(
+        pdfs_to_process,
+        pdf_files,
+        config,
+        lab_specs,
+        standardization_section,
+        log_dir,
+    )
 
 
 def run_for_profile(args, profile_name: str) -> bool:
@@ -1298,24 +1399,17 @@ def run_for_profile(args, profile_name: str) -> bool:
 
     Returns True if successful, False otherwise.
     """
-    # Temporarily set args.profile for build_config
-    original_profile = args.profile
-    args.profile = profile_name
+    # Build and validate configuration for this profile
+    config, errors = _build_and_validate_config(args, profile_name)
 
-    try:
-        # Build and validate configuration - handle errors explicitly
-        config, errors = build_config(args)
-        if errors:
-            # Log all configuration errors before returning
-            print(f"\nConfiguration errors for profile '{profile_name}':")
-            for error in errors:
-                print(f"  - {error}")
-            return False
-    finally:
-        # Restore original profile name regardless of success/failure
-        args.profile = original_profile
+    # Handle configuration validation failures
+    if errors:
+        print(f"\nConfiguration errors for profile '{profile_name}':")
+        for error in errors:
+            print(f"  - {error}")
+        return False
 
-    # Guard: config should be valid at this point
+    # Guard: Config should exist if no errors were reported
     if not config:
         print(f"\nUnexpected error: Configuration failed but no errors reported")
         return False
@@ -1379,26 +1473,10 @@ def run_for_profile(args, profile_name: str) -> bool:
     logger.info(f"Skipping {skipped_count} already-processed PDF(s)")
     logger.info(f"Processing {len(pdfs_to_process)} PDF(s)")
 
-    # Initialize collection for tracking extraction failures across all PDFs
-    all_failed_pages = []
-
-    if not pdfs_to_process:
-        # All PDFs already have valid CSVs - collect paths for merging
-        logger.info("All PDFs already processed. Moving to merge step...")
-        csv_paths = [
-            p for pdf in pdf_files if _is_csv_valid(p := _get_csv_path(pdf, config.output_path))
-        ]
-        pdfs_failed = 0
-    else:
-        # Process remaining PDFs using parallel worker pool
-        csv_paths, all_failed_pages, pdfs_failed = _process_pdfs_in_parallel(
-            pdfs_to_process,
-            pdf_files,
-            config,
-            lab_specs,
-            standardization_section,
-            log_dir,
-        )
+    # Process PDFs or use cached results (handles both cache hit and miss cases)
+    csv_paths, all_failed_pages, pdfs_failed = _process_pdfs_or_use_cache(
+        pdf_files, pdfs_to_process, config, lab_specs, standardization_section, log_dir
+    )
 
     # Guard: Exit if no PDFs were successfully processed
     if not csv_paths:
