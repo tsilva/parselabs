@@ -7,155 +7,9 @@ description: Code quality and clarity guidelines for Python - enforces flat orch
 
 ## Core Rules
 
-### 1. Max 2 Indentation Levels in Orchestrators
+### 1. Flat Orchestrator
 
-Main orchestrator functions must not exceed 2 levels of indentation. Extract helpers when deeper.
-
-```python
-# GOOD - Flat structure with early returns
-def process():
-    if not valid:           # Level 1
-        return None
-    
-    result = fetch()        # Level 1
-    if not result:          # Level 1
-        return None
-    
-    return transform(result)
-
-# BAD - Deep nesting requires extraction
-def process():
-    if condition1:          # Level 1
-        if condition2:       # Level 2
-            for item in items: # Level 3 ← EXTRACT THIS
-                process(item)
-```
-
-### 2. Helpers Must Not Silently Catch Errors
-
-Reusable helpers let exceptions propagate. Orchestrator handles all error flow.
-
-```python
-# BAD - Silent failure hidden in helper
-def helper():
-    try:
-        return api.call()
-    except Exception:
-        return None  # Silent!
-
-def main():
-    result = helper()  # Did it fail? Unknown!
-    if result:         # Defensive check required
-        process(result)
-
-# CORRECT - Explicit error handling in orchestrator
-def helper():
-    return api.call()  # Let it raise
-
-def main():
-    try:
-        result = helper()
-        process(result)
-    except APIError as e:
-        logger.error(f"API call failed: {e}")
-        return None
-```
-
-### 3. All Comments Required
-
-**Every code block, branch, and early exit must have an explanatory comment.**
-
-#### Block Comments
-Comments explain PURPOSE and INTENT, not just restate code.
-
-```python
-# Build and validate configuration from user args
-config, errors = build_config(args)
-
-# Guard: Return errors if validation failed
-if errors:
-    return None, errors
-```
-
-#### Branch Comments
-All `if/elif/else` branches must have comments explaining the condition.
-
-```python
-# Guard: Skip processing if data is missing
-if not data:
-    return None
-# Check for authentication errors specifically
-elif "401" in error_msg:
-    return False, "Auth failed"
-# Handle timeout scenarios
-elif "timeout" in error_msg.lower():
-    return False, "Server timeout"
-# Any other error - fail safe
-else:
-    return False, "Unknown error"
-```
-
-**TRIGGER: Always check these for missing comments:**
-- Error classification chains (multiple elif branches)
-- State machine logic (different states)
-- Strategy selection (choosing between algorithms)
-- Protocol handlers (HTTP status codes, API response codes)
-
-#### Early Exit Comments (Guard Clauses)
-**ALL early exits MUST have comments.** No exceptions.
-
-```python
-# CORRECT - Guard clause with explanation
-# Guard: Return errors if validation failed
-if errors:
-    return None, errors
-
-# Skip non-directory entries
-if not pdf_dir.is_dir():
-    continue
-
-# Process remaining PDFs if cache incomplete
-if pdfs_to_process:
-    _process()
-```
-
-**MANDATORY CHECK:** Verify each has a comment:
-- `if condition:` → `return` / `continue` / `break`
-- Any guard causing early exit from function or loop
-
-### 4. Extract Helpers for Complex Logic
-
-Break logic into well-named helpers when:
-- Hit indentation level 3 or deeper
-- More than 5-7 lines of contiguous logic
-- Logic can be reused or tested independently
-
-**Naming:** Use verbs describing intent.
-```python
-# GOOD
-def _extract_via_vision()
-def _apply_standardization()
-def _try_load_cached_extraction()
-
-# BAD
-def _convert_pdf()        # Implementation detail
-def _load_cache()         # Too vague
-def _process_data()       # Too generic
-```
-
-**Document tuple returns in docstring:**
-```python
-def _extract_via_vision(pdf_path: Path) -> tuple[list[Result], datetime | None]:
-    """Extract lab results from PDF using vision model.
-    
-    Returns:
-        tuple: (list of extracted results, document date or None)
-    """
-```
-
-### 5. Orchestrator Pattern
-
-Main function controls all flow decisions. Error handling visible at each step. Read top-to-bottom without jumping into helpers.
+Main functions own all flow: max 2 indent levels, early returns as guards, helpers extracted for deeper logic.
 
 ```python
 def process_single_pdf(pdf_path: Path) -> tuple[Path | None, list[dict]]:
@@ -163,66 +17,90 @@ def process_single_pdf(pdf_path: Path) -> tuple[Path | None, list[dict]]:
     # Initialize directory structure
     doc_out_dir, csv_path, failed_pages = _setup_paths(pdf_path)
 
-    # Attempt text extraction, fall back to vision if needed
+    # Guard: Skip if no pages found
+    pages = _convert_to_images(pdf_path)
+    if not pages:
+        return None, []
+
+    # Extract lab data via vision model
     try:
-        result = _try_text_extraction(pdf_path)
-    except Exception as e:
-        logger.error(f"Text extraction failed: {e}")
-        result = None
+        data = _extract_via_vision(pdf_path, pages)
+    except ExtractionError as e:
+        logger.error(f"Extraction failed: {e}")
+        return None, failed_pages
 
-    # Choose processing path based on extraction success
-    if result:
-        data = _process_text_results(result)
-    else:
-        try:
-            data = _extract_via_vision(pdf_path)
-        except Exception as e:
-            logger.error(f"Vision extraction failed: {e}")
-            return None, failed_pages
-
-    # Guard: Check if extraction yielded results
+    # Guard: No results extracted
     if not data:
         return _handle_empty_results(csv_path), failed_pages
 
-    # Post-processing
+    # Normalize and save
     _apply_standardization(data)
     _save_results(data, csv_path)
-
     return csv_path, failed_pages
 ```
 
-**Principles:**
-- Read top-to-bottom without jumping into helpers
-- All decision points visible in main flow
-- Error handling explicit at each step
-- Guard clauses for early returns
+**Rules embedded in this example:**
+- **Max 2 indent levels** — `try` block is the deepest nesting
+- **Early return over else** — guards exit early, remaining code stays flat
+- **Extract helpers** — `_extract_via_vision`, `_apply_standardization` keep orchestrator readable
+- **Verb-based helper names** — `_setup_paths`, `_convert_to_images`, `_extract_via_vision`
+- **Read top-to-bottom** — all decision points visible in main flow
 
-### 6. Early Return Over Else
+**When to extract a helper:**
+- Indentation would reach level 3+
+- Block exceeds 5-7 contiguous lines
+- Logic is independently testable or reusable
 
-When one branch of an `if/else` exits (return, continue, break), eliminate the `else` block. Flip the condition to exit early and dedent the remaining code.
+### 2. Errors Propagate Up
+
+Helpers raise exceptions. Orchestrators catch and decide.
 
 ```python
-# WRONG - Unnecessary else after early return
-if args.list_profiles:
-    profiles = ProfileConfig.list_profiles()
-    if profiles:
-        print("Available profiles:")
-        for name in profiles:
-            print(f"  - {name}")
-    else:
-        print("No profiles found. Create profiles in the 'profiles/' directory.")
-    return
+# BAD - Helper hides failure
+def _fetch_data():
+    try:
+        return api.call()
+    except Exception:
+        return None  # Caller can't distinguish failure from empty
 
-# RIGHT - Early return eliminates else, flattens code
-if args.list_profiles:
-    # If no profiles available then return
-    profiles = ProfileConfig.list_profiles()
-    if not profiles:
-        print("No profiles found. Create profiles in the 'profiles/' directory.")
-        return
+# GOOD - Helper raises, orchestrator decides
+def _fetch_data():
+    return api.call()  # Let it raise
 
-    # Print available profiles
-    print("Available profiles:")
-    for name in profiles:
-        print(f"  - {name}")
+def process():
+    try:
+        data = _fetch_data()
+    except APIError as e:
+        logger.error(f"Fetch failed: {e}")
+        return None
+    return transform(data)
 ```
+
+### 3. Comment Every Branch
+
+Every guard clause, if/elif/else branch, and logical block gets a comment explaining intent.
+
+```python
+# Build and validate configuration
+config, errors = build_config(args)
+
+# Guard: Bail if validation failed
+if errors:
+    return None, errors
+
+# Check error type for appropriate response
+if "401" in error_msg:
+    # Authentication failure - credentials invalid
+    return False, "Auth failed"
+elif "timeout" in error_msg.lower():
+    # Server didn't respond in time
+    return False, "Server timeout"
+else:
+    # Unknown error - fail safe
+    return False, "Unknown error"
+```
+
+**Mandatory check** — verify a comment exists before every:
+- `return` / `continue` / `break` guard
+- `if` / `elif` / `else` branch
+- Logical block (group of related statements)
