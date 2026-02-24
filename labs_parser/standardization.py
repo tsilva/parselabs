@@ -19,24 +19,34 @@ _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 def _load_prompt(name: str) -> str:
     """Load a prompt template from the prompts directory."""
+
     return (_PROMPTS_DIR / f"{name}.txt").read_text(encoding="utf-8")
 
 
 def load_cache(name: str) -> dict:
     """Load JSON cache file. User-editable for overriding LLM decisions."""
+
     path = CACHE_DIR / f"{name}.json"
+
+    # Cache file exists — attempt to load it
     if path.exists():
         try:
             with open(path, encoding="utf-8") as f:
                 return json.load(f)
+        # Cache file is corrupted or unreadable
         except (json.JSONDecodeError, IOError) as e:
             logger.warning(f"Failed to load cache {name}: {e}")
+
+    # No cache file or load failed — return empty dict
     return {}
 
 
 def save_cache(name: str, cache: dict):
     """Save cache to JSON, sorted alphabetically for easy editing."""
+
+    # Ensure cache directory exists
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
     path = CACHE_DIR / f"{name}.json"
     with open(path, "w", encoding="utf-8") as f:
         json.dump(cache, f, indent=2, ensure_ascii=False, sort_keys=True)
@@ -64,16 +74,18 @@ def standardize_with_llm(
     Returns:
         Dictionary or list (matching input type) mapping items to standardized values
     """
+
     # Empty input — return matching empty type
     if not items:
         return {} if isinstance(items, dict) else []
 
+    # Track input type for consistent return format
     is_list_input = isinstance(items, list)
 
     def fallback():
         return items if is_list_input else {key: UNKNOWN_VALUE for key in items.keys()}
 
-    # No candidates to match against
+    # No candidates to match against — nothing to standardize to
     if not candidates:
         logger.warning("No candidates available, returning $UNKNOWN$ for all")
         return fallback()
@@ -91,6 +103,7 @@ def standardize_with_llm(
 
 Return a JSON object/array with the standardized values."""
 
+    # Call LLM for standardization
     try:
         completion = client.chat.completions.create(
             model=model_id,
@@ -107,6 +120,7 @@ Return a JSON object/array with the standardized values."""
             logger.error("Invalid completion response for standardization")
             return fallback()
 
+        # Parse LLM response into structured data
         response_text = completion.choices[0].message.content.strip()
         result = parse_llm_json_response(response_text, fallback={})
 
@@ -138,9 +152,11 @@ Return a JSON object/array with the standardized values."""
 
         return validated
 
+    # JSON parsing failed at response level
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse standardization response as JSON: {e}")
         return fallback()
+    # Unexpected error (network, API, etc.)
     except Exception as e:
         logger.error(f"Error during standardization: {e}")
         return fallback()
@@ -168,6 +184,8 @@ def standardize_lab_names(
     Returns:
         Dictionary mapping raw_test_name -> standardized_name
     """
+
+    # No input names — nothing to standardize
     if not raw_test_names:
         return {}
 
@@ -183,9 +201,11 @@ def standardize_lab_names(
 
     uncached_names = [n for n in unique_raw_names if cache_key(n) not in cache]
 
-    # Call LLM only for uncached names
+    # Uncached names found — call LLM for standardization
     if uncached_names:
         logger.info(f"[name_standardization] {len(uncached_names)} uncached names, calling LLM...")
+
+        # Build items dict mapping each name to itself for LLM input
         items = {name: name for name in uncached_names}
 
         system_prompt_template = _load_prompt("name_standardization")
@@ -232,6 +252,8 @@ def standardize_lab_units(
     Returns:
         Dictionary mapping (raw_unit, lab_name) -> standardized_unit
     """
+
+    # No input contexts — nothing to standardize
     if not unit_contexts:
         return {}
 
@@ -249,12 +271,14 @@ def standardize_lab_units(
     uncached_pairs = []
     for raw_unit, lab_name in unique_pairs:
         key = cache_key(raw_unit, lab_name)
+        # Cache hit — use cached result
         if key in cache:
             cached_results[(raw_unit, lab_name)] = cache[key]
+        # Cache miss — queue for LLM
         else:
             uncached_pairs.append((raw_unit, lab_name))
 
-    # If all cached, return early
+    # All pairs cached — return early
     if not uncached_pairs:
         return {pair: cached_results.get(pair, UNKNOWN_VALUE) for pair in unit_contexts}
 
@@ -262,10 +286,14 @@ def standardize_lab_units(
 
     # Build primary units mapping for null unit inference (only for uncached)
     primary_units_map = {}
+
+    # Lab specs available — look up primary units for each uncached lab name
     if lab_specs_config and lab_specs_config.exists:
         for _, lab_name in uncached_pairs:
+            # Valid lab name — look up its primary unit
             if lab_name and lab_name != UNKNOWN_VALUE:
                 primary_unit = lab_specs_config.get_primary_unit(lab_name)
+                # Primary unit found — add to mapping
                 if primary_unit:
                     primary_units_map[lab_name] = primary_unit
 
@@ -274,6 +302,8 @@ def standardize_lab_units(
 
     # Build primary units context for prompt
     primary_units_context = ""
+
+    # Primary units available — format them for the prompt template
     if primary_units_map:
         primary_units_list = [f'  "{lab}": "{unit}"' for lab, unit in sorted(primary_units_map.items())]
         # Build the mapping and escape curly braces for .format()
@@ -300,25 +330,31 @@ PRIMARY UNITS MAPPING (use this for null/missing units):
     )
 
     # Convert list result to dict mapping (raw_unit, lab_name) -> standardized_unit
-    # The LLM should return a list, so we need to handle that
     llm_results = {}
+
+    # LLM returned expected list format — process each item
     if isinstance(result_list, list):
         for item in result_list:
             raw_unit = item.get("raw_unit")
             lab_name = item.get("lab_name")
             standardized = item.get("standardized_unit")
 
+            # Valid pair — validate the standardized value
             if raw_unit is not None and lab_name is not None:
+                # Valid standardized unit
                 if standardized and (standardized == UNKNOWN_VALUE or standardized in standardized_units):
                     llm_results[(raw_unit, lab_name)] = standardized
+                # LLM returned value not in candidates
                 else:
                     logger.warning(f"LLM returned invalid unit: '{standardized}' for ({raw_unit}, {lab_name})")
                     llm_results[(raw_unit, lab_name)] = UNKNOWN_VALUE
+    # LLM returned unexpected format
     else:
         logger.error("Expected list response from LLM for unit standardization")
 
     # Ensure all uncached pairs have a mapping
     for pair in uncached_pairs:
+        # LLM omitted this pair — default to unknown
         if pair not in llm_results:
             logger.warning(f"LLM didn't return mapping for {pair}, using $UNKNOWN$")
             llm_results[pair] = UNKNOWN_VALUE
@@ -352,6 +388,8 @@ def standardize_qualitative_values(raw_values: list[str], model_id: str, client:
     Returns:
         Dictionary mapping raw_value -> 0 (negative), 1 (positive), or None (not qualitative)
     """
+
+    # No input values — nothing to classify
     if not raw_values:
         return {}
 
@@ -367,7 +405,7 @@ def standardize_qualitative_values(raw_values: list[str], model_id: str, client:
     # Split into cached and uncached
     uncached_values = [v for v in unique_values if v not in cache]
 
-    # If all cached, return early
+    # All values cached — return early
     if not uncached_values:
         return {v: cache.get(cache_key(v)) for v in raw_values if v is not None}
 
@@ -376,6 +414,7 @@ def standardize_qualitative_values(raw_values: list[str], model_id: str, client:
     # Build items for LLM
     items = {v: v for v in uncached_values}
 
+    # System prompt for qualitative classification
     system_prompt_template = """You are a medical lab result classifier.
 
 Your task: Classify qualitative lab result text as boolean values.
@@ -394,6 +433,7 @@ IMPORTANT:
 Return format: {{"value1": 0, "value2": 1, "value3": null, ...}}
 """
 
+    # Call LLM for classification
     try:
         completion = client.chat.completions.create(
             model=model_id,
@@ -408,33 +448,42 @@ Return format: {{"value1": 0, "value2": 1, "value3": null, ...}}
             max_tokens=2000,
         )
 
+        # Empty or malformed API response
         if not completion or not completion.choices:
             logger.error("Invalid completion response for qualitative classification")
             return {v: None for v in raw_values if v is not None}
 
+        # Parse LLM response into structured data
         response_text = completion.choices[0].message.content.strip()
         result = parse_llm_json_response(response_text, fallback={})
 
+        # JSON parsing failed
         if not result:
             logger.error("Failed to parse qualitative classification response")
             return {v: None for v in raw_values if v is not None}
 
         # Validate and update cache
         for value in uncached_values:
+            # LLM returned a classification for this value
             if value in result:
                 classified = result[value]
+                # Valid boolean classification
                 if classified in (0, 1, None):
                     cache[value] = classified
+                # LLM returned unexpected value
                 else:
                     logger.warning(f"LLM returned invalid classification: '{classified}' for '{value}', using null")
                     cache[value] = None
+            # LLM omitted this value
             else:
                 logger.warning(f"LLM didn't return classification for '{value}', using null")
                 cache[value] = None
 
+        # Persist updated cache
         save_cache("qualitative_to_boolean", cache)
         logger.info(f"[qualitative_to_boolean] Cache updated with {len(uncached_values)} entries")
 
+    # Unexpected error (network, API, etc.)
     except Exception as e:
         logger.error(f"Error during qualitative classification: {e}")
         return {v: None for v in raw_values if v is not None}

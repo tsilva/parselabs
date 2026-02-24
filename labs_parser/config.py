@@ -56,6 +56,8 @@ class ProfileConfig:
     @classmethod
     def from_file(cls, profile_path: Path) -> "ProfileConfig":
         """Load profile from YAML or JSON file."""
+
+        # Guard: profile file must exist
         if not profile_path.exists():
             raise FileNotFoundError(f"Profile not found: {profile_path}")
 
@@ -67,6 +69,7 @@ class ProfileConfig:
 
             data = yaml.safe_load(content)
         else:
+            # Fall back to JSON for all other extensions
             data = json.loads(content)
 
         # Extract paths
@@ -81,6 +84,8 @@ class ProfileConfig:
         # Extract demographics (for personalized healthy ranges)
         demographics = None
         demo_data = data.get("demographics", {})
+
+        # Build Demographics object if demographic data is present
         if demo_data:
             demographics = Demographics(
                 gender=demo_data.get("gender"),
@@ -101,22 +106,31 @@ class ProfileConfig:
     @classmethod
     def find_path(cls, name: str, profiles_dir: Path = Path("profiles")) -> Path | None:
         """Find profile file path by name, trying yaml/yml/json extensions."""
+
+        # Try each supported extension in priority order
         for ext in (".yaml", ".yml", ".json"):
             p = profiles_dir / f"{name}{ext}"
             if p.exists():
                 return p
+
+        # No matching profile file found
         return None
 
     @classmethod
     def list_profiles(cls, profiles_dir: Path = Path("profiles")) -> list[str]:
         """List available profile names."""
+
+        # Guard: return empty if profiles directory doesn't exist
         if not profiles_dir.exists():
             return []
+
+        # Collect profile names from all supported formats
         profiles = []
         for ext in ("*.json", "*.yaml", "*.yml"):
             for f in profiles_dir.glob(ext):
                 if not f.name.startswith("_"):  # Skip templates
                     profiles.append(f.stem)
+
         return sorted(set(profiles))
 
 
@@ -136,8 +150,11 @@ class Demographics:
     @property
     def age(self) -> int | None:
         """Calculate current age from date_of_birth."""
+
+        # Guard: no date of birth available
         if not self.date_of_birth:
             return None
+
         try:
             from datetime import date
 
@@ -145,6 +162,7 @@ class Demographics:
             today = date.today()
             return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
         except ValueError:
+            # Invalid date format
             return None
 
 
@@ -156,16 +174,20 @@ class LabSpecsConfig:
 
     def __init__(self, config_path: Path = Path("config/lab_specs.json")):
         """Load lab specs configuration."""
+
+        # Initialize empty state
         self.config_path = config_path
         self._specs = {}
         self._standardized_names = []
         self._standardized_units = []
         self._lab_type_map = {}
 
+        # Guard: config file must exist
         if not config_path.exists():
             logger.warning(f"lab_specs.json not found at {config_path}")
             return
 
+        # Load raw specs from JSON
         with open(config_path, "r", encoding="utf-8") as f:
             self._specs = json.load(f)
 
@@ -179,6 +201,7 @@ class LabSpecsConfig:
                 continue
             if not isinstance(spec, dict):  # Skip non-dict entries
                 continue
+
             primary = spec.get("primary_unit")
             if primary:
                 all_units.add(primary)
@@ -198,35 +221,45 @@ class LabSpecsConfig:
     @property
     def exists(self) -> bool:
         """Check if config was successfully loaded."""
+
         return bool(self._specs)
 
     @property
     def standardized_names(self) -> list[str]:
         """Get list of valid standardized lab names."""
+
         return self._standardized_names
 
     @property
     def standardized_units(self) -> list[str]:
         """Get list of valid standardized units."""
+
         return self._standardized_units
 
     @property
     def specs(self) -> dict:
         """Get raw specs dictionary."""
+
         return self._specs
 
     def get_lab_type(self, lab_name: str) -> str:
         """Get lab type for a given lab name."""
+
         return self._lab_type_map.get(lab_name, "blood")
 
     def get_primary_unit(self, lab_name: str) -> str | None:
         """Get primary unit for a lab."""
+
+        # Guard: lab not in specs
         if lab_name not in self._specs:
             return None
+
         return self._specs[lab_name].get("primary_unit")
 
     def get_conversion_factor(self, lab_name: str, from_unit: str) -> float | None:
         """Get conversion factor from given unit to primary unit."""
+
+        # Guard: lab not in specs
         if lab_name not in self._specs:
             return None
 
@@ -242,6 +275,7 @@ class LabSpecsConfig:
             if alt.get("unit") == from_unit:
                 return alt.get("factor")
 
+        # No conversion available for this unit
         return None
 
     def get_healthy_range_for_demographics(self, lab_name: str, gender: str | None = None, age: int | None = None) -> tuple[float | None, float | None]:
@@ -261,10 +295,14 @@ class LabSpecsConfig:
         Returns:
             Tuple of (min, max) or (None, None)
         """
+
+        # Guard: lab not in specs
         if lab_name not in self._specs:
             return (None, None)
 
         ranges = self._specs[lab_name].get("ranges", {})
+
+        # Guard: no ranges configured
         if not ranges:
             return (None, None)
 
@@ -274,6 +312,7 @@ class LabSpecsConfig:
                 if key.startswith(f"{gender}:"):
                     age_part = key.split(":", 1)[1]
                     if self._age_matches_range(age, age_part):
+                        # Matching gender+age range found
                         if isinstance(value, list) and len(value) >= 2:
                             return (value[0], value[1])
 
@@ -288,6 +327,7 @@ class LabSpecsConfig:
         if isinstance(default, list) and len(default) >= 2:
             return (default[0], default[1])
 
+        # No applicable range found
         return (None, None)
 
     def _age_matches_range(self, age: int, age_spec: str) -> bool:
@@ -298,26 +338,37 @@ class LabSpecsConfig:
         - "65+" (threshold and above)
         - "18-64" (inclusive range)
         """
+
+        # Check threshold format (e.g., "65+")
         if "+" in age_spec:
             threshold = int(age_spec.replace("+", ""))
             return age >= threshold
+
+        # Check range format (e.g., "0-17", "18-64")
         if "-" in age_spec:
             parts = age_spec.split("-")
             if len(parts) == 2:
                 try:
                     return int(parts[0]) <= age <= int(parts[1])
                 except ValueError:
+                    # Invalid numeric values in range
                     return False
+
+        # Unrecognized format
         return False
 
     def get_percentage_variant(self, lab_name: str) -> str | None:
         """Get the (%) variant of a lab name if it exists."""
-        if lab_name.endswith("(%)"):
-            return None  # Already a percentage variant
 
+        # Guard: already a percentage variant
+        if lab_name.endswith("(%)"):
+            return None
+
+        # Check if percentage variant exists in specs
         percentage_variant = f"{lab_name} (%)"
         if percentage_variant in self._specs:
             return percentage_variant
+
         return None
 
     def get_non_percentage_variant(self, lab_name: str) -> str | None:
@@ -325,13 +376,16 @@ class LabSpecsConfig:
 
         For example: "Blood - Neutrophils (%)" -> "Blood - Neutrophils"
         """
-        if not lab_name.endswith("(%)"):
-            return None  # Not a percentage variant
 
-        # Remove " (%)" suffix
+        # Guard: not a percentage variant
+        if not lab_name.endswith("(%)"):
+            return None
+
+        # Remove " (%)" suffix and check if non-percentage variant exists
         non_percentage_variant = lab_name[:-4]  # Remove " (%)"
         if non_percentage_variant in self._specs:
             return non_percentage_variant
+
         return None
 
     def get_loinc_code(self, lab_name: str) -> str | None:
@@ -352,6 +406,9 @@ class LabSpecsConfig:
             >>> lab_specs.get_loinc_code("Blood - Unknown Test")
             None
         """
+
+        # Guard: lab not in specs
         if lab_name not in self._specs:
             return None
+
         return self._specs[lab_name].get("loinc_code")

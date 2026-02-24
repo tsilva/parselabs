@@ -28,6 +28,8 @@ def preprocess_numeric_value(value) -> str:
     Returns:
         Cleaned string ready for numeric conversion
     """
+
+    # Pass through missing values
     if pd.isna(value):
         return value
 
@@ -62,6 +64,8 @@ def extract_comparison_value(value) -> tuple[str, bool, bool]:
     Returns:
         Tuple of (numeric_str, is_below_limit, is_above_limit)
     """
+
+    # Pass through missing values
     if pd.isna(value):
         return str(value), False, False
 
@@ -69,6 +73,7 @@ def extract_comparison_value(value) -> tuple[str, bool, bool]:
     is_below = s.startswith("<")
     is_above = s.startswith(">")
 
+    # Strip operator prefix and extract numeric part
     if is_below or is_above:
         # Extract numeric part: "<0.05" → "0.05", "< 10" → "10"
         numeric = re.sub(r"^[<>]\s*", "", s)
@@ -76,6 +81,7 @@ def extract_comparison_value(value) -> tuple[str, bool, bool]:
         numeric = numeric.split("=")[0].strip()
         return numeric, is_below, is_above
 
+    # No operator found
     return s, False, False
 
 
@@ -89,7 +95,11 @@ def _infer_unit_by_plausibility(
 
     Returns '%' if value clearly belongs to the percentage variant, None otherwise.
     """
+
+    # Look up expected range for the primary unit
     expected_default = lab_specs._specs.get(lab_name_standardized, {}).get("ranges", {}).get("default", [])
+
+    # Not enough range data to evaluate
     if len(expected_default) < 2:
         return None
 
@@ -101,6 +111,8 @@ def _infer_unit_by_plausibility(
 
     # Check if value fits percentage range instead
     pct_default = lab_specs._specs.get(percentage_lab_name, {}).get("ranges", {}).get("default", [])
+
+    # Not enough percentage range data to evaluate
     if len(pct_default) < 2:
         return None
 
@@ -141,6 +153,8 @@ def infer_missing_unit(
     Returns:
         Inferred unit string or None if cannot infer
     """
+
+    # Skip unknown or missing lab names
     if pd.isna(lab_name_standardized) or lab_name_standardized == UNKNOWN_VALUE:
         return None
 
@@ -171,9 +185,8 @@ def infer_missing_unit(
         # Value is within reasonable bounds of reference range (0.3x to 3x)
         value_matches_range = 0.3 <= ratio <= 3.0
 
-    # Decision logic
+    # Decision logic: strong evidence this is a percentage
     if has_large_range and has_percentage_variant and value_matches_range:
-        # Strong evidence this is a percentage
         logger.debug(f"[unit_inference] Inferring '%' for {lab_name_standardized}: value={value}, ref_range=({ref_min}, {ref_max})")
         return "%"
 
@@ -190,6 +203,7 @@ def infer_missing_unit(
             logger.debug(f"[unit_inference] Using primary unit '{primary_unit}' from lab_specs for {lab_name_standardized}")
             return primary_unit
 
+    # Could not infer a unit
     return None
 
 
@@ -221,9 +235,12 @@ def validate_reference_range(
     Returns:
         Tuple of (validated_ref_min, validated_ref_max) - may be converted or nullified
     """
+
+    # Skip if no lab specs available
     if not lab_specs.exists:
         return ref_min, ref_max
 
+    # Skip unknown or missing lab names
     if pd.isna(lab_name_standardized) or lab_name_standardized == UNKNOWN_VALUE:
         return ref_min, ref_max
 
@@ -238,29 +255,37 @@ def validate_reference_range(
     if lab_config.get("skip_range_validation", False):
         return ref_min, ref_max
 
+    # Skip if either reference bound is missing
     if ref_min is None or ref_max is None:
         return ref_min, ref_max
 
     # Get expected range for this lab from lab_specs
     ranges = lab_config.get("ranges", {})
+
+    # No expected ranges configured
     if not ranges:
         return ref_min, ref_max
 
     # Try to get expected range for this unit or default
     expected_range = None
+
+    # Prefer default range
     if "default" in ranges:
         expected_range = ranges["default"]
+    # Fall back to unit-specific range
     elif unit and unit in ranges:
         expected_range = ranges[unit]
 
+    # No usable expected range found
     if not expected_range or len(expected_range) < 2:
         return ref_min, ref_max
 
     expected_min, expected_max = expected_range[0], expected_range[1]
 
-    # If unit differs from primary unit, convert expected range using conversion factor
+    # Convert expected range when current unit differs from primary unit
     # This handles cases where PDF reference ranges are in a different unit than lab_specs
     primary_unit = lab_config.get("primary_unit")
+
     if unit and primary_unit and unit != primary_unit:
         alternatives = lab_config.get("alternatives", [])
         for alt in alternatives:
@@ -274,6 +299,7 @@ def validate_reference_range(
                     expected_max = expected_max / factor
                 break
 
+    # Cannot validate against zero or missing expected values
     if expected_min is None or expected_max is None or expected_min == 0 or expected_max == 0:
         return ref_min, ref_max
 
@@ -292,6 +318,7 @@ def validate_reference_range(
     #   ratio_min = 50x, ratio_max = 107x (BOTH suspicious)
     is_suspicious = (ratio_min > THRESHOLD_HIGH or ratio_min < THRESHOLD_LOW) and (ratio_max > THRESHOLD_HIGH or ratio_max < THRESHOLD_LOW)
 
+    # Attempt to fix or nullify suspicious ranges
     if is_suspicious:
         # Try to find a conversion factor that would fix the range
         converted_ref_min, converted_ref_max, was_explained = _try_convert_mismatched_range(
@@ -306,6 +333,7 @@ def validate_reference_range(
             lab_specs,
         )
 
+        # Conversion succeeded
         if converted_ref_min is not None and converted_ref_max is not None:
             return converted_ref_min, converted_ref_max
 
@@ -316,8 +344,11 @@ def validate_reference_range(
                 f"PDF=({ref_min:.2f}, {ref_max:.2f}), expected≈({expected_min}, {expected_max}), "
                 f"ratios=({ratio_min:.2f}x, {ratio_max:.2f}x) - nullifying range"
             )
+
+        # Nullify suspicious range
         return None, None
 
+    # Range is within acceptable bounds
     return ref_min, ref_max
 
 
@@ -332,14 +363,20 @@ def _try_match_cross_variant_range(
 
     Returns True and logs if the range matches the variant, False otherwise.
     """
+
+    # Variant lab not in specs
     if variant_lab not in lab_specs._specs:
         return False
 
     variant_ranges = lab_specs._specs[variant_lab].get("ranges", {}).get("default", [])
+
+    # Not enough range data for variant
     if len(variant_ranges) < 2:
         return False
 
     variant_min, variant_max = variant_ranges[0], variant_ranges[1]
+
+    # Variant range must have positive bounds
     if not (variant_min > 0 and variant_max > 0):
         return False
 
@@ -347,6 +384,7 @@ def _try_match_cross_variant_range(
     ratio_min = abs(ref_min / variant_min) if variant_min != 0 else 0
     ratio_max = abs(ref_max / variant_max) if variant_max != 0 else 0
 
+    # Ratios too far from 1 to be a match
     if not (0.3 < ratio_min < 3.0 and 0.3 < ratio_max < 3.0):
         return False
 
@@ -388,12 +426,15 @@ def _try_convert_mismatched_range(
         - If detected but can't convert: (None, None, True) - issue was logged
         - If unknown mismatch: (None, None, False) - caller should log warning
     """
+
     TOLERANCE = 0.3  # Allow 30% tolerance when matching conversion factors
 
     # Strategy 1: Check if ratio matches any alternative unit's conversion factor
     alternatives = lab_config.get("alternatives", [])
     for alt in alternatives:
         factor = alt.get("factor", 1.0)
+
+        # Skip invalid conversion factors
         if factor is None or factor == 0:
             continue
 
@@ -412,18 +453,19 @@ def _try_convert_mismatched_range(
             )
             return converted_min, converted_max, False
 
-    # Strategy 2: Check if range belongs to percentage variant
+    # Strategy 2: Check if range belongs to percentage variant (for absolute labs)
     if not lab_name_standardized.endswith("(%)"):
         pct_lab_name = f"{lab_name_standardized} (%)"
         if _try_match_cross_variant_range(lab_name_standardized, ref_min, ref_max, pct_lab_name, lab_specs):
             return None, None, True
 
-    # Strategy 3: Check if range belongs to absolute variant
+    # Strategy 3: Check if range belongs to absolute variant (for percentage labs)
     if lab_name_standardized.endswith("(%)"):
         base_lab_name = lab_name_standardized[:-4].strip()
         if _try_match_cross_variant_range(lab_name_standardized, ref_min, ref_max, base_lab_name, lab_specs):
             return None, None, True
 
+    # No conversion strategy matched
     return None, None, False
 
 
@@ -449,6 +491,8 @@ def fix_misassigned_percentage_units(df: pd.DataFrame, lab_specs: LabSpecsConfig
     Returns:
         DataFrame with corrected units and lab names
     """
+
+    # Skip empty data or missing specs
     if df.empty or not lab_specs.exists:
         return df
 
@@ -469,7 +513,7 @@ def fix_misassigned_percentage_units(df: pd.DataFrame, lab_specs: LabSpecsConfig
         if lab_name_std.endswith("(%)"):
             continue
 
-        # Check if percentage variant exists
+        # Skip if no percentage variant exists
         pct_lab_name = f"{lab_name_std} (%)"
         if pct_lab_name not in lab_specs._specs:
             continue
@@ -478,7 +522,7 @@ def fix_misassigned_percentage_units(df: pd.DataFrame, lab_specs: LabSpecsConfig
         abs_config = lab_specs._specs.get(lab_name_std, {})
         pct_config = lab_specs._specs.get(pct_lab_name, {})
 
-        # Check if current unit is an absolute unit (g/dL, g/L, etc.)
+        # Skip if current unit is not an absolute unit (g/dL, g/L, etc.)
         abs_primary_unit = abs_config.get("primary_unit", "")
         if unit not in [abs_primary_unit, "g/dL", "g/L"]:
             continue
@@ -491,17 +535,21 @@ def fix_misassigned_percentage_units(df: pd.DataFrame, lab_specs: LabSpecsConfig
 
         # Check 1: Value exceeds biological_max for absolute variant
         bio_max = abs_config.get("biological_max")
+
+        # Fall back to expected range max * 3 when biological_max not configured
         if bio_max is None:
-            # Fall back to expected range max * 3
             abs_ranges = abs_config.get("ranges", {}).get("default", [])
             if len(abs_ranges) >= 2:
                 bio_max = abs_ranges[1] * 3
 
+        # Value is plausible for absolute unit
         if bio_max is None or value_float <= bio_max:
-            continue  # Value is plausible for absolute unit
+            continue
 
         # Check 2: Value fits percentage range
         pct_ranges = pct_config.get("ranges", {}).get("default", [])
+
+        # Not enough percentage range data
         if len(pct_ranges) < 2:
             continue
 
@@ -511,6 +559,7 @@ def fix_misassigned_percentage_units(df: pd.DataFrame, lab_specs: LabSpecsConfig
             continue  # Value doesn't fit percentage range either
 
         # Check 3: Reference range matches percentage range (if present)
+        # When reference values exist, verify they match the percentage variant
         if pd.notna(ref_min) and pd.notna(ref_max):
             # Reference range should be close to percentage expected range
             ref_matches_pct = abs(ref_min - pct_min) / max(pct_min, 1) < 0.5 and abs(ref_max - pct_max) / max(pct_max, 1) < 0.5
@@ -524,6 +573,7 @@ def fix_misassigned_percentage_units(df: pd.DataFrame, lab_specs: LabSpecsConfig
         df.at[idx, "lab_name_standardized"] = pct_lab_name
         corrections_made += 1
 
+    # Log summary of corrections
     if corrections_made > 0:
         logger.info(f"[unit_fix] Corrected {corrections_made} misassigned percentage units")
 
@@ -537,6 +587,7 @@ def correct_percentage_lab_names(results: list[dict], lab_specs: LabSpecsConfig)
     1. Unit is "%" but name doesn't end with "(%) " -> add "(%) "
     2. Unit is NOT "%" but name ends with "(%) " -> remove "(%) " (for absolute counts)
     """
+
     corrected_to_pct = 0
     corrected_to_abs = 0
 
@@ -544,6 +595,7 @@ def correct_percentage_lab_names(results: list[dict], lab_specs: LabSpecsConfig)
         std_name = result.get("lab_name_standardized")
         std_unit = result.get("lab_unit_standardized")
 
+        # Skip results with missing lab name
         if not std_name:
             continue
 
@@ -563,6 +615,7 @@ def correct_percentage_lab_names(results: list[dict], lab_specs: LabSpecsConfig)
                 result["lab_name_standardized"] = non_percentage_variant
                 corrected_to_abs += 1
 
+    # Log summary of corrections
     if corrected_to_pct > 0 or corrected_to_abs > 0:
         logger.info(f"Corrected {corrected_to_pct} to percentage, {corrected_to_abs} to absolute lab names")
 
@@ -574,6 +627,7 @@ def _correct_percentage_names_in_df(df: pd.DataFrame, lab_specs: LabSpecsConfig)
 
     DataFrame equivalent of correct_percentage_lab_names (which operates on list[dict]).
     """
+
     corrected_to_pct = 0
     corrected_to_abs = 0
 
@@ -581,6 +635,7 @@ def _correct_percentage_names_in_df(df: pd.DataFrame, lab_specs: LabSpecsConfig)
         std_name = df.at[idx, "lab_name_standardized"]
         std_unit = df.at[idx, "lab_unit_standardized"]
 
+        # Skip rows with missing lab name
         if not std_name or pd.isna(std_name):
             continue
 
@@ -598,6 +653,7 @@ def _correct_percentage_names_in_df(df: pd.DataFrame, lab_specs: LabSpecsConfig)
                 df.at[idx, "lab_name_standardized"] = abs_variant
                 corrected_to_abs += 1
 
+    # Log summary of corrections
     if corrected_to_pct > 0 or corrected_to_abs > 0:
         logger.info(f"[normalization] Corrected {corrected_to_pct} to percentage, {corrected_to_abs} to absolute lab names")
 
@@ -625,6 +681,8 @@ def apply_normalizations(
     Returns:
         DataFrame with normalized columns added
     """
+
+    # Nothing to normalize
     if df.empty:
         return df
 
@@ -648,14 +706,15 @@ def apply_normalizations(
     # Look up lab_type from config (vectorized)
     if lab_specs.exists:
         df["lab_type"] = df["lab_name_standardized"].apply(lambda name: lab_specs.get_lab_type(name) if pd.notna(name) and name != UNKNOWN_VALUE else "blood")
+    # Default all to blood when no specs available
     else:
         df["lab_type"] = "blood"
 
     # Convert to primary units (batched)
     if lab_specs.exists:
         df = apply_unit_conversions(df, lab_specs, client, model_id)
+    # No conversions available, just copy values as-is
     else:
-        # No conversions, just copy values
         df["value_primary"] = df.get("value_raw")
         df["lab_unit_primary"] = df.get("lab_unit_standardized")
         df["reference_min_primary"] = df.get("reference_min_raw")
@@ -671,6 +730,7 @@ def _preprocess_values(df: pd.DataFrame) -> pd.DataFrame:
     Extracts < and > operators, cleans numeric strings, and converts to float.
     Adds is_below_limit, is_above_limit, and value_primary columns.
     """
+
     # Initialize limit indicator columns
     df["is_below_limit"] = False
     df["is_above_limit"] = False
@@ -705,7 +765,10 @@ def _infer_missing_units(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Data
     Uses value magnitude, reference ranges, and lab_specs configuration
     to determine appropriate units for rows with missing lab_unit_standardized.
     """
+
     missing_unit_mask = df["lab_unit_standardized"].isna()
+
+    # No missing units to infer
     if not missing_unit_mask.any():
         return df
 
@@ -720,6 +783,8 @@ def _infer_missing_units(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Data
         ref_max = df.at[idx, "reference_max_raw"]
 
         inferred_unit = infer_missing_unit(lab_name_std, value, ref_min, ref_max, lab_specs)
+
+        # Could not infer a unit for this row
         if not inferred_unit:
             continue
 
@@ -733,8 +798,10 @@ def _infer_missing_units(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Data
                 df.at[idx, "lab_name_standardized"] = potential_pct_name
                 percentage_remap_count += 1
 
+    # Log summary of inference results
     if inferred_count > 0:
         logger.info(f"[normalization] Successfully inferred {inferred_count} units")
+
     if percentage_remap_count > 0:
         logger.info(f"[normalization] Remapped {percentage_remap_count} tests to percentage variants")
 
@@ -754,6 +821,8 @@ def _convert_qualitative_values(
     to numeric 0/1 values. Handles both boolean labs and non-boolean labs
     with negative-like values.
     """
+
+    # Skip if no LLM client available for classification
     if not client or not model_id:
         return df
 
@@ -763,15 +832,19 @@ def _convert_qualitative_values(
     # Find labs with boolean primary unit
     boolean_labs = [lab_name for lab_name in df["lab_name_standardized"].unique() if pd.notna(lab_name) and lab_name != UNKNOWN_VALUE and lab_specs.get_primary_unit(lab_name) == "boolean"]
 
-    # Boolean labs: convert qualitative text to 0/1 from value_raw then comments
+    # Boolean labs: convert qualitative text to 0/1 from value_raw, then comments
     if boolean_labs:
         for source_col, needs_val_raw_isna in [
             ("value_raw", False),
             ("comments", True),
         ]:
             mask = df["lab_name_standardized"].isin(boolean_labs) & df["value_primary"].isna() & df[source_col].notna()
+
+            # For comments source, only use when value_raw is also missing
             if needs_val_raw_isna:
                 mask &= df["value_raw"].isna()
+
+            # No qualifying rows for this source
             if not mask.any():
                 continue
 
@@ -780,15 +853,20 @@ def _convert_qualitative_values(
             df.loc[mask, "lab_unit_primary"] = "boolean"
             logger.info(f"[normalization] Converted {mask.sum()} qualitative values from {source_col} (boolean labs)")
 
-    # Non-boolean labs: convert only negative-like values to 0 from value_raw then comments
+    # Non-boolean labs: convert only negative-like values to 0 from value_raw, then comments
     non_boolean_exclude = boolean_labs if boolean_labs else []
+
     for source_col, needs_val_raw_isna in [
         ("value_raw", False),
         ("comments", True),
     ]:
         mask = df["value_primary"].isna() & df[source_col].notna() & ~df["lab_name_standardized"].isin(non_boolean_exclude)
+
+        # For comments source, only use when value_raw is also missing
         if needs_val_raw_isna:
             mask &= df["value_raw"].isna()
+
+        # No qualifying rows for this source
         if not mask.any():
             continue
 
@@ -815,7 +893,10 @@ def _apply_unit_conversions_for_lab(
     Converts values and reference ranges from their current units to the
     primary unit specified in lab_specs.
     """
+
     primary_unit = lab_specs.get_primary_unit(lab_name_standardized)
+
+    # No primary unit configured for this lab
     if not primary_unit:
         return
 
@@ -824,6 +905,7 @@ def _apply_unit_conversions_for_lab(
 
     # For each unique unit in this lab
     for unit in df.loc[mask, "lab_unit_standardized"].unique():
+        # Skip missing units
         if pd.isna(unit):
             continue
 
@@ -836,6 +918,8 @@ def _apply_unit_conversions_for_lab(
 
         # Get conversion factor
         factor = lab_specs.get_conversion_factor(lab_name_standardized, unit)
+
+        # No conversion factor available for this unit
         if factor is None:
             continue
 
@@ -853,11 +937,14 @@ def _fix_specific_gravity(df: pd.DataFrame) -> pd.DataFrame:
     Some labs report specific gravity as integer (1000-1040) instead of decimal.
     Detects and corrects these values by dividing by 1000.
     """
+
     specific_gravity_labs = [
         "Urine Type II - Specific Gravity",
         "Urine - Specific Gravity",
     ]
     sg_mask = df["lab_name_standardized"].isin(specific_gravity_labs) & df["value_primary"].notna() & (df["value_primary"] > 100)
+
+    # Divide integer-format values by 1000 to restore decimal form
     if sg_mask.any():
         df.loc[sg_mask, "value_primary"] = df.loc[sg_mask, "value_primary"] / 1000
         logger.info(f"[normalization] Fixed {sg_mask.sum()} specific gravity values (divided by 1000)")
@@ -872,10 +959,13 @@ def _validate_reference_ranges(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> p
     Detects suspicious reference ranges (wrong units, impossible values)
     and either converts them using known factors or nullifies them.
     """
+
+    # Skip if no lab specs available
     if not lab_specs.exists:
         return df
 
     validation_count = 0
+
     for idx in df.index:
         lab_name_std = df.at[idx, "lab_name_standardized"]
         value = df.at[idx, "value_primary"]
@@ -883,16 +973,19 @@ def _validate_reference_ranges(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> p
         ref_min = df.at[idx, "reference_min_primary"]
         ref_max = df.at[idx, "reference_max_primary"]
 
+        # Skip rows with no reference range
         if pd.isna(ref_min) and pd.isna(ref_max):
             continue
 
         validated_min, validated_max = validate_reference_range(lab_name_std, value, unit, ref_min, ref_max, lab_specs)
 
+        # Update if validation changed the range
         if validated_min != ref_min or validated_max != ref_max:
             df.at[idx, "reference_min_primary"] = validated_min
             df.at[idx, "reference_max_primary"] = validated_max
             validation_count += 1
 
+    # Log summary of validation results
     if validation_count > 0:
         logger.info(f"[normalization] Nullified {validation_count} suspicious reference ranges")
 
@@ -912,6 +1005,7 @@ def apply_unit_conversions(
     Handles boolean tests by converting qualitative text values (e.g., "negativo", "positivo")
     to 0/1 using LLM-based classification with caching.
     """
+
     # Initialize primary unit columns from standardized values
     df["lab_unit_primary"] = df["lab_unit_standardized"]
     df["reference_min_primary"] = df["reference_min_raw"]
@@ -928,6 +1022,7 @@ def apply_unit_conversions(
 
     # Phase 4: Apply unit conversion factors for each lab type
     for lab_name_standardized in df["lab_name_standardized"].unique():
+        # Skip unknown or missing lab names
         if pd.isna(lab_name_standardized) or lab_name_standardized == UNKNOWN_VALUE:
             continue
         _apply_unit_conversions_for_lab(df, lab_name_standardized, lab_specs)
@@ -962,20 +1057,25 @@ def sanitize_percentage_reference_ranges(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame with suspicious reference ranges nullified
     """
+
+    # Nothing to sanitize
     if df.empty:
         return df
 
+    # Determine column names based on what's available
     unit_col = "lab_unit_primary" if "lab_unit_primary" in df.columns else "lab_unit_standardized"
     value_col = "value_primary" if "value_primary" in df.columns else "value_raw"
     ref_min_col = "reference_min_primary" if "reference_min_primary" in df.columns else "reference_min_raw"
     ref_max_col = "reference_max_primary" if "reference_max_primary" in df.columns else "reference_max_raw"
 
+    # Required columns not present
     if unit_col not in df.columns or value_col not in df.columns:
         return df
 
     # Find percentage labs
     percentage_mask = df[unit_col] == "%"
 
+    # No percentage labs to check
     if not percentage_mask.any():
         return df
 
@@ -983,6 +1083,7 @@ def sanitize_percentage_reference_ranges(df: pd.DataFrame) -> pd.DataFrame:
     # Condition 2: ref_max > 100 (invalid percentage)
     suspicious_mask = percentage_mask & (df[ref_max_col].notna() & ((df[value_col].notna() & (df[value_col] > df[ref_max_col] * 5)) | (df[ref_max_col] > 100)))
 
+    # Nullify suspicious percentage reference ranges
     if suspicious_mask.any():
         count = suspicious_mask.sum()
         logger.info(f"[normalization] Discarding {count} suspicious reference ranges for percentage labs (likely wrong unit)")
@@ -1005,16 +1106,21 @@ def deduplicate_results(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataF
     Returns:
         Deduplicated DataFrame
     """
+
+    # Skip if missing required columns
     if df.empty or "date" not in df.columns or "lab_name_standardized" not in df.columns:
         return df
 
     def pick_best_dupe(group):
         """Pick best duplicate: prefer primary unit if multiple entries exist."""
+
         lab_name_standardized = group.iloc[0]["lab_name_standardized"]
         primary_unit = lab_specs.get_primary_unit(lab_name_standardized) if lab_specs.exists else None
 
+        # Prefer the row already in primary unit
         if primary_unit and "lab_unit_standardized" in group.columns and (group["lab_unit_standardized"] == primary_unit).any():
             return group[group["lab_unit_standardized"] == primary_unit].iloc[0]
+        # Fall back to first row
         else:
             return group.iloc[0]
 
@@ -1048,17 +1154,23 @@ def apply_dtype_conversions(df: pd.DataFrame, dtype_map: dict) -> pd.DataFrame:
     Returns:
         DataFrame with converted dtypes
     """
+
     for col, target_dtype in dtype_map.items():
+        # Skip columns not present in DataFrame
         if col not in df.columns:
             continue
 
         try:
+            # Convert datetime columns
             if target_dtype == "datetime64[ns]":
                 df[col] = pd.to_datetime(df[col], errors="coerce")
+            # Convert boolean columns
             elif target_dtype == "boolean":
                 df[col] = df[col].astype("boolean")
+            # Convert nullable integer columns
             elif target_dtype == "Int64":
                 df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
+            # Convert float columns
             elif "float" in target_dtype:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
         except (ValueError, TypeError) as e:

@@ -22,19 +22,26 @@ load_dotenv(Path(".env.local"), override=True)
 
 def load_data():
     """Load the main CSV file."""
+
     output_path = Path(os.getenv("OUTPUT_PATH", "output"))
     csv_path = output_path / "all.csv"
+
+    # Bail out if CSV doesn't exist
     if not csv_path.exists():
         raise FileNotFoundError(f"CSV file not found: {csv_path}")
+
     return pd.read_csv(csv_path)
 
 
 def mode_search(df: pd.DataFrame):
     """Basic search: count and summarize unknowns."""
+
     print(f"\nTotal rows: {len(df)}")
 
     # Unknown lab names
     unknown_names = df[df["lab_name_standardized"] == "$UNKNOWN$"]
+
+    # Display unknown lab name details if any found
     if len(unknown_names) > 0:
         print(f"\n{'=' * 80}")
         print(f"UNKNOWN LAB NAMES: {len(unknown_names)} rows")
@@ -46,11 +53,14 @@ def mode_search(df: pd.DataFrame):
         print("\nRaw test names that couldn't be standardized:")
         for _, row in name_counts.iterrows():
             print(f"  [{row['lab_type']}] {row['lab_name_raw']:60s} ({row['count']} occurrences)")
+    # No unknown lab names
     else:
         print("\n No unknown lab names found!")
 
     # Unknown units
     unknown_units = df[df["lab_unit_standardized"] == "$UNKNOWN$"]
+
+    # Display unknown unit details if any found
     if len(unknown_units) > 0:
         print(f"\n{'=' * 80}")
         print(f"UNKNOWN UNITS: {len(unknown_units)} rows")
@@ -62,6 +72,7 @@ def mode_search(df: pd.DataFrame):
         print("\nRaw units that couldn't be standardized:")
         for _, row in unit_counts.iterrows():
             print(f"  [{row['lab_type']}] {row['lab_name_raw']:50s} | Unit: {row['lab_unit_raw']:15s} ({row['count']} occurrences)")
+    # No unknown units
     else:
         print("\n No unknown units found!")
 
@@ -78,11 +89,14 @@ def mode_search(df: pd.DataFrame):
 
 def mode_analyze(df: pd.DataFrame):
     """Detailed analysis: row-by-row view and lab_specs check."""
+
     print("=" * 80)
     print("UNKNOWN LAB NAMES - Detailed Analysis")
     print("=" * 80)
 
     unknown_names = df[df["lab_name_standardized"] == "$UNKNOWN$"]
+
+    # Print details for each unknown lab name
     if len(unknown_names) > 0:
         for _, row in unknown_names.iterrows():
             print(f"\nRaw lab_name: {row['lab_name_raw']}")
@@ -96,6 +110,8 @@ def mode_analyze(df: pd.DataFrame):
     print("=" * 80)
 
     unknown_units = df[df["lab_unit_standardized"] == "$UNKNOWN$"]
+
+    # Print unique test/unit combinations for unknown units
     if len(unknown_units) > 0:
         unique_combos = unknown_units[
             [
@@ -118,29 +134,36 @@ def mode_analyze(df: pd.DataFrame):
     print("=" * 80)
 
     lab_specs_path = Path("config/lab_specs.json")
+
+    # Cross-reference unknown units against lab_specs config
     if lab_specs_path.exists():
         with open(lab_specs_path, "r") as f:
             lab_specs = json.load(f)
 
         print(f"\nTotal standardized labs in config: {len(lab_specs)}")
 
+        # Check which standardized names have unknown units
         if len(unknown_units) > 0:
             standardized_names_with_unknown_units = unknown_units["lab_name_standardized"].unique()
             print("\nStandardized names with unknown units:")
             for name in standardized_names_with_unknown_units:
+                # Lab exists in config - show its unit info
                 if name in lab_specs:
                     spec = lab_specs[name]
                     print(f"\n  '{name}' EXISTS in config")
                     print(f"    Primary unit: {spec.get('primary_unit')}")
                     print(f"    Alternatives: {[alt['unit'] for alt in spec.get('alternatives', [])]}")
+                # Lab not in config
                 else:
                     print(f"\n  '{name}' NOT FOUND in config")
+    # Config file missing
     else:
         print(f"\nWarning: {lab_specs_path} not found")
 
 
 def mode_categorize(df: pd.DataFrame):
     """Categorize unknowns into reference indicators vs actual tests."""
+
     unknown_names = df[df["lab_name_standardized"] == "$UNKNOWN$"]
 
     print("=" * 80)
@@ -154,7 +177,7 @@ def mode_categorize(df: pd.DataFrame):
     for lab_name_raw in unknown_names["lab_name_raw"].unique():
         test_lower = lab_name_raw.lower()
 
-        # Check if it's a reference indicator
+        # Matches a reference/interpretation keyword
         if any(
             keyword in test_lower
             for keyword in [
@@ -169,6 +192,7 @@ def mode_categorize(df: pd.DataFrame):
             ]
         ):
             reference_indicators.append(lab_name_raw)
+        # Not a reference indicator - treat as actual test
         else:
             actual_tests.append(lab_name_raw)
 
@@ -188,40 +212,58 @@ def mode_categorize(df: pd.DataFrame):
         count = len(unknown_names[unknown_names["lab_name_raw"] == name])
         name_lower = name.lower()
 
+        # Hepatitis A markers
         if "anti-hav" in name_lower or "hepatite a" in name_lower:
             category = "Hepatitis A"
+        # Hepatitis B markers
         elif "anti-hbe" in name_lower or "hepatite b" in name_lower:
             category = "Hepatitis B"
+        # HIV markers
         elif "hiv" in name_lower or "anti-hiv" in name_lower:
             category = "HIV"
+        # Cytomegalovirus markers
         elif "citomegalovirus" in name_lower or "cmv" in name_lower:
             category = "Cytomegalovirus"
+        # Epstein-Barr virus markers
         elif "epstein" in name_lower or "ebv" in name_lower:
             category = "Epstein-Barr Virus"
+        # Celiac disease markers
         elif "endomísio" in name_lower or "endomisio" in name_lower:
             category = "Celiac Disease"
+        # Syphilis markers
         elif "treponema" in name_lower or "tpha" in name_lower:
             category = "Syphilis"
+        # Morphology tests
         elif "morfológico" in name_lower or "morfologico" in name_lower:
             category = "Morphology"
+        # G6PD enzyme assay
         elif "g6pd" in name_lower or "glucose-6-fosfato" in name_lower:
             category = "Enzyme Assays"
+        # Pyruvate kinase enzyme assay
         elif "piruvatoquinase" in name_lower or "pyruvate" in name_lower:
             category = "Enzyme Assays"
+        # Blood bank / Coombs tests
         elif "coombs" in name_lower or "antiglobulina" in name_lower:
             category = "Blood Bank Tests"
+        # PNH-related markers
         elif "hemoglobinúria" in name_lower or "hpn" in name_lower or "gpi" in name_lower:
             category = "Paroxysmal Nocturnal Hemoglobinuria"
+        # Hemoglobin HPLC
         elif "hplc" in name_lower:
             category = "Hemoglobin HPLC"
+        # Iron studies
         elif "hemossiderina" in name_lower:
             category = "Iron Studies"
+        # Sample/product information
         elif "caracterização" in name_lower or "produto" in name_lower:
             category = "Sample Information"
+        # Cell count: lymphoplasmacytic
         elif "linfoplasmocitárias" in name_lower:
             category = "Cell Counts"
+        # Cell count: monocyte formula
         elif "monócitos" in name_lower and "fórmula" in name_lower:
             category = "Cell Counts"
+        # Uncategorized test
         else:
             category = "Other"
 
@@ -264,6 +306,7 @@ def mode_categorize(df: pd.DataFrame):
 
     print("\nUnits that need to be added to lab_specs.json:")
     for _, row in unit_combos.iterrows():
+        # Skip rows with missing unit values
         if pd.notna(row["lab_unit_raw"]):
             print(f"  - '{row['lab_unit_raw']}' ({row['count']} occurrences)")
 
@@ -289,12 +332,14 @@ Modes:
 
     args = parser.parse_args()
 
+    # Load data, bail on missing file
     try:
         df = load_data()
     except FileNotFoundError as e:
         print(f"Error: {e}")
         return 1
 
+    # Dispatch to the selected mode
     if args.mode == "search":
         mode_search(df)
     elif args.mode == "analyze":
