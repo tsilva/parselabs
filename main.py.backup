@@ -159,379 +159,26 @@ _MIN_TEXT_CHARS = 200  # Minimum non-whitespace characters to attempt text extra
 
 
 def _text_has_enough_content(text: str, min_chars: int = _MIN_TEXT_CHARS) -> bool:
-    """Check if extracted text has enough content to attempt LLM extraction."""
+    """Check if extracted text has enough content to attempt LLM extraction.
+
+    Uses a simple character count threshold instead of an LLM classifier.
+    If the PDF has at least min_chars non-whitespace characters, we attempt
+    text extraction. If it returns 0 results, we fall through to vision.
+
+    Args:
+        text: Extracted PDF text.
+        min_chars: Minimum non-whitespace characters required.
+
+    Returns:
+        True if text has enough content to attempt extraction.
+    """
     clean_text = text.replace(" ", "").replace("\n", "").replace("\t", "")
     return len(clean_text) >= min_chars
 
 
 # ========================================
-# PDF Processing - Helper Functions
+# PDF Processing
 # ========================================
-
-
-def _setup_pdf_processing(pdf_path: Path, output_dir: Path) -> tuple[Path, Path, list]:
-    """Initialize processing: create directories, return paths."""
-    pdf_stem = pdf_path.stem  # Extract filename without extension for directory naming
-    doc_out_dir = output_dir / pdf_stem  # Create document-specific output directory
-    doc_out_dir.mkdir(
-        exist_ok=True, parents=True
-    )  # Ensure directory exists, create parents if needed
-    csv_path = doc_out_dir / f"{pdf_stem}.csv"  # Define CSV output path within document directory
-    return doc_out_dir, csv_path, []  # Return paths and empty failed_pages list for population
-
-
-def _copy_pdf_to_output(pdf_path: Path, doc_out_dir: Path) -> Path:
-    """Copy PDF to output directory if not already present."""
-    copied_pdf = doc_out_dir / pdf_path.name  # Define destination path for PDF copy
-    # Copy only if missing or file size differs (ensures we have latest version)
-    if not copied_pdf.exists() or copied_pdf.stat().st_size != pdf_path.stat().st_size:
-        shutil.copy2(pdf_path, copied_pdf)  # copy2 preserves metadata like timestamps
-    return copied_pdf  # Return path to the copied PDF (whether newly copied or existing)
-
-
-def _try_load_cached_text_extraction(doc_out_dir: Path, pdf_stem: str) -> dict | None:
-    """Try to load cached text extraction results."""
-    text_json_path = doc_out_dir / f"{pdf_stem}.json"  # Build path to cached JSON results
-    if not text_json_path.exists():
-        return None  # No cache exists, will need to perform fresh extraction
-    try:
-        return json.loads(
-            text_json_path.read_text(encoding="utf-8")
-        )  # Parse and return cached data
-    except Exception as e:
-        logger.warning(f"[{pdf_stem}] Failed to load text extraction cache: {e}")
-        return None  # Cache corrupted or unreadable, treat as cache miss
-
-
-def _extract_labs_from_pdf_text(
-    pdf_text: str,
-    config: ExtractionConfig,
-    standardization_section: str | None,
-) -> dict:
-    """Extract lab results from PDF text using LLM."""
-    return extract_labs_from_text(
-        pdf_text,
-        config.extract_model_id,
-        client,
-        standardization_section=standardization_section,
-    )
-
-
-def _cache_text_extraction(
-    text_extraction_data: dict,
-    pdf_text: str,
-    doc_out_dir: Path,
-    pdf_stem: str,
-) -> None:
-    """Cache text extraction results and raw PDF text."""
-    text_json_path = doc_out_dir / f"{pdf_stem}.json"  # Path for structured extraction results
-    text_txt_path = doc_out_dir / f"{pdf_stem}.txt"  # Path for raw text content
-    text_json_path.write_text(
-        json.dumps(text_extraction_data, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    text_txt_path.write_text(pdf_text, encoding="utf-8")
-
-
-def _try_text_extraction(
-    copied_pdf: Path,
-    config: ExtractionConfig,
-    standardization_section: str | None,
-    doc_out_dir: Path,
-    pdf_stem: str,
-) -> tuple[bool, dict | None]:
-    """
-    Attempt text-first extraction with fallback to vision.
-    Returns (used_text_extraction, extraction_data).
-    """
-    # Check cache first
-    cached_data = _try_load_cached_text_extraction(doc_out_dir, pdf_stem)
-    if cached_data:
-        logger.info(f"[{pdf_stem}] Strategy: TEXT (cached)")
-        return True, cached_data
-
-    # Try fresh text extraction
-    pdf_text, pdftotext_success = extract_text_from_pdf(copied_pdf)
-
-    if not pdftotext_success:
-        logger.info(f"[{pdf_stem}] Strategy: VISION (no embedded text in PDF)")
-        return False, None
-
-    if not _text_has_enough_content(pdf_text):
-        logger.info(f"[{pdf_stem}] Strategy: VISION (insufficient text content)")
-        return False, None
-
-    logger.info(f"[{pdf_stem}] Strategy: TEXT (sufficient content, {len(pdf_text)} chars)")
-
-    try:
-        text_extraction_data = _extract_labs_from_pdf_text(
-            pdf_text, config, standardization_section
-        )
-    except Exception as e:
-        logger.warning(f"[{pdf_stem}] Text extraction failed: {e}")
-        return False, None
-
-    if not text_extraction_data or not text_extraction_data.get("lab_results"):
-        logger.warning(f"[{pdf_stem}] Strategy: TEXT -> VISION (no results from text)")
-        return False, None
-
-    _cache_text_extraction(text_extraction_data, pdf_text, doc_out_dir, pdf_stem)
-    logger.info(
-        f"[{pdf_stem}] Text extraction complete: {len(text_extraction_data['lab_results'])} results"
-    )
-    return True, text_extraction_data
-
-
-def _process_text_results(text_extraction_data: dict, pdf_stem: str) -> tuple[list, str | None]:
-    """Process text extraction results into standardized format."""
-    all_results = []
-    doc_date = _extract_document_date(text_extraction_data, pdf_stem)
-
-    for result_idx, result in enumerate(text_extraction_data.get("lab_results", [])):
-        result["result_index"] = result_idx
-        result["page_number"] = 1
-        result["source_file"] = f"{pdf_stem}.text"
-        all_results.append(result)
-
-    return all_results, doc_date
-
-
-def _convert_pdf_to_images(copied_pdf: Path, pdf_stem: str) -> list:
-    """Convert PDF to PIL images."""
-    return pdf2image.convert_from_path(str(copied_pdf))
-
-
-def _preprocess_and_save_image(page_image, page_name: str, jpg_path: Path) -> None:
-    """Preprocess page image and save if not cached."""
-    if jpg_path.exists():
-        return
-    processed = preprocess_page_image(page_image)
-    processed.save(jpg_path, "JPEG", quality=95)
-    logger.info(f"[{page_name}] Image preprocessed and saved")
-
-
-def _extract_or_load_page_data(
-    jpg_path: Path,
-    json_path: Path,
-    page_name: str,
-    config: ExtractionConfig,
-    standardization_section: str | None,
-    pdf_stem: str,
-    page_idx: int,
-    failed_pages: list,
-) -> dict:
-    """Extract data from image or load from cache."""
-    if json_path.exists():
-        logger.info(f"[{page_name}] Loading cached extraction data")
-        page_data = json.loads(json_path.read_text(encoding="utf-8"))
-        _check_and_record_failure(page_data, pdf_stem, page_idx, failed_pages)
-        return page_data
-
-    logger.info(f"[{page_name}] Extracting data from image...")
-    page_data, _ = self_consistency(
-        extract_labs_from_page_image,
-        config.self_consistency_model_id,
-        config.n_extractions,
-        jpg_path,
-        config.extract_model_id,
-        client,
-        standardization_section=standardization_section,
-    )
-    logger.info(f"[{page_name}] Extraction completed")
-    _check_and_record_failure(page_data, pdf_stem, page_idx, failed_pages, page_name)
-    json_path.write_text(
-        json.dumps(page_data, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    return page_data
-
-
-def _check_and_record_failure(
-    page_data: dict,
-    pdf_stem: str,
-    page_idx: int,
-    failed_pages: list,
-    page_name: str | None = None,
-) -> None:
-    """Check if extraction failed and record failure reason."""
-    if not page_data.get("_extraction_failed"):
-        return
-    failure_reason = page_data.get("_failure_reason", "Unknown error")
-    failed_pages.append({"page": f"{pdf_stem} page {page_idx + 1}", "reason": failure_reason})
-    if page_name:
-        logger.error(f"[{page_name}] EXTRACTION FAILED: {failure_reason}")
-
-
-def _add_page_metadata(results: list, page_idx: int, page_name: str) -> list:
-    """Add page metadata to extraction results."""
-    enriched = []
-    for result_idx, result in enumerate(results):
-        result["result_index"] = result_idx
-        result["page_number"] = page_idx + 1
-        result["source_file"] = page_name
-        enriched.append(result)
-    return enriched
-
-
-def _extract_via_vision(
-    copied_pdf: Path,
-    config: ExtractionConfig,
-    standardization_section: str | None,
-    doc_out_dir: Path,
-    pdf_stem: str,
-    failed_pages: list,
-) -> tuple[list, str | None]:
-    """Extract lab results using vision-based processing."""
-    pil_pages = _convert_pdf_to_images(copied_pdf, pdf_stem)
-    if pil_pages is None:
-        return [], None
-
-    logger.info(f"[{pdf_stem}] Processing {len(pil_pages)} page(s) with vision...")
-    all_results = []
-    doc_date = None
-
-    for page_idx, page_image in enumerate(pil_pages):
-        page_name = f"{pdf_stem}.{page_idx + 1:03d}"
-        jpg_path = doc_out_dir / f"{page_name}.jpg"
-        json_path = doc_out_dir / f"{page_name}.json"
-
-        logger.info(f"[{page_name}] Processing page {page_idx + 1}/{len(pil_pages)}...")
-        _preprocess_and_save_image(page_image, page_name, jpg_path)
-
-        page_data = _extract_or_load_page_data(
-            jpg_path,
-            json_path,
-            page_name,
-            config,
-            standardization_section,
-            pdf_stem,
-            page_idx,
-            failed_pages,
-        )
-
-        if page_idx == 0:
-            doc_date = _extract_document_date(page_data, pdf_stem)
-
-        page_results = _add_page_metadata(page_data.get("lab_results", []), page_idx, page_name)
-        all_results.extend(page_results)
-
-    return all_results, doc_date
-
-
-def _apply_name_standardization(
-    all_results: list,
-    lab_specs: LabSpecsConfig,
-    config: ExtractionConfig,
-    pdf_stem: str,
-) -> int:
-    """Apply name standardization fallback. Returns count of updated results."""
-    names_to_standardize = [
-        result.get("lab_name_raw", "")
-        for result in all_results
-        if not result.get("lab_name_standardized")
-        or result.get("lab_name_standardized") == UNKNOWN_VALUE
-    ]
-    if not names_to_standardize:
-        return 0
-
-    name_mappings = standardize_lab_names(
-        names_to_standardize,
-        config.extract_model_id,
-        lab_specs.standardized_names,
-        client,
-    )
-    fallback_count = 0
-    for result in all_results:
-        std_name = result.get("lab_name_standardized")
-        if std_name and std_name != UNKNOWN_VALUE:
-            continue
-        raw_name = result.get("lab_name_raw", "")
-        mapped = name_mappings.get(raw_name)
-        if mapped:
-            result["lab_name_standardized"] = mapped
-            fallback_count += 1
-
-    if fallback_count > 0:
-        logger.info(f"[{pdf_stem}] Name standardization applied to {fallback_count} results")
-    return fallback_count
-
-
-def _apply_unit_standardization(
-    all_results: list,
-    lab_specs: LabSpecsConfig,
-    config: ExtractionConfig,
-    pdf_stem: str,
-) -> int:
-    """Apply unit standardization fallback. Returns count of updated results."""
-    unit_contexts = [
-        (result.get("lab_unit_raw", ""), result.get("lab_name_standardized", ""))
-        for result in all_results
-        if not result.get("lab_unit_standardized")
-        and result.get("lab_name_standardized")
-        and result.get("lab_name_standardized") != UNKNOWN_VALUE
-    ]
-    if not unit_contexts:
-        return 0
-
-    unit_mappings = standardize_lab_units(
-        unit_contexts,
-        config.extract_model_id,
-        lab_specs.standardized_units,
-        client,
-        lab_specs,
-    )
-    unit_count = 0
-    for result in all_results:
-        if result.get("lab_unit_standardized"):
-            continue
-        std_name = result.get("lab_name_standardized", "")
-        if not std_name or std_name == UNKNOWN_VALUE:
-            continue
-        pair = (result.get("lab_unit_raw", ""), std_name)
-        mapped = unit_mappings.get(pair)
-        if mapped:
-            result["lab_unit_standardized"] = mapped
-            unit_count += 1
-
-    if unit_count > 0:
-        logger.info(f"[{pdf_stem}] Unit standardization applied to {unit_count} results")
-    return unit_count
-
-
-def _apply_standardization_fallbacks(
-    all_results: list,
-    lab_specs: LabSpecsConfig,
-    config: ExtractionConfig,
-    pdf_stem: str,
-) -> None:
-    """Apply name and unit standardization fallbacks."""
-    if not lab_specs.exists:
-        return
-    _apply_name_standardization(all_results, lab_specs, config, pdf_stem)
-    _apply_unit_standardization(all_results, lab_specs, config, pdf_stem)
-
-
-def _save_results_to_csv(
-    all_results: list,
-    doc_date: str | None,
-    csv_path: Path,
-    pdf_stem: str,
-) -> None:
-    """Create DataFrame and save to CSV."""
-    df = pd.DataFrame(all_results)
-    df["date"] = doc_date
-
-    core_cols = list(LabResult.model_fields.keys()) + ["date"]
-    ensure_columns(df, core_cols, default=None)
-    df = df[[col for col in core_cols if col in df.columns]]
-    df.to_csv(csv_path, index=False, encoding="utf-8")
-
-
-def _handle_empty_results(csv_path: Path, pdf_stem: str) -> tuple[Path, list]:
-    """Handle case when no results were extracted."""
-    logger.warning(f"[{pdf_stem}] No results extracted")
-    pd.DataFrame().to_csv(csv_path, index=False)
-    return csv_path, []
 
 
 def process_single_pdf(
@@ -549,40 +196,261 @@ def process_single_pdf(
         - failed_pages: List of dicts with 'page' and 'reason' for any extraction failures
     """
     pdf_stem = pdf_path.stem
-    doc_out_dir, csv_path, failed_pages = _setup_pdf_processing(pdf_path, output_dir)
+    doc_out_dir = output_dir / pdf_stem
+    doc_out_dir.mkdir(exist_ok=True, parents=True)
+    csv_path = doc_out_dir / f"{pdf_stem}.csv"
+    failed_pages = []  # Track pages that failed extraction
 
     try:
         logger.info(f"[{pdf_stem}] Processing...")
-        copied_pdf = _copy_pdf_to_output(pdf_path, doc_out_dir)
 
-        # Try text extraction first (cheaper), fall back to vision
-        used_text, text_data = _try_text_extraction(
-            copied_pdf, config, standardization_section, doc_out_dir, pdf_stem
-        )
+        # Copy PDF to output directory
+        copied_pdf = doc_out_dir / pdf_path.name
+        if not copied_pdf.exists() or copied_pdf.stat().st_size != pdf_path.stat().st_size:
+            shutil.copy2(pdf_path, copied_pdf)
 
-        if used_text:
-            all_results, doc_date = _process_text_results(text_data, pdf_stem)
-        else:
+        # ========================================
+        # Text-First Extraction (Cost Optimization)
+        # ========================================
+        # Try to extract text from PDF first - if successful, use text-only LLM (much cheaper)
+        # Falls back to vision-based extraction if text extraction fails or is not viable
+
+        used_text_extraction = False
+        text_extraction_data = None
+
+        # Check for existing text extraction cache
+        text_json_path = doc_out_dir / f"{pdf_stem}.json"
+        text_txt_path = doc_out_dir / f"{pdf_stem}.txt"
+        if text_json_path.exists():
             try:
-                all_results, doc_date = _extract_via_vision(
-                    copied_pdf, config, standardization_section, doc_out_dir, pdf_stem, failed_pages
-                )
+                text_extraction_data = json.loads(text_json_path.read_text(encoding="utf-8"))
+                used_text_extraction = True
+                logger.info(f"[{pdf_stem}] Strategy: TEXT (cached)")
             except Exception as e:
-                logger.error(f"[{pdf_stem}] Vision extraction failed: {e}")
+                logger.warning(f"[{pdf_stem}] Failed to load text extraction cache: {e}")
+                text_extraction_data = None
+
+        # Try text extraction if no cache
+        if text_extraction_data is None:
+            pdf_text, pdftotext_success = extract_text_from_pdf(copied_pdf)
+
+            if pdftotext_success and _text_has_enough_content(pdf_text):
+                logger.info(
+                    f"[{pdf_stem}] Strategy: TEXT (sufficient content, {len(pdf_text)} chars)"
+                )
+
+                try:
+                    text_extraction_data = extract_labs_from_text(
+                        pdf_text,
+                        config.extract_model_id,
+                        client,
+                        standardization_section=standardization_section,
+                    )
+
+                    # Validate text extraction results
+                    if text_extraction_data and text_extraction_data.get("lab_results"):
+                        used_text_extraction = True
+                        # Cache the text extraction results
+                        text_json_path.write_text(
+                            json.dumps(text_extraction_data, indent=2, ensure_ascii=False),
+                            encoding="utf-8",
+                        )
+                        # Save the raw PDF text
+                        text_txt_path.write_text(pdf_text, encoding="utf-8")
+                        logger.info(
+                            f"[{pdf_stem}] Text extraction complete: "
+                            f"{len(text_extraction_data['lab_results'])} results"
+                        )
+                    else:
+                        logger.warning(
+                            f"[{pdf_stem}] Strategy: TEXT -> VISION (no results from text, falling back)"
+                        )
+                        text_extraction_data = None
+
+                except Exception as e:
+                    logger.warning(f"[{pdf_stem}] Strategy: TEXT -> VISION (text failed: {e})")
+                    text_extraction_data = None
+            else:
+                if pdftotext_success:
+                    logger.info(f"[{pdf_stem}] Strategy: VISION (insufficient text content)")
+                else:
+                    logger.info(f"[{pdf_stem}] Strategy: VISION (no embedded text in PDF)")
+
+        # ========================================
+        # Vision-Based Extraction (Fallback)
+        # ========================================
+        # If text extraction was not successful, use the traditional vision-based approach
+
+        all_results = []
+        doc_date = None
+
+        if used_text_extraction and text_extraction_data:
+            # Use text extraction results
+            doc_date = _extract_document_date(text_extraction_data, pdf_stem)
+
+            # Add page metadata to results (all from "page 1" since text extraction is whole-document)
+            for result_idx, result in enumerate(text_extraction_data.get("lab_results", [])):
+                result["result_index"] = result_idx
+                result["page_number"] = 1
+                result["source_file"] = f"{pdf_stem}.text"  # Mark as text extraction
+                all_results.append(result)
+
+        else:
+            # Fall back to vision-based extraction
+            # Convert PDF to images
+            try:
+                pil_pages = pdf2image.convert_from_path(str(copied_pdf))
+            except Exception as e:
+                logger.error(f"[{pdf_stem}] Failed to convert PDF: {e}")
                 return None, failed_pages
 
-        # Guard: no results extracted
+            logger.info(f"[{pdf_stem}] Processing {len(pil_pages)} page(s) with vision...")
+            for page_idx, page_image in enumerate(pil_pages):
+                page_name = f"{pdf_stem}.{page_idx + 1:03d}"
+                jpg_path = doc_out_dir / f"{page_name}.jpg"
+                json_path = doc_out_dir / f"{page_name}.json"
+
+                logger.info(f"[{page_name}] Processing page {page_idx + 1}/{len(pil_pages)}...")
+
+                # Preprocess and save image
+                if not jpg_path.exists():
+                    processed = preprocess_page_image(page_image)
+                    processed.save(jpg_path, "JPEG", quality=95)
+                    logger.info(f"[{page_name}] Image preprocessed and saved")
+
+                # Extract or load results
+                if not json_path.exists():
+                    logger.info(f"[{page_name}] Extracting data from image...")
+                    try:
+                        page_data, _ = self_consistency(
+                            extract_labs_from_page_image,
+                            config.self_consistency_model_id,
+                            config.n_extractions,
+                            jpg_path,
+                            config.extract_model_id,
+                            client,
+                            standardization_section=standardization_section,
+                        )
+                        logger.info(f"[{page_name}] Extraction completed")
+
+                        # Check for extraction failure (temperature retry exhausted)
+                        if page_data.get("_extraction_failed"):
+                            failure_reason = page_data.get("_failure_reason", "Unknown error")
+                            failed_pages.append(
+                                {
+                                    "page": f"{pdf_stem} page {page_idx + 1}",
+                                    "reason": failure_reason,
+                                }
+                            )
+                            logger.error(f"[{page_name}] EXTRACTION FAILED: {failure_reason}")
+
+                        json_path.write_text(
+                            json.dumps(page_data, indent=2, ensure_ascii=False),
+                            encoding="utf-8",
+                        )
+                    except Exception as e:
+                        logger.error(f"[{page_name}] Extraction failed: {e}")
+                        page_data = HealthLabReport(lab_results=[]).model_dump(mode="json")
+                else:
+                    logger.info(f"[{page_name}] Loading cached extraction data")
+                    page_data = json.loads(json_path.read_text(encoding="utf-8"))
+                    # Check for cached extraction failure
+                    if page_data.get("_extraction_failed"):
+                        failure_reason = page_data.get("_failure_reason", "Unknown error")
+                        failed_pages.append(
+                            {
+                                "page": f"{pdf_stem} page {page_idx + 1}",
+                                "reason": failure_reason,
+                            }
+                        )
+
+                # Extract date from first page
+                if page_idx == 0:
+                    doc_date = _extract_document_date(page_data, pdf_stem)
+
+                # Add page metadata and result index to results
+                for result_idx, result in enumerate(page_data.get("lab_results", [])):
+                    result["result_index"] = result_idx
+                    result["page_number"] = page_idx + 1
+                    result["source_file"] = page_name
+                    all_results.append(result)
+
         if not all_results:
-            return _handle_empty_results(csv_path, pdf_stem)[0], failed_pages
+            logger.warning(f"[{pdf_stem}] No results extracted")
+            pd.DataFrame().to_csv(csv_path, index=False)
+            return csv_path, failed_pages
 
-        # Apply standardization fallbacks for missing names/units
-        _apply_standardization_fallbacks(all_results, lab_specs, config, pdf_stem)
+        # Standardized names/units are set inline during extraction but may be missing.
+        # Apply LLM-backed standardization as fallback (with persistent caching).
+        if lab_specs.exists:
+            # --- Name standardization fallback ---
+            names_to_standardize = [
+                result.get("lab_name_raw", "")
+                for result in all_results
+                if not result.get("lab_name_standardized")
+                or result.get("lab_name_standardized") == UNKNOWN_VALUE
+            ]
+            if names_to_standardize:
+                name_mappings = standardize_lab_names(
+                    names_to_standardize,
+                    config.extract_model_id,
+                    lab_specs.standardized_names,
+                    client,
+                )
+                fallback_count = 0
+                for result in all_results:
+                    std_name = result.get("lab_name_standardized")
+                    if not std_name or std_name == UNKNOWN_VALUE:
+                        raw_name = result.get("lab_name_raw", "")
+                        mapped = name_mappings.get(raw_name)
+                        if mapped:
+                            result["lab_name_standardized"] = mapped
+                            fallback_count += 1
+                if fallback_count > 0:
+                    logger.info(f"[{pdf_stem}] Name standardization applied to {fallback_count} results")
 
-        # Persist standardized values back to JSON files
+            # --- Unit standardization fallback ---
+            unit_contexts = [
+                (result.get("lab_unit_raw", ""), result.get("lab_name_standardized", ""))
+                for result in all_results
+                if not result.get("lab_unit_standardized")
+                and result.get("lab_name_standardized")
+                and result.get("lab_name_standardized") != UNKNOWN_VALUE
+            ]
+            if unit_contexts:
+                unit_mappings = standardize_lab_units(
+                    unit_contexts,
+                    config.extract_model_id,
+                    lab_specs.standardized_units,
+                    client,
+                    lab_specs,
+                )
+                unit_count = 0
+                for result in all_results:
+                    if not result.get("lab_unit_standardized"):
+                        std_name = result.get("lab_name_standardized", "")
+                        if std_name and std_name != UNKNOWN_VALUE:
+                            pair = (result.get("lab_unit_raw", ""), std_name)
+                            mapped = unit_mappings.get(pair)
+                            if mapped:
+                                result["lab_unit_standardized"] = mapped
+                                unit_count += 1
+                if unit_count > 0:
+                    logger.info(f"[{pdf_stem}] Unit standardization applied to {unit_count} results")
+
+        # Update JSON files with standardized values
         _update_json_with_standardized_values(all_results, doc_out_dir)
 
-        # Save final results
-        _save_results_to_csv(all_results, doc_date, csv_path, pdf_stem)
+        # Create DataFrame and save
+        df = pd.DataFrame(all_results)
+        df["date"] = doc_date
+
+        # Ensure core columns exist
+        core_cols = list(LabResult.model_fields.keys()) + ["date"]
+        ensure_columns(df, core_cols, default=None)
+
+        df = df[[col for col in core_cols if col in df.columns]]
+        df.to_csv(csv_path, index=False, encoding="utf-8")
 
         logger.info(f"[{pdf_stem}] Completed successfully")
         return csv_path, failed_pages
@@ -645,7 +513,15 @@ def export_excel(
 
 
 def _extract_document_date(data_dict: dict, pdf_stem: str) -> str | None:
-    """Extract document date from extraction data or filename."""
+    """Extract document date from extraction data or filename.
+
+    Args:
+        data_dict: Dict containing collection_date or report_date fields
+        pdf_stem: PDF filename stem (without extension) to extract date from
+
+    Returns:
+        Date string in YYYY-MM-DD format, or None if not found
+    """
     doc_date = data_dict.get("collection_date") or data_dict.get("report_date")
     if doc_date == "0000-00-00":
         doc_date = None

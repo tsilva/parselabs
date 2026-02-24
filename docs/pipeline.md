@@ -18,7 +18,7 @@ INPUT_PATH/*.pdf
 ┌─────────────────────────────────────────────────────┐
 │ 2. Extraction (with inline standardization)          │
 │    Text-first: pdftotext → ≥200 non-ws chars?        │
-│      → extract_labs_from_text() → cache .text.json  │
+│      → extract_labs_from_text() → cache .json + .txt  │
 │    Vision fallback (per page):                       │
 │      → pdf2image → preprocess_page_image()           │
 │      → extract_labs_from_page_image()               │
@@ -89,7 +89,7 @@ INPUT_PATH/*.pdf
 2. **Content check** (`_text_has_enough_content`): skip if < 200 non-whitespace chars
 3. `extract_labs_from_text()` uses the same `TOOLS` schema and system prompt as vision; no retries
 4. If text extraction returns zero results → fall through to vision
-5. Successful result cached as `{doc}/{doc}.text.json`
+5. Successful result cached as `{doc}/{doc}.json` + `{doc}/{doc}.txt`
 
 **Vision path (per-page, fallback):**
 
@@ -99,7 +99,10 @@ INPUT_PATH/*.pdf
 - `lab_name` → mapped to `lab_name_standardized` (standardized name from the list)
 - `unit` → mapped to `lab_unit_standardized` (format-normalized unit)
 
-A cache-based fallback (`config/cache/name_standardization.json`) is applied for any results where `lab_name_standardized` is still `$UNKNOWN$` after extraction.
+**Post-extraction standardization fallback** is applied after extraction for any results still missing `lab_name_standardized` or `lab_unit_standardized`:
+1. **Name fallback**: calls `standardize_lab_names()` (cache + LLM) for all unmapped names → updates `lab_name_standardized`
+2. **Unit fallback**: calls `standardize_lab_units()` (cache + LLM) for all unmapped `(raw_unit, std_name)` pairs → updates `lab_unit_standardized`
+3. Both caches are persisted: `config/cache/name_standardization.json`, `config/cache/unit_standardization.json`
 
 **Retry strategy (temperature escalation):**
 - Attempt 0: `temperature=0.0`
@@ -189,8 +192,8 @@ Relationship formulas (e.g., LDL Friedewald) are defined in `lab_specs.json` und
 |-------|--------|-------|
 | Viability check | 1 (LLM) | 0 (simple char count) |
 | Extraction | 1/page | 1/page (includes inline standardization) |
-| Name standardization | 1/PDF | 0 (done in extraction) |
-| Unit standardization | 1/PDF | 0 (done in extraction) |
+| Name standardization | 1/PDF | 0 on cache hit; 1 on miss (post-extraction fallback) |
+| Unit standardization | 1/PDF | 0 on cache hit; 1 on miss (post-extraction fallback) |
 | Qualitative→boolean | 0-2/PDF | 0 on cache hit, LLM on miss |
 | **Total (3-page PDF)** | **~5-7** | **~1-3** (extraction only, warm cache) |
 
@@ -228,7 +231,7 @@ Relationship formulas (e.g., LDL Friedewald) are defined in `lab_specs.json` und
 |------|---------|
 | `main.py` | Pipeline orchestration (`run_for_profile`, `process_single_pdf`) |
 | `labs_parser/extraction.py` | Vision/text LLM extraction, `HealthLabReport`/`LabResult` Pydantic models, LLM-facing `HealthLabReportExtraction` schema, self-consistency, inline standardization |
-| `labs_parser/standardization.py` | Qualitative-value standardization with LLM + cache |
+| `labs_parser/standardization.py` | Lab name, unit, and qualitative-value standardization with LLM + persistent cache |
 | `labs_parser/normalization.py` | Unit conversion, value preprocessing, unit inference, range validation, % name correction |
 | `labs_parser/validation.py` | `ValueValidator` — data-driven extraction error detection |
 | `labs_parser/config.py` | `ExtractionConfig`, `ProfileConfig`, `LabSpecsConfig` |
