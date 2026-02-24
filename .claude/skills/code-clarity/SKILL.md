@@ -61,7 +61,7 @@ def main():
 **Every code block, branch, and early exit must have an explanatory comment.**
 
 #### Block Comments
-Comments explain PURPOSE and INTENT, not just restate code. Place a blank line before every comment.
+Comments explain PURPOSE and INTENT, not just restate code. Use blank lines to separate logical sections (caveat: first comment after function definition or control structure does not need a blank line since the structure itself provides separation).
 
 ```python
 # CORRECT - Blank line before comment
@@ -105,15 +105,12 @@ All `if/elif/else` branches must have comments explaining the condition.
 # Guard: Skip processing if data is missing
 if not data:
     return None
-
 # Check for authentication errors specifically
 elif "401" in error_msg:
     return False, "Auth failed"
-
 # Handle timeout scenarios
 elif "timeout" in error_msg.lower():
     return False, "Server timeout"
-
 # Any other error - fail safe
 else:
     return False, "Unknown error"
@@ -142,9 +139,32 @@ if not pdf_dir.is_dir():
 if pdfs_to_process:
     _process()
 
+# CORRECT - Guards inside for loop with blank lines before each comment
+for pdf_dir in output_path.iterdir():
+    # Skip non-directory entries (files, symlinks, etc.)
+    if not pdf_dir.is_dir():
+        continue
+
+    # Skip hidden directories (e.g., .git, .DS_Store)
+    if pdf_dir.name.startswith("."):
+        continue
+
+    # Only check directories that match the input file pattern
+    if pdf_dir.name not in matching_stems:
+        continue
+
 # INCORRECT - Missing comment
 if errors:
     return None, errors
+
+# INCORRECT - Guards inside loop without blank lines
+for pdf_dir in output_path.iterdir():
+    # Skip non-directory entries
+    if not pdf_dir.is_dir():
+        continue
+    # Skip hidden directories
+    if pdf_dir.name.startswith("."):
+        continue
 ```
 
 **MANDATORY CHECK:** Verify each has a comment:
