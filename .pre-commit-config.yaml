@@ -6,6 +6,6 @@ repos:
         args: [--fix]
       - id: ruff-format
   - repo: https://github.com/tsilva/.github
-    rev: main
+    rev: v0.1.0
     hooks:
       - id: gitleaks
