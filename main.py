@@ -150,8 +150,8 @@ def extract_text_from_pdf(pdf_path: Path) -> tuple[str, bool]:
     Extract text from PDF using pdftotext (from poppler).
 
     Returns:
-        Tuple of (extracted_text, success).
-        Raises exceptions on failure - caller must handle errors explicitly.
+        Tuple of (extracted_text, success). Returns ("", False) on non-zero exit code.
+        May raise subprocess.TimeoutExpired on timeout.
     """
     # Execute pdftotext command with layout preservation and 30s timeout
     result = subprocess.run(
@@ -724,18 +724,14 @@ def process_single_pdf(
         copied_pdf = _copy_pdf_to_output(pdf_path, doc_out_dir)
 
         # Extract lab data using text-first strategy with vision fallback
-        try:
-            all_results, doc_date = _extract_data_from_pdf(
-                copied_pdf,
-                config,
-                standardization_section,
-                doc_out_dir,
-                pdf_stem,
-                failed_pages,
-            )
-        except Exception as e:
-            logger.error(f"[{pdf_stem}] Data extraction failed: {e}")
-            return None, failed_pages
+        all_results, doc_date = _extract_data_from_pdf(
+            copied_pdf,
+            config,
+            standardization_section,
+            doc_out_dir,
+            pdf_stem,
+            failed_pages,
+        )
 
         # Guard: Check if any results were successfully extracted
         if not all_results:
@@ -754,8 +750,8 @@ def process_single_pdf(
         return csv_path, failed_pages
 
     except Exception as e:
-        # Catch-all for unexpected errors during processing
-        logger.error(f"[{pdf_stem}] Unhandled exception: {e}", exc_info=True)
+        # Catch-all for errors during processing (extraction, standardization, export)
+        logger.error(f"[{pdf_stem}] Processing failed: {e}", exc_info=True)
         return None, failed_pages
 
 
@@ -837,6 +833,7 @@ def _extract_document_date(data_dict: dict, pdf_stem: str) -> str | None:
     # Fallback: Extract date from filename pattern (YYYY-MM-DD)
     if not doc_date:
         match = re.search(r"(\d{4}-\d{2}-\d{2})", pdf_stem)
+        # Use date from filename if pattern matches
         if match:
             doc_date = match.group(1)
 
@@ -866,12 +863,31 @@ def _find_text_extraction_json(doc_out_dir: Path, page_results: list[dict]) -> l
     return []
 
 
+def _apply_standardized_values_to_json(json_path: Path, page_results: list[dict]) -> None:
+    """Update a single JSON file with standardized lab names and units from page results."""
+    # Load JSON data - let exceptions propagate to orchestrator
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    lab_results = data.get("lab_results", [])
+
+    # Update each result by result_index with standardized values
+    for result in page_results:
+        idx = result.get("result_index")
+        # Update only if index is valid and within bounds
+        if idx is not None and 0 <= idx < len(lab_results):
+            lab_results[idx]["lab_name_standardized"] = result.get("lab_name_standardized")
+            lab_results[idx]["lab_unit_standardized"] = result.get("lab_unit_standardized")
+
+    # Write updated data back to JSON file
+    json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
 def _update_json_with_standardized_values(all_results: list[dict], doc_out_dir: Path) -> None:
     """Update JSON files with standardized lab names and units."""
     # Group results by page number to minimize file I/O
     results_by_page: dict[int, list[dict]] = {}
     for result in all_results:
         page_num = result.get("page_number")
+        # Skip results without page number (can't locate JSON file)
         if page_num is not None:
             results_by_page.setdefault(page_num, []).append(result)
 
@@ -888,20 +904,8 @@ def _update_json_with_standardized_values(all_results: list[dict], doc_out_dir: 
         if not json_files:
             continue
 
-        json_path = json_files[0]
-
-        # Load and update JSON data - let exceptions propagate to orchestrator
-        data = json.loads(json_path.read_text(encoding="utf-8"))
-
-        # Update each result by result_index with standardized values
-        for result in page_results:
-            idx = result.get("result_index")
-            if idx is not None and 0 <= idx < len(data.get("lab_results", [])):
-                data["lab_results"][idx]["lab_name_standardized"] = result.get("lab_name_standardized")
-                data["lab_results"][idx]["lab_unit_standardized"] = result.get("lab_unit_standardized")
-
-        # Write updated data back to JSON file
-        json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        # Apply standardized values to this page's JSON file
+        _apply_standardized_values_to_json(json_files[0], page_results)
 
 
 REQUIRED_CSV_COLS = ["result_index", "page_number", "source_file"]
@@ -1054,6 +1058,30 @@ def _process_pdf_wrapper(args):
     return process_single_pdf(*args)
 
 
+def _is_empty_extraction_json(json_path: Path) -> bool:
+    """Check if a JSON extraction file has empty lab_results.
+
+    Returns True if the file is a valid extraction with no results.
+    Raises json.JSONDecodeError or UnicodeDecodeError for corrupted files.
+    """
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    # Empty extraction: valid dict with no lab_results but not explicitly marked as no-lab-data
+    return isinstance(data, dict) and not data.get("lab_results") and data.get("page_has_lab_data") is not False
+
+
+def _collect_empty_jsons(pdf_dir: Path) -> list[Path]:
+    """Collect JSON files with empty lab_results in a PDF output directory."""
+    empty_jsons = []
+    for json_path in pdf_dir.glob("*.json"):
+        try:
+            if _is_empty_extraction_json(json_path):
+                empty_jsons.append(json_path)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            # Skip corrupted or unreadable JSON files
+            logger.debug(f"Skipping unreadable JSON {json_path.name}: {e}")
+    return empty_jsons
+
+
 def _find_empty_extractions(output_path: Path, matching_stems: set[str]) -> list[tuple[Path, list[Path]]]:
     """Find all PDFs that have empty extraction JSONs.
 
@@ -1074,18 +1102,8 @@ def _find_empty_extractions(output_path: Path, matching_stems: set[str]) -> list
         if pdf_dir.name not in matching_stems:
             continue
 
-        # Collect JSON files that have empty lab_results
-        empty_jsons = []
-        for json_path in pdf_dir.glob("*.json"):
-            try:
-                # Parse JSON extraction result
-                data = json.loads(json_path.read_text(encoding="utf-8"))
-                # Identify empty extractions: valid dict with no lab_results but not explicitly marked as no-lab-data
-                if isinstance(data, dict) and not data.get("lab_results") and data.get("page_has_lab_data") is not False:
-                    empty_jsons.append(json_path)
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                # Skip corrupted or unreadable JSON files
-                pass
+        # Collect JSON files with empty extraction results
+        empty_jsons = _collect_empty_jsons(pdf_dir)
 
         # Record this PDF if it has any empty extraction files
         if empty_jsons:
@@ -1093,6 +1111,26 @@ def _find_empty_extractions(output_path: Path, matching_stems: set[str]) -> list
 
     # Return sorted by PDF name for consistent ordering
     return sorted(empty_by_pdf, key=lambda x: x[0].name)
+
+
+def _delete_empty_extraction_files(pdf_dir: Path) -> None:
+    """Delete empty extraction JSON and CSV files for a PDF directory."""
+    # Delete empty JSON files (removes cached extraction results)
+    for json_path in pdf_dir.glob("*.json"):
+        try:
+            # Only delete if still empty (has no lab_results)
+            if _is_empty_extraction_json(json_path):
+                json_path.unlink()
+                logger.info(f"Deleted empty JSON: {json_path.name}")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            # Skip corrupted files (don't delete what we can't parse)
+            logger.debug(f"Skipping unreadable JSON {json_path.name}: {e}")
+
+    # Delete the CSV file to ensure clean reprocessing
+    csv_path = pdf_dir / f"{pdf_dir.name}.csv"
+    if csv_path.exists():
+        csv_path.unlink()
+        logger.info(f"Deleted CSV: {csv_path.name}")
 
 
 def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list[Path]:
@@ -1146,23 +1184,7 @@ def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list
     if pdfs_to_reprocess:
         print(f"\nDeleting empty extractions for {len(pdfs_to_reprocess)} PDF(s)...")
         for pdf_dir in pdfs_to_reprocess:
-            # Delete empty JSON files (removes cached extraction results)
-            for json_path in pdf_dir.glob("*.json"):
-                try:
-                    data = json.loads(json_path.read_text(encoding="utf-8"))
-                    # Only delete if still empty (has no lab_results)
-                    if isinstance(data, dict) and not data.get("lab_results") and data.get("page_has_lab_data") is not False:
-                        json_path.unlink()
-                        logger.info(f"Deleted empty JSON: {json_path.name}")
-                except (json.JSONDecodeError, UnicodeDecodeError):
-                    # Skip corrupted files (don't delete what we can't parse)
-                    pass
-
-            # Delete the CSV file to ensure clean reprocessing
-            csv_path = pdf_dir / f"{pdf_dir.name}.csv"
-            if csv_path.exists():
-                csv_path.unlink()
-                logger.info(f"Deleted CSV: {csv_path.name}")
+            _delete_empty_extraction_files(pdf_dir)
 
     return pdfs_to_reprocess
 
@@ -1333,6 +1355,27 @@ def build_config(args) -> tuple[ExtractionConfig | None, list[str]]:
 # ========================================
 
 
+def _classify_server_error(error_msg: str, timeout: int) -> tuple[bool, str]:
+    """Classify a server connectivity error into a diagnostic result.
+
+    Returns tuple of (is_available, diagnostic_message).
+    """
+    # Authentication errors (invalid or missing API key)
+    if "401" in error_msg or "Unauthorized" in error_msg:
+        return False, f"Authentication failed - check your OPENROUTER_API_KEY: {error_msg}"
+    # Timeout errors (server slow or unreachable)
+    if "timeout" in error_msg.lower():
+        return False, f"Server timeout after {timeout}s - server may be unreachable"
+    # 404 errors - endpoint not implemented (common with local servers), server is still available
+    if "404" in error_msg:
+        return True, "Server is available (models endpoint not implemented)"
+    # Connection failures (network issues, DNS problems, server down)
+    if "Connection" in error_msg or "refused" in error_msg.lower() or "reset" in error_msg.lower() or "Name or service not known" in error_msg or "getaddrinfo" in error_msg:
+        return False, f"Cannot connect to server: {error_msg}"
+    # Unknown errors - assume unavailable to be safe
+    return False, f"Server check failed: {error_msg}"
+
+
 def check_server_availability(client: OpenAI, model_id: str, timeout: int = 10) -> tuple[bool, str]:
     """Check if OpenRouter API server is available and responsive.
 
@@ -1345,41 +1388,12 @@ def check_server_availability(client: OpenAI, model_id: str, timeout: int = 10) 
         Tuple of (is_available, message)
     """
     try:
-        # Just check that the server is reachable with a lightweight request
-        # Try models.list first, but don't validate model existence
+        # Check that the server is reachable with a lightweight request
         client.models.list(timeout=timeout)
         return True, "Server is available"
     except Exception as e:
-        # Classify the error type to provide helpful diagnostic messages
-        error_msg = str(e)
-
-        # Check for authentication errors (invalid or missing API key)
-        if "401" in error_msg or "Unauthorized" in error_msg:
-            return (
-                False,
-                f"Authentication failed - check your OPENROUTER_API_KEY: {error_msg}",
-            )
-        # Check for timeout errors (server slow or unreachable)
-        elif "timeout" in error_msg.lower():
-            return (
-                False,
-                f"Server timeout after {timeout}s - server may be unreachable",
-            )
-        # Check for 404 errors (endpoint not implemented, common with local servers)
-        elif "404" in error_msg:
-            # Server responded with 404 - endpoint not implemented (e.g., local servers)
-            # This is a valid response, so server is available
-            return (
-                True,
-                "Server is available (models endpoint not implemented)",
-            )
-        # Check for connection failures (network issues, DNS problems, server down)
-        elif "Connection" in error_msg or "refused" in error_msg.lower() or "reset" in error_msg.lower() or "Name or service not known" in error_msg or "getaddrinfo" in error_msg:
-            return False, f"Cannot connect to server: {error_msg}"
-        # Handle all other errors conservatively - assume unavailable to be safe
-        else:
-            # For any other error, assume server is unavailable to be safe
-            return False, f"Server check failed: {error_msg}"
+        # Classify the error to provide helpful diagnostic messages
+        return _classify_server_error(str(e), timeout)
 
 
 def _build_and_validate_config(args, profile_name: str) -> tuple[ExtractionConfig | None, list[str]]:
@@ -1499,7 +1513,7 @@ def _process_and_transform_data(
     # Filter out rows that couldn't be mapped to known lab tests
     merged_df = _filter_unknown_labs(merged_df)
 
-    # Remove duplicate results from same date/lab combinations
+    # Remove duplicate results from same date/lab combinations (requires lab specs for priority rules)
     if lab_specs.exists:
         logger.info("Deduplicating results...")
         merged_df = deduplicate_results(merged_df, lab_specs)
@@ -1673,10 +1687,12 @@ def main():
     # Handle --list-profiles flag (just list and exit)
     if args.list_profiles:
         profiles = ProfileConfig.list_profiles()
+        # Display available profiles
         if profiles:
             print("Available profiles:")
             for name in profiles:
                 print(f"  - {name}")
+        # No profiles configured yet
         else:
             print("No profiles found. Create profiles in the 'profiles/' directory.")
         return
@@ -1684,8 +1700,10 @@ def main():
     # Determine which profiles to run (single specified or all available)
     if args.profile:
         profiles_to_run = [args.profile]
+    # No profile specified - run all available
     else:
         profiles_to_run = ProfileConfig.list_profiles()
+        # Guard: No profiles configured
         if not profiles_to_run:
             print("No profiles found. Create profiles in the 'profiles/' directory.")
             print("Or use --profile to specify one.")
@@ -1695,6 +1713,7 @@ def main():
     # Check server availability once before processing any profiles
     print("Checking OpenRouter server availability...")
     is_available, message = check_server_availability(client, os.getenv("EXTRACT_MODEL_ID", ""))
+    # Guard: Abort if API server is unreachable
     if not is_available:
         print(f"Error: Cannot start extraction - {message}")
         print("Please check your internet connection and API key, then try again.")
@@ -1712,6 +1731,7 @@ def main():
         try:
             success = run_for_profile(args, profile_name)
             results[profile_name] = "success" if success else "failed"
+        # Catch-all for unexpected errors during profile processing
         except Exception as e:
             print(f"Error processing profile {profile_name}: {e}")
             results[profile_name] = f"error: {e}"
