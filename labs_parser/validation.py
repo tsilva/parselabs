@@ -551,7 +551,6 @@ class ValueValidator:
 
         flags: dict[str, list] = {
             "FORMAT_ARTIFACT": [],
-            "IMPOSSIBLE_VALUE": [],
         }
 
         has_value_col = self._value_col in df.columns
@@ -593,20 +592,6 @@ class ValueValidator:
                             f"Concatenation error in {lab_name}: {value_raw_str}"
                         )
                         continue
-
-            # Check for magnitude mismatch using defined biological limits only
-            if pd.notna(value) and pd.notna(lab_name) and value > 0:
-                if not re.match(r"^[\d\.\-\+<>≤≥]", value_raw_str):
-                    continue
-
-                spec = self.lab_specs.specs.get(lab_name, {})
-                bio_max = spec.get("biological_max")
-
-                if bio_max is not None and value > bio_max:
-                    flags["IMPOSSIBLE_VALUE"].append(idx)
-                    logger.debug(
-                        f"Value exceeds biological max for {lab_name}: {value} > {bio_max}"
-                    )
 
         return self._batch_flag_by_indices(df, flags)
 
