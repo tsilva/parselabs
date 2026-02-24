@@ -104,3 +104,45 @@ else:
 - `return` / `continue` / `break` guard
 - `if` / `elif` / `else` branch
 - Logical block (group of related statements)
+
+### 4. Blank Lines Between Blocks
+
+Separate each comment-headed block with a blank line. This includes after the docstring.
+
+```python
+# WRONG - dense wall of code
+def _classify_server_error(error_msg: str, timeout: int) -> tuple[bool, str]:
+    """Classify a server connectivity error."""
+    # Authentication errors
+    if "401" in error_msg or "Unauthorized" in error_msg:
+        return False, f"Auth failed: {error_msg}"
+    # Timeout errors
+    if "timeout" in error_msg.lower():
+        return False, f"Timeout after {timeout}s"
+    # Connection failures
+    if "Connection" in error_msg or "refused" in error_msg.lower():
+        return False, f"Cannot connect: {error_msg}"
+    # Unknown errors
+    return False, f"Server check failed: {error_msg}"
+
+# RIGHT - each block breathes
+def _classify_server_error(error_msg: str, timeout: int) -> tuple[bool, str]:
+    """Classify a server connectivity error."""
+
+    # Authentication errors
+    if "401" in error_msg or "Unauthorized" in error_msg:
+        return False, f"Auth failed: {error_msg}"
+
+    # Timeout errors
+    if "timeout" in error_msg.lower():
+        return False, f"Timeout after {timeout}s"
+
+    # Connection failures
+    if "Connection" in error_msg or "refused" in error_msg.lower():
+        return False, f"Cannot connect: {error_msg}"
+
+    # Unknown errors
+    return False, f"Server check failed: {error_msg}"
+```
+
+**Rule:** Blank line after docstring and before each comment-headed block.
