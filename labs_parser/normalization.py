@@ -537,6 +537,51 @@ def fix_misassigned_percentage_units(df: pd.DataFrame, lab_specs: LabSpecsConfig
     return df
 
 
+def correct_percentage_lab_names(results: list[dict], lab_specs: LabSpecsConfig) -> list[dict]:
+    """Correct lab names based on unit: add (%) when unit is %, remove (%) when unit is not %.
+
+    This handles cases where:
+    1. Unit is "%" but name doesn't end with "(%) " -> add "(%) "
+    2. Unit is NOT "%" but name ends with "(%) " -> remove "(%) " (for absolute counts)
+    """
+    corrected_to_pct = 0
+    corrected_to_abs = 0
+
+    for result in results:
+        std_name = result.get("lab_name_standardized")
+        std_unit = result.get("lab_unit_standardized")
+
+        if not std_name:
+            continue
+
+        # Case 1: Unit is % but name doesn't have (%) -> add it
+        if std_unit == "%" and not std_name.endswith("(%)"):
+            percentage_variant = lab_specs.get_percentage_variant(std_name)
+            if percentage_variant:
+                logger.debug(
+                    f"Correcting lab name '{std_name}' -> '{percentage_variant}' (unit is %)"
+                )
+                result["lab_name_standardized"] = percentage_variant
+                corrected_to_pct += 1
+
+        # Case 2: Unit is NOT % but name has (%) -> remove it (for absolute counts)
+        elif std_unit != "%" and std_name.endswith("(%)"):
+            non_percentage_variant = lab_specs.get_non_percentage_variant(std_name)
+            if non_percentage_variant:
+                logger.debug(
+                    f"Correcting lab name '{std_name}' -> '{non_percentage_variant}' (unit is {std_unit})"
+                )
+                result["lab_name_standardized"] = non_percentage_variant
+                corrected_to_abs += 1
+
+    if corrected_to_pct > 0 or corrected_to_abs > 0:
+        logger.info(
+            f"Corrected {corrected_to_pct} to percentage, {corrected_to_abs} to absolute lab names"
+        )
+
+    return results
+
+
 def apply_normalizations(
     df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
@@ -567,6 +612,32 @@ def apply_normalizations(
         ["lab_name_standardized", "lab_unit_standardized", "lab_name_raw"],
         default=None,
     )
+
+    # Correct percentage lab names based on unit
+    # unit=% → name must end with (%), unit≠% → strip (%) from name
+    if lab_specs.exists and "lab_name_standardized" in df.columns and "lab_unit_standardized" in df.columns:
+        corrected_to_pct = 0
+        corrected_to_abs = 0
+        for idx in df.index:
+            std_name = df.at[idx, "lab_name_standardized"]
+            std_unit = df.at[idx, "lab_unit_standardized"]
+            if not std_name or pd.isna(std_name):
+                continue
+            if std_unit == "%" and not std_name.endswith("(%)"):
+                pct_variant = lab_specs.get_percentage_variant(std_name)
+                if pct_variant:
+                    df.at[idx, "lab_name_standardized"] = pct_variant
+                    corrected_to_pct += 1
+            elif std_unit != "%" and not pd.isna(std_unit) and std_name.endswith("(%)"):
+                abs_variant = lab_specs.get_non_percentage_variant(std_name)
+                if abs_variant:
+                    df.at[idx, "lab_name_standardized"] = abs_variant
+                    corrected_to_abs += 1
+        if corrected_to_pct > 0 or corrected_to_abs > 0:
+            logger.info(
+                f"[normalization] Corrected {corrected_to_pct} to percentage, "
+                f"{corrected_to_abs} to absolute lab names"
+            )
 
     # Fix misassigned percentage units BEFORE other normalizations
     # This catches cases like Albumin 61.5 "g/dL" that should be 61.5 "%"

@@ -14,6 +14,9 @@ from labs_parser.utils import parse_llm_json_response
 
 logger = logging.getLogger(__name__)
 
+# Sentinel for unknown standardized values (imported from config to avoid circular import)
+_UNKNOWN_VALUE = "$UNKNOWN$"
+
 
 # ========================================
 # Pydantic Models
@@ -193,17 +196,141 @@ class HealthLabReport(BaseModel):
             self._clear_empty_strings(lab_result)
 
 
-# Tool definition for function calling
+# ========================================
+# LLM-Facing Schema (subset of full model)
+# ========================================
+
+
+class LabResultExtraction(BaseModel):
+    """LLM-facing schema — only fields the model should populate.
+
+    Excludes pipeline-internal fields (review_*, page_number, source_file,
+    result_index, lab_name_standardized, lab_unit_standardized) to reduce
+    token usage and avoid confusing the model.
+    """
+
+    lab_name_raw: str = Field(
+        description="Test name ONLY as written in the PDF. Must contain ONLY the test name - "
+        "DO NOT include values, units, reference ranges, or field labels. "
+        "WRONG: 'Glucose, value_raw: 100' CORRECT: 'Glucose'"
+    )
+    lab_name: str | None = Field(
+        default=None,
+        description="Standardized lab name from the provided list. "
+        "Match the raw name to the CLOSEST entry. Use '$UNKNOWN$' if no match.",
+    )
+    value_raw: str | None = Field(
+        default=None,
+        description="Result value ONLY. Must contain ONLY the numeric or text result - "
+        "DO NOT include test names, units, or field labels. "
+        "Examples: '5.2', '14.8', 'NEGATIVO', 'POSITIVO'",
+    )
+    lab_unit_raw: str | None = Field(
+        default=None,
+        description="Unit ONLY as written in PDF. Must contain ONLY the unit symbol - "
+        "DO NOT include values or test names. Examples: 'mg/dL', '%', 'U/L'",
+    )
+    unit: str | None = Field(
+        default=None,
+        description="Standardized unit from the provided list for this lab. "
+        "Normalize FORMAT only (e.g., 'mg/dl' → 'mg/dL'). Do NOT convert units. "
+        "Use '$UNKNOWN$' if no match.",
+    )
+    reference_range: str | None = Field(
+        default=None, description="Complete reference range text EXACTLY as shown."
+    )
+    reference_notes: str | None = Field(
+        default=None,
+        description="Any notes, comments, or additional context about the reference range.",
+    )
+    reference_min_raw: float | None = Field(
+        default=None,
+        description="Minimum reference value as a PLAIN NUMBER ONLY. Parse from reference_range.",
+    )
+    reference_max_raw: float | None = Field(
+        default=None,
+        description="Maximum reference value as a PLAIN NUMBER ONLY. Parse from reference_range.",
+    )
+    is_abnormal: bool | None = Field(
+        default=None, description="Whether result is marked/flagged as abnormal in PDF"
+    )
+    comments: str | None = Field(
+        default=None,
+        description="Additional notes or remarks about the test (NOT the test result itself).",
+    )
+    source_text: str | None = Field(
+        default="", description="Exact row or section from PDF containing this result"
+    )
+
+
+class HealthLabReportExtraction(BaseModel):
+    """LLM-facing schema for function calling.
+
+    Excludes pipeline-internal fields from HealthLabReport. Uses LabResultExtraction
+    to reduce schema size (~41% smaller) and avoid confusing the model.
+    """
+
+    collection_date: str | None = Field(
+        default=None,
+        description="Specimen collection date in YYYY-MM-DD format",
+    )
+    report_date: str | None = Field(
+        default=None,
+        description="Report issue date in YYYY-MM-DD format",
+    )
+    lab_facility: str | None = Field(
+        default=None, description="Name of laboratory that performed tests"
+    )
+    page_has_lab_data: bool | None = Field(
+        default=None,
+        description="True if page contains lab test results, False if page is cover/instructions/administrative",
+    )
+    lab_results: list[LabResultExtraction] = Field(
+        default_factory=list,
+        description="List of all lab test results extracted from this page/document",
+    )
+    source_file: str | None = Field(default=None, description="Source PDF filename")
+
+
+# Tool definition for function calling — uses LLM-facing schema to reduce token usage
 TOOLS = [
     {
         "type": "function",
         "function": {
             "name": "extract_lab_results",
             "description": "Extracts lab results from medical report image",
-            "parameters": HealthLabReport.model_json_schema(),
+            "parameters": HealthLabReportExtraction.model_json_schema(),
         },
     }
 ]
+
+
+def _build_standardized_names_section(standardized_names: list[str], lab_specs_data: dict) -> str:
+    """Build the standardized names reference section for the extraction prompt.
+
+    Args:
+        standardized_names: Sorted list of all standardized lab names
+        lab_specs_data: Raw lab specs dict for looking up primary units and lab types
+
+    Returns:
+        Formatted string to append to the system prompt
+    """
+    sections: dict[str, list[str]] = {"blood": [], "urine": [], "feces": [], "saliva": [], "other": []}
+
+    for name in standardized_names:
+        spec = lab_specs_data.get(name, {})
+        primary_unit = spec.get("primary_unit", "")
+        lab_type = spec.get("lab_type", "blood")
+        entry = f"- {name} [{primary_unit}]"
+        sections.setdefault(lab_type, []).append(entry)
+
+    result = "\n\nSTANDARDIZED LAB NAMES AND UNITS:\n"
+    for lab_type in ["blood", "urine", "feces", "saliva", "other"]:
+        entries = sections.get(lab_type, [])
+        if entries:
+            result += f"\n### {lab_type.title()}\n" + "\n".join(entries) + "\n"
+
+    return result
 
 
 # ========================================
@@ -344,6 +471,7 @@ def extract_labs_from_page_image(
     temperature: float = 0.0,
     max_retries: int = 3,
     temperature_step: float = 0.2,
+    standardization_section: str | None = None,
 ) -> dict:
     """
     Extract lab results from a page image using vision model.
@@ -360,6 +488,8 @@ def extract_labs_from_page_image(
         temperature: Initial temperature for sampling (default: 0.0)
         max_retries: Maximum retry attempts with escalating temperature (default: 3)
         temperature_step: Temperature increment per retry (default: 0.2)
+        standardization_section: Optional standardized names/units list to append to system prompt.
+            When provided, the model also populates lab_name and unit fields inline.
 
     Returns:
         Dictionary with extracted report data (validated by Pydantic).
@@ -367,6 +497,12 @@ def extract_labs_from_page_image(
     """
     with open(image_path, "rb") as img_file:
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
+
+    effective_system_prompt = (
+        EXTRACTION_SYSTEM_PROMPT + standardization_section
+        if standardization_section
+        else EXTRACTION_SYSTEM_PROMPT
+    )
 
     current_temp = temperature
     last_error = None
@@ -383,7 +519,7 @@ def extract_labs_from_page_image(
             completion = client.chat.completions.create(
                 model=model_id,
                 messages=[
-                    {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+                    {"role": "system", "content": effective_system_prompt},
                     {
                         "role": "user",
                         "content": [
@@ -510,7 +646,11 @@ def extract_labs_from_page_image(
 
 
 def extract_labs_from_text(
-    text: str, model_id: str, client: OpenAI, temperature: float = 0.0
+    text: str,
+    model_id: str,
+    client: OpenAI,
+    temperature: float = 0.0,
+    standardization_section: str | None = None,
 ) -> dict:
     """
     Extract lab results from text using a text-only LLM (no vision).
@@ -523,11 +663,23 @@ def extract_labs_from_text(
         model_id: Model to use for extraction
         client: OpenAI client instance
         temperature: Temperature for sampling
+        standardization_section: Optional standardized names/units list to append to system prompt.
 
     Returns:
         Dictionary with extracted report data (validated by Pydantic)
     """
+    effective_system_prompt = (
+        EXTRACTION_SYSTEM_PROMPT + standardization_section
+        if standardization_section
+        else EXTRACTION_SYSTEM_PROMPT
+    )
+
     # Use same prompts but adapted for text input
+    std_reminder = (
+        "\nAlso set lab_name (standardized name from the provided list) and unit (standardized unit format) for each result.\n"
+        if standardization_section
+        else ""
+    )
     user_prompt = f"""Please extract ALL lab test results from this medical lab report text.
 
 CRITICAL: For EACH lab test you find, you MUST extract:
@@ -536,7 +688,7 @@ CRITICAL: For EACH lab test you find, you MUST extract:
 3. lab_unit_raw - The unit EXACTLY as shown (extract what you see, can be null if no unit)
 4. reference_range - The reference range text (if visible)
 5. reference_min_raw and reference_max_raw - Parse the numeric bounds from the reference range
-
+{std_reminder}
 Extract test names, values, units, and reference ranges EXACTLY as they appear.
 Pay special attention to preserving the exact formatting and symbols.
 
@@ -559,7 +711,7 @@ Also set page_has_lab_data:
         completion = client.chat.completions.create(
             model=model_id,
             messages=[
-                {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+                {"role": "system", "content": effective_system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=temperature,
@@ -653,8 +805,10 @@ def _normalize_date_format(date_str: str | None) -> str | None:
 # Known LabResult field names for detecting flattened key-value format
 _LAB_RESULT_FIELDS = {
     "lab_name_raw",
+    "lab_name",   # NEW: standardized name from LLM
     "value_raw",
     "lab_unit_raw",
+    "unit",       # NEW: standardized unit from LLM
     "reference_range",
     "reference_min_raw",
     "reference_max_raw",
@@ -838,6 +992,23 @@ def _fix_lab_results_format(
         tool_result_dict["lab_results"], list
     ):
         return tool_result_dict
+
+    # Map LLM-populated standardization fields to internal fields
+    # lab_name (standardized name) → lab_name_standardized
+    # unit (standardized unit) → lab_unit_standardized
+    for item in tool_result_dict["lab_results"]:
+        if isinstance(item, dict):
+            if "lab_name" in item:
+                std_name = item.pop("lab_name")
+                item["lab_name_standardized"] = std_name if std_name else _UNKNOWN_VALUE
+            if "unit" in item:
+                std_unit = item.pop("unit")
+                # Map $UNKNOWN$ to None so unit inference in normalization can handle it
+                item["lab_unit_standardized"] = (
+                    std_unit
+                    if (std_unit and std_unit != _UNKNOWN_VALUE)
+                    else None
+                )
 
     # First, try to reassemble flattened key-value format (common LLM issue)
     # e.g., ['lab_name_raw: Glucose', 'value_raw: 100', ...] -> [{'lab_name_raw': 'Glucose', 'value_raw': '100', ...}]

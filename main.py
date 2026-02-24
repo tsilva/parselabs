@@ -12,7 +12,6 @@ import json
 import shutil
 import logging
 import argparse
-import hashlib
 import subprocess
 import pandas as pd
 import pdf2image
@@ -34,8 +33,9 @@ from labs_parser.extraction import (
     extract_labs_from_page_image,
     extract_labs_from_text,
     self_consistency,
+    _build_standardized_names_section,
 )
-from labs_parser.standardization import standardize_lab_names, standardize_lab_units
+from labs_parser.standardization import load_cache
 from labs_parser.normalization import (
     apply_normalizations,
     deduplicate_results,
@@ -155,108 +155,25 @@ def extract_text_from_pdf(pdf_path: Path) -> tuple[str, bool]:
         return "", False
 
 
-VIABILITY_CACHE_PATH = Path("config/cache/viability_cache.json")
+_MIN_TEXT_CHARS = 200  # Minimum non-whitespace characters to attempt text extraction
 
 
-def _load_viability_cache() -> dict:
-    """Load viability check cache from disk."""
-    if VIABILITY_CACHE_PATH.exists():
-        try:
-            return json.loads(VIABILITY_CACHE_PATH.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, IOError) as e:
-            logger.warning(f"Failed to load viability cache: {e}")
-    return {}
+def _text_has_enough_content(text: str, min_chars: int = _MIN_TEXT_CHARS) -> bool:
+    """Check if extracted text has enough content to attempt LLM extraction.
 
-
-def _save_viability_cache(cache: dict):
-    """Save viability check cache to disk."""
-    VIABILITY_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    VIABILITY_CACHE_PATH.write_text(json.dumps(cache, indent=2, sort_keys=True), encoding="utf-8")
-
-
-def text_extraction_is_viable(
-    text: str,
-    client: OpenAI,
-    model_id: str,
-    min_chars: int = 200,
-) -> bool:
-    """
-    Check if extracted text is viable for LLM parsing using classification.
-
-    Uses an LLM to classify whether the text contains structured lab data,
-    with results cached to avoid repeated API calls.
+    Uses a simple character count threshold instead of an LLM classifier.
+    If the PDF has at least min_chars non-whitespace characters, we attempt
+    text extraction. If it returns 0 results, we fall through to vision.
 
     Args:
-        text: The extracted PDF text to check.
-        client: OpenAI client for API calls.
-        model_id: Model to use for classification.
-        min_chars: Minimum character count (excluding whitespace).
+        text: Extracted PDF text.
+        min_chars: Minimum non-whitespace characters required.
 
     Returns:
-        True if text is viable for lab extraction, False otherwise.
+        True if text has enough content to attempt extraction.
     """
-    # Quick check: minimum character count
-    clean_text = text.replace(" ", "").replace("\n", "")
-    if len(clean_text) < min_chars:
-        return False
-
-    # Check cache using hash of first 500 chars
-    cache = _load_viability_cache()
-    text_hash = hashlib.md5(text[:500].encode()).hexdigest()
-    if text_hash in cache:
-        logger.debug(f"Viability cache hit: {cache[text_hash]}")
-        return cache[text_hash]
-
-    # LLM classification
-    system_prompt = """Classify if this text contains structured lab test results.
-
-LAB DATA characteristics (any language):
-- Test names in any language (e.g., Glucose/Glicose, Hemoglobin/Hemoglobina,
-  Creatinine/Creatinina, Cholesterol/Colesterol, Leukocytes/Leucócitos, etc.)
-- Numeric values or qualitative results (142, NEGATIVE/NEGATIVO, 1.2, POSITIVE/POSITIVO)
-- Units (mg/dL, g/dL, %, mmol/L, U/L, x10³/µL, etc.)
-- Reference ranges (70-100, 4.0-10.0, <5.0, etc.)
-- Table-like structure with test names, values, and reference ranges
-
-NOT lab data:
-- Disclaimers, legal text, or headers without results
-- Patient info without actual test results
-- Empty or minimal text
-- General medical notes without structured lab values
-
-Return ONLY a JSON object: {"is_lab_data": true} or {"is_lab_data": false}"""
-
-    try:
-        completion = client.chat.completions.create(
-            model=model_id,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text[:1000]},
-            ],
-            temperature=0.0,
-            max_tokens=50,
-        )
-
-        response = completion.choices[0].message.content.strip()
-        # Parse JSON from response (handle markdown code blocks)
-        if response.startswith("```"):
-            response = response.split("```")[1]
-            if response.startswith("json"):
-                response = response[4:]
-            response = response.strip()
-        result = json.loads(response)
-        is_viable = result.get("is_lab_data", False)
-        logger.debug(f"LLM viability classification: {is_viable}")
-
-    except Exception as e:
-        logger.warning(f"LLM viability check failed: {e}, falling back to vision")
-        is_viable = False  # Conservative: use vision extraction on failure
-
-    # Save to cache
-    cache[text_hash] = is_viable
-    _save_viability_cache(cache)
-
-    return is_viable
+    clean_text = text.replace(" ", "").replace("\n", "").replace("\t", "")
+    return len(clean_text) >= min_chars
 
 
 # ========================================
@@ -264,56 +181,13 @@ Return ONLY a JSON object: {"is_lab_data": true} or {"is_lab_data": false}"""
 # ========================================
 
 
-def correct_percentage_lab_names(results: list[dict], lab_specs: LabSpecsConfig) -> list[dict]:
-    """Correct lab names based on unit: add (%) when unit is %, remove (%) when unit is not %.
-
-    This handles cases where:
-    1. Unit is "%" but name doesn't end with "(%) " -> add "(%) "
-    2. Unit is NOT "%" but name ends with "(%) " -> remove "(%) " (for absolute counts)
-    """
-    corrected_to_pct = 0
-    corrected_to_abs = 0
-
-    for result in results:
-        std_name = result.get("lab_name_standardized")
-        std_unit = result.get("lab_unit_standardized")
-
-        if not std_name:
-            continue
-
-        # Case 1: Unit is % but name doesn't have (%) -> add it
-        if std_unit == "%" and not std_name.endswith("(%)"):
-            percentage_variant = lab_specs.get_percentage_variant(std_name)
-            if percentage_variant:
-                logger.debug(
-                    f"Correcting lab name '{std_name}' -> '{percentage_variant}' (unit is %)"
-                )
-                result["lab_name_standardized"] = percentage_variant
-                corrected_to_pct += 1
-
-        # Case 2: Unit is NOT % but name has (%) -> remove it (for absolute counts)
-        elif std_unit != "%" and std_name.endswith("(%)"):
-            non_percentage_variant = lab_specs.get_non_percentage_variant(std_name)
-            if non_percentage_variant:
-                logger.debug(
-                    f"Correcting lab name '{std_name}' -> '{non_percentage_variant}' (unit is {std_unit})"
-                )
-                result["lab_name_standardized"] = non_percentage_variant
-                corrected_to_abs += 1
-
-    if corrected_to_pct > 0 or corrected_to_abs > 0:
-        logger.info(
-            f"Corrected {corrected_to_pct} to percentage, {corrected_to_abs} to absolute lab names"
-        )
-
-    return results
-
 
 def process_single_pdf(
     pdf_path: Path,
     output_dir: Path,
     config: ExtractionConfig,
     lab_specs: LabSpecsConfig,
+    standardization_section: str | None = None,
 ) -> tuple[Path | None, list[dict]]:
     """Process a single PDF file: extract, standardize, and save results.
 
@@ -360,16 +234,17 @@ def process_single_pdf(
         if text_extraction_data is None:
             pdf_text, pdftotext_success = extract_text_from_pdf(copied_pdf)
 
-            if pdftotext_success and text_extraction_is_viable(
-                pdf_text, client, config.extract_model_id
-            ):
+            if pdftotext_success and _text_has_enough_content(pdf_text):
                 logger.info(
-                    f"[{pdf_stem}] Strategy: TEXT (LLM classified as lab data, {len(pdf_text)} chars)"
+                    f"[{pdf_stem}] Strategy: TEXT (sufficient content, {len(pdf_text)} chars)"
                 )
 
                 try:
                     text_extraction_data = extract_labs_from_text(
-                        pdf_text, config.extract_model_id, client
+                        pdf_text,
+                        config.extract_model_id,
+                        client,
+                        standardization_section=standardization_section,
                     )
 
                     # Validate text extraction results
@@ -395,7 +270,7 @@ def process_single_pdf(
                     text_extraction_data = None
             else:
                 if pdftotext_success:
-                    logger.info(f"[{pdf_stem}] Strategy: VISION (LLM classified as non-lab data)")
+                    logger.info(f"[{pdf_stem}] Strategy: VISION (insufficient text content)")
                 else:
                     logger.info(f"[{pdf_stem}] Strategy: VISION (no embedded text in PDF)")
 
@@ -452,6 +327,7 @@ def process_single_pdf(
                             jpg_path,
                             config.extract_model_id,
                             client,
+                            standardization_section=standardization_section,
                         )
                         logger.info(f"[{page_name}] Extraction completed")
 
@@ -502,93 +378,23 @@ def process_single_pdf(
             pd.DataFrame().to_csv(csv_path, index=False)
             return csv_path, failed_pages
 
-        # Standardize lab names
-        logger.info(f"[{pdf_stem}] Standardizing lab names...")
-        raw_names = [r.get("lab_name_raw") for r in all_results if r.get("lab_name_raw")]
-        if raw_names and lab_specs.exists:
-            try:
-                unique_names = list(set(raw_names))
-                name_mapping = standardize_lab_names(
-                    unique_names,
-                    config.self_consistency_model_id,
-                    lab_specs.standardized_names,
-                    client,
-                )
-                for result in all_results:
-                    raw_name = result.get("lab_name_raw")
-                    result["lab_name_standardized"] = (
-                        name_mapping.get(raw_name, UNKNOWN_VALUE) if raw_name else UNKNOWN_VALUE
-                    )
-                logger.info(f"[{pdf_stem}] Standardized {len(unique_names)} unique test names")
-            except Exception as e:
-                logger.error(f"[{pdf_stem}] Name standardization failed: {e}")
-                for result in all_results:
-                    result["lab_name_standardized"] = UNKNOWN_VALUE
-        else:
-            for result in all_results:
-                result["lab_name_standardized"] = UNKNOWN_VALUE
-
-        # Standardize units
-        logger.info(f"[{pdf_stem}] Standardizing units...")
-
-        def normalize_raw_unit(raw_unit):
-            """Normalize raw unit to handle null/nan/None values."""
-            if raw_unit is None:
-                return "null"
-            raw_str = str(raw_unit).strip().lower()
-            if raw_str in ("nan", "none", ""):
-                return "null"
-            return raw_unit
-
-        unit_contexts = [
-            (
-                normalize_raw_unit(r.get("lab_unit_raw")),
-                r.get("lab_name_standardized", ""),
-            )
-            for r in all_results
-        ]
-        if unit_contexts and lab_specs.exists:
-            try:
-                unit_mapping = standardize_lab_units(
-                    unit_contexts,
-                    config.self_consistency_model_id,
-                    lab_specs.standardized_units,
-                    client,
-                    lab_specs,
-                )
-                for result in all_results:
-                    raw_unit = normalize_raw_unit(result.get("lab_unit_raw"))
-                    lab_name = result.get("lab_name_standardized", "")
-                    standardized_unit = unit_mapping.get((raw_unit, lab_name), UNKNOWN_VALUE)
-
-                    # Post-process: If LLM returned $UNKNOWN$ for a null unit, use lab spec primary unit
-                    if (
-                        standardized_unit == UNKNOWN_VALUE
-                        and raw_unit == "null"
-                        and lab_name != UNKNOWN_VALUE
-                    ):
-                        primary_unit = lab_specs.get_primary_unit(lab_name)
-                        if primary_unit:
-                            standardized_unit = primary_unit
-                            logger.debug(
-                                f"[{pdf_stem}] Used primary unit '{primary_unit}' for null unit in '{lab_name}'"
-                            )
-
-                    result["lab_unit_standardized"] = standardized_unit
-                logger.info(
-                    f"[{pdf_stem}] Standardized {len(set(r.get('lab_unit_raw') for r in all_results))} unique units"
-                )
-            except Exception as e:
-                logger.error(f"[{pdf_stem}] Unit standardization failed: {e}")
-                for result in all_results:
-                    result["lab_unit_standardized"] = UNKNOWN_VALUE
-        else:
-            for result in all_results:
-                result["lab_unit_standardized"] = UNKNOWN_VALUE
-
-        # Post-process: Correct percentage lab names
+        # Standardized names/units are now set inline during extraction (via lab_name/unit fields).
+        # Apply cache-based fallback for any results still missing lab_name_standardized.
         if lab_specs.exists:
-            all_results = correct_percentage_lab_names(all_results, lab_specs)
+            name_cache = load_cache("name_standardization")
+            fallback_count = 0
+            for result in all_results:
+                std_name = result.get("lab_name_standardized")
+                if not std_name or std_name == UNKNOWN_VALUE:
+                    raw_name = result.get("lab_name_raw", "")
+                    cached = name_cache.get(raw_name.lower()) if raw_name else None
+                    if cached and cached != UNKNOWN_VALUE:
+                        result["lab_name_standardized"] = cached
+                        fallback_count += 1
+                    elif not std_name:
+                        result["lab_name_standardized"] = UNKNOWN_VALUE
+            if fallback_count > 0:
+                logger.info(f"[{pdf_stem}] Cache fallback applied to {fallback_count} names")
 
         # Update JSON files with standardized values
         _update_json_with_standardized_values(all_results, doc_out_dir)
@@ -1065,6 +871,16 @@ def run_for_profile(args, profile_name: str) -> bool:
         shutil.copy2(lab_specs.config_path, lab_specs_dest)
         logger.info(f"Copied lab specs to output: {lab_specs_dest}")
 
+    # Build standardization section for inline standardization during extraction
+    standardization_section: str | None = None
+    if lab_specs.exists:
+        standardization_section = _build_standardized_names_section(
+            lab_specs.standardized_names, lab_specs._specs
+        )
+        logger.info(
+            f"Built standardization section: {len(lab_specs.standardized_names)} lab names"
+        )
+
     # Get column configuration
     export_cols, hidden_cols, widths, dtypes = get_column_lists(COLUMN_SCHEMA)
 
@@ -1108,7 +924,10 @@ def run_for_profile(args, profile_name: str) -> bool:
         n_workers = min(config.max_workers, len(pdfs_to_process))
         logger.info(f"Using {n_workers} worker(s) for PDF processing")
 
-        tasks = [(pdf, config.output_path, config, lab_specs) for pdf in pdfs_to_process]
+        tasks = [
+            (pdf, config.output_path, config, lab_specs, standardization_section)
+            for pdf in pdfs_to_process
+        ]
 
         with Pool(n_workers, initializer=_init_worker_logging, initargs=(log_dir,)) as pool:
             results = []
