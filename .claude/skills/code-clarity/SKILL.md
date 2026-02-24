@@ -1,3 +1,8 @@
+---
+name: code-clarity
+description: Code quality and clarity guidelines for Python - enforces flat orchestrator patterns, explicit error handling, and mandatory comments
+---
+
 # Code Clarity Skill
 
 ## Core Rules
