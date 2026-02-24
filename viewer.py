@@ -65,7 +65,10 @@ def set_output_path(path: Path) -> None:
 
 def get_output_path() -> Path:
     """Get output path from configuration, profile, or environment."""
+
     global _configured_output_path
+
+    # Return configured path if available
     if _configured_output_path:
         return _configured_output_path
     return Path(os.getenv("OUTPUT_PATH", "./output"))
@@ -95,7 +98,10 @@ def get_demographics() -> Demographics | None:
 
 def get_lab_specs() -> LabSpecsConfig:
     """Get or initialize lab specs config."""
+
     global _lab_specs
+
+    # Initialize on first access
     if _lab_specs is None:
         _lab_specs = LabSpecsConfig()
     return _lab_specs
@@ -103,17 +109,20 @@ def get_lab_specs() -> LabSpecsConfig:
 
 def load_profile(profile_name: str) -> ProfileConfig | None:
     """Load a profile by name and update global configuration."""
+
+    # Guard: profile must exist
     profile_path = ProfileConfig.find_path(profile_name)
     if not profile_path:
         return None
 
     profile = ProfileConfig.from_file(profile_path)
-
     set_current_profile(profile_name)
 
+    # Apply profile output path
     if profile.output_path:
         set_output_path(profile.output_path)
 
+    # Apply demographics (or clear if not configured)
     if profile.demographics:
         set_demographics(profile.demographics)
     else:
@@ -124,12 +133,15 @@ def load_profile(profile_name: str) -> ProfileConfig | None:
 
 def get_available_profiles() -> list[str]:
     """Get list of available profile names (excluding templates)."""
+
     profiles = ProfileConfig.list_profiles()
     return [p for p in profiles if not p.startswith("_")]
 
 
 def get_lab_name_choices(df: pd.DataFrame) -> list[str]:
     """Get sorted list of unique lab names from DataFrame, excluding unknowns."""
+
+    # Guard: no data available
     if df.empty or "lab_name" not in df.columns:
         return []
     return sorted([name for name in df["lab_name"].dropna().unique() if name and not str(name).startswith("$UNKNOWN")])
@@ -178,6 +190,8 @@ def _resolve_page_path(entry: dict, output_path: Path, suffix: str) -> Path:
     Returns:
         Resolved Path (may not exist on disk)
     """
+
+    # Guard: no source file
     source_file = entry.get("source_file", "")
     if not source_file:
         return Path()
@@ -185,9 +199,11 @@ def _resolve_page_path(entry: dict, output_path: Path, suffix: str) -> Path:
     stem = source_file.rsplit(".", 1)[0] if "." in source_file else source_file
     page_number = entry.get("page_number")
 
+    # Format page number with zero-padding
     if page_number is not None and pd.notna(page_number):
         page_str = f"{int(page_number):03d}"
     else:
+        # Default to first page
         page_str = "001"
 
     return output_path / stem / f"{stem}.{page_str}{suffix}"
@@ -195,9 +211,13 @@ def _resolve_page_path(entry: dict, output_path: Path, suffix: str) -> Path:
 
 def get_image_path(entry: dict, output_path: Path) -> str | None:
     """Get page image path from source_file and page_number."""
+
     image_path = _resolve_page_path(entry, output_path, ".jpg")
+
+    # Return path only if it resolves to an existing file
     if image_path.parts and image_path.exists():
         return str(image_path)
+
     return None
 
 
@@ -213,12 +233,15 @@ def get_json_path(entry: dict, output_path: Path) -> Path:
 
 def save_review_to_json(entry: dict, status: str, output_path: Path) -> tuple[bool, str]:
     """Save review status directly to the source JSON file."""
+
     json_path = get_json_path(entry, output_path)
     result_index = entry.get("result_index")
 
+    # Guard: JSON file must exist
     if not json_path.exists():
         return False, f"JSON file not found: {json_path}"
 
+    # Guard: result_index is required
     if result_index is None or pd.isna(result_index):
         return False, "Missing result_index for entry."
 
@@ -227,15 +250,19 @@ def save_review_to_json(entry: dict, status: str, output_path: Path) -> tuple[bo
     try:
         data = json.loads(json_path.read_text(encoding="utf-8"))
 
+        # Guard: JSON must contain lab_results array
         if "lab_results" not in data:
             return False, "No lab_results in JSON file"
 
+        # Guard: index must be within bounds
         if result_index >= len(data["lab_results"]):
             return False, f"result_index {result_index} out of range"
 
+        # Update review status and timestamp
         data["lab_results"][result_index]["review_status"] = status
         data["lab_results"][result_index]["review_completed_at"] = datetime.utcnow().isoformat() + "Z"
 
+        # Persist updated data
         json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         return True, ""
 
@@ -255,8 +282,10 @@ def _is_out_of_range(value: float, range_min, range_max) -> bool:
 
 def _load_json_cached(json_path: Path, cache: dict) -> dict | None:
     """Load and cache a JSON file, returning None on missing/invalid files."""
+
     json_path_str = str(json_path)
 
+    # Cache hit
     if json_path_str in cache:
         return cache[json_path_str]
 
@@ -280,6 +309,7 @@ def _load_json_cached(json_path: Path, cache: dict) -> dict | None:
 
 def _sync_review_statuses(df: pd.DataFrame, output_path: Path) -> list:
     """Read review_status from JSON files for each row, using a file cache."""
+
     json_cache: dict = {}
     review_statuses = []
 
@@ -312,6 +342,7 @@ def _sync_review_statuses(df: pd.DataFrame, output_path: Path) -> list:
 
 def _format_reference_range(row) -> str:
     """Format reference_min/reference_max into a display string."""
+
     ref_min = row["reference_min"]
     ref_max = row["reference_max"]
 
@@ -332,6 +363,7 @@ def _format_reference_range(row) -> str:
 
 def _check_out_of_reference(row) -> bool | None:
     """Check if value falls outside the PDF reference range."""
+
     val = row["value"]
 
     # Missing value — cannot evaluate
@@ -358,6 +390,7 @@ def _get_lab_spec_range(lab_name: str, lab_specs: LabSpecsConfig, gender: str | 
 
 def _check_out_of_healthy_range(row) -> bool | None:
     """Check if value falls outside the lab_specs healthy range."""
+
     val = row.get("value")
 
     # Missing value — cannot evaluate
@@ -376,7 +409,10 @@ def _check_out_of_healthy_range(row) -> bool | None:
 
 def load_data(output_path: Path) -> pd.DataFrame:
     """Load lab results from all.csv and sync review status from JSON files."""
+
     csv_path = output_path / "all.csv"
+
+    # Guard: no data file
     if not csv_path.exists():
         return pd.DataFrame()
 
@@ -422,6 +458,7 @@ def load_data(output_path: Path) -> pd.DataFrame:
 
 def get_review_status(entry: dict) -> str | None:
     """Get review status for an entry (accepted/rejected/None)."""
+
     status = entry.get("review_status")
     if status is not None and pd.notna(status) and str(status).strip():
         return str(status).strip()
@@ -435,6 +472,8 @@ def get_review_status(entry: dict) -> str | None:
 
 def build_summary_cards(df: pd.DataFrame) -> str:
     """Generate HTML summary cards with color coding."""
+
+    # Guard: no data
     if df.empty:
         return '<div class="summary-row"><span class="stat-card">No data loaded</span></div>'
 
@@ -508,6 +547,8 @@ REASON_DESCRIPTIONS = {
 
 def build_review_reason_banner(entry: dict) -> str:
     """Build HTML banner showing why a result needs review."""
+
+    # Guard: no entry
     if not entry:
         return ""
 
@@ -515,6 +556,7 @@ def build_review_reason_banner(entry: dict) -> str:
     review_reason = entry.get("review_reason")
     review_confidence = entry.get("review_confidence")
 
+    # Guard: no review flags set
     if not review_needed and not review_reason:
         return ""
 
@@ -524,11 +566,14 @@ def build_review_reason_banner(entry: dict) -> str:
         reason_str = str(review_reason).strip()
         for code in reason_str.split(";"):
             code = code.strip()
+            # Known reason code — use human-readable description
             if code and code in REASON_DESCRIPTIONS:
                 reasons.append(REASON_DESCRIPTIONS[code])
+            # Unknown reason code — show as-is
             elif code:
                 reasons.append(code)
 
+    # Guard: no reasons and confidence is acceptable
     if not reasons and not (review_confidence and pd.notna(review_confidence) and float(review_confidence) < 0.7):
         return ""
 
@@ -571,6 +616,8 @@ def apply_filters(
         latest_only: Whether to show only latest result per lab
         review_filter: Filter option ('All', 'Needs Review', 'Abnormal', 'Unhealthy', 'Unreviewed')
     """
+
+    # Guard: no data to filter
     if df.empty:
         return df
 
@@ -594,13 +641,15 @@ def apply_filters(
     if review_filter == "Unreviewed":
         filtered = filtered[filtered["review_status"].isna() | (filtered["review_status"] == "")]
     elif review_filter == "Abnormal":
-        # Quick filter for abnormal results
+        # Results outside PDF reference range
         if "is_out_of_reference" in filtered.columns:
             filtered = filtered[filtered["is_out_of_reference"]]
     elif review_filter == "Needs Review":
+        # Flagged by validation and not yet reviewed
         if "review_needed" in filtered.columns:
             filtered = filtered[(filtered["review_needed"]) & (filtered["review_status"].isna() | (filtered["review_status"] == ""))]
     elif review_filter == "Unhealthy":
+        # Results outside lab_specs healthy range
         if "is_out_of_healthy_range" in filtered.columns:
             filtered = filtered[filtered["is_out_of_healthy_range"]]
 
@@ -612,6 +661,8 @@ def apply_filters(
 
 def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
     """Prepare DataFrame for display (subset and format columns)."""
+
+    # Guard: no data
     if df.empty:
         return pd.DataFrame(columns=[COLUMN_LABELS.get(c, c) for c in DISPLAY_COLUMNS])
 
@@ -657,8 +708,10 @@ def create_single_lab_plot(
         selected_ref: Optional (ref_min, ref_max) from the selected row. When provided,
                       this is used for the PDF reference range instead of computing the mode.
     """
+
     lab_df = df[df["lab_name"] == lab_name].copy()
 
+    # Guard: no data for this lab
     if lab_df.empty:
         fig = go.Figure()
         fig.add_annotation(
@@ -673,10 +726,12 @@ def create_single_lab_plot(
         fig.update_layout(template="plotly_white", height=300)
         return fig, ""
 
+    # Prepare time series data
     lab_df["date"] = pd.to_datetime(lab_df["date"], errors="coerce")
     lab_df = lab_df.dropna(subset=["date", "value"])
     lab_df = lab_df.sort_values("date")
 
+    # Guard: no valid data points after cleanup
     if lab_df.empty:
         fig = go.Figure()
         fig.add_annotation(
@@ -889,6 +944,8 @@ def create_interactive_plot(
         selected_ref: Optional (ref_min, ref_max) from the selected row. Only applies
                       to single-lab plots or the first lab in multi-lab plots.
     """
+
+    # Guard: no labs selected or no data
     if not lab_names or df.empty:
         fig = go.Figure()
         fig.add_annotation(
@@ -903,12 +960,13 @@ def create_interactive_plot(
         fig.update_layout(template="plotly_white", height=400)
         return fig
 
+    # Single lab — delegate to dedicated single-lab plot
     if len(lab_names) == 1:
         fig, _ = create_single_lab_plot(df, lab_names[0], selected_ref=selected_ref)
         fig.update_layout(height=400)
         return fig
 
-    # Multiple labs - create stacked subplots
+    # Multiple labs — create stacked subplots
     n_labs = len(lab_names)
     fig = make_subplots(
         rows=n_labs,
@@ -1039,6 +1097,8 @@ def create_interactive_plot(
 
 def build_details_html(entry: dict) -> str:
     """Build HTML for entry details (raw vs standardized comparison)."""
+
+    # Guard: no entry
     if not entry:
         return "<p>No entry selected</p>"
 
@@ -1074,10 +1134,13 @@ def build_details_html(entry: dict) -> str:
     review_reason = entry.get("review_reason")
     review_confidence = entry.get("review_confidence")
 
+    # Show review details when flags are present
     if review_needed or review_reason or (review_confidence and pd.notna(review_confidence)):
         html += '<div style="margin-top:15px;">'
+        # Display reason codes
         if review_reason and pd.notna(review_reason):
             html += f'<div class="status-warning">Reason: {review_reason}</div>'
+        # Display confidence score
         if review_confidence and pd.notna(review_confidence):
             conf_val = float(review_confidence)
             css_class = "status-warning" if conf_val < 0.7 else "status-info"
@@ -1089,14 +1152,20 @@ def build_details_html(entry: dict) -> str:
 
 def build_review_status_html(entry: dict) -> str:
     """Build HTML for current review status badge."""
+
+    # Guard: no entry
     if not entry:
         return ""
 
     status = get_review_status(entry)
+
+    # Accepted status badge
     if status == "accepted":
         return '<span class="status-accepted">Accepted</span>'
+    # Rejected status badge
     elif status == "rejected":
         return '<span class="status-rejected">Rejected</span>'
+    # Default pending badge
     else:
         return '<span class="status-pending">Pending</span>'
 
@@ -1108,6 +1177,7 @@ def build_review_status_html(entry: dict) -> str:
 
 def _empty_nav_state(full_df: pd.DataFrame) -> tuple:
     """Return standard empty state tuple for navigation handlers."""
+
     return (
         create_interactive_plot(full_df, []),
         0,
@@ -1121,6 +1191,7 @@ def _empty_nav_state(full_df: pd.DataFrame) -> tuple:
 
 def _load_output_data(output_path: Path) -> tuple[pd.DataFrame, list[str]]:
     """Load and sort data from output path, return (full_df, lab_name_choices)."""
+
     full_df = load_data(output_path)
     if not full_df.empty and "date" in full_df.columns:
         full_df = full_df.sort_values(["date", "lab_name"], ascending=[False, True], na_position="last").reset_index(drop=True)
@@ -1138,6 +1209,7 @@ def _build_row_context(
     Returns:
         Tuple of (plot, row_idx, position_text, image_path, details_html, status_html, banner_html)
     """
+
     row = filtered_df.iloc[row_idx]
     position_text = f"**Row {row_idx + 1} of {len(filtered_df)}**"
     image_path = get_image_path(row.to_dict(), get_output_path())
@@ -1145,9 +1217,11 @@ def _build_row_context(
     status_html = build_review_status_html(row.to_dict())
     banner_html = build_review_reason_banner(row.to_dict())
 
+    # Determine which labs to plot
     if lab_names:
         plot_labs = [lab_names]
     else:
+        # Default to the selected row's lab
         plot_labs = [row.get("lab_name")]
 
     ref_min = row.get("reference_min")
@@ -1174,10 +1248,12 @@ def handle_filter_change(
     full_df: pd.DataFrame,
 ):
     """Handle filter changes and update display."""
+
     filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter)
     display_df = prepare_display_df(filtered_df)
     summary = build_summary_cards(filtered_df)
 
+    # Build context from first row if results exist
     if not filtered_df.empty:
         (
             plot,
@@ -1189,6 +1265,7 @@ def handle_filter_change(
             banner_html,
         ) = _build_row_context(filtered_df, 0, full_df, lab_names)
     else:
+        # Empty result set
         current_idx = 0
         position_text = "No results"
         image_path = None
@@ -1218,14 +1295,18 @@ def handle_row_select(
     lab_names: str | None,
 ):
     """Handle row selection to update plot, details, and current index."""
+
+    # Guard: no selection or data
     if evt is None or filtered_df.empty:
         return _empty_nav_state(full_df)
 
+    # Extract row index from selection event
     if isinstance(evt.index, (list, tuple)):
         row_idx = evt.index[0]
     else:
         row_idx = evt.index
 
+    # Clamp to valid range
     if row_idx < 0 or row_idx >= len(filtered_df):
         row_idx = 0
 
@@ -1239,9 +1320,12 @@ def handle_previous(
     lab_names: str | None,
 ):
     """Navigate to previous row."""
+
+    # Guard: no data
     if filtered_df.empty:
         return _empty_nav_state(full_df)
 
+    # Wrap around to end
     new_idx = current_idx - 1
     if new_idx < 0:
         new_idx = len(filtered_df) - 1
@@ -1256,9 +1340,12 @@ def handle_next(
     lab_names: str | None,
 ):
     """Navigate to next row."""
+
+    # Guard: no data
     if filtered_df.empty:
         return _empty_nav_state(full_df)
 
+    # Wrap around to start
     new_idx = current_idx + 1
     if new_idx >= len(filtered_df):
         new_idx = 0
@@ -1276,6 +1363,8 @@ def handle_review_action(
     status: str,
 ):
     """Handle review action (accept/reject)."""
+
+    # Guard: no data to review
     if filtered_df.empty:
         return (
             full_df,  # full_df unchanged
@@ -1291,6 +1380,7 @@ def handle_review_action(
             "",  # banner_html
         )
 
+    # Clamp index to valid range
     if current_idx >= len(filtered_df):
         current_idx = 0
 
@@ -1300,10 +1390,11 @@ def handle_review_action(
     # Save to JSON
     success, error = save_review_to_json(current_entry, status, output_path)
 
+    # Handle save result
     if not success:
         gr.Warning(f"Failed to save review: {error}")
     else:
-        # Update the entry in full_df
+        # Update the entry in full_df to reflect new status
         # Find the matching row by source_file, page_number, and result_index
         mask = (full_df["source_file"] == current_entry.get("source_file")) & (full_df["page_number"] == current_entry.get("page_number")) & (full_df["result_index"] == current_entry.get("result_index"))
         full_df.loc[mask, "review_status"] = status
@@ -1313,7 +1404,7 @@ def handle_review_action(
     display_df = prepare_display_df(filtered_df)
     summary = build_summary_cards(full_df)
 
-    # Adjust index if needed
+    # All entries reviewed under this filter
     if len(filtered_df) == 0:
         current_idx = 0
         return (
@@ -1330,6 +1421,7 @@ def handle_review_action(
             "",  # banner_html
         )
 
+    # Clamp index after re-filtering
     if current_idx >= len(filtered_df):
         current_idx = max(0, len(filtered_df) - 1)
 
@@ -1367,6 +1459,7 @@ def handle_accept(
     review_filter: str,
 ):
     """Mark current entry as accepted."""
+
     return handle_review_action(
         current_idx,
         filtered_df,
@@ -1387,6 +1480,7 @@ def handle_reject(
     review_filter: str,
 ):
     """Mark current entry as rejected."""
+
     return handle_review_action(
         current_idx,
         filtered_df,
@@ -1400,6 +1494,8 @@ def handle_reject(
 
 def export_csv(filtered_df: pd.DataFrame):
     """Export filtered data to CSV file."""
+
+    # Guard: no data to export
     if filtered_df.empty:
         return None
 
@@ -1411,6 +1507,8 @@ def export_csv(filtered_df: pd.DataFrame):
 
 def handle_profile_change(profile_name: str):
     """Handle profile switch - reload all data for the new profile."""
+
+    # Guard: no profile selected
     if not profile_name:
         return (
             pd.DataFrame(),  # display_df
@@ -1427,6 +1525,7 @@ def handle_profile_change(profile_name: str):
             "",  # banner_html
         )
 
+    # Guard: profile not found or no output path
     profile = load_profile(profile_name)
     if not profile or not profile.output_path:
         return (
@@ -1488,6 +1587,7 @@ def handle_profile_change(profile_name: str):
 
 def create_app():
     """Create and configure the Gradio app."""
+
     output_path = get_output_path()
     full_df, lab_name_choices = _load_output_data(output_path)
 
@@ -1761,6 +1861,7 @@ def create_app():
 
 def parse_args():
     """Parse command-line arguments."""
+
     parser = argparse.ArgumentParser(
         description="Lab Results Viewer",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1797,18 +1898,22 @@ if __name__ == "__main__":
     # Handle --list-profiles
     if args.list_profiles:
         profiles = ProfileConfig.list_profiles()
+        # Print profiles if available
         if profiles:
             print("Available profiles:")
             for name in profiles:
                 print(f"  - {name}")
         else:
+            # No profiles configured
             print("No profiles found. Create profiles in the 'profiles/' directory.")
         sys.exit(0)
 
     # Determine which profile to use
     profile_name = args.profile
+    # No profile specified — auto-select first available
     if not profile_name:
         available = get_available_profiles()
+        # No profiles configured at all
         if not available:
             print("Error: No profiles found.")
             print("Create profiles in the 'profiles/' directory.")
@@ -1816,7 +1921,7 @@ if __name__ == "__main__":
         profile_name = available[0]
         print(f"No profile specified, defaulting to: {profile_name}")
 
-    # Load profile
+    # Guard: profile must exist
     profile = load_profile(profile_name)
     if not profile:
         print(f"Error: Profile '{profile_name}' not found")
@@ -1825,6 +1930,7 @@ if __name__ == "__main__":
 
     print(f"Using profile: {profile.name}")
 
+    # Display demographics info if configured
     if profile.demographics:
         demo_info = []
         if profile.demographics.gender:
@@ -1834,6 +1940,7 @@ if __name__ == "__main__":
         if demo_info:
             print(f"Demographics: {', '.join(demo_info)}")
 
+    # Guard: output_path must be configured
     if not profile.output_path:
         print(f"Error: Profile '{profile_name}' has no output_path defined.")
         sys.exit(1)

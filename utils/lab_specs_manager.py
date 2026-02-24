@@ -49,9 +49,13 @@ TEMP_PATH = Path("temp_lab_specs.json")
 
 def validate_env():
     """Validate required environment variables are set."""
+
+    # Require extraction model ID
     if not os.getenv("EXTRACT_MODEL_ID"):
         print("Error: EXTRACT_MODEL_ID environment variable not set")
         sys.exit(1)
+
+    # Require API key
     if not os.getenv("OPENROUTER_API_KEY"):
         print("Error: OPENROUTER_API_KEY environment variable not set")
         sys.exit(1)
@@ -59,6 +63,7 @@ def validate_env():
 
 def get_openai_client():
     """Get configured OpenAI client for OpenRouter."""
+
     return OpenAI(
         base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
         api_key=os.getenv("OPENROUTER_API_KEY"),
@@ -67,11 +72,13 @@ def get_openai_client():
 
 def cmd_sort(args):
     """Sort lab_specs.json alphabetically by lab name."""
+
     with open(LAB_SPECS_PATH, encoding="utf-8") as f:
         data = json.load(f)
 
     sorted_data = dict(sorted(data.items()))
 
+    # Write sorted data back
     with open(LAB_SPECS_PATH, "w", encoding="utf-8") as f:
         json.dump(sorted_data, f, ensure_ascii=False, indent=2)
         f.write("\n")
@@ -81,9 +88,12 @@ def cmd_sort(args):
 
 def cmd_fix_encoding(args):
     """Fix Unicode encoding by converting escape sequences to UTF-8."""
+
+    # Bail out if file doesn't exist
     if not LAB_SPECS_PATH.exists():
         raise FileNotFoundError(f"File not found: {LAB_SPECS_PATH}")
 
+    # Create backup if requested
     if args.backup:
         backup_path = LAB_SPECS_PATH.with_suffix(".json.backup")
         shutil.copy2(LAB_SPECS_PATH, backup_path)
@@ -96,10 +106,11 @@ def cmd_fix_encoding(args):
         json.dump(data, f, indent=2, ensure_ascii=False)
         f.write("\n")
 
-    # Validate
+    # Validate round-trip integrity
     with open(LAB_SPECS_PATH, "r", encoding="utf-8") as f:
         validated_data = json.load(f)
 
+    # Data mismatch after write
     if data != validated_data:
         raise ValueError("Data integrity check failed!")
 
@@ -108,6 +119,7 @@ def cmd_fix_encoding(args):
 
 def get_conversion_factor(lab_name, from_unit, to_unit, client, temperature=0.0):
     """Use LLM to get conversion factor from from_unit to to_unit."""
+
     system_prompt = "You are a medical laboratory assistant. Given a lab test name and two units, provide the numeric conversion factor to convert a value from the first unit to the second. Respond with only the numeric factor."
     user_prompt = f"Lab test: {lab_name}\nConvert from: {from_unit}\nConvert to: {to_unit}\nWhat is the numeric conversion factor? Respond with only the number."
 
@@ -124,7 +136,9 @@ def get_conversion_factor(lab_name, from_unit, to_unit, client, temperature=0.0)
         max_tokens=16,
     )
 
+    # Parse numeric response
     response = completion.choices[0].message.content.strip()
+
     try:
         return float(response)
     except (ValueError, TypeError):
@@ -134,6 +148,7 @@ def get_conversion_factor(lab_name, from_unit, to_unit, client, temperature=0.0)
 
 def get_health_range(lab_name, primary_unit, user_stats, client, temperature=0.0):
     """Use LLM to get healthy reference range for a lab test."""
+
     system_prompt = (
         "You are a medical laboratory assistant. "
         "Given a lab test name, its primary unit, and user stats (gender, age, weight, height, activity level), "
@@ -160,16 +175,23 @@ def get_health_range(lab_name, primary_unit, user_stats, client, temperature=0.0
 
 def parse_range_string(range_str, primary_unit=None):
     """Parse range string like '3.5-5.0' or '70-110' into min/max dict."""
+
     # Handle boolean units
     if primary_unit is not None and primary_unit.lower() in ["boolean"]:
         s = range_str.strip().lower()
+
+        # Negative/absent boolean
         if s in ["negative", "absent", "none", "no", "false", "0", "0-0"]:
             return {"min": 0, "max": 0}
+
+        # Positive/present boolean
         if s in ["positive", "present", "yes", "true", "1", "1-1"]:
             return {"min": 1, "max": 1}
 
-    # Try range pattern
+    # Try range pattern (e.g., "3.5-5.0")
     match = re.match(r"^\s*([-\d\.]+)\s*[--]\s*([-\d\.]+)\s*$", range_str)
+
+    # Matched a range pattern
     if match:
         try:
             return {"min": float(match.group(1)), "max": float(match.group(2))}
@@ -186,6 +208,7 @@ def parse_range_string(range_str, primary_unit=None):
 
 def cmd_build_conversions(args):
     """Build conversion factors from extracted CSV data."""
+
     validate_env()
     client = get_openai_client()
 
@@ -200,6 +223,8 @@ def cmd_build_conversions(args):
         for row in reader:
             lab_name = row.get("lab_name_enum") or row.get("lab_name")
             lab_unit = row.get("lab_unit_enum") or row.get("unit")
+
+            # Only track rows with both lab name and unit
             if lab_name and lab_unit:
                 lab_units[lab_name].add(lab_unit)
 
@@ -232,6 +257,7 @@ def cmd_build_conversions(args):
         for future in concurrent.futures.as_completed(futures):
             lab_name, unit, primary_unit, factor = future.result()
             for alt in labs_specs[lab_name]["alternatives"]:
+                # Match the alternative by unit name
                 if alt["unit"] == unit:
                     alt["factor"] = factor
                     break
@@ -245,6 +271,7 @@ def cmd_build_conversions(args):
 
 def cmd_build_ranges(args):
     """Build healthy reference ranges using LLM."""
+
     validate_env()
     client = get_openai_client()
 
@@ -271,8 +298,10 @@ def cmd_build_ranges(args):
         futures = [executor.submit(task_fn, args) for args in health_range_tasks]
         for future in concurrent.futures.as_completed(futures):
             lab_name, parsed_range = future.result()
+            # Initialize ranges dict if missing
             if "ranges" not in labs_specs[lab_name]:
                 labs_specs[lab_name]["ranges"] = {}
+
             labs_specs[lab_name]["ranges"]["healthy"] = parsed_range
 
     # Save results
@@ -340,6 +369,7 @@ Examples:
 
     args = parser.parse_args()
 
+    # No command given - show help
     if not args.command:
         parser.print_help()
         sys.exit(1)

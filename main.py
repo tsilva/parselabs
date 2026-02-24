@@ -1071,6 +1071,7 @@ def _is_empty_extraction_json(json_path: Path) -> bool:
 
 def _collect_empty_jsons(pdf_dir: Path) -> list[Path]:
     """Collect JSON files with empty lab_results in a PDF output directory."""
+
     empty_jsons = []
     for json_path in pdf_dir.glob("*.json"):
         try:

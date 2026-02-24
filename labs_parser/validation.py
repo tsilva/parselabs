@@ -67,6 +67,7 @@ class ValueValidator:
         Args:
             lab_specs: LabSpecsConfig containing biological limits and relationships
         """
+
         self.lab_specs = lab_specs
         self._validation_stats = {
             "total_rows": 0,
@@ -92,12 +93,14 @@ class ValueValidator:
         Returns:
             Actual column name to use (preferred if exists, else fallback)
         """
+
         preferred, fallback = self.COLUMN_MAPPINGS[key]
         return preferred if preferred in df.columns else fallback
 
     @property
     def validation_stats(self) -> dict:
         """Get statistics from the last validation run."""
+
         return self._validation_stats
 
     def validate(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -109,9 +112,12 @@ class ValueValidator:
         Returns:
             DataFrame with review_needed, review_reason, review_confidence updated
         """
+
+        # Empty DataFrame — nothing to validate
         if df.empty:
             return df
 
+        # Work on a copy to avoid mutating the original
         df = df.copy()
 
         # Initialize review columns if not present
@@ -162,14 +168,20 @@ class ValueValidator:
         Returns:
             Modified DataFrame
         """
+
+        # No rows to flag
         if not mask.any():
             return df
 
+        # Look up the confidence multiplier for this reason code
         confidence_mult = self.REASON_CODES.get(reason_code, 0.8)
 
+        # Set review flag and append reason code to review_reason
         df.loc[mask, "review_needed"] = True
         # Handle NaN values in review_reason by converting to empty string first
         df.loc[mask, "review_reason"] = df.loc[mask, "review_reason"].fillna("").apply(lambda x: str(x) + f"{reason_code}; " if reason_code not in str(x) else str(x))
+
+        # Reduce confidence by the reason code's multiplier
         df.loc[mask, "review_confidence"] = df.loc[mask, "review_confidence"] * confidence_mult
 
         # Update stats
@@ -190,7 +202,9 @@ class ValueValidator:
         Returns:
             Modified DataFrame
         """
+
         for reason_code, indices in flags.items():
+            # Skip reason codes with no flagged indices
             if indices:
                 mask = df.index.isin(indices)
                 df = self._flag_row(df, mask, reason_code)
@@ -209,6 +223,8 @@ class ValueValidator:
         - Percentage bounds (0-100%)
         - Boolean constraints (0/1 for positive/negative tests)
         """
+
+        # Required columns missing — skip check
         if self._value_col not in df.columns or self._lab_name_col not in df.columns:
             return df
 
@@ -246,6 +262,7 @@ class ValueValidator:
             value = getattr(row, self._value_col, None)
             lab_name = getattr(row, self._lab_name_col, None)
 
+            # Skip rows with missing value or lab name
             if pd.isna(value) or pd.isna(lab_name):
                 continue
 
@@ -259,6 +276,7 @@ class ValueValidator:
             if unit == "%":
                 # Some labs (coagulation factors) can legitimately exceed 100%
                 max_pct = 200 if lab_name in percentage_exceeds_100_allowed else 100
+                # Value outside allowed percentage range
                 if value < 0 or value > max_pct:
                     flags["PERCENTAGE_BOUNDS"].append(idx)
                     continue
@@ -268,6 +286,7 @@ class ValueValidator:
             bio_min = spec.get("biological_min")
             bio_max = spec.get("biological_max")
 
+            # Check value against biological min/max
             if (bio_min is not None and value < bio_min) or (bio_max is not None and value > bio_max):
                 flags["IMPOSSIBLE_VALUE"].append(idx)
 
@@ -283,11 +302,12 @@ class ValueValidator:
         Returns:
             (pct_diff, tolerance_pct) if relationship can be evaluated, (None, 0) otherwise
         """
+
         target = rel.get("target")
         formula = rel.get("formula")
         tolerance_pct = rel.get("tolerance_percent", 15)
 
-        # Missing definition
+        # Missing definition — cannot evaluate
         if not target or not formula:
             return None, 0
 
@@ -298,14 +318,17 @@ class ValueValidator:
 
         # Calculate expected value from formula
         calculated = self._evaluate_formula(formula, lab_values)
+
+        # Formula missing components — cannot evaluate
         if calculated is None:
             return None, 0
 
         # Compute percentage difference
+        # Non-zero target — use relative percentage difference
         if target_value != 0:
             pct_diff = abs(calculated - target_value) / abs(target_value) * 100
+        # Zero target — use absolute diff scaled to percentage
         else:
-            # Use absolute diff for zero target
             pct_diff = abs(calculated - target_value) * 100
 
         return pct_diff, tolerance_pct
@@ -319,15 +342,20 @@ class ValueValidator:
         - Total Bilirubin = Direct + Indirect
         - MCHC = MCH/MCV * 100
         """
+
         relationships = self.lab_specs.specs.get("_relationships", [])
+
+        # No relationships defined — skip check
         if not relationships:
             return df
 
+        # Date column missing — cannot group by date
         if self._date_col not in df.columns:
             return df
 
         # Group by date to check relationships within same test date
         for date_val, date_group in df.groupby(self._date_col):
+            # Skip rows with missing date
             if pd.isna(date_val):
                 continue
 
@@ -339,10 +367,11 @@ class ValueValidator:
                 if pd.notna(lab_name) and pd.notna(value):
                     lab_values[lab_name] = value
 
-            # Check each relationship against this date's values
+            # Evaluate each relationship against this date's values
             for rel in relationships:
                 try:
                     pct_diff, tolerance_pct = self._evaluate_single_relationship(rel, lab_values)
+                # Evaluation error — log and skip
                 except Exception as e:
                     logger.debug(f"Error evaluating relationship {rel.get('name')}: {e}")
                     continue
@@ -369,6 +398,8 @@ class ValueValidator:
         For example: Albumin should not exceed Total Protein,
         Direct Bilirubin should not exceed Total Bilirubin.
         """
+
+        # Date column missing — cannot group by date
         if self._date_col not in df.columns:
             return df
 
@@ -376,6 +407,7 @@ class ValueValidator:
 
         # Group by date to check constraints within same test date
         for date_val, date_group in df.groupby(self._date_col):
+            # Skip rows with missing date
             if pd.isna(date_val):
                 continue
 
@@ -394,12 +426,14 @@ class ValueValidator:
                 component_value = lab_values.get(component_lab)
                 total_value = lab_values.get(total_lab)
 
+                # Either component or total missing — skip constraint
                 if component_value is None or total_value is None:
                     continue
 
                 # Component should not exceed total (with small tolerance for rounding)
                 if component_value > total_value * 1.05:  # 5% tolerance
                     component_idx = lab_indices.get(component_lab)
+                    # Record index for batch flagging
                     if component_idx is not None:
                         component_exceeds_indices.append(component_idx)
                         logger.debug(f"Component exceeds total on {date_val}: {component_lab}={component_value} > {total_lab}={total_value}")
@@ -421,6 +455,7 @@ class ValueValidator:
         Returns:
             Calculated value or None if missing components
         """
+
         # Extract lab names from formula (they're the parts that start with lab type prefix)
         lab_prefixes = ("Blood - ", "Urine - ", "Feces - ")
 
@@ -434,17 +469,21 @@ class ValueValidator:
             for match in matches:
                 lab_name = match.strip()
                 value = lab_values.get(lab_name)
+                # Missing component — formula cannot be evaluated
                 if value is None:
-                    return None  # Missing component
+                    return None
                 result_formula = result_formula.replace(lab_name, str(value))
 
         # Safely evaluate the arithmetic expression
         try:
             # Only allow safe arithmetic operations
             allowed = set("0123456789.+-*/() ")
+
+            # Unsafe characters present — reject formula
             if not all(c in allowed for c in result_formula):
                 return None
             return eval(result_formula)
+        # Evaluation failed (division by zero, syntax error, etc.)
         except Exception:
             return None
 
@@ -458,6 +497,8 @@ class ValueValidator:
         Uses max_daily_change from lab_specs to determine if a value
         changed too rapidly between tests.
         """
+
+        # Required columns missing — skip check
         if self._date_col not in df.columns or self._value_col not in df.columns:
             return df
 
@@ -470,12 +511,14 @@ class ValueValidator:
 
         # Group by lab name and check temporal consistency
         for lab_name, group in df.groupby(self._lab_name_col):
+            # Skip rows with missing lab name
             if pd.isna(lab_name):
                 continue
 
             spec = self.lab_specs.specs.get(lab_name, {})
             max_daily_change = spec.get("max_daily_change")
 
+            # No max daily change defined — skip this lab
             if max_daily_change is None:
                 continue
 
@@ -534,6 +577,8 @@ class ValueValidator:
         - Magnitude mismatch (wrong order of magnitude for unit)
         - Embedded text in numeric fields
         """
+
+        # Raw value column missing — skip check
         if self._value_raw_col not in df.columns:
             return df
 
@@ -550,6 +595,7 @@ class ValueValidator:
             value = getattr(row, self._value_col, None) if has_value_col else None
             lab_name = getattr(row, self._lab_name_col, None) if has_lab_name_col else None
 
+            # Skip rows with missing raw value
             if pd.isna(value_raw):
                 continue
 
@@ -559,6 +605,7 @@ class ValueValidator:
             if "." in value_raw_str:
                 decimal_part = value_raw_str.split(".")[-1]
                 decimal_digits = re.match(r"\d+", decimal_part)
+                # More than 4 decimal digits — likely a concatenation error
                 if decimal_digits and len(decimal_digits.group()) > 4:
                     flags["FORMAT_ARTIFACT"].append(idx)
                     logger.debug(f"Excessive decimals in {lab_name}: {value_raw_str}")
@@ -570,8 +617,10 @@ class ValueValidator:
                 has_digits = bool(re.search(r"\d", cleaned))
                 starts_with_number = bool(re.match(r"^[\d\.\-\+<>≤≥]", cleaned))
 
+                # Numeric-looking string — check for "value=reference" concatenation
                 if has_digits and starts_with_number:
                     concat_pattern = re.match(r"^[\d\.\-\+<>≤≥]+\s*=\s*\d+", cleaned)
+                    # Pattern matched — flag as concatenation artifact
                     if concat_pattern:
                         flags["FORMAT_ARTIFACT"].append(idx)
                         logger.debug(f"Concatenation error in {lab_name}: {value_raw_str}")
@@ -590,6 +639,8 @@ class ValueValidator:
         - ref_min > ref_max (invalid range)
         - Value extremely far outside extracted range (100x)
         """
+
+        # Reference range columns missing — skip check
         if self._ref_min_col not in df.columns or self._ref_max_col not in df.columns:
             return df
 
@@ -610,6 +661,7 @@ class ValueValidator:
 
             # Check ref_min > ref_max (inverted range)
             if pd.notna(ref_min) and pd.notna(ref_max):
+                # Inverted range — min exceeds max
                 if ref_min > ref_max:
                     flags["RANGE_INCONSISTENCY"].append(idx)
                     logger.debug(f"Inverted range for {lab_name}: {ref_min} > {ref_max}")
@@ -618,6 +670,8 @@ class ValueValidator:
             # Check for extreme deviation from reference range
             if pd.notna(value) and pd.notna(ref_min) and pd.notna(ref_max):
                 range_size = ref_max - ref_min
+
+                # Valid range size — check deviation
                 if range_size > 0:
                     # Value below reference minimum
                     if value < ref_min:
