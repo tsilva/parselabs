@@ -23,8 +23,16 @@ def integrity_test(func):
         try:
             df = pd.read_csv(file)
             func(df, report, errors)
-        except Exception as e:
-            errors.append(f"Exception: {e}")
+        except FileNotFoundError as e:
+            errors.append(f"Results file not found: {e}")
+        except pd.errors.EmptyDataError as e:
+            errors.append(f"Results file is empty: {e}")
+        except pd.errors.ParserError as e:
+            errors.append(f"Failed to parse CSV: {e}")
+        except PermissionError as e:
+            errors.append(f"Permission denied reading results file: {e}")
+        # Let unexpected exceptions (AttributeError, TypeError, etc.) propagate
+        # These indicate programming bugs, not test data issues
         if errors:
             report.setdefault(file, []).extend(errors)
 
@@ -40,9 +48,7 @@ def test_all_rows_have_dates_and_no_duplicates(df, report, errors):
         errors.append("Some rows have empty date")
     # 2. No duplicate rows (hash all columns per row)
     row_hashes = df.apply(
-        lambda row: hashlib.sha256(
-            ("|".join(row.astype(str))).encode("utf-8")
-        ).hexdigest(),
+        lambda row: hashlib.sha256(("|".join(row.astype(str))).encode("utf-8")).hexdigest(),
         axis=1,
     )
     duplicates = row_hashes[row_hashes.duplicated(keep=False)]
@@ -52,25 +58,19 @@ def test_all_rows_have_dates_and_no_duplicates(df, report, errors):
             for idx in dup_indices:
                 row = df.loc[idx]
                 source_file = row.get("source_file", "unknown")
-                report.setdefault(source_file, []).append(
-                    f"Duplicate row at index {idx}: {row.to_dict()}"
-                )
+                report.setdefault(source_file, []).append(f"Duplicate row at index {idx}: {row.to_dict()}")
 
 
 @integrity_test
 def test_lab_unit_percent_vs_lab_name(df, report, errors):
     if "unit" not in df.columns or "lab_name" not in df.columns:
         return
-    mask = (df["unit"] == "%") & (
-        ~df["lab_name"].astype(str).str.endswith("(%)")
-    )
+    mask = (df["unit"] == "%") & (~df["lab_name"].astype(str).str.endswith("(%)"))
     for idx in df[mask].index:
         row = df.loc[idx]
         source_file = row.get("source_file", "unknown")
         lab_name = row.get("lab_name", "")
-        report.setdefault(source_file, []).append(
-            f'Row at index {idx} (lab_name="{lab_name}") has unit="%" but lab_name="{lab_name}"'
-        )
+        report.setdefault(source_file, []).append(f'Row at index {idx} (lab_name="{lab_name}") has unit="%" but lab_name="{lab_name}"')
 
 
 @integrity_test
@@ -83,9 +83,7 @@ def test_lab_unit_percent_value_range(df, report, errors):
         source_file = row.get("source_file", "unknown")
         val = row.get("value")
         lab_name = row.get("lab_name", "")
-        report.setdefault(source_file, []).append(
-            f'Row at index {idx} (lab_name="{lab_name}") has unit="%" but value={val} (should be between 0 and 100)'
-        )
+        report.setdefault(source_file, []).append(f'Row at index {idx} (lab_name="{lab_name}") has unit="%" but value={val} (should be between 0 and 100)')
 
 
 @integrity_test
@@ -98,9 +96,7 @@ def test_lab_unit_boolean_value(df, report, errors):
         source_file = row.get("source_file", "unknown")
         val = row.get("value")
         lab_name = row.get("lab_name", "")
-        report.setdefault(source_file, []).append(
-            f'Row at index {idx} (lab_name="{lab_name}") has unit="boolean" but value={val} (should be 0 or 1)'
-        )
+        report.setdefault(source_file, []).append(f'Row at index {idx} (lab_name="{lab_name}") has unit="boolean" but value={val} (should be 0 or 1)')
 
 
 @integrity_test
@@ -112,9 +108,7 @@ def test_lab_name_unit_consistency(df, report, errors):
         units = [u for u in units if pd.notnull(u)]
         if len(units) > 1:
             indices = df[df["lab_name"] == lab_name].index.tolist()
-            errors.append(
-                f'lab_name="{lab_name}" has inconsistent unit values: {units} (rows: {indices})'
-            )
+            errors.append(f'lab_name="{lab_name}" has inconsistent unit values: {units} (rows: {indices})')
 
 
 @integrity_test
@@ -142,30 +136,16 @@ def test_lab_value_outliers_by_lab_name(df, report, errors):
             continue
 
         if "unit" in group.columns:
-            outliers = group[
-                (group["unit"] == most_freq_unit)
-                & (
-                    (group["value"] > mean + 3 * std)
-                    | (group["value"] < mean - 3 * std)
-                )
-            ]
+            outliers = group[(group["unit"] == most_freq_unit) & ((group["value"] > mean + 3 * std) | (group["value"] < mean - 3 * std))]
         else:
-            outliers = group[
-                (group["value"] > mean + 3 * std)
-                | (group["value"] < mean - 3 * std)
-            ]
+            outliers = group[(group["value"] > mean + 3 * std) | (group["value"] < mean - 3 * std)]
 
         if not outliers.empty:
             source_files = set(outliers["source_file"].dropna().astype(str))
             outlier_values = outliers["value"].tolist()
-            page_numbers = (
-                outliers["page_number"].tolist()
-                if "page_number" in outliers.columns
-                else ["unknown"] * len(outlier_values)
-            )
+            page_numbers = outliers["page_number"].tolist() if "page_number" in outliers.columns else ["unknown"] * len(outlier_values)
             errors.append(
-                f'lab_name="{lab_name}", unit="{most_freq_unit}" has outlier value (>3 std from mean {mean:.2f}±{std:.2f}) '
-                f"in files: {list(sorted(source_files))} outlier values: {outlier_values} page numbers: {page_numbers}"
+                f'lab_name="{lab_name}", unit="{most_freq_unit}" has outlier value (>3 std from mean {mean:.2f}±{std:.2f}) in files: {list(sorted(source_files))} outlier values: {outlier_values} page numbers: {page_numbers}'
             )
 
 
@@ -180,9 +160,7 @@ def test_unique_date_lab_name(df, report, errors):
             source_file = getattr(row, "source_file", "unknown") or "unknown"
             date_val = getattr(row, "date", "")
             lab_name = getattr(row, "lab_name", "")
-            report.setdefault(source_file, []).append(
-                f"Duplicate (date, lab_name) at index {row.Index}: date={date_val}, lab_name={lab_name}"
-            )
+            report.setdefault(source_file, []).append(f"Duplicate (date, lab_name) at index {row.Index}: date={date_val}, lab_name={lab_name}")
 
 
 def test_loinc_critical_codes(report):
@@ -206,9 +184,7 @@ def test_loinc_critical_codes(report):
             if test_name in config:
                 actual_code = config[test_name].get("loinc_code")
                 if actual_code != expected_code:
-                    errors.append(
-                        f"{test_name} code should be {expected_code}, got {actual_code}"
-                    )
+                    errors.append(f"{test_name} code should be {expected_code}, got {actual_code}")
 
         # Hemolysis tests should NOT have 1975-2
         hemolysis_tests = [
@@ -221,9 +197,7 @@ def test_loinc_critical_codes(report):
             if test_name in config:
                 code = config[test_name].get("loinc_code")
                 if code == "1975-2":
-                    errors.append(
-                        f"{test_name} should not share code 1975-2 with Bilirubin"
-                    )
+                    errors.append(f"{test_name} should not share code 1975-2 with Bilirubin")
 
     except Exception as e:
         errors.append(f"Exception: {e}")
@@ -260,9 +234,7 @@ def test_no_critical_loinc_duplicates(report):
                 has_first = any(pair[0] in t for t in tests)
                 has_second = any(pair[1] in t for t in tests)
                 if has_first and has_second:
-                    errors.append(
-                        f"LOINC {code} incorrectly shared between {pair[0]} and {pair[1]}: {tests}"
-                    )
+                    errors.append(f"LOINC {code} incorrectly shared between {pair[0]} and {pair[1]}: {tests}")
 
     except Exception as e:
         errors.append(f"Exception: {e}")

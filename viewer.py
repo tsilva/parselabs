@@ -18,19 +18,23 @@ from labs_parser.utils import load_dotenv_with_env
 
 load_dotenv_with_env()
 
-import argparse
-import json
-import os
-import sys
-from datetime import datetime
-from pathlib import Path
+import argparse  # noqa: E402
+import json  # noqa: E402
+import logging  # noqa: E402
+import os  # noqa: E402
+import sys  # noqa: E402
+from datetime import datetime  # noqa: E402
+from pathlib import Path  # noqa: E402
 
-import gradio as gr
-import pandas as pd
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import gradio as gr  # noqa: E402
+import pandas as pd  # noqa: E402
+import plotly.graph_objects as go  # noqa: E402
+from plotly.subplots import make_subplots  # noqa: E402
 
-from labs_parser.config import Demographics, LabSpecsConfig, ProfileConfig
+from labs_parser.config import Demographics, LabSpecsConfig, ProfileConfig  # noqa: E402
+
+# Initialize module logger
+logger = logging.getLogger(__name__)
 
 _STATIC_DIR = Path(__file__).parent / "static"
 KEYBOARD_JS = (_STATIC_DIR / "viewer.js").read_text()
@@ -128,13 +132,7 @@ def get_lab_name_choices(df: pd.DataFrame) -> list[str]:
     """Get sorted list of unique lab names from DataFrame, excluding unknowns."""
     if df.empty or "lab_name" not in df.columns:
         return []
-    return sorted(
-        [
-            name
-            for name in df["lab_name"].dropna().unique()
-            if name and not str(name).startswith("$UNKNOWN")
-        ]
-    )
+    return sorted([name for name in df["lab_name"].dropna().unique() if name and not str(name).startswith("$UNKNOWN")])
 
 
 # =============================================================================
@@ -213,9 +211,7 @@ def get_json_path(entry: dict, output_path: Path) -> Path:
 # =============================================================================
 
 
-def save_review_to_json(
-    entry: dict, status: str, output_path: Path
-) -> tuple[bool, str]:
+def save_review_to_json(entry: dict, status: str, output_path: Path) -> tuple[bool, str]:
     """Save review status directly to the source JSON file."""
     json_path = get_json_path(entry, output_path)
     result_index = entry.get("result_index")
@@ -238,13 +234,9 @@ def save_review_to_json(
             return False, f"result_index {result_index} out of range"
 
         data["lab_results"][result_index]["review_status"] = status
-        data["lab_results"][result_index]["review_completed_at"] = (
-            datetime.utcnow().isoformat() + "Z"
-        )
+        data["lab_results"][result_index]["review_completed_at"] = datetime.utcnow().isoformat() + "Z"
 
-        json_path.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         return True, ""
 
     except Exception as e:
@@ -258,9 +250,7 @@ def save_review_to_json(
 
 def _is_out_of_range(value: float, range_min, range_max) -> bool:
     """Check if a value falls outside a min/max range."""
-    return (pd.notna(range_min) and value < range_min) or (
-        pd.notna(range_max) and value > range_max
-    )
+    return (pd.notna(range_min) and value < range_min) or (pd.notna(range_max) and value > range_max)
 
 
 def load_data(output_path: Path) -> pd.DataFrame:
@@ -295,10 +285,14 @@ def load_data(output_path: Path) -> pd.DataFrame:
             if json_path_str not in json_cache:
                 if json_path.exists():
                     try:
-                        json_cache[json_path_str] = json.loads(
-                            json_path.read_text(encoding="utf-8")
-                        )
-                    except Exception:
+                        json_cache[json_path_str] = json.loads(json_path.read_text(encoding="utf-8"))
+                    except json.JSONDecodeError as e:
+                        # Log JSON parsing errors but cache None to avoid re-reading
+                        logger.warning(f"Failed to parse JSON from {json_path}: {e}")
+                        json_cache[json_path_str] = None
+                    except (IOError, OSError) as e:
+                        # Log file read errors but cache None to avoid re-reading
+                        logger.warning(f"Failed to read JSON file {json_path}: {e}")
                         json_cache[json_path_str] = None
                 else:
                     json_cache[json_path_str] = None
@@ -333,11 +327,7 @@ def load_data(output_path: Path) -> pd.DataFrame:
         df["reference_range"] = df.apply(format_range, axis=1)
 
     # Compute is_out_of_reference
-    if (
-        "value" in df.columns
-        and "reference_min" in df.columns
-        and "reference_max" in df.columns
-    ):
+    if "value" in df.columns and "reference_min" in df.columns and "reference_max" in df.columns:
 
         def check_out_of_range(row):
             val = row["value"]
@@ -362,25 +352,15 @@ def load_data(output_path: Path) -> pd.DataFrame:
     if "lab_name" in df.columns and lab_specs.exists:
 
         def get_lab_spec_range(lab_name):
-            range_min, range_max = (
-                lab_specs.get_healthy_range_for_demographics(
-                    lab_name, gender=gender, age=age
-                )
-            )
-            return pd.Series(
-                {"lab_specs_min": range_min, "lab_specs_max": range_max}
-            )
+            range_min, range_max = lab_specs.get_healthy_range_for_demographics(lab_name, gender=gender, age=age)
+            return pd.Series({"lab_specs_min": range_min, "lab_specs_max": range_max})
 
         range_df = df["lab_name"].apply(get_lab_spec_range)
         df["lab_specs_min"] = range_df["lab_specs_min"]
         df["lab_specs_max"] = range_df["lab_specs_max"]
 
     # Compute is_out_of_healthy_range (based on lab_specs healthy ranges)
-    if (
-        "value" in df.columns
-        and "lab_specs_min" in df.columns
-        and "lab_specs_max" in df.columns
-    ):
+    if "value" in df.columns and "lab_specs_min" in df.columns and "lab_specs_max" in df.columns:
 
         def check_out_of_healthy_range(row):
             val = row.get("value")
@@ -392,9 +372,7 @@ def load_data(output_path: Path) -> pd.DataFrame:
                 return None  # No healthy range defined
             return _is_out_of_range(val, spec_min, spec_max)
 
-        df["is_out_of_healthy_range"] = df.apply(
-            check_out_of_healthy_range, axis=1
-        )
+        df["is_out_of_healthy_range"] = df.apply(check_out_of_healthy_range, axis=1)
 
     return df
 
@@ -450,12 +428,7 @@ def build_summary_cards(df: pd.DataFrame) -> str:
         reviewed_count = int(df["review_status"].notna().sum())
     if "review_needed" in df.columns:
         # Only count those that need review AND haven't been reviewed yet
-        needs_review_count = int(
-            (
-                (df["review_needed"] == True)
-                & (df["review_status"].isna() | (df["review_status"] == ""))
-            ).sum()
-        )
+        needs_review_count = int(((df["review_needed"]) & (df["review_status"].isna() | (df["review_status"] == ""))).sum())
 
     # Build HTML cards
     cards = []
@@ -466,24 +439,16 @@ def build_summary_cards(df: pd.DataFrame) -> str:
         cards.append(f'<span class="stat-card">{date_range}</span>')
 
     if needs_review_count > 0:
-        cards.append(
-            f'<span class="stat-card warning">{needs_review_count} need review</span>'
-        )
+        cards.append(f'<span class="stat-card warning">{needs_review_count} need review</span>')
 
     if abnormal_count > 0:
-        cards.append(
-            f'<span class="stat-card danger">{abnormal_count} abnormal</span>'
-        )
+        cards.append(f'<span class="stat-card danger">{abnormal_count} abnormal</span>')
 
     if unhealthy_count > 0:
-        cards.append(
-            f'<span class="stat-card warning">{unhealthy_count} unhealthy</span>'
-        )
+        cards.append(f'<span class="stat-card warning">{unhealthy_count} unhealthy</span>')
 
     if reviewed_count > 0:
-        cards.append(
-            f'<span class="stat-card success">{reviewed_count} reviewed</span>'
-        )
+        cards.append(f'<span class="stat-card success">{reviewed_count} reviewed</span>')
 
     return f'<div class="summary-row">{" ".join(cards)}</div>'
 
@@ -524,11 +489,7 @@ def build_review_reason_banner(entry: dict) -> str:
             elif code:
                 reasons.append(code)
 
-    if not reasons and not (
-        review_confidence
-        and pd.notna(review_confidence)
-        and float(review_confidence) < 0.7
-    ):
+    if not reasons and not (review_confidence and pd.notna(review_confidence) and float(review_confidence) < 0.7):
         return ""
 
     # Build banner HTML
@@ -577,18 +538,12 @@ def apply_filters(
 
     # Sort by date descending, then by lab_name ascending
     if "date" in filtered.columns:
-        filtered = filtered.sort_values(
-            ["date", "lab_name"], ascending=[False, True], na_position="last"
-        )
+        filtered = filtered.sort_values(["date", "lab_name"], ascending=[False, True], na_position="last")
 
     # Latest only: keep only the most recent value per lab test
     # This must run BEFORE status filters so we get the latest result first,
     # then apply status filters to those latest results
-    if (
-        latest_only
-        and "lab_name" in filtered.columns
-        and "date" in filtered.columns
-    ):
+    if latest_only and "lab_name" in filtered.columns and "date" in filtered.columns:
         filtered = filtered.drop_duplicates(subset=["lab_name"], keep="first")
 
     # Filter by lab name (single selection)
@@ -597,26 +552,17 @@ def apply_filters(
 
     # Status filter pills options
     if review_filter == "Unreviewed":
-        filtered = filtered[
-            filtered["review_status"].isna()
-            | (filtered["review_status"] == "")
-        ]
+        filtered = filtered[filtered["review_status"].isna() | (filtered["review_status"] == "")]
     elif review_filter == "Abnormal":
         # Quick filter for abnormal results
         if "is_out_of_reference" in filtered.columns:
-            filtered = filtered[filtered["is_out_of_reference"] == True]
+            filtered = filtered[filtered["is_out_of_reference"]]
     elif review_filter == "Needs Review":
         if "review_needed" in filtered.columns:
-            filtered = filtered[
-                (filtered["review_needed"] == True)
-                & (
-                    filtered["review_status"].isna()
-                    | (filtered["review_status"] == "")
-                )
-            ]
+            filtered = filtered[(filtered["review_needed"]) & (filtered["review_status"].isna() | (filtered["review_status"] == ""))]
     elif review_filter == "Unhealthy":
         if "is_out_of_healthy_range" in filtered.columns:
-            filtered = filtered[filtered["is_out_of_healthy_range"] == True]
+            filtered = filtered[filtered["is_out_of_healthy_range"]]
 
     # Reset index so iloc positions match displayed row positions
     filtered = filtered.reset_index(drop=True)
@@ -627,13 +573,9 @@ def apply_filters(
 def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
     """Prepare DataFrame for display (subset and format columns)."""
     if df.empty:
-        return pd.DataFrame(
-            columns=[COLUMN_LABELS.get(c, c) for c in DISPLAY_COLUMNS]
-        )
+        return pd.DataFrame(columns=[COLUMN_LABELS.get(c, c) for c in DISPLAY_COLUMNS])
 
-    display_df = df[
-        [col for col in DISPLAY_COLUMNS if col in df.columns]
-    ].copy()
+    display_df = df[[col for col in DISPLAY_COLUMNS if col in df.columns]].copy()
 
     # Format date column
     if "date" in display_df.columns:
@@ -641,17 +583,11 @@ def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
 
     # Format boolean columns
     if "is_out_of_reference" in display_df.columns:
-        display_df["is_out_of_reference"] = display_df[
-            "is_out_of_reference"
-        ].map({True: "Yes", False: "No", None: ""})
+        display_df["is_out_of_reference"] = display_df["is_out_of_reference"].map({True: "Yes", False: "No", None: ""})
 
     # Format review status
     if "review_status" in display_df.columns:
-        display_df["review_status"] = (
-            display_df["review_status"]
-            .fillna("")
-            .apply(lambda x: x.capitalize() if x else "")
-        )
+        display_df["review_status"] = display_df["review_status"].fillna("").apply(lambda x: x.capitalize() if x else "")
 
     # Round numeric columns
     if "value" in display_df.columns:
@@ -732,11 +668,7 @@ def create_single_lab_plot(
             name="Values",
             marker=dict(size=10, color="#1f77b4"),
             line=dict(width=2),
-            hovertemplate=(
-                "<b>Date:</b> %{x|%Y-%m-%d}<br>"
-                f"<b>Value:</b> %{{y:.2f}} {unit}<br>"
-                "<extra></extra>"
-            ),
+            hovertemplate=(f"<b>Date:</b> %{{x|%Y-%m-%d}}<br><b>Value:</b> %{{y:.2f}} {unit}<br><extra></extra>"),
         )
     )
 
@@ -788,17 +720,9 @@ def create_single_lab_plot(
         else:
             # Fallback to mode-based logic for historical view
             if not min_vals.empty:
-                ref_min = (
-                    float(min_vals.mode().iloc[0])
-                    if len(min_vals.mode()) > 0
-                    else float(min_vals.iloc[0])
-                )
+                ref_min = float(min_vals.mode().iloc[0]) if len(min_vals.mode()) > 0 else float(min_vals.iloc[0])
             if not max_vals.empty:
-                ref_max = (
-                    float(max_vals.mode().iloc[0])
-                    if len(max_vals.mode()) > 0
-                    else float(max_vals.iloc[0])
-                )
+                ref_max = float(max_vals.mode().iloc[0]) if len(max_vals.mode()) > 0 else float(max_vals.iloc[0])
 
         if ref_min is not None or ref_max is not None:
             has_pdf_range = True
@@ -822,9 +746,7 @@ def create_single_lab_plot(
                 )
             elif ref_max is not None:
                 data_min = lab_df["value"].min()
-                y_bottom = (
-                    min(0, data_min * 0.9) if data_min > 0 else data_min * 1.1
-                )
+                y_bottom = min(0, data_min * 0.9) if data_min > 0 else data_min * 1.1
                 fig.add_hrect(
                     y0=y_bottom,
                     y1=ref_max,
@@ -840,11 +762,7 @@ def create_single_lab_plot(
                 )
             else:
                 data_max = lab_df["value"].max()
-                y_top = (
-                    max(data_max * 1.2, ref_min * 2)
-                    if data_max > 0
-                    else data_max * 0.8
-                )
+                y_top = max(data_max * 1.2, ref_min * 2) if data_max > 0 else data_max * 0.8
                 fig.add_hrect(
                     y0=ref_min,
                     y1=y_top,
@@ -866,9 +784,7 @@ def create_single_lab_plot(
                 x=[None],
                 y=[None],
                 mode="markers",
-                marker=dict(
-                    size=10, color="rgba(37, 99, 235, 0.6)", symbol="square"
-                ),
+                marker=dict(size=10, color="rgba(37, 99, 235, 0.6)", symbol="square"),
                 name="Healthy Range",
                 showlegend=True,
             )
@@ -880,9 +796,7 @@ def create_single_lab_plot(
                 x=[None],
                 y=[None],
                 mode="markers",
-                marker=dict(
-                    size=10, color="rgba(245, 158, 11, 0.6)", symbol="square"
-                ),
+                marker=dict(size=10, color="rgba(245, 158, 11, 0.6)", symbol="square"),
                 name="PDF Reference",
                 showlegend=True,
             )
@@ -950,9 +864,7 @@ def create_interactive_plot(
         return fig
 
     if len(lab_names) == 1:
-        fig, _ = create_single_lab_plot(
-            df, lab_names[0], selected_ref=selected_ref
-        )
+        fig, _ = create_single_lab_plot(df, lab_names[0], selected_ref=selected_ref)
         fig.update_layout(height=400)
         return fig
 
@@ -1008,21 +920,14 @@ def create_interactive_plot(
                 name="Values",
                 marker=dict(size=8, color=color),
                 line=dict(width=2, color=color),
-                hovertemplate=(
-                    "<b>Date:</b> %{x|%Y-%m-%d}<br>"
-                    f"<b>Value:</b> %{{y:.2f}} {unit}<br>"
-                    "<extra></extra>"
-                ),
+                hovertemplate=(f"<b>Date:</b> %{{x|%Y-%m-%d}}<br><b>Value:</b> %{{y:.2f}} {unit}<br><extra></extra>"),
             ),
             row=i + 1,
             col=1,
         )
 
         # Add lab_specs healthy range (blue band)
-        if (
-            "lab_specs_min" in lab_df.columns
-            and "lab_specs_max" in lab_df.columns
-        ):
+        if "lab_specs_min" in lab_df.columns and "lab_specs_max" in lab_df.columns:
             min_vals = lab_df["lab_specs_min"].dropna()
             max_vals = lab_df["lab_specs_max"].dropna()
 
@@ -1040,10 +945,7 @@ def create_interactive_plot(
                 )
 
         # Add PDF reference range (orange band)
-        if (
-            "reference_min" in lab_df.columns
-            and "reference_max" in lab_df.columns
-        ):
+        if "reference_min" in lab_df.columns and "reference_max" in lab_df.columns:
             min_vals = lab_df["reference_min"].dropna()
             max_vals = lab_df["reference_max"].dropna()
 
@@ -1060,17 +962,9 @@ def create_interactive_plot(
             else:
                 # Fallback to mode-based logic for other labs or when no selection
                 if not min_vals.empty:
-                    ref_min = (
-                        float(min_vals.mode().iloc[0])
-                        if len(min_vals.mode()) > 0
-                        else float(min_vals.iloc[0])
-                    )
+                    ref_min = float(min_vals.mode().iloc[0]) if len(min_vals.mode()) > 0 else float(min_vals.iloc[0])
                 if not max_vals.empty:
-                    ref_max = (
-                        float(max_vals.mode().iloc[0])
-                        if len(max_vals.mode()) > 0
-                        else float(max_vals.iloc[0])
-                    )
+                    ref_max = float(max_vals.mode().iloc[0]) if len(max_vals.mode()) > 0 else float(max_vals.iloc[0])
 
             if ref_min is not None and ref_max is not None:
                 fig.add_hrect(
@@ -1082,9 +976,7 @@ def create_interactive_plot(
                     col=1,
                 )
 
-        fig.update_yaxes(
-            title_text=unit if unit else "Value", row=i + 1, col=1
-        )
+        fig.update_yaxes(title_text=unit if unit else "Value", row=i + 1, col=1)
 
     height_per_chart = 250
     fig.update_layout(
@@ -1142,16 +1034,10 @@ def build_details_html(entry: dict) -> str:
     review_reason = entry.get("review_reason")
     review_confidence = entry.get("review_confidence")
 
-    if (
-        review_needed
-        or review_reason
-        or (review_confidence and pd.notna(review_confidence))
-    ):
+    if review_needed or review_reason or (review_confidence and pd.notna(review_confidence)):
         html += '<div style="margin-top:15px;">'
         if review_reason and pd.notna(review_reason):
-            html += (
-                f'<div class="status-warning">Reason: {review_reason}</div>'
-            )
+            html += f'<div class="status-warning">Reason: {review_reason}</div>'
         if review_confidence and pd.notna(review_confidence):
             conf_val = float(review_confidence)
             css_class = "status-warning" if conf_val < 0.7 else "status-info"
@@ -1197,9 +1083,7 @@ def _load_output_data(output_path: Path) -> tuple[pd.DataFrame, list[str]]:
     """Load and sort data from output path, return (full_df, lab_name_choices)."""
     full_df = load_data(output_path)
     if not full_df.empty and "date" in full_df.columns:
-        full_df = full_df.sort_values(
-            ["date", "lab_name"], ascending=[False, True], na_position="last"
-        ).reset_index(drop=True)
+        full_df = full_df.sort_values(["date", "lab_name"], ascending=[False, True], na_position="last").reset_index(drop=True)
     return full_df, get_lab_name_choices(full_df)
 
 
@@ -1228,13 +1112,9 @@ def _build_row_context(
 
     ref_min = row.get("reference_min")
     ref_max = row.get("reference_max")
-    selected_ref = (
-        (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
-    )
+    selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
 
-    plot = create_interactive_plot(
-        full_df, plot_labs, selected_ref=selected_ref
-    )
+    plot = create_interactive_plot(full_df, plot_labs, selected_ref=selected_ref)
 
     return (
         plot,
@@ -1275,9 +1155,7 @@ def handle_filter_change(
         details_html = "<p>No entry selected</p>"
         status_html = ""
         banner_html = ""
-        plot = create_interactive_plot(
-            full_df, [lab_names] if lab_names else []
-        )
+        plot = create_interactive_plot(full_df, [lab_names] if lab_names else [])
 
     return (
         display_df,
@@ -1387,11 +1265,7 @@ def handle_review_action(
     else:
         # Update the entry in full_df
         # Find the matching row by source_file, page_number, and result_index
-        mask = (
-            (full_df["source_file"] == current_entry.get("source_file"))
-            & (full_df["page_number"] == current_entry.get("page_number"))
-            & (full_df["result_index"] == current_entry.get("result_index"))
-        )
+        mask = (full_df["source_file"] == current_entry.get("source_file")) & (full_df["page_number"] == current_entry.get("page_number")) & (full_df["result_index"] == current_entry.get("result_index"))
         full_df.loc[mask, "review_status"] = status
 
     # Re-filter
@@ -1536,29 +1410,11 @@ def handle_profile_change(profile_name: str):
     display_df = prepare_display_df(full_df)
     summary = build_summary_cards(full_df)
 
-    position_text = (
-        f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
-    )
-    image_path = (
-        get_image_path(full_df.iloc[0].to_dict(), output_path)
-        if not full_df.empty
-        else None
-    )
-    details_html = (
-        build_details_html(full_df.iloc[0].to_dict())
-        if not full_df.empty
-        else "<p>No entry selected</p>"
-    )
-    status_html = (
-        build_review_status_html(full_df.iloc[0].to_dict())
-        if not full_df.empty
-        else ""
-    )
-    banner_html = (
-        build_review_reason_banner(full_df.iloc[0].to_dict())
-        if not full_df.empty
-        else ""
-    )
+    position_text = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
+    image_path = get_image_path(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
+    details_html = build_details_html(full_df.iloc[0].to_dict()) if not full_df.empty else "<p>No entry selected</p>"
+    status_html = build_review_status_html(full_df.iloc[0].to_dict()) if not full_df.empty else ""
+    banner_html = build_review_reason_banner(full_df.iloc[0].to_dict()) if not full_df.empty else ""
 
     # Auto-select first row - show its plot
     initial_plot_labs = []
@@ -1595,24 +1451,10 @@ def create_app():
     output_path = get_output_path()
     full_df, lab_name_choices = _load_output_data(output_path)
 
-    initial_position = (
-        f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
-    )
-    initial_image = (
-        get_image_path(full_df.iloc[0].to_dict(), output_path)
-        if not full_df.empty
-        else None
-    )
-    initial_details = (
-        build_details_html(full_df.iloc[0].to_dict())
-        if not full_df.empty
-        else "<p>No entry selected</p>"
-    )
-    initial_status = (
-        build_review_status_html(full_df.iloc[0].to_dict())
-        if not full_df.empty
-        else ""
-    )
+    initial_position = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
+    initial_image = get_image_path(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
+    initial_details = build_details_html(full_df.iloc[0].to_dict()) if not full_df.empty else "<p>No entry selected</p>"
+    initial_status = build_review_status_html(full_df.iloc[0].to_dict()) if not full_df.empty else ""
 
     # Auto-select first row - get its lab name for the initial plot
     initial_plot_labs = []
@@ -1703,23 +1545,15 @@ def create_app():
             with gr.Column(scale=2):
                 # Navigation controls
                 with gr.Row():
-                    prev_btn = gr.Button(
-                        "< Prev [k]", elem_id="prev-btn", size="sm"
-                    )
-                    position_display = gr.Markdown(
-                        initial_position, elem_id="position-display"
-                    )
-                    next_btn = gr.Button(
-                        "Next [j] >", elem_id="next-btn", size="sm"
-                    )
+                    prev_btn = gr.Button("< Prev [k]", elem_id="prev-btn", size="sm")
+                    position_display = gr.Markdown(initial_position, elem_id="position-display")
+                    next_btn = gr.Button("Next [j] >", elem_id="next-btn", size="sm")
 
                 # Tabs for Plot, Source Image, and Details
                 with gr.Tabs():
                     with gr.TabItem("Plot"):
                         plot_display = gr.Plot(
-                            value=create_interactive_plot(
-                                full_df, initial_plot_labs
-                            ),
+                            value=create_interactive_plot(full_df, initial_plot_labs),
                             label="",
                         )
                     with gr.TabItem("Source"):
@@ -1739,11 +1573,7 @@ def create_app():
                 gr.Markdown("### Review")
 
                 # Review reason banner (shows why item needs review)
-                initial_banner = (
-                    build_review_reason_banner(full_df.iloc[0].to_dict())
-                    if not full_df.empty
-                    else ""
-                )
+                initial_banner = build_review_reason_banner(full_df.iloc[0].to_dict()) if not full_df.empty else ""
                 review_reason_banner = gr.HTML(value=initial_banner)
 
                 with gr.Row():
@@ -1854,9 +1684,7 @@ def create_app():
             review_reason_banner,
         ]
 
-        prev_btn.click(
-            fn=handle_previous, inputs=nav_inputs, outputs=nav_outputs
-        )
+        prev_btn.click(fn=handle_previous, inputs=nav_inputs, outputs=nav_outputs)
         next_btn.click(fn=handle_next, inputs=nav_inputs, outputs=nav_outputs)
 
         # Review action buttons
@@ -1882,17 +1710,11 @@ def create_app():
             review_reason_banner,
         ]
 
-        accept_btn.click(
-            fn=handle_accept, inputs=review_inputs, outputs=review_outputs
-        )
-        reject_btn.click(
-            fn=handle_reject, inputs=review_inputs, outputs=review_outputs
-        )
+        accept_btn.click(fn=handle_accept, inputs=review_inputs, outputs=review_outputs)
+        reject_btn.click(fn=handle_reject, inputs=review_inputs, outputs=review_outputs)
 
         # Export
-        export_btn.click(
-            fn=export_csv, inputs=[filtered_df_state], outputs=[export_file]
-        ).then(fn=lambda: gr.update(visible=True), outputs=[export_file])
+        export_btn.click(fn=export_csv, inputs=[filtered_df_state], outputs=[export_file]).then(fn=lambda: gr.update(visible=True), outputs=[export_file])
 
     return demo
 
@@ -1940,9 +1762,7 @@ if __name__ == "__main__":
             for name in profiles:
                 print(f"  - {name}")
         else:
-            print(
-                "No profiles found. Create profiles in the 'profiles/' directory."
-            )
+            print("No profiles found. Create profiles in the 'profiles/' directory.")
         sys.exit(0)
 
     # Determine which profile to use

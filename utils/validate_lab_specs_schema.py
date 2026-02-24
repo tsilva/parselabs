@@ -101,38 +101,23 @@ class LabSpecsValidator:
             # Required fields
             for field in ["name", "formula", "target", "tolerance_percent"]:
                 if field not in rel:
-                    self.errors.append(
-                        f"Relationship '{rel.get('name', i)}': Missing required field '{field}'"
-                    )
+                    self.errors.append(f"Relationship '{rel.get('name', i)}': Missing required field '{field}'")
 
             # Validate types
             if "name" in rel and not isinstance(rel["name"], str):
-                self.errors.append(
-                    f"Relationship {i}: 'name' must be a string"
-                )
+                self.errors.append(f"Relationship {i}: 'name' must be a string")
 
             if "formula" in rel and not isinstance(rel["formula"], str):
-                self.errors.append(
-                    f"Relationship '{rel.get('name', i)}': 'formula' must be a string"
-                )
+                self.errors.append(f"Relationship '{rel.get('name', i)}': 'formula' must be a string")
 
             if "target" in rel and not isinstance(rel["target"], str):
-                self.errors.append(
-                    f"Relationship '{rel.get('name', i)}': 'target' must be a string"
-                )
+                self.errors.append(f"Relationship '{rel.get('name', i)}': 'target' must be a string")
 
             if "tolerance_percent" in rel:
                 if not isinstance(rel["tolerance_percent"], (int, float)):
-                    self.errors.append(
-                        f"Relationship '{rel.get('name', i)}': 'tolerance_percent' must be a number"
-                    )
-                elif (
-                    rel["tolerance_percent"] < 0
-                    or rel["tolerance_percent"] > 100
-                ):
-                    self.errors.append(
-                        f"Relationship '{rel.get('name', i)}': 'tolerance_percent' must be between 0 and 100"
-                    )
+                    self.errors.append(f"Relationship '{rel.get('name', i)}': 'tolerance_percent' must be a number")
+                elif rel["tolerance_percent"] < 0 or rel["tolerance_percent"] > 100:
+                    self.errors.append(f"Relationship '{rel.get('name', i)}': 'tolerance_percent' must be between 0 and 100")
 
     def _validate_lab_entries(self) -> None:
         """Validate individual lab entries."""
@@ -148,9 +133,7 @@ class LabSpecsValidator:
             lab_count += 1
 
             if not isinstance(spec, dict):
-                self.errors.append(
-                    f"Lab '{lab_name}': Specification must be an object"
-                )
+                self.errors.append(f"Lab '{lab_name}': Specification must be an object")
                 continue
 
             # Validate required fields
@@ -191,19 +174,14 @@ class LabSpecsValidator:
         # Check for duplicate LOINC codes
         for loinc_code, lab_names in loinc_codes.items():
             if len(lab_names) > 1:
-                self.errors.append(
-                    f"Duplicate LOINC code '{loinc_code}' used by: {', '.join(sorted(lab_names))}"
-                )
+                self.errors.append(f"Duplicate LOINC code '{loinc_code}' used by: {', '.join(sorted(lab_names))}")
 
         # Summary
         if lab_count == 0:
             self.errors.append("No lab entries found in config")
 
         if missing_loinc_count > len(self.LOINC_EXCEPTIONS):
-            self.warnings.append(
-                f"{missing_loinc_count} labs missing LOINC codes "
-                f"({len(self.LOINC_EXCEPTIONS)} known exceptions)"
-            )
+            self.warnings.append(f"{missing_loinc_count} labs missing LOINC codes ({len(self.LOINC_EXCEPTIONS)} known exceptions)")
 
     def _validate_required_fields(self, lab_name: str, spec: dict) -> None:
         """Validate required fields are present."""
@@ -214,9 +192,7 @@ class LabSpecsValidator:
                 # LOINC code is checked separately with exceptions
                 if field == "loinc_code" and lab_name in self.LOINC_EXCEPTIONS:
                     continue
-                self.errors.append(
-                    f"Lab '{lab_name}': Missing required field '{field}'"
-                )
+                self.errors.append(f"Lab '{lab_name}': Missing required field '{field}'")
 
     def _validate_lab_type_and_prefix(self, lab_name: str, spec: dict) -> None:
         """Validate lab_type and name prefix consistency."""
@@ -226,28 +202,19 @@ class LabSpecsValidator:
             return  # Already flagged in required fields
 
         if not isinstance(lab_type, str):
-            self.errors.append(
-                f"Lab '{lab_name}': 'lab_type' must be a string"
-            )
+            self.errors.append(f"Lab '{lab_name}': 'lab_type' must be a string")
             return
 
         if lab_type not in self.VALID_LAB_TYPES:
-            self.errors.append(
-                f"Lab '{lab_name}': Invalid lab_type '{lab_type}'. "
-                f"Must be one of: {', '.join(sorted(self.VALID_LAB_TYPES))}"
-            )
+            self.errors.append(f"Lab '{lab_name}': Invalid lab_type '{lab_type}'. Must be one of: {', '.join(sorted(self.VALID_LAB_TYPES))}")
             return
 
         # Check name prefix matches lab_type
         expected_prefixes = self.LAB_NAME_PREFIXES.get(lab_type, [])
         if expected_prefixes:
-            if not any(
-                lab_name.startswith(prefix) for prefix in expected_prefixes
-            ):
+            if not any(lab_name.startswith(prefix) for prefix in expected_prefixes):
                 prefix_str = "' or '".join(expected_prefixes)
-                self.errors.append(
-                    f"Lab '{lab_name}': Name must start with '{prefix_str}' for lab_type '{lab_type}'"
-                )
+                self.errors.append(f"Lab '{lab_name}': Name must start with '{prefix_str}' for lab_type '{lab_type}'")
 
     def _validate_primary_unit(self, lab_name: str, spec: dict) -> None:
         """Validate primary_unit field."""
@@ -257,61 +224,41 @@ class LabSpecsValidator:
             return  # Already flagged in required fields
 
         if not isinstance(primary_unit, str):
-            self.errors.append(
-                f"Lab '{lab_name}': 'primary_unit' must be a string"
-            )
+            self.errors.append(f"Lab '{lab_name}': 'primary_unit' must be a string")
             return
 
         if not primary_unit.strip():
-            self.errors.append(
-                f"Lab '{lab_name}': 'primary_unit' cannot be empty"
-            )
+            self.errors.append(f"Lab '{lab_name}': 'primary_unit' cannot be empty")
 
         # Check consistency with lab name for percentage units
         if primary_unit == "%" and not lab_name.endswith("(%)"):
-            self.warnings.append(
-                f"Lab '{lab_name}': Has unit '%' but name doesn't end with '(%)'"
-            )
+            self.warnings.append(f"Lab '{lab_name}': Has unit '%' but name doesn't end with '(%)'")
 
     def _validate_alternatives(self, lab_name: str, spec: dict) -> None:
         """Validate alternatives array."""
         alternatives = spec.get("alternatives", [])
 
         if not isinstance(alternatives, list):
-            self.errors.append(
-                f"Lab '{lab_name}': 'alternatives' must be an array"
-            )
+            self.errors.append(f"Lab '{lab_name}': 'alternatives' must be an array")
             return
 
         for i, alt in enumerate(alternatives):
             if not isinstance(alt, dict):
-                self.errors.append(
-                    f"Lab '{lab_name}': Alternative {i} must be an object"
-                )
+                self.errors.append(f"Lab '{lab_name}': Alternative {i} must be an object")
                 continue
 
             # Required fields in alternatives
             if "unit" not in alt:
-                self.errors.append(
-                    f"Lab '{lab_name}': Alternative {i} missing 'unit'"
-                )
+                self.errors.append(f"Lab '{lab_name}': Alternative {i} missing 'unit'")
             elif not isinstance(alt["unit"], str):
-                self.errors.append(
-                    f"Lab '{lab_name}': Alternative {i} 'unit' must be a string"
-                )
+                self.errors.append(f"Lab '{lab_name}': Alternative {i} 'unit' must be a string")
 
             if "factor" not in alt:
-                self.errors.append(
-                    f"Lab '{lab_name}': Alternative {i} missing 'factor'"
-                )
+                self.errors.append(f"Lab '{lab_name}': Alternative {i} missing 'factor'")
             elif not isinstance(alt["factor"], (int, float)):
-                self.errors.append(
-                    f"Lab '{lab_name}': Alternative {i} 'factor' must be a number"
-                )
+                self.errors.append(f"Lab '{lab_name}': Alternative {i} 'factor' must be a number")
             elif alt["factor"] <= 0:
-                self.errors.append(
-                    f"Lab '{lab_name}': Alternative {i} 'factor' must be positive"
-                )
+                self.errors.append(f"Lab '{lab_name}': Alternative {i} 'factor' must be positive")
 
     def _validate_ranges(self, lab_name: str, spec: dict) -> None:
         """Validate ranges configuration."""
@@ -327,31 +274,21 @@ class LabSpecsValidator:
 
         for range_key, range_val in ranges.items():
             if not isinstance(range_val, list):
-                self.errors.append(
-                    f"Lab '{lab_name}': Range '{range_key}' must be an array"
-                )
+                self.errors.append(f"Lab '{lab_name}': Range '{range_key}' must be an array")
                 continue
 
             if len(range_val) != 2:
-                self.errors.append(
-                    f"Lab '{lab_name}': Range '{range_key}' must have exactly 2 values [min, max]"
-                )
+                self.errors.append(f"Lab '{lab_name}': Range '{range_key}' must have exactly 2 values [min, max]")
                 continue
 
             min_val, max_val = range_val
 
-            if not isinstance(min_val, (int, float)) or not isinstance(
-                max_val, (int, float)
-            ):
-                self.errors.append(
-                    f"Lab '{lab_name}': Range '{range_key}' values must be numbers"
-                )
+            if not isinstance(min_val, (int, float)) or not isinstance(max_val, (int, float)):
+                self.errors.append(f"Lab '{lab_name}': Range '{range_key}' values must be numbers")
                 continue
 
             if min_val > max_val:
-                self.errors.append(
-                    f"Lab '{lab_name}': Range '{range_key}' min ({min_val}) > max ({max_val})"
-                )
+                self.errors.append(f"Lab '{lab_name}': Range '{range_key}' min ({min_val}) > max ({max_val})")
 
     def _validate_loinc_code(self, lab_name: str, spec: dict) -> bool:
         """Validate LOINC code presence and format.
@@ -364,9 +301,7 @@ class LabSpecsValidator:
         # Allow exceptions
         if lab_name in self.LOINC_EXCEPTIONS:
             if not loinc_code:
-                self.warnings.append(
-                    f"Lab '{lab_name}': Known exception without LOINC code"
-                )
+                self.warnings.append(f"Lab '{lab_name}': Known exception without LOINC code")
             return True
 
         if not loinc_code:
@@ -374,9 +309,7 @@ class LabSpecsValidator:
             return False
 
         if not isinstance(loinc_code, str):
-            self.errors.append(
-                f"Lab '{lab_name}': LOINC code must be a string"
-            )
+            self.errors.append(f"Lab '{lab_name}': LOINC code must be a string")
             return False
 
         # Basic format validation (LOINC codes are typically NNNN-N format)
@@ -386,9 +319,7 @@ class LabSpecsValidator:
 
         # Loose format check (allows various LOINC formats)
         if not any(c.isdigit() for c in loinc_code):
-            self.warnings.append(
-                f"Lab '{lab_name}': LOINC code '{loinc_code}' has unusual format (no digits)"
-            )
+            self.warnings.append(f"Lab '{lab_name}': LOINC code '{loinc_code}' has unusual format (no digits)")
 
         return True
 
@@ -399,45 +330,29 @@ class LabSpecsValidator:
 
         if bio_min is not None:
             if not isinstance(bio_min, (int, float)):
-                self.errors.append(
-                    f"Lab '{lab_name}': 'biological_min' must be a number"
-                )
+                self.errors.append(f"Lab '{lab_name}': 'biological_min' must be a number")
 
         if bio_max is not None:
             if not isinstance(bio_max, (int, float)):
-                self.errors.append(
-                    f"Lab '{lab_name}': 'biological_max' must be a number"
-                )
+                self.errors.append(f"Lab '{lab_name}': 'biological_max' must be a number")
 
         # Check min < max if both present
         if bio_min is not None and bio_max is not None:
-            if isinstance(bio_min, (int, float)) and isinstance(
-                bio_max, (int, float)
-            ):
+            if isinstance(bio_min, (int, float)) and isinstance(bio_max, (int, float)):
                 if bio_min > bio_max:
-                    self.errors.append(
-                        f"Lab '{lab_name}': biological_min ({bio_min}) > biological_max ({bio_max})"
-                    )
+                    self.errors.append(f"Lab '{lab_name}': biological_min ({bio_min}) > biological_max ({bio_max})")
 
-    def _validate_temporal_constraints(
-        self, lab_name: str, spec: dict
-    ) -> None:
+    def _validate_temporal_constraints(self, lab_name: str, spec: dict) -> None:
         """Validate optional max_daily_change field."""
         max_daily_change = spec.get("max_daily_change")
 
         if max_daily_change is not None:
             if not isinstance(max_daily_change, (int, float)):
-                self.errors.append(
-                    f"Lab '{lab_name}': 'max_daily_change' must be a number"
-                )
+                self.errors.append(f"Lab '{lab_name}': 'max_daily_change' must be a number")
             elif max_daily_change <= 0:
-                self.errors.append(
-                    f"Lab '{lab_name}': 'max_daily_change' must be positive"
-                )
+                self.errors.append(f"Lab '{lab_name}': 'max_daily_change' must be positive")
 
-    def _validate_ranges_vary_with_cycle(
-        self, lab_name: str, spec: dict
-    ) -> None:
+    def _validate_ranges_vary_with_cycle(self, lab_name: str, spec: dict) -> None:
         """Validate optional ranges_vary_with_cycle field.
 
         This flag indicates labs where reference ranges legitimately vary
@@ -447,9 +362,7 @@ class LabSpecsValidator:
 
         if ranges_vary is not None:
             if not isinstance(ranges_vary, bool):
-                self.errors.append(
-                    f"Lab '{lab_name}': 'ranges_vary_with_cycle' must be a boolean"
-                )
+                self.errors.append(f"Lab '{lab_name}': 'ranges_vary_with_cycle' must be a boolean")
 
     def print_report(self) -> None:
         """Print validation report."""
