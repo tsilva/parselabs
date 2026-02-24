@@ -1433,7 +1433,7 @@ def _process_pdfs_or_use_cache(
 
 
 def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfig | None, LabSpecsConfig | None, str | None, list[str]]:
-    """Setup environment for a profile: config, logging, server check.
+    """Setup environment for a profile: config, logging, lab specs.
 
     Returns tuple of (config, lab_specs, standardization_section, errors).
     If setup fails, returns (None, None, None, errors).
@@ -1457,16 +1457,6 @@ def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfi
     global logger
     log_dir = config.output_path / "logs"
     logger = setup_logging(log_dir, clear_logs=True)
-
-    # Check server availability before processing
-    logger.info("Checking OpenRouter server availability...")
-    is_available, message = check_server_availability(client, config.extract_model_id)
-    if not is_available:
-        logger.error(f"Server check failed: {message}")
-        print(f"\nError: Cannot start extraction - {message}")
-        print("Please check your internet connection and API key, then try again.")
-        return None, None, None, [f"Server unavailable: {message}"]
-    logger.info(f"Server check passed: {message}")
 
     # Log configuration for debugging/auditing
     logger.info(f"Input: {config.input_path}")
@@ -1701,6 +1691,15 @@ def main():
             print("Or use --profile to specify one.")
             sys.exit(1)
         print(f"Running all profiles: {', '.join(profiles_to_run)}")
+
+    # Check server availability once before processing any profiles
+    print("Checking OpenRouter server availability...")
+    is_available, message = check_server_availability(client, os.getenv("EXTRACT_MODEL_ID", ""))
+    if not is_available:
+        print(f"Error: Cannot start extraction - {message}")
+        print("Please check your internet connection and API key, then try again.")
+        sys.exit(1)
+    print(f"Server check passed: {message}")
 
     # Initialize results tracking for each profile
     results = {}
