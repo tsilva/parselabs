@@ -2,56 +2,105 @@
 
 ## Core Rules
 
-1. **Max 2 indentation levels** in orchestrators. Extract helpers when deeper.
+### 1. Max 2 Indentation Levels in Orchestrators
 
-2. **Helpers MUST NOT silently catch errors.** Let exceptions propagate to orchestrator.
+Main orchestrator functions must not exceed 2 levels of indentation. Extract helpers when deeper.
 
-3. **Every code block needs inline comments** explaining purpose/intent. 
-   - Comments must have a blank line before them (don't stack with code)
-   - Comment the block before it runs, not inline with the code:
-   ```python
-   # CORRECT - Comment has blank line before it, explains the block
-   
-   # Build and validate configuration from user args
-   config, errors = build_config(args)
-   
-   # Guard: Return errors if validation failed
-   if errors:
-       return None, errors
-   
-   # CORRECT - Multiple guards with blank lines separating blocks
-   
-   # Skip non-directory entries (files, symlinks, etc.)
-   if not pdf_dir.is_dir():
-       continue
-   
-   # Skip hidden directories (e.g., .git, .DS_Store)
-   if pdf_dir.name.startswith("."):
-       continue
-   
-   # Only check directories that match the input file pattern
-   if pdf_dir.name not in matching_stems:
-       continue
-   
-   # INCORRECT - Comment stacked directly after previous code block without blank line
-   config, errors = build_config(args)
-   # Guard: Return errors if validation failed
-   if errors:
-       return None, errors
-   
-   # INCORRECT - Multiple consecutive guards without blank lines between
-   # Skip non-directory entries (files, symlinks, etc.)
-   if not pdf_dir.is_dir():
-       continue
-   # Skip hidden directories (e.g., .git, .DS_Store)
-   if pdf_dir.name.startswith("."):
-       continue
-   # Only check directories that match the input file pattern
-   if pdf_dir.name not in matching_stems:
-       continue
-   ```
+```python
+# GOOD - Flat structure with early returns
+def process():
+    if not valid:           # Level 1
+        return None
+    
+    result = fetch()        # Level 1
+    if not result:          # Level 1
+        return None
+    
+    return transform(result)
 
-4. **All if/elif/else branches must have comments** explaining the condition and why that path is taken:
+# BAD - Deep nesting requires extraction
+def process():
+    if condition1:          # Level 1
+        if condition2:       # Level 2
+            for item in items: # Level 3 ← EXTRACT THIS
+                process(item)
+```
+
+### 2. Helpers Must Not Silently Catch Errors
+
+Reusable helpers let exceptions propagate. Orchestrator handles all error flow.
+
+```python
+# BAD - Silent failure hidden in helper
+def helper():
+    try:
+        return api.call()
+    except Exception:
+        return None  # Silent!
+
+def main():
+    result = helper()  # Did it fail? Unknown!
+    if result:         # Defensive check required
+        process(result)
+
+# CORRECT - Explicit error handling in orchestrator
+def helper():
+    return api.call()  # Let it raise
+
+def main():
+    try:
+        result = helper()
+        process(result)
+    except APIError as e:
+        logger.error(f"API call failed: {e}")
+        return None
+```
+
+### 3. All Comments Required
+
+**Every code block, branch, and early exit must have an explanatory comment.**
+
+#### Block Comments
+Comments explain PURPOSE and INTENT, not just restate code. Place a blank line before every comment.
+
+```python
+# CORRECT - Blank line before comment
+
+# Build and validate configuration from user args
+config, errors = build_config(args)
+
+# Guard: Return errors if validation failed
+if errors:
+    return None, errors
+
+# CORRECT - Multiple guards separated by blank lines
+
+# Skip non-directory entries
+if not pdf_dir.is_dir():
+    continue
+
+# Skip hidden directories
+if pdf_dir.name.startswith("."):
+    continue
+
+# INCORRECT - Comment stacked without blank line
+config, errors = build_config(args)
+# Guard: Return errors if validation failed
+if errors:
+    return None, errors
+
+# INCORRECT - Guards without blank lines between
+# Skip non-directory entries
+if not pdf_dir.is_dir():
+    continue
+# Skip hidden directories
+if pdf_dir.name.startswith("."):
+    continue
+```
+
+#### Branch Comments
+All `if/elif/else` branches must have comments explaining the condition.
+
 ```python
 # Guard: Skip processing if data is missing
 if not data:
@@ -65,98 +114,113 @@ elif "401" in error_msg:
 elif "timeout" in error_msg.lower():
     return False, "Server timeout"
 
-# Any other error - fail safe and assume unavailable
+# Any other error - fail safe
 else:
     return False, "Unknown error"
 ```
 
-**TRIGGER: Always check these patterns for missing comments:**
-- Error classification chains (multiple elif branches checking error codes/messages)
-- State machine logic (if/elif/else handling different states)
-- Strategy selection (choosing between algorithms, formats, approaches)
-- Protocol handlers (HTTP status codes, API response codes, error types)
+**TRIGGER: Always check these for missing comments:**
+- Error classification chains (multiple elif branches)
+- State machine logic (different states)
+- Strategy selection (choosing between algorithms)
+- Protocol handlers (HTTP status codes, API response codes)
 
-5. **ALL early exit conditions MUST have a comment** directly above them explaining the guard condition. No exceptions.
+#### Early Exit Comments (Guard Clauses)
+**ALL early exits MUST have comments.** No exceptions.
 
 ```python
-# CORRECT - Comment explains WHY we exit
-# Guard: Return errors if validation failed (config will be None)
+# CORRECT - Guard clause with explanation
+# Guard: Return errors if validation failed
 if errors:
     return None, errors
 
-# CORRECT - Comment explains WHAT we're filtering
-# Skip non-directory entries (files, symlinks, etc.)
+# Skip non-directory entries
 if not pdf_dir.is_dir():
     continue
 
-# CORRECT - Comment explains the threshold
-# Process remaining PDFs if cache doesn't have all files
+# Process remaining PDFs if cache incomplete
 if pdfs_to_process:
     _process()
 
 # INCORRECT - Missing comment
 if errors:
     return None, errors
-
-# INCORRECT - Missing comment  
-if not pdf_dir.is_dir():
-    continue
 ```
 
-**MANDATORY CHECK: Scan for these patterns and verify each has a comment:**
-- `if condition:` followed by `return` → Must have comment above `if`
-- `if condition:` followed by `continue` → Must have comment above `if`  
-- `if condition:` followed by `break` → Must have comment above `if`
-- Any guard clause that causes early exit from function or loop
+**MANDATORY CHECK:** Verify each has a comment:
+- `if condition:` → `return` / `continue` / `break`
+- Any guard causing early exit from function or loop
 
-**NO EXCEPTIONS:** Even "obvious" conditions like `if errors:` or `if not data:` MUST have comments.
+### 4. Extract Helpers for Complex Logic
 
-6. **Extract helpers** for logic >5 lines or complex conditionals. 
-   - Name by intent: `_extract_via_vision()`, not `_convert_pdf()`
-   - Use verb phrases describing what the function accomplishes
-   - For functions returning tuples, document what each element represents in the docstring
-   - Keep helpers focused on a single responsibility
+Break logic into well-named helpers when:
+- Hit indentation level 3 or deeper
+- More than 5-7 lines of contiguous logic
+- Logic can be reused or tested independently
 
-7. **Use guard clauses** for early returns:
+**Naming:** Use verbs describing intent.
 ```python
-# Skip invalid data entries
-if not data:
-    return None
+# GOOD
+def _extract_via_vision()
+def _apply_standardization()
+def _try_load_cached_extraction()
+
+# BAD
+def _convert_pdf()        # Implementation detail
+def _load_cache()         # Too vague
+def _process_data()       # Too generic
 ```
 
-## Orchestrator Pattern
-- Main function controls all flow decisions
-- Error handling visible at each step
-- Read top-to-bottom without jumping into helpers
-
-## Anti-Patterns
-| Issue | Solution |
-|-------|----------|
-| Indentation >2 levels | Extract helper |
-| Silent try/except | Remove, propagate exceptions |
-| Missing comments | Add inline explanation |
-| Missing branch comments | Comment every if/elif/else path |
-| **Guard clause without comment** | **Add comment above EVERY early exit** |
-| Early exits without comments | Add comment explaining guard condition |
-| Long functions >30 lines | Extract logical sections |
-
-## Example
+**Document tuple returns in docstring:**
 ```python
-def main():
-    # Setup paths for processing
-    paths = _setup_paths()
+def _extract_via_vision(pdf_path: Path) -> tuple[list[Result], datetime | None]:
+    """Extract lab results from PDF using vision model.
     
-    # Explicit error handling visible here
+    Returns:
+        tuple: (list of extracted results, document date or None)
+    """
+```
+
+### 5. Orchestrator Pattern
+
+Main function controls all flow decisions. Error handling visible at each step. Read top-to-bottom without jumping into helpers.
+
+```python
+def process_single_pdf(pdf_path: Path) -> tuple[Path | None, list[dict]]:
+    """Process a single PDF: extract, standardize, save."""
+    # Initialize directory structure
+    doc_out_dir, csv_path, failed_pages = _setup_paths(pdf_path)
+
+    # Attempt text extraction, fall back to vision if needed
     try:
-        result = _helper()  # Helper raises, doesn't catch
+        result = _try_text_extraction(pdf_path)
     except Exception as e:
-        logger.error(f"Failed: {e}")
-        return None
-    
-    # Guard clause for early exit on invalid state
-    if not result:
-        return None
-    
-    # Continue processing...
-    return _process(result)
+        logger.error(f"Text extraction failed: {e}")
+        result = None
+
+    # Choose processing path based on extraction success
+    if result:
+        data = _process_text_results(result)
+    else:
+        try:
+            data = _extract_via_vision(pdf_path)
+        except Exception as e:
+            logger.error(f"Vision extraction failed: {e}")
+            return None, failed_pages
+
+    # Guard: Check if extraction yielded results
+    if not data:
+        return _handle_empty_results(csv_path), failed_pages
+
+    # Post-processing
+    _apply_standardization(data)
+    _save_results(data, csv_path)
+
+    return csv_path, failed_pages
 ```
+
+**Principles:**
+- Read top-to-bottom without jumping into helpers
+- All decision points visible in main flow
+- Error handling explicit at each step
+- Guard clauses for early returns
