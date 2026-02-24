@@ -18,18 +18,19 @@ from labs_parser.utils import load_dotenv_with_env
 
 load_dotenv_with_env()
 
+import argparse
+import json
 import os
 import sys
-import json
-import argparse
-import pandas as pd
+from datetime import datetime
+from pathlib import Path
+
 import gradio as gr
+import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from pathlib import Path
-from datetime import datetime
 
-from labs_parser.config import ProfileConfig, Demographics, LabSpecsConfig
+from labs_parser.config import Demographics, LabSpecsConfig, ProfileConfig
 
 _STATIC_DIR = Path(__file__).parent / "static"
 KEYBOARD_JS = (_STATIC_DIR / "viewer.js").read_text()
@@ -361,10 +362,14 @@ def load_data(output_path: Path) -> pd.DataFrame:
     if "lab_name" in df.columns and lab_specs.exists:
 
         def get_lab_spec_range(lab_name):
-            range_min, range_max = lab_specs.get_healthy_range_for_demographics(
-                lab_name, gender=gender, age=age
+            range_min, range_max = (
+                lab_specs.get_healthy_range_for_demographics(
+                    lab_name, gender=gender, age=age
+                )
             )
-            return pd.Series({"lab_specs_min": range_min, "lab_specs_max": range_max})
+            return pd.Series(
+                {"lab_specs_min": range_min, "lab_specs_max": range_max}
+            )
 
         range_df = df["lab_name"].apply(get_lab_spec_range)
         df["lab_specs_min"] = range_df["lab_specs_min"]
@@ -387,7 +392,9 @@ def load_data(output_path: Path) -> pd.DataFrame:
                 return None  # No healthy range defined
             return _is_out_of_range(val, spec_min, spec_max)
 
-        df["is_out_of_healthy_range"] = df.apply(check_out_of_healthy_range, axis=1)
+        df["is_out_of_healthy_range"] = df.apply(
+            check_out_of_healthy_range, axis=1
+        )
 
     return df
 
@@ -464,7 +471,9 @@ def build_summary_cards(df: pd.DataFrame) -> str:
         )
 
     if abnormal_count > 0:
-        cards.append(f'<span class="stat-card danger">{abnormal_count} abnormal</span>')
+        cards.append(
+            f'<span class="stat-card danger">{abnormal_count} abnormal</span>'
+        )
 
     if unhealthy_count > 0:
         cards.append(
@@ -548,7 +557,10 @@ def build_review_reason_banner(entry: dict) -> str:
 
 
 def apply_filters(
-    df: pd.DataFrame, lab_names: str | None, latest_only: bool, review_filter: str
+    df: pd.DataFrame,
+    lab_names: str | None,
+    latest_only: bool,
+    review_filter: str,
 ) -> pd.DataFrame:
     """Apply all filters to DataFrame and sort by date descending.
 
@@ -572,7 +584,11 @@ def apply_filters(
     # Latest only: keep only the most recent value per lab test
     # This must run BEFORE status filters so we get the latest result first,
     # then apply status filters to those latest results
-    if latest_only and "lab_name" in filtered.columns and "date" in filtered.columns:
+    if (
+        latest_only
+        and "lab_name" in filtered.columns
+        and "date" in filtered.columns
+    ):
         filtered = filtered.drop_duplicates(subset=["lab_name"], keep="first")
 
     # Filter by lab name (single selection)
@@ -582,7 +598,8 @@ def apply_filters(
     # Status filter pills options
     if review_filter == "Unreviewed":
         filtered = filtered[
-            filtered["review_status"].isna() | (filtered["review_status"] == "")
+            filtered["review_status"].isna()
+            | (filtered["review_status"] == "")
         ]
     elif review_filter == "Abnormal":
         # Quick filter for abnormal results
@@ -592,7 +609,10 @@ def apply_filters(
         if "review_needed" in filtered.columns:
             filtered = filtered[
                 (filtered["review_needed"] == True)
-                & (filtered["review_status"].isna() | (filtered["review_status"] == ""))
+                & (
+                    filtered["review_status"].isna()
+                    | (filtered["review_status"] == "")
+                )
             ]
     elif review_filter == "Unhealthy":
         if "is_out_of_healthy_range" in filtered.columns:
@@ -607,9 +627,13 @@ def apply_filters(
 def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
     """Prepare DataFrame for display (subset and format columns)."""
     if df.empty:
-        return pd.DataFrame(columns=[COLUMN_LABELS.get(c, c) for c in DISPLAY_COLUMNS])
+        return pd.DataFrame(
+            columns=[COLUMN_LABELS.get(c, c) for c in DISPLAY_COLUMNS]
+        )
 
-    display_df = df[[col for col in DISPLAY_COLUMNS if col in df.columns]].copy()
+    display_df = df[
+        [col for col in DISPLAY_COLUMNS if col in df.columns]
+    ].copy()
 
     # Format date column
     if "date" in display_df.columns:
@@ -617,9 +641,9 @@ def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
 
     # Format boolean columns
     if "is_out_of_reference" in display_df.columns:
-        display_df["is_out_of_reference"] = display_df["is_out_of_reference"].map(
-            {True: "Yes", False: "No", None: ""}
-        )
+        display_df["is_out_of_reference"] = display_df[
+            "is_out_of_reference"
+        ].map({True: "Yes", False: "No", None: ""})
 
     # Format review status
     if "review_status" in display_df.columns:
@@ -645,7 +669,9 @@ def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def create_single_lab_plot(
-    df: pd.DataFrame, lab_name: str, selected_ref: tuple[float, float] | None = None
+    df: pd.DataFrame,
+    lab_name: str,
+    selected_ref: tuple[float, float] | None = None,
 ) -> tuple[go.Figure, str]:
     """Generate a single plot for one lab test. Returns (figure, unit).
 
@@ -734,10 +760,14 @@ def create_single_lab_plot(
                 line_width=0,
             )
             fig.add_hline(
-                y=spec_min, line_dash="dot", line_color="rgba(37, 99, 235, 0.8)"
+                y=spec_min,
+                line_dash="dot",
+                line_color="rgba(37, 99, 235, 0.8)",
             )
             fig.add_hline(
-                y=spec_max, line_dash="dot", line_color="rgba(37, 99, 235, 0.8)"
+                y=spec_max,
+                line_dash="dot",
+                line_color="rgba(37, 99, 235, 0.8)",
             )
 
     # Add PDF reference range (orange band)
@@ -781,14 +811,20 @@ def create_single_lab_plot(
                     line_width=0,
                 )
                 fig.add_hline(
-                    y=ref_min, line_dash="dash", line_color="rgba(245, 158, 11, 0.8)"
+                    y=ref_min,
+                    line_dash="dash",
+                    line_color="rgba(245, 158, 11, 0.8)",
                 )
                 fig.add_hline(
-                    y=ref_max, line_dash="dash", line_color="rgba(245, 158, 11, 0.8)"
+                    y=ref_max,
+                    line_dash="dash",
+                    line_color="rgba(245, 158, 11, 0.8)",
                 )
             elif ref_max is not None:
                 data_min = lab_df["value"].min()
-                y_bottom = min(0, data_min * 0.9) if data_min > 0 else data_min * 1.1
+                y_bottom = (
+                    min(0, data_min * 0.9) if data_min > 0 else data_min * 1.1
+                )
                 fig.add_hrect(
                     y0=y_bottom,
                     y1=ref_max,
@@ -805,7 +841,9 @@ def create_single_lab_plot(
             else:
                 data_max = lab_df["value"].max()
                 y_top = (
-                    max(data_max * 1.2, ref_min * 2) if data_max > 0 else data_max * 0.8
+                    max(data_max * 1.2, ref_min * 2)
+                    if data_max > 0
+                    else data_max * 0.8
                 )
                 fig.add_hrect(
                     y0=ref_min,
@@ -828,7 +866,9 @@ def create_single_lab_plot(
                 x=[None],
                 y=[None],
                 mode="markers",
-                marker=dict(size=10, color="rgba(37, 99, 235, 0.6)", symbol="square"),
+                marker=dict(
+                    size=10, color="rgba(37, 99, 235, 0.6)", symbol="square"
+                ),
                 name="Healthy Range",
                 showlegend=True,
             )
@@ -840,7 +880,9 @@ def create_single_lab_plot(
                 x=[None],
                 y=[None],
                 mode="markers",
-                marker=dict(size=10, color="rgba(245, 158, 11, 0.6)", symbol="square"),
+                marker=dict(
+                    size=10, color="rgba(245, 158, 11, 0.6)", symbol="square"
+                ),
                 name="PDF Reference",
                 showlegend=True,
             )
@@ -858,7 +900,8 @@ def create_single_lab_plot(
 
     fig.update_layout(
         title=dict(
-            text=f"{lab_name}" + (f" [{unit}]" if unit else ""), font=dict(size=14)
+            text=f"{lab_name}" + (f" [{unit}]" if unit else ""),
+            font=dict(size=14),
         ),
         xaxis=xaxis_config,
         yaxis_title=f"Value ({unit})" if unit else "Value",
@@ -907,7 +950,9 @@ def create_interactive_plot(
         return fig
 
     if len(lab_names) == 1:
-        fig, _ = create_single_lab_plot(df, lab_names[0], selected_ref=selected_ref)
+        fig, _ = create_single_lab_plot(
+            df, lab_names[0], selected_ref=selected_ref
+        )
         fig.update_layout(height=400)
         return fig
 
@@ -974,7 +1019,10 @@ def create_interactive_plot(
         )
 
         # Add lab_specs healthy range (blue band)
-        if "lab_specs_min" in lab_df.columns and "lab_specs_max" in lab_df.columns:
+        if (
+            "lab_specs_min" in lab_df.columns
+            and "lab_specs_max" in lab_df.columns
+        ):
             min_vals = lab_df["lab_specs_min"].dropna()
             max_vals = lab_df["lab_specs_max"].dropna()
 
@@ -992,7 +1040,10 @@ def create_interactive_plot(
                 )
 
         # Add PDF reference range (orange band)
-        if "reference_min" in lab_df.columns and "reference_max" in lab_df.columns:
+        if (
+            "reference_min" in lab_df.columns
+            and "reference_max" in lab_df.columns
+        ):
             min_vals = lab_df["reference_min"].dropna()
             max_vals = lab_df["reference_max"].dropna()
 
@@ -1031,7 +1082,9 @@ def create_interactive_plot(
                     col=1,
                 )
 
-        fig.update_yaxes(title_text=unit if unit else "Value", row=i + 1, col=1)
+        fig.update_yaxes(
+            title_text=unit if unit else "Value", row=i + 1, col=1
+        )
 
     height_per_chart = 250
     fig.update_layout(
@@ -1078,9 +1131,7 @@ def build_details_html(entry: dict) -> str:
     for label, raw_field, std_field in paired_fields:
         raw_val = get_val(raw_field)
         std_val = get_val(std_field)
-        html += (
-            f'<tr><td style="padding:6px; border-bottom:1px solid #ddd;">{label}</td>'
-        )
+        html += f'<tr><td style="padding:6px; border-bottom:1px solid #ddd;">{label}</td>'
         html += f'<td style="padding:6px; border-bottom:1px solid #ddd;">{raw_val}</td>'
         html += f'<td style="padding:6px; border-bottom:1px solid #ddd;">{std_val}</td></tr>'
 
@@ -1098,7 +1149,9 @@ def build_details_html(entry: dict) -> str:
     ):
         html += '<div style="margin-top:15px;">'
         if review_reason and pd.notna(review_reason):
-            html += f'<div class="status-warning">Reason: {review_reason}</div>'
+            html += (
+                f'<div class="status-warning">Reason: {review_reason}</div>'
+            )
         if review_confidence and pd.notna(review_confidence):
             conf_val = float(review_confidence)
             css_class = "status-warning" if conf_val < 0.7 else "status-info"
@@ -1179,7 +1232,9 @@ def _build_row_context(
         (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
     )
 
-    plot = create_interactive_plot(full_df, plot_labs, selected_ref=selected_ref)
+    plot = create_interactive_plot(
+        full_df, plot_labs, selected_ref=selected_ref
+    )
 
     return (
         plot,
@@ -1193,7 +1248,10 @@ def _build_row_context(
 
 
 def handle_filter_change(
-    lab_names: str | None, latest_only: bool, review_filter: str, full_df: pd.DataFrame
+    lab_names: str | None,
+    latest_only: bool,
+    review_filter: str,
+    full_df: pd.DataFrame,
 ):
     """Handle filter changes and update display."""
     filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter)
@@ -1217,7 +1275,9 @@ def handle_filter_change(
         details_html = "<p>No entry selected</p>"
         status_html = ""
         banner_html = ""
-        plot = create_interactive_plot(full_df, [lab_names] if lab_names else [])
+        plot = create_interactive_plot(
+            full_df, [lab_names] if lab_names else []
+        )
 
     return (
         display_df,
@@ -1490,7 +1550,9 @@ def handle_profile_change(profile_name: str):
         else "<p>No entry selected</p>"
     )
     status_html = (
-        build_review_status_html(full_df.iloc[0].to_dict()) if not full_df.empty else ""
+        build_review_status_html(full_df.iloc[0].to_dict())
+        if not full_df.empty
+        else ""
     )
     banner_html = (
         build_review_reason_banner(full_df.iloc[0].to_dict())
@@ -1547,7 +1609,9 @@ def create_app():
         else "<p>No entry selected</p>"
     )
     initial_status = (
-        build_review_status_html(full_df.iloc[0].to_dict()) if not full_df.empty else ""
+        build_review_status_html(full_df.iloc[0].to_dict())
+        if not full_df.empty
+        else ""
     )
 
     # Auto-select first row - get its lab name for the initial plot
@@ -1607,7 +1671,9 @@ def create_app():
                 )
             with gr.Column(scale=1, min_width=120):
                 latest_filter = gr.Checkbox(
-                    label="Latest Only", value=False, elem_classes="toggle-pill"
+                    label="Latest Only",
+                    value=False,
+                    elem_classes="toggle-pill",
                 )
 
         # Summary cards
@@ -1637,17 +1703,23 @@ def create_app():
             with gr.Column(scale=2):
                 # Navigation controls
                 with gr.Row():
-                    prev_btn = gr.Button("< Prev [k]", elem_id="prev-btn", size="sm")
+                    prev_btn = gr.Button(
+                        "< Prev [k]", elem_id="prev-btn", size="sm"
+                    )
                     position_display = gr.Markdown(
                         initial_position, elem_id="position-display"
                     )
-                    next_btn = gr.Button("Next [j] >", elem_id="next-btn", size="sm")
+                    next_btn = gr.Button(
+                        "Next [j] >", elem_id="next-btn", size="sm"
+                    )
 
                 # Tabs for Plot, Source Image, and Details
                 with gr.Tabs():
                     with gr.TabItem("Plot"):
                         plot_display = gr.Plot(
-                            value=create_interactive_plot(full_df, initial_plot_labs),
+                            value=create_interactive_plot(
+                                full_df, initial_plot_labs
+                            ),
                             label="",
                         )
                     with gr.TabItem("Source"):
@@ -1679,7 +1751,10 @@ def create_app():
 
                 with gr.Row():
                     accept_btn = gr.Button(
-                        "Accept [Y]", variant="primary", elem_id="accept-btn", size="sm"
+                        "Accept [Y]",
+                        variant="primary",
+                        elem_id="accept-btn",
+                        size="sm",
                     )
                     reject_btn = gr.Button(
                         "Reject [N]",
@@ -1712,7 +1787,12 @@ def create_app():
         )
 
         # Filter inputs and outputs
-        filter_inputs = [lab_name_filter, latest_filter, review_filter, full_df_state]
+        filter_inputs = [
+            lab_name_filter,
+            latest_filter,
+            review_filter,
+            full_df_state,
+        ]
         filter_outputs = [
             data_table,
             summary_display,
@@ -1727,13 +1807,19 @@ def create_app():
         ]
 
         lab_name_filter.change(
-            fn=handle_filter_change, inputs=filter_inputs, outputs=filter_outputs
+            fn=handle_filter_change,
+            inputs=filter_inputs,
+            outputs=filter_outputs,
         )
         latest_filter.change(
-            fn=handle_filter_change, inputs=filter_inputs, outputs=filter_outputs
+            fn=handle_filter_change,
+            inputs=filter_inputs,
+            outputs=filter_outputs,
         )
         review_filter.change(
-            fn=handle_filter_change, inputs=filter_inputs, outputs=filter_outputs
+            fn=handle_filter_change,
+            inputs=filter_inputs,
+            outputs=filter_outputs,
         )
 
         # Row selection
@@ -1768,7 +1854,9 @@ def create_app():
             review_reason_banner,
         ]
 
-        prev_btn.click(fn=handle_previous, inputs=nav_inputs, outputs=nav_outputs)
+        prev_btn.click(
+            fn=handle_previous, inputs=nav_inputs, outputs=nav_outputs
+        )
         next_btn.click(fn=handle_next, inputs=nav_inputs, outputs=nav_outputs)
 
         # Review action buttons
@@ -1794,8 +1882,12 @@ def create_app():
             review_reason_banner,
         ]
 
-        accept_btn.click(fn=handle_accept, inputs=review_inputs, outputs=review_outputs)
-        reject_btn.click(fn=handle_reject, inputs=review_inputs, outputs=review_outputs)
+        accept_btn.click(
+            fn=handle_accept, inputs=review_inputs, outputs=review_outputs
+        )
+        reject_btn.click(
+            fn=handle_reject, inputs=review_inputs, outputs=review_outputs
+        )
 
         # Export
         export_btn.click(
@@ -1825,7 +1917,9 @@ Examples:
         help="Profile name (defaults to first available profile)",
     )
     parser.add_argument(
-        "--list-profiles", action="store_true", help="List available profiles and exit"
+        "--list-profiles",
+        action="store_true",
+        help="List available profiles and exit",
     )
     parser.add_argument(
         "--env",
@@ -1846,7 +1940,9 @@ if __name__ == "__main__":
             for name in profiles:
                 print(f"  - {name}")
         else:
-            print("No profiles found. Create profiles in the 'profiles/' directory.")
+            print(
+                "No profiles found. Create profiles in the 'profiles/' directory."
+            )
         sys.exit(0)
 
     # Determine which profile to use
@@ -1908,7 +2004,7 @@ if __name__ == "__main__":
     allowed_paths = list(allowed_paths)
 
     print(f"Output path: {output_path}")
-    print(f"Starting Lab Results Viewer on http://localhost:7862")
+    print("Starting Lab Results Viewer on http://localhost:7862")
 
     demo = create_app()
 

@@ -39,7 +39,8 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 load_dotenv(
-    Path(".env.local") if Path(".env.local").exists() else Path(".env"), override=True
+    Path(".env.local") if Path(".env.local").exists() else Path(".env"),
+    override=True,
 )
 
 LAB_SPECS_PATH = Path("config/lab_specs.json")
@@ -59,7 +60,9 @@ def validate_env():
 def get_openai_client():
     """Get configured OpenAI client for OpenRouter."""
     return OpenAI(
-        base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+        base_url=os.getenv(
+            "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
+        ),
         api_key=os.getenv("OPENROUTER_API_KEY"),
     )
 
@@ -105,7 +108,9 @@ def cmd_fix_encoding(args):
     print(f"✓ Fixed encoding in {LAB_SPECS_PATH}")
 
 
-def get_conversion_factor(lab_name, from_unit, to_unit, client, temperature=0.0):
+def get_conversion_factor(
+    lab_name, from_unit, to_unit, client, temperature=0.0
+):
     """Use LLM to get conversion factor from from_unit to to_unit."""
     system_prompt = (
         "You are a medical laboratory assistant. "
@@ -123,7 +128,10 @@ def get_conversion_factor(lab_name, from_unit, to_unit, client, temperature=0.0)
         model=os.getenv("EXTRACT_MODEL_ID"),
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": user_prompt}],
+            },
         ],
         temperature=temperature,
         max_tokens=16,
@@ -136,7 +144,9 @@ def get_conversion_factor(lab_name, from_unit, to_unit, client, temperature=0.0)
         return None
 
 
-def get_health_range(lab_name, primary_unit, user_stats, client, temperature=0.0):
+def get_health_range(
+    lab_name, primary_unit, user_stats, client, temperature=0.0
+):
     """Use LLM to get healthy reference range for a lab test."""
     system_prompt = (
         "You are a medical laboratory assistant. "
@@ -155,7 +165,10 @@ def get_health_range(lab_name, primary_unit, user_stats, client, temperature=0.0
         model=os.getenv("EXTRACT_MODEL_ID"),
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": [{"type": "text", "text": user_prompt}]},
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": user_prompt}],
+            },
         ],
         temperature=temperature,
         max_tokens=32,
@@ -233,7 +246,9 @@ def cmd_build_conversions(args):
         return (lab_name, unit, primary_unit, factor)
 
     max_workers = args.workers or min(30, len(conversion_tasks))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=max_workers
+    ) as executor:
         futures = [executor.submit(task_fn, args) for args in conversion_tasks]
         for future in concurrent.futures.as_completed(futures):
             lab_name, unit, primary_unit, factor = future.result()
@@ -246,7 +261,9 @@ def cmd_build_conversions(args):
     with open(output_json, "w", encoding="utf-8") as f:
         json.dump(labs_specs, f, indent=2, ensure_ascii=False)
 
-    print(f"✓ Generated conversion factors for {len(labs_specs)} labs → {output_json}")
+    print(
+        f"✓ Generated conversion factors for {len(labs_specs)} labs → {output_json}"
+    )
 
 
 def cmd_build_ranges(args):
@@ -264,19 +281,26 @@ def cmd_build_ranges(args):
 
     # Prepare health range tasks
     health_range_tasks = [
-        (lab_name, spec["primary_unit"]) for lab_name, spec in labs_specs.items()
+        (lab_name, spec["primary_unit"])
+        for lab_name, spec in labs_specs.items()
     ]
 
     def task_fn(args):
         lab_name, primary_unit = args
-        health_range = get_health_range(lab_name, primary_unit, user_stats, client)
+        health_range = get_health_range(
+            lab_name, primary_unit, user_stats, client
+        )
         parsed = parse_range_string(health_range, primary_unit)
         print(f"  {lab_name}: {health_range}")
         return (lab_name, parsed)
 
     max_workers = args.workers or min(10, len(health_range_tasks))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(task_fn, args) for args in health_range_tasks]
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=max_workers
+    ) as executor:
+        futures = [
+            executor.submit(task_fn, args) for args in health_range_tasks
+        ]
         for future in concurrent.futures.as_completed(futures):
             lab_name, parsed_range = future.result()
             if "ranges" not in labs_specs[lab_name]:
@@ -312,7 +336,9 @@ Examples:
 """,
     )
 
-    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
+    subparsers = parser.add_subparsers(
+        dest="command", help="Command to execute"
+    )
 
     # sort command
     sort_parser = subparsers.add_parser(
@@ -320,7 +346,9 @@ Examples:
     )
 
     # fix-encoding command
-    fix_parser = subparsers.add_parser("fix-encoding", help="Fix Unicode encoding")
+    fix_parser = subparsers.add_parser(
+        "fix-encoding", help="Fix Unicode encoding"
+    )
     fix_parser.add_argument(
         "--backup",
         action="store_true",
@@ -328,7 +356,10 @@ Examples:
         help="Create backup before modifying (default: True)",
     )
     fix_parser.add_argument(
-        "--no-backup", action="store_true", dest="backup", help="Don't create backup"
+        "--no-backup",
+        action="store_true",
+        dest="backup",
+        help="Don't create backup",
     )
 
     # build-conversions command
@@ -339,7 +370,9 @@ Examples:
         "--input", "-i", help="Input CSV file (default: output/all.csv)"
     )
     conv_parser.add_argument(
-        "--output", "-o", help="Output JSON file (default: temp_lab_specs.json)"
+        "--output",
+        "-o",
+        help="Output JSON file (default: temp_lab_specs.json)",
     )
     conv_parser.add_argument(
         "--workers", "-w", type=int, help="Number of parallel workers"
@@ -349,7 +382,9 @@ Examples:
     range_parser = subparsers.add_parser(
         "build-ranges", help="Build healthy ranges using LLM"
     )
-    range_parser.add_argument("--user-stats", "-u", help="User stats JSON file")
+    range_parser.add_argument(
+        "--user-stats", "-u", help="User stats JSON file"
+    )
     range_parser.add_argument("--output", "-o", help="Output JSON file")
     range_parser.add_argument(
         "--workers", "-w", type=int, help="Number of parallel workers"

@@ -61,41 +61,15 @@ def main():
 **Every code block, branch, and early exit must have an explanatory comment.**
 
 #### Block Comments
-Comments explain PURPOSE and INTENT, not just restate code. Use blank lines to separate logical sections (caveat: first comment after function definition or control structure does not need a blank line since the structure itself provides separation).
+Comments explain PURPOSE and INTENT, not just restate code.
 
 ```python
-# CORRECT - Blank line before comment
-
 # Build and validate configuration from user args
 config, errors = build_config(args)
 
 # Guard: Return errors if validation failed
 if errors:
     return None, errors
-
-# CORRECT - Multiple guards separated by blank lines
-
-# Skip non-directory entries
-if not pdf_dir.is_dir():
-    continue
-
-# Skip hidden directories
-if pdf_dir.name.startswith("."):
-    continue
-
-# INCORRECT - Comment stacked without blank line
-config, errors = build_config(args)
-# Guard: Return errors if validation failed
-if errors:
-    return None, errors
-
-# INCORRECT - Guards without blank lines between
-# Skip non-directory entries
-if not pdf_dir.is_dir():
-    continue
-# Skip hidden directories
-if pdf_dir.name.startswith("."):
-    continue
 ```
 
 #### Branch Comments
@@ -138,33 +112,6 @@ if not pdf_dir.is_dir():
 # Process remaining PDFs if cache incomplete
 if pdfs_to_process:
     _process()
-
-# CORRECT - Guards inside for loop with blank lines before each comment
-for pdf_dir in output_path.iterdir():
-    # Skip non-directory entries (files, symlinks, etc.)
-    if not pdf_dir.is_dir():
-        continue
-
-    # Skip hidden directories (e.g., .git, .DS_Store)
-    if pdf_dir.name.startswith("."):
-        continue
-
-    # Only check directories that match the input file pattern
-    if pdf_dir.name not in matching_stems:
-        continue
-
-# INCORRECT - Missing comment
-if errors:
-    return None, errors
-
-# INCORRECT - Guards inside loop without blank lines
-for pdf_dir in output_path.iterdir():
-    # Skip non-directory entries
-    if not pdf_dir.is_dir():
-        continue
-    # Skip hidden directories
-    if pdf_dir.name.startswith("."):
-        continue
 ```
 
 **MANDATORY CHECK:** Verify each has a comment:

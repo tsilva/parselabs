@@ -1,16 +1,16 @@
 """Shared utility functions for the labs parser."""
 
-import sys
 import json
-import unicodedata
-import re
-
 import logging
+import re
+import sys
+import unicodedata
 from pathlib import Path
 from typing import Any
-from PIL import Image, ImageEnhance
+
 import pandas as pd
 from dotenv import load_dotenv
+from PIL import Image, ImageEnhance
 
 
 def load_dotenv_with_env() -> str | None:
@@ -69,7 +69,9 @@ def slugify(value: Any) -> str:
         .replace("%", "percent")
     )
     value = (
-        unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+        unicodedata.normalize("NFKD", value)
+        .encode("ascii", "ignore")
+        .decode("ascii")
     )
     value = re.sub(r"[^\w\s-]", "", value)
     value = re.sub(r"[\s_]+", "-", value).strip("-")

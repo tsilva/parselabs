@@ -4,6 +4,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any
+
 from openai import OpenAI
 
 from labs_parser.config import UNKNOWN_VALUE
@@ -69,7 +70,11 @@ def standardize_with_llm(
     is_list_input = isinstance(items, list)
 
     def fallback():
-        return items if is_list_input else {key: UNKNOWN_VALUE for key in items.keys()}
+        return (
+            items
+            if is_list_input
+            else {key: UNKNOWN_VALUE for key in items.keys()}
+        )
 
     if not candidates:
         logger.warning("No candidates available, returning $UNKNOWN$ for all")
@@ -204,7 +209,10 @@ def standardize_lab_names(
         )
 
     # Return results for all names from cache
-    return {name: cache.get(cache_key(name), UNKNOWN_VALUE) for name in raw_test_names}
+    return {
+        name: cache.get(cache_key(name), UNKNOWN_VALUE)
+        for name in raw_test_names
+    }
 
 
 def standardize_lab_units(
@@ -238,7 +246,9 @@ def standardize_lab_units(
     cache = load_cache("unit_standardization")
 
     def cache_key(raw_unit, lab_name):
-        return f"{str(raw_unit).lower().strip()}|{str(lab_name).lower().strip()}"
+        return (
+            f"{str(raw_unit).lower().strip()}|{str(lab_name).lower().strip()}"
+        )
 
     # Get unique (raw_unit, lab_name) pairs
     unique_pairs = list(set(unit_contexts))
@@ -255,7 +265,10 @@ def standardize_lab_units(
 
     # If all cached, return early
     if not uncached_pairs:
-        return {pair: cached_results.get(pair, UNKNOWN_VALUE) for pair in unit_contexts}
+        return {
+            pair: cached_results.get(pair, UNKNOWN_VALUE)
+            for pair in unit_contexts
+        }
 
     logger.info(
         f"[unit_standardization] {len(uncached_pairs)} uncached pairs, calling LLM..."
@@ -280,7 +293,8 @@ def standardize_lab_units(
     primary_units_context = ""
     if primary_units_map:
         primary_units_list = [
-            f'  "{lab}": "{unit}"' for lab, unit in sorted(primary_units_map.items())
+            f'  "{lab}": "{unit}"'
+            for lab, unit in sorted(primary_units_map.items())
         ]
         # Build the mapping and escape curly braces for .format()
         mapping_content = "\n".join(primary_units_list)
@@ -318,7 +332,8 @@ PRIMARY UNITS MAPPING (use this for null/missing units):
 
             if raw_unit is not None and lab_name is not None:
                 if standardized and (
-                    standardized == UNKNOWN_VALUE or standardized in standardized_units
+                    standardized == UNKNOWN_VALUE
+                    or standardized in standardized_units
                 ):
                     llm_results[(raw_unit, lab_name)] = standardized
                 else:
@@ -327,25 +342,33 @@ PRIMARY UNITS MAPPING (use this for null/missing units):
                     )
                     llm_results[(raw_unit, lab_name)] = UNKNOWN_VALUE
     else:
-        logger.error("Expected list response from LLM for unit standardization")
+        logger.error(
+            "Expected list response from LLM for unit standardization"
+        )
 
     # Ensure all uncached pairs have a mapping
     for pair in uncached_pairs:
         if pair not in llm_results:
-            logger.warning(f"LLM didn't return mapping for {pair}, using $UNKNOWN$")
+            logger.warning(
+                f"LLM didn't return mapping for {pair}, using $UNKNOWN$"
+            )
             llm_results[pair] = UNKNOWN_VALUE
 
     # Update cache with LLM results
     for (raw_unit, lab_name), std_unit in llm_results.items():
         cache[cache_key(raw_unit, lab_name)] = std_unit
     save_cache("unit_standardization", cache)
-    logger.info(f"[unit_standardization] Cache updated with {len(llm_results)} entries")
+    logger.info(
+        f"[unit_standardization] Cache updated with {len(llm_results)} entries"
+    )
 
     # Merge cached and new results
     cached_results.update(llm_results)
 
     # Return results for all input pairs from merged cache
-    return {pair: cached_results.get(pair, UNKNOWN_VALUE) for pair in unit_contexts}
+    return {
+        pair: cached_results.get(pair, UNKNOWN_VALUE) for pair in unit_contexts
+    }
 
 
 def standardize_qualitative_values(
@@ -391,7 +414,9 @@ def standardize_qualitative_values(
 
     # If all cached, return early
     if not uncached_values:
-        return {v: cache.get(cache_key(v)) for v in raw_values if v is not None}
+        return {
+            v: cache.get(cache_key(v)) for v in raw_values if v is not None
+        }
 
     logger.info(
         f"[qualitative_to_boolean] {len(uncached_values)} uncached values, calling LLM..."
@@ -433,7 +458,9 @@ Return format: {{"value1": 0, "value2": 1, "value3": null, ...}}
         )
 
         if not completion or not completion.choices:
-            logger.error("Invalid completion response for qualitative classification")
+            logger.error(
+                "Invalid completion response for qualitative classification"
+            )
             return {v: None for v in raw_values if v is not None}
 
         response_text = completion.choices[0].message.content.strip()
