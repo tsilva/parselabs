@@ -64,6 +64,7 @@ def standardize_with_llm(
     Returns:
         Dictionary or list (matching input type) mapping items to standardized values
     """
+    # Empty input — return matching empty type
     if not items:
         return {} if isinstance(items, dict) else []
 
@@ -72,10 +73,12 @@ def standardize_with_llm(
     def fallback():
         return items if is_list_input else {key: UNKNOWN_VALUE for key in items.keys()}
 
+    # No candidates to match against
     if not candidates:
         logger.warning("No candidates available, returning $UNKNOWN$ for all")
         return fallback()
 
+    # Build prompts from template
     system_prompt = system_prompt_template.format(
         num_candidates=len(candidates),
         candidates=json.dumps(candidates, ensure_ascii=False, indent=2),
@@ -99,6 +102,7 @@ Return a JSON object/array with the standardized values."""
             max_tokens=4000,
         )
 
+        # Empty or malformed API response
         if not completion or not completion.choices:
             logger.error("Invalid completion response for standardization")
             return fallback()
@@ -106,24 +110,28 @@ Return a JSON object/array with the standardized values."""
         response_text = completion.choices[0].message.content.strip()
         result = parse_llm_json_response(response_text, fallback={})
 
+        # JSON parsing failed
         if not result:
             logger.error("Failed to parse standardization response")
             return fallback()
 
-        # For list input, return as-is (already validated by the calling function)
+        # List input — return as-is (caller validates)
         if is_list_input:
             return result
 
-        # Validate results for dict input
+        # Dict input — validate each mapping against candidates
         validated = {}
         for key in items.keys():
             if key in result:
                 standardized = result[key]
+                # Valid standardized value
                 if standardized == UNKNOWN_VALUE or standardized in candidates:
                     validated[key] = standardized
+                # LLM returned value not in candidates
                 else:
                     logger.warning(f"LLM returned invalid value: '{standardized}' for '{key}', using $UNKNOWN$")
                     validated[key] = UNKNOWN_VALUE
+            # LLM omitted this key
             else:
                 logger.warning(f"LLM didn't return mapping for '{key}', using $UNKNOWN$")
                 validated[key] = UNKNOWN_VALUE
