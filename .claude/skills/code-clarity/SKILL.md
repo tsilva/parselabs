@@ -196,3 +196,33 @@ def process_single_pdf(pdf_path: Path) -> tuple[Path | None, list[dict]]:
 - All decision points visible in main flow
 - Error handling explicit at each step
 - Guard clauses for early returns
+
+### 6. Early Return Over Else
+
+When one branch of an `if/else` exits (return, continue, break), eliminate the `else` block. Flip the condition to exit early and dedent the remaining code.
+
+```python
+# WRONG - Unnecessary else after early return
+if args.list_profiles:
+    profiles = ProfileConfig.list_profiles()
+    if profiles:
+        print("Available profiles:")
+        for name in profiles:
+            print(f"  - {name}")
+    else:
+        print("No profiles found. Create profiles in the 'profiles/' directory.")
+    return
+
+# RIGHT - Early return eliminates else, flattens code
+if args.list_profiles:
+    # If no profiles available then return
+    profiles = ProfileConfig.list_profiles()
+    if not profiles:
+        print("No profiles found. Create profiles in the 'profiles/' directory.")
+        return
+
+    # Print available profiles
+    print("Available profiles:")
+    for name in profiles:
+        print(f"  - {name}")
+```
