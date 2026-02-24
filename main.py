@@ -417,6 +417,48 @@ def _add_page_metadata(results: list, page_idx: int, page_name: str) -> list:
     return enriched
 
 
+def _process_single_page(
+    page_image,
+    page_idx: int,
+    total_pages: int,
+    pdf_stem: str,
+    doc_out_dir: Path,
+    config: ExtractionConfig,
+    standardization_section: str | None,
+    failed_pages: list,
+) -> tuple[list, dict | None]:
+    """Process a single PDF page: preprocess, extract, and return results with metadata.
+
+    Returns tuple of (page_results, page_data) where page_data is the full extraction data.
+    """
+    # Generate unique page identifier with zero-padding
+    page_name = f"{pdf_stem}.{page_idx + 1:03d}"
+    jpg_path = doc_out_dir / f"{page_name}.jpg"
+    json_path = doc_out_dir / f"{page_name}.json"
+
+    logger.info(f"[{page_name}] Processing page {page_idx + 1}/{total_pages}...")
+
+    # Preprocess and cache page image
+    _preprocess_and_save_image(page_image, page_name, jpg_path)
+
+    # Extract data using vision model or load from cache
+    page_data = _extract_or_load_page_data(
+        jpg_path,
+        json_path,
+        page_name,
+        config,
+        standardization_section,
+        pdf_stem,
+        page_idx,
+        failed_pages,
+    )
+
+    # Add page metadata to results
+    page_results = _add_page_metadata(page_data.get("lab_results", []), page_idx, page_name)
+
+    return page_results, page_data
+
+
 def _extract_via_vision(
     copied_pdf: Path,
     config: ExtractionConfig,
@@ -441,34 +483,23 @@ def _extract_via_vision(
 
     # Process each page independently
     for page_idx, page_image in enumerate(pil_pages):
-        # Generate unique page identifier with zero-padding
-        page_name = f"{pdf_stem}.{page_idx + 1:03d}"
-        jpg_path = doc_out_dir / f"{page_name}.jpg"
-        json_path = doc_out_dir / f"{page_name}.json"
-
-        logger.info(f"[{page_name}] Processing page {page_idx + 1}/{len(pil_pages)}...")
-
-        # Preprocess and cache page image
-        _preprocess_and_save_image(page_image, page_name, jpg_path)
-
-        # Extract data using vision model or load from cache
-        page_data = _extract_or_load_page_data(
-            jpg_path,
-            json_path,
-            page_name,
+        # Process single page and get results
+        page_results, page_data = _process_single_page(
+            page_image,
+            page_idx,
+            len(pil_pages),
+            pdf_stem,
+            doc_out_dir,
             config,
             standardization_section,
-            pdf_stem,
-            page_idx,
             failed_pages,
         )
 
         # Extract document date from first page only
-        if page_idx == 0:
+        if page_idx == 0 and page_data is not None:
             doc_date = _extract_document_date(page_data, pdf_stem)
 
-        # Add page metadata to results and append to collection
-        page_results = _add_page_metadata(page_data.get("lab_results", []), page_idx, page_name)
+        # Append page results to collection
         all_results.extend(page_results)
 
     return all_results, doc_date
@@ -630,6 +661,36 @@ def _handle_empty_results(csv_path: Path, pdf_stem: str) -> tuple[Path, list]:
     return csv_path, []
 
 
+def _extract_data_from_pdf(
+    copied_pdf: Path,
+    config: ExtractionConfig,
+    standardization_section: str | None,
+    doc_out_dir: Path,
+    pdf_stem: str,
+    failed_pages: list,
+) -> tuple[list, str | None]:
+    """Extract lab data from PDF using text-first strategy with vision fallback.
+
+    Returns tuple of (all_results, doc_date) or raises exception on failure.
+    """
+    # Attempt text-first extraction (cheaper), fall back to vision if needed
+    used_text, text_data = _try_text_extraction(
+        copied_pdf, config, standardization_section, doc_out_dir, pdf_stem
+    )
+
+    if used_text:
+        # Guard: Ensure text_data is valid before processing
+        if not text_data:
+            raise ValueError("Text extraction indicated success but returned no data")
+        # Process text extraction results
+        return _process_text_results(text_data, pdf_stem)
+
+    # Fall back to vision-based extraction
+    return _extract_via_vision(
+        copied_pdf, config, standardization_section, doc_out_dir, pdf_stem, failed_pages
+    )
+
+
 def process_single_pdf(
     pdf_path: Path,
     output_dir: Path,
@@ -654,23 +715,14 @@ def process_single_pdf(
         # Copy source PDF to output directory for archival
         copied_pdf = _copy_pdf_to_output(pdf_path, doc_out_dir)
 
-        # Attempt text-first extraction (cheaper), fall back to vision if needed
-        used_text, text_data = _try_text_extraction(
-            copied_pdf, config, standardization_section, doc_out_dir, pdf_stem
-        )
-
-        if used_text:
-            # Process text extraction results
-            all_results, doc_date = _process_text_results(text_data, pdf_stem)
-        else:
-            # Fall back to vision-based extraction with explicit error handling
-            try:
-                all_results, doc_date = _extract_via_vision(
-                    copied_pdf, config, standardization_section, doc_out_dir, pdf_stem, failed_pages
-                )
-            except Exception as e:
-                logger.error(f"[{pdf_stem}] Vision extraction failed: {e}")
-                return None, failed_pages
+        # Extract lab data using text-first strategy with vision fallback
+        try:
+            all_results, doc_date = _extract_data_from_pdf(
+                copied_pdf, config, standardization_section, doc_out_dir, pdf_stem, failed_pages
+            )
+        except Exception as e:
+            logger.error(f"[{pdf_stem}] Data extraction failed: {e}")
+            return None, failed_pages
 
         # Guard: Check if any results were successfully extracted
         if not all_results:
@@ -1394,10 +1446,13 @@ def _process_pdfs_or_use_cache(
     )
 
 
-def run_for_profile(args, profile_name: str) -> bool:
-    """Run extraction pipeline for a single profile.
+def _setup_profile_environment(
+    args, profile_name: str
+) -> tuple[ExtractionConfig | None, LabSpecsConfig | None, str | None, list[str]]:
+    """Setup environment for a profile: config, logging, server check.
 
-    Returns True if successful, False otherwise.
+    Returns tuple of (config, lab_specs, standardization_section, errors).
+    If setup fails, returns (None, None, None, errors).
     """
     # Build and validate configuration for this profile
     config, errors = _build_and_validate_config(args, profile_name)
@@ -1407,12 +1462,12 @@ def run_for_profile(args, profile_name: str) -> bool:
         print(f"\nConfiguration errors for profile '{profile_name}':")
         for error in errors:
             print(f"  - {error}")
-        return False
+        return None, None, None, errors
 
     # Guard: Config should exist if no errors were reported
     if not config:
         print(f"\nUnexpected error: Configuration failed but no errors reported")
-        return False
+        return None, None, None, ["Configuration failed"]
 
     # Setup logging to output folder for later review
     global logger
@@ -1426,7 +1481,7 @@ def run_for_profile(args, profile_name: str) -> bool:
         logger.error(f"Server check failed: {message}")
         print(f"\nError: Cannot start extraction - {message}")
         print("Please check your internet connection and API key, then try again.")
-        return False
+        return None, None, None, [f"Server unavailable: {message}"]
     logger.info(f"Server check passed: {message}")
 
     # Log configuration for debugging/auditing
@@ -1451,6 +1506,95 @@ def run_for_profile(args, profile_name: str) -> bool:
         )
         logger.info(f"Built standardization section: {len(lab_specs.standardized_names)} lab names")
 
+    return config, lab_specs, standardization_section, []
+
+
+def _process_and_transform_data(
+    merged_df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+    export_cols: list,
+    client: OpenAI,
+    model_id: str,
+) -> pd.DataFrame | None:
+    """Apply all transformations to merged data: normalize, filter, dedupe, validate.
+
+    Returns transformed DataFrame or None if processing fails.
+    """
+    # Apply value normalizations and unit conversions
+    logger.info("Applying normalizations...")
+    merged_df = apply_normalizations(merged_df, lab_specs, client, model_id)
+
+    # Filter out rows that couldn't be mapped to known lab tests
+    merged_df = _filter_unknown_labs(merged_df)
+
+    # Remove duplicate results from same date/lab combinations
+    if lab_specs.exists:
+        logger.info("Deduplicating results...")
+        merged_df = deduplicate_results(merged_df, lab_specs)
+        logger.info(f"After deduplication: {len(merged_df)} rows")
+
+    # Rename columns from internal names to simplified export schema
+    merged_df = _rename_columns_for_export(merged_df)
+
+    # Run value-based validation to flag suspicious values
+    logger.info("Running value-based validation...")
+    merged_df, validation_stats = _run_value_validation(merged_df, lab_specs)
+    _log_validation_stats(validation_stats)
+
+    # Initialize confidence column (all values valid at this stage)
+    merged_df["confidence"] = 1.0
+
+    return merged_df
+
+
+def _export_final_results(
+    merged_df: pd.DataFrame,
+    export_cols: list,
+    hidden_cols: list,
+    widths: dict,
+    dtypes: dict,
+    output_path: Path,
+    all_failed_pages: list[dict],
+    csv_paths: list[Path],
+) -> None:
+    """Export final results to CSV and Excel formats."""
+    # Select only the columns needed for final export
+    final_cols = [col for col in export_cols if col in merged_df.columns]
+    merged_df = merged_df[final_cols]
+
+    # Convert columns to their proper data types
+    logger.info("Applying data type conversions...")
+    merged_df = apply_dtype_conversions(merged_df, dtypes)
+
+    # Export merged results to CSV format
+    logger.info("Saving merged CSV...")
+    csv_path = output_path / "all.csv"
+    merged_df.to_csv(csv_path, index=False, encoding="utf-8")
+    logger.info(f"Saved merged CSV: {csv_path}")
+
+    # Export merged results to Excel format with formatting
+    logger.info("Exporting to Excel...")
+    excel_path = output_path / "all.xlsx"
+    export_excel(merged_df, excel_path, hidden_cols, widths)
+
+    # Report extraction results and failures
+    _report_extraction_failures(all_failed_pages, csv_path, csv_paths)
+
+
+def run_for_profile(args, profile_name: str) -> bool:
+    """Run extraction pipeline for a single profile.
+
+    Returns True if successful, False otherwise.
+    """
+    # Setup environment: config, logging, server check, lab specs
+    config, lab_specs, standardization_section, errors = _setup_profile_environment(
+        args, profile_name
+    )
+
+    # Guard: Exit if setup failed or returned None values
+    if errors or not config or not lab_specs:
+        return False
+
     # Get column configuration for export formatting
     export_cols, hidden_cols, widths, dtypes = get_column_lists(COLUMN_SCHEMA)
 
@@ -1474,6 +1618,7 @@ def run_for_profile(args, profile_name: str) -> bool:
     logger.info(f"Processing {len(pdfs_to_process)} PDF(s)")
 
     # Process PDFs or use cached results (handles both cache hit and miss cases)
+    log_dir = config.output_path / "logs"
     csv_paths, all_failed_pages, pdfs_failed = _process_pdfs_or_use_cache(
         pdf_files, pdfs_to_process, config, lab_specs, standardization_section, log_dir
     )
@@ -1496,60 +1641,27 @@ def run_for_profile(args, profile_name: str) -> bool:
         logger.error("No data to process")
         return False
 
-    # Apply value normalizations and unit conversions
-    logger.info("Applying normalizations...")
-    merged_df = apply_normalizations(merged_df, lab_specs, client, config.self_consistency_model_id)
-
-    # Filter out rows that couldn't be mapped to known lab tests
-    merged_df = _filter_unknown_labs(merged_df)
-
-    # Remove duplicate results from same date/lab combinations
-    if lab_specs.exists:
-        logger.info("Deduplicating results...")
-        merged_df = deduplicate_results(merged_df, lab_specs)
-        logger.info(f"After deduplication: {len(merged_df)} rows")
-
-    # Rename columns from internal names to simplified export schema
-    merged_df = _rename_columns_for_export(merged_df)
-
-    # Run value-based validation to flag suspicious values
-    logger.info("Running value-based validation...")
-    merged_df, validation_stats = _run_value_validation(merged_df, lab_specs)
-    _log_validation_stats(validation_stats)
-
-    # Initialize confidence column (all values valid at this stage)
-    merged_df["confidence"] = 1.0
-    logger.debug(
-        f"After setting confidence=1.0: NaN count = {merged_df['confidence'].isna().sum()}"
+    # Apply all data transformations: normalize, filter, dedupe, validate
+    merged_df = _process_and_transform_data(
+        merged_df, lab_specs, export_cols, client, config.self_consistency_model_id
     )
 
-    # Select only the columns needed for final export
-    final_cols = [col for col in export_cols if col in merged_df.columns]
-    merged_df = merged_df[final_cols]
-    logger.debug(
-        f"After column filtering: confidence NaN count = {merged_df['confidence'].isna().sum() if 'confidence' in merged_df.columns else 'column missing'}"
+    # Guard: Exit if data processing failed
+    if merged_df is None:
+        logger.error("Data processing failed")
+        return False
+
+    # Export final results to CSV and Excel
+    _export_final_results(
+        merged_df,
+        export_cols,
+        hidden_cols,
+        widths,
+        dtypes,
+        config.output_path,
+        all_failed_pages,
+        csv_paths,
     )
-
-    # Convert columns to their proper data types
-    logger.info("Applying data type conversions...")
-    merged_df = apply_dtype_conversions(merged_df, dtypes)
-    logger.debug(
-        f"After dtype conversion: confidence NaN count = {merged_df['confidence'].isna().sum()}"
-    )
-
-    # Export merged results to CSV format
-    logger.info("Saving merged CSV...")
-    csv_path = config.output_path / "all.csv"
-    merged_df.to_csv(csv_path, index=False, encoding="utf-8")
-    logger.info(f"Saved merged CSV: {csv_path}")
-
-    # Export merged results to Excel format with formatting
-    logger.info("Exporting to Excel...")
-    excel_path = config.output_path / "all.xlsx"
-    export_excel(merged_df, excel_path, hidden_cols, widths)
-
-    # Report extraction results and failures
-    _report_extraction_failures(all_failed_pages, csv_path, csv_paths)
 
     return True
 
