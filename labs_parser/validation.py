@@ -6,8 +6,8 @@ flagging suspicious values for review. Integrates with existing review workflow
 using review_needed, review_reason, and review_confidence fields.
 """
 
-import re
 import logging
+import re
 
 import pandas as pd
 
@@ -178,9 +178,11 @@ class ValueValidator:
             df.loc[mask, "review_reason"]
             .fillna("")
             .apply(
-                lambda x: str(x) + f"{reason_code}; "
-                if reason_code not in str(x)
-                else str(x)
+                lambda x: (
+                    str(x) + f"{reason_code}; "
+                    if reason_code not in str(x)
+                    else str(x)
+                )
             )
         )
         df.loc[mask, "review_confidence"] = (
@@ -190,7 +192,8 @@ class ValueValidator:
         # Update stats
         count = int(mask.sum())
         self._validation_stats["flags_by_reason"][reason_code] = (
-            self._validation_stats["flags_by_reason"].get(reason_code, 0) + count
+            self._validation_stats["flags_by_reason"].get(reason_code, 0)
+            + count
         )
 
         logger.debug(f"Flagged {count} rows with {reason_code}")
@@ -228,7 +231,10 @@ class ValueValidator:
         - Percentage bounds (0-100%)
         - Boolean constraints (0/1 for positive/negative tests)
         """
-        if self._value_col not in df.columns or self._lab_name_col not in df.columns:
+        if (
+            self._value_col not in df.columns
+            or self._lab_name_col not in df.columns
+        ):
             return df
 
         # Labs allowed to have negative values
@@ -277,7 +283,9 @@ class ValueValidator:
             unit = getattr(row, self._unit_col, None) if has_unit_col else None
             if unit == "%":
                 # Some labs (coagulation factors) can legitimately exceed 100%
-                max_pct = 200 if lab_name in percentage_exceeds_100_allowed else 100
+                max_pct = (
+                    200 if lab_name in percentage_exceeds_100_allowed else 100
+                )
                 if value < 0 or value > max_pct:
                     flags["PERCENTAGE_BOUNDS"].append(idx)
                     continue
@@ -350,7 +358,9 @@ class ValueValidator:
                     # Check if within tolerance
                     if target_value != 0:
                         pct_diff = (
-                            abs(calculated - target_value) / abs(target_value) * 100
+                            abs(calculated - target_value)
+                            / abs(target_value)
+                            * 100
                         )
                     else:
                         pct_diff = (
@@ -376,7 +386,9 @@ class ValueValidator:
 
         return df
 
-    def _check_component_total_constraints(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _check_component_total_constraints(
+        self, df: pd.DataFrame
+    ) -> pd.DataFrame:
         """Check that component values don't exceed their totals.
 
         For example: Albumin should not exceed Total Protein,
@@ -427,7 +439,9 @@ class ValueValidator:
 
         return df
 
-    def _evaluate_formula(self, formula: str, lab_values: dict) -> float | None:
+    def _evaluate_formula(
+        self, formula: str, lab_values: dict
+    ) -> float | None:
         """Evaluate a formula string with lab values.
 
         Args:
@@ -474,12 +488,17 @@ class ValueValidator:
         Uses max_daily_change from lab_specs to determine if a value
         changed too rapidly between tests.
         """
-        if self._date_col not in df.columns or self._value_col not in df.columns:
+        if (
+            self._date_col not in df.columns
+            or self._value_col not in df.columns
+        ):
             return df
 
         # Ensure date is datetime
         if not pd.api.types.is_datetime64_any_dtype(df[self._date_col]):
-            df[self._date_col] = pd.to_datetime(df[self._date_col], errors="coerce")
+            df[self._date_col] = pd.to_datetime(
+                df[self._date_col], errors="coerce"
+            )
 
         # Collect all indices to flag
         temporal_anomaly_indices: list = []
@@ -559,9 +578,13 @@ class ValueValidator:
         for row in df.itertuples():
             idx = row.Index
             value_raw = getattr(row, self._value_raw_col, None)
-            value = getattr(row, self._value_col, None) if has_value_col else None
+            value = (
+                getattr(row, self._value_col, None) if has_value_col else None
+            )
             lab_name = (
-                getattr(row, self._lab_name_col, None) if has_lab_name_col else None
+                getattr(row, self._lab_name_col, None)
+                if has_lab_name_col
+                else None
             )
 
             if pd.isna(value_raw):
@@ -575,17 +598,23 @@ class ValueValidator:
                 decimal_digits = re.match(r"\d+", decimal_part)
                 if decimal_digits and len(decimal_digits.group()) > 4:
                     flags["FORMAT_ARTIFACT"].append(idx)
-                    logger.debug(f"Excessive decimals in {lab_name}: {value_raw_str}")
+                    logger.debug(
+                        f"Excessive decimals in {lab_name}: {value_raw_str}"
+                    )
                     continue
 
             # Check for concatenation errors (e.g., "52.6=1946" where reference got appended)
             if pd.notna(value) and isinstance(value_raw_str, str):
                 cleaned = value_raw_str.replace(",", ".").strip()
                 has_digits = bool(re.search(r"\d", cleaned))
-                starts_with_number = bool(re.match(r"^[\d\.\-\+<>≤≥]", cleaned))
+                starts_with_number = bool(
+                    re.match(r"^[\d\.\-\+<>≤≥]", cleaned)
+                )
 
                 if has_digits and starts_with_number:
-                    concat_pattern = re.match(r"^[\d\.\-\+<>≤≥]+\s*=\s*\d+", cleaned)
+                    concat_pattern = re.match(
+                        r"^[\d\.\-\+<>≤≥]+\s*=\s*\d+", cleaned
+                    )
                     if concat_pattern:
                         flags["FORMAT_ARTIFACT"].append(idx)
                         logger.debug(
@@ -606,7 +635,10 @@ class ValueValidator:
         - ref_min > ref_max (invalid range)
         - Value extremely far outside extracted range (100x)
         """
-        if self._ref_min_col not in df.columns or self._ref_max_col not in df.columns:
+        if (
+            self._ref_min_col not in df.columns
+            or self._ref_max_col not in df.columns
+        ):
             return df
 
         flags: dict[str, list] = {
@@ -619,11 +651,15 @@ class ValueValidator:
 
         for row in df.itertuples():
             idx = row.Index
-            value = getattr(row, self._value_col, None) if has_value_col else None
+            value = (
+                getattr(row, self._value_col, None) if has_value_col else None
+            )
             ref_min = getattr(row, self._ref_min_col, None)
             ref_max = getattr(row, self._ref_max_col, None)
             lab_name = (
-                getattr(row, self._lab_name_col, None) if has_lab_name_col else None
+                getattr(row, self._lab_name_col, None)
+                if has_lab_name_col
+                else None
             )
 
             # Check ref_min > ref_max (inverted range)

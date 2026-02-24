@@ -1,11 +1,12 @@
 """Configuration management for lab parser."""
+
 from __future__ import annotations
 
-import os
 import json
 import logging
-from pathlib import Path
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class ExtractionConfig:
 
     Simplified to require only essential inputs with smart defaults.
     """
+
     input_path: Path
     output_path: Path
     openrouter_api_key: str
@@ -39,6 +41,7 @@ class ProfileConfig:
     Paths + optional setting overrides + demographics for personalized ranges.
     Supports both YAML and JSON formats.
     """
+
     name: str
     input_path: Path | None = None
     output_path: Path | None = None
@@ -51,42 +54,45 @@ class ProfileConfig:
     demographics: Demographics | None = None
 
     @classmethod
-    def from_file(cls, profile_path: Path) -> 'ProfileConfig':
+    def from_file(cls, profile_path: Path) -> "ProfileConfig":
         """Load profile from YAML or JSON file."""
         if not profile_path.exists():
             raise FileNotFoundError(f"Profile not found: {profile_path}")
 
-        content = profile_path.read_text(encoding='utf-8')
+        content = profile_path.read_text(encoding="utf-8")
 
         # Parse based on extension
-        if profile_path.suffix in ('.yaml', '.yml'):
+        if profile_path.suffix in (".yaml", ".yml"):
             import yaml
+
             data = yaml.safe_load(content)
         else:
             data = json.loads(content)
 
         # Extract paths
-        paths = data.get('paths', {})
-        input_path_str = paths.get('input_path') or data.get('input_path')
-        output_path_str = paths.get('output_path') or data.get('output_path')
-        input_file_regex = paths.get('input_file_regex') or data.get('input_file_regex')
+        paths = data.get("paths", {})
+        input_path_str = paths.get("input_path") or data.get("input_path")
+        output_path_str = paths.get("output_path") or data.get("output_path")
+        input_file_regex = paths.get("input_file_regex") or data.get(
+            "input_file_regex"
+        )
 
         # Extract optional overrides
-        workers = data.get('workers')
+        workers = data.get("workers")
 
         # Extract demographics (for personalized healthy ranges)
         demographics = None
-        demo_data = data.get('demographics', {})
+        demo_data = data.get("demographics", {})
         if demo_data:
             demographics = Demographics(
-                gender=demo_data.get('gender'),
-                date_of_birth=demo_data.get('date_of_birth'),
-                height_cm=demo_data.get('height_cm'),
-                weight_kg=demo_data.get('weight_kg'),
+                gender=demo_data.get("gender"),
+                date_of_birth=demo_data.get("date_of_birth"),
+                height_cm=demo_data.get("height_cm"),
+                weight_kg=demo_data.get("weight_kg"),
             )
 
         return cls(
-            name=data.get('name', profile_path.stem),
+            name=data.get("name", profile_path.stem),
             input_path=Path(input_path_str) if input_path_str else None,
             output_path=Path(output_path_str) if output_path_str else None,
             input_file_regex=input_file_regex,
@@ -95,7 +101,9 @@ class ProfileConfig:
         )
 
     @classmethod
-    def find_path(cls, name: str, profiles_dir: Path = Path("profiles")) -> Path | None:
+    def find_path(
+        cls, name: str, profiles_dir: Path = Path("profiles")
+    ) -> Path | None:
         """Find profile file path by name, trying yaml/yml/json extensions."""
         for ext in (".yaml", ".yml", ".json"):
             p = profiles_dir / f"{name}{ext}"
@@ -109,9 +117,9 @@ class ProfileConfig:
         if not profiles_dir.exists():
             return []
         profiles = []
-        for ext in ('*.json', '*.yaml', '*.yml'):
+        for ext in ("*.json", "*.yaml", "*.yml"):
             for f in profiles_dir.glob(ext):
-                if not f.name.startswith('_'):  # Skip templates
+                if not f.name.startswith("_"):  # Skip templates
                     profiles.append(f.stem)
         return sorted(set(profiles))
 
@@ -123,6 +131,7 @@ class Demographics:
 
     Note: This is kept for the review tool, not used in extraction.
     """
+
     gender: str | None = None  # "male", "female", "other"
     date_of_birth: str | None = None  # ISO format: "YYYY-MM-DD"
     height_cm: float | None = None
@@ -135,9 +144,14 @@ class Demographics:
             return None
         try:
             from datetime import date
+
             dob = date.fromisoformat(self.date_of_birth)
             today = date.today()
-            return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+            return (
+                today.year
+                - dob.year
+                - ((today.month, today.day) < (dob.month, dob.day))
+            )
         except ValueError:
             return None
 
@@ -160,27 +174,27 @@ class LabSpecsConfig:
             logger.warning(f"lab_specs.json not found at {config_path}")
             return
 
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             self._specs = json.load(f)
 
         # Pre-compute all views (filter out meta keys starting with _)
         self._standardized_names = sorted(
-            key for key in self._specs.keys() if not key.startswith('_')
+            key for key in self._specs.keys() if not key.startswith("_")
         )
 
         # Collect unique units from primary_unit and alternatives
         all_units = set()
         for lab_name, spec in self._specs.items():
-            if lab_name.startswith('_'):  # Skip meta keys
+            if lab_name.startswith("_"):  # Skip meta keys
                 continue
             if not isinstance(spec, dict):  # Skip non-dict entries
                 continue
-            primary = spec.get('primary_unit')
+            primary = spec.get("primary_unit")
             if primary:
                 all_units.add(primary)
 
-            for alt in spec.get('alternatives', []):
-                unit = alt.get('unit')
+            for alt in spec.get("alternatives", []):
+                unit = alt.get("unit")
                 if unit:
                     all_units.add(unit)
 
@@ -188,13 +202,15 @@ class LabSpecsConfig:
 
         # Build lab_type mapping
         self._lab_type_map = {
-            lab_name: spec.get('lab_type', 'blood')
+            lab_name: spec.get("lab_type", "blood")
             for lab_name, spec in self._specs.items()
-            if not lab_name.startswith('_') and isinstance(spec, dict)
+            if not lab_name.startswith("_") and isinstance(spec, dict)
         }
 
-        logger.info(f"Loaded {len(self._standardized_names)} lab specs, "
-                    f"{len(self._standardized_units)} units")
+        logger.info(
+            f"Loaded {len(self._standardized_names)} lab specs, "
+            f"{len(self._standardized_units)} units"
+        )
 
     @property
     def exists(self) -> bool:
@@ -224,32 +240,31 @@ class LabSpecsConfig:
         """Get primary unit for a lab."""
         if lab_name not in self._specs:
             return None
-        return self._specs[lab_name].get('primary_unit')
+        return self._specs[lab_name].get("primary_unit")
 
-    def get_conversion_factor(self, lab_name: str, from_unit: str) -> float | None:
+    def get_conversion_factor(
+        self, lab_name: str, from_unit: str
+    ) -> float | None:
         """Get conversion factor from given unit to primary unit."""
         if lab_name not in self._specs:
             return None
 
         spec = self._specs[lab_name]
-        primary_unit = spec.get('primary_unit')
+        primary_unit = spec.get("primary_unit")
 
         # Already in primary unit
         if from_unit == primary_unit:
             return 1.0
 
         # Find conversion factor in alternatives
-        for alt in spec.get('alternatives', []):
-            if alt.get('unit') == from_unit:
-                return alt.get('factor')
+        for alt in spec.get("alternatives", []):
+            if alt.get("unit") == from_unit:
+                return alt.get("factor")
 
         return None
 
     def get_healthy_range_for_demographics(
-        self,
-        lab_name: str,
-        gender: str | None = None,
-        age: int | None = None
+        self, lab_name: str, gender: str | None = None, age: int | None = None
     ) -> tuple[float | None, float | None]:
         """Get healthy range for a lab, considering demographics.
 
@@ -270,7 +285,7 @@ class LabSpecsConfig:
         if lab_name not in self._specs:
             return (None, None)
 
-        ranges = self._specs[lab_name].get('ranges', {})
+        ranges = self._specs[lab_name].get("ranges", {})
         if not ranges:
             return (None, None)
 
@@ -290,7 +305,7 @@ class LabSpecsConfig:
                 return (gender_range[0], gender_range[1])
 
         # Fall back to default
-        default = ranges.get('default')
+        default = ranges.get("default")
         if isinstance(default, list) and len(default) >= 2:
             return (default[0], default[1])
 
@@ -304,11 +319,11 @@ class LabSpecsConfig:
         - "65+" (threshold and above)
         - "18-64" (inclusive range)
         """
-        if '+' in age_spec:
-            threshold = int(age_spec.replace('+', ''))
+        if "+" in age_spec:
+            threshold = int(age_spec.replace("+", ""))
             return age >= threshold
-        if '-' in age_spec:
-            parts = age_spec.split('-')
+        if "-" in age_spec:
+            parts = age_spec.split("-")
             if len(parts) == 2:
                 try:
                     return int(parts[0]) <= age <= int(parts[1])
@@ -360,4 +375,4 @@ class LabSpecsConfig:
         """
         if lab_name not in self._specs:
             return None
-        return self._specs[lab_name].get('loinc_code')
+        return self._specs[lab_name].get("loinc_code")

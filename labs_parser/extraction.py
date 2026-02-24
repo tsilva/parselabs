@@ -1,14 +1,14 @@
 """Lab result extraction from images using vision models."""
 
-import json
-import re
 import base64
+import json
 import logging
-from pathlib import Path
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
+from openai import APIError, OpenAI
 from pydantic import BaseModel, Field, field_validator
-from openai import OpenAI, APIError
 
 from labs_parser.utils import parse_llm_json_response
 
@@ -44,7 +44,8 @@ class LabResult(BaseModel):
         "DO NOT include values or test names. Examples: 'mg/dL', '%', 'U/L'",
     )
     reference_range: str | None = Field(
-        default=None, description="Complete reference range text EXACTLY as shown."
+        default=None,
+        description="Complete reference range text EXACTLY as shown.",
     )
     reference_notes: str | None = Field(
         default=None,
@@ -65,21 +66,25 @@ class LabResult(BaseModel):
         "Examples: '< 40' → 40, '150 - 400' → 400, '26.5-32.6' → 32.6",
     )
     is_abnormal: bool | None = Field(
-        default=None, description="Whether result is marked/flagged as abnormal in PDF"
+        default=None,
+        description="Whether result is marked/flagged as abnormal in PDF",
     )
     comments: str | None = Field(
         default=None,
         description="Additional notes or remarks about the test (NOT the test result itself). Only use for extra information like methodology notes or special conditions.",
     )
     source_text: str | None = Field(
-        default="", description="Exact row or section from PDF containing this result"
+        default="",
+        description="Exact row or section from PDF containing this result",
     )
 
     # Internal fields (added by pipeline, not by LLM)
     page_number: int | None = Field(
         default=None, ge=1, description="Page number in PDF"
     )
-    source_file: str | None = Field(default=None, description="Source file identifier")
+    source_file: str | None = Field(
+        default=None, description="Source file identifier"
+    )
     lab_name_standardized: str | None = Field(
         default=None, description="Standardized lab name"
     )
@@ -97,13 +102,15 @@ class LabResult(BaseModel):
         description="Whether this result needs human review (auto-flagged)",
     )
     review_reason: str | None = Field(
-        default=None, description="Reason why review is needed (auto-generated)"
+        default=None,
+        description="Reason why review is needed (auto-generated)",
     )
     review_confidence: float | None = Field(
         default=1.0, description="Confidence score 0-1 (auto-generated)"
     )
     review_status: str | None = Field(
-        default=None, description="Human review status: 'accepted', 'rejected', or null"
+        default=None,
+        description="Human review status: 'accepted', 'rejected', or null",
     )
     review_completed_at: str | None = Field(
         default=None, description="ISO timestamp when review was completed"
@@ -117,7 +124,11 @@ class LabResult(BaseModel):
             return v
         if isinstance(v, (int, float)):
             # Format without unnecessary decimal places for integers
-            return str(int(v)) if isinstance(v, float) and v.is_integer() else str(v)
+            return (
+                str(int(v))
+                if isinstance(v, float) and v.is_integer()
+                else str(v)
+            )
         return v
 
     @field_validator("lab_name_raw", mode="before")
@@ -178,7 +189,9 @@ class HealthLabReport(BaseModel):
         default_factory=list,
         description="List of all lab test results extracted from this page/document",
     )
-    source_file: str | None = Field(default=None, description="Source PDF filename")
+    source_file: str | None = Field(
+        default=None, description="Source PDF filename"
+    )
 
     @staticmethod
     def _clear_empty_strings(model: BaseModel):
@@ -237,7 +250,8 @@ class LabResultExtraction(BaseModel):
         "Use '$UNKNOWN$' if no match.",
     )
     reference_range: str | None = Field(
-        default=None, description="Complete reference range text EXACTLY as shown."
+        default=None,
+        description="Complete reference range text EXACTLY as shown.",
     )
     reference_notes: str | None = Field(
         default=None,
@@ -252,14 +266,16 @@ class LabResultExtraction(BaseModel):
         description="Maximum reference value as a PLAIN NUMBER ONLY. Parse from reference_range.",
     )
     is_abnormal: bool | None = Field(
-        default=None, description="Whether result is marked/flagged as abnormal in PDF"
+        default=None,
+        description="Whether result is marked/flagged as abnormal in PDF",
     )
     comments: str | None = Field(
         default=None,
         description="Additional notes or remarks about the test (NOT the test result itself).",
     )
     source_text: str | None = Field(
-        default="", description="Exact row or section from PDF containing this result"
+        default="",
+        description="Exact row or section from PDF containing this result",
     )
 
 
@@ -289,7 +305,9 @@ class HealthLabReportExtraction(BaseModel):
         default_factory=list,
         description="List of all lab test results extracted from this page/document",
     )
-    source_file: str | None = Field(default=None, description="Source PDF filename")
+    source_file: str | None = Field(
+        default=None, description="Source PDF filename"
+    )
 
 
 # Tool definition for function calling — uses LLM-facing schema to reduce token usage
@@ -305,7 +323,9 @@ TOOLS = [
 ]
 
 
-def _build_standardized_names_section(standardized_names: list[str], lab_specs_data: dict) -> str:
+def _build_standardized_names_section(
+    standardized_names: list[str], lab_specs_data: dict
+) -> str:
     """Build the standardized names reference section for the extraction prompt.
 
     Args:
@@ -315,7 +335,13 @@ def _build_standardized_names_section(standardized_names: list[str], lab_specs_d
     Returns:
         Formatted string to append to the system prompt
     """
-    sections: dict[str, list[str]] = {"blood": [], "urine": [], "feces": [], "saliva": [], "other": []}
+    sections: dict[str, list[str]] = {
+        "blood": [],
+        "urine": [],
+        "feces": [],
+        "saliva": [],
+        "other": [],
+    }
 
     for name in standardized_names:
         spec = lab_specs_data.get(name, {})
@@ -339,7 +365,9 @@ def _build_standardized_names_section(standardized_names: list[str], lab_specs_d
 
 _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 EXTRACTION_SYSTEM_PROMPT = (
-    (_PROMPTS_DIR / "extraction_system.txt").read_text(encoding="utf-8").strip()
+    (_PROMPTS_DIR / "extraction_system.txt")
+    .read_text(encoding="utf-8")
+    .strip()
 )
 EXTRACTION_USER_PROMPT = (
     (_PROMPTS_DIR / "extraction_user.txt").read_text(encoding="utf-8").strip()
@@ -384,7 +412,10 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
         for i in range(n):
             effective_kwargs = kwargs.copy()
             # Use fixed temperature if function accepts it and not already set
-            if "temperature" in fn.__code__.co_varnames and "temperature" not in kwargs:
+            if (
+                "temperature" in fn.__code__.co_varnames
+                and "temperature" not in kwargs
+            ):
                 effective_kwargs["temperature"] = SELF_CONSISTENCY_TEMPERATURE
             futures.append(executor.submit(fn, *args, **effective_kwargs))
 
@@ -392,7 +423,9 @@ def self_consistency(fn, model_id, n, *args, **kwargs):
             try:
                 results.append(future.result())
             except Exception as e:
-                logger.error(f"Error during self-consistency task execution: {e}")
+                logger.error(
+                    f"Error during self-consistency task execution: {e}"
+                )
                 for f_cancel in futures:
                     if not f_cancel.done():
                         f_cancel.cancel()
@@ -414,7 +447,9 @@ def vote_on_best_result(results: list, model_id: str, fn_name: str):
     import os
 
     client = OpenAI(
-        base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+        base_url=os.getenv(
+            "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
+        ),
         api_key=os.getenv("OPENROUTER_API_KEY"),
     )
 
@@ -542,12 +577,16 @@ def extract_labs_from_page_image(
                 },
             )
         except APIError as e:
-            logger.error(f"API Error during lab extraction from {image_path.name}: {e}")
-            raise RuntimeError(f"Lab extraction failed for {image_path.name}: {e}")
+            logger.error(
+                f"API Error during lab extraction from {image_path.name}: {e}"
+            )
+            raise RuntimeError(
+                f"Lab extraction failed for {image_path.name}: {e}"
+            )
 
         # Check for valid response structure
         if not completion or not completion.choices:
-            logger.error(f"Invalid completion response structure")
+            logger.error("Invalid completion response structure")
             return _empty_report()
 
         if not completion.choices[0].message.tool_calls:
@@ -556,7 +595,9 @@ def extract_labs_from_page_image(
             )
             return _empty_report()
 
-        tool_args_raw = completion.choices[0].message.tool_calls[0].function.arguments
+        tool_args_raw = (
+            completion.choices[0].message.tool_calls[0].function.arguments
+        )
         try:
             tool_result_dict = json.loads(tool_args_raw)
         except json.JSONDecodeError as e:
@@ -564,7 +605,9 @@ def extract_labs_from_page_image(
             return _empty_report()
 
         # Pre-process: Fix common LLM issues before Pydantic validation (using LLM for soft parsing)
-        tool_result_dict = _fix_lab_results_format(tool_result_dict, client, model_id)
+        tool_result_dict = _fix_lab_results_format(
+            tool_result_dict, client, model_id
+        )
 
         # Validate with Pydantic
         try:
@@ -577,7 +620,9 @@ def extract_labs_from_page_image(
                     1 for r in report_model.lab_results if r.value_raw is None
                 )
                 total_count = len(report_model.lab_results)
-                null_pct = (null_count / total_count * 100) if total_count > 0 else 0
+                null_pct = (
+                    (null_count / total_count * 100) if total_count > 0 else 0
+                )
 
                 if null_pct > 50:
                     logger.warning(
@@ -640,7 +685,9 @@ def extract_labs_from_page_image(
     )
     result = _empty_report()
     result["_extraction_failed"] = True
-    result["_failure_reason"] = f"Malformed output after {max_retries + 1} attempts"
+    result["_failure_reason"] = (
+        f"Malformed output after {max_retries + 1} attempts"
+    )
     result["_retry_count"] = max_retries + 1
     return result
 
@@ -728,14 +775,18 @@ Also set page_has_lab_data:
 
     # Check for valid response structure
     if not completion or not completion.choices:
-        logger.error("Invalid completion response structure for text extraction")
+        logger.error(
+            "Invalid completion response structure for text extraction"
+        )
         return HealthLabReport(lab_results=[]).model_dump(mode="json")
 
     if not completion.choices[0].message.tool_calls:
         logger.warning("No tool call by model for text-based lab extraction")
         return HealthLabReport(lab_results=[]).model_dump(mode="json")
 
-    tool_args_raw = completion.choices[0].message.tool_calls[0].function.arguments
+    tool_args_raw = (
+        completion.choices[0].message.tool_calls[0].function.arguments
+    )
     try:
         tool_result_dict = json.loads(tool_args_raw)
     except json.JSONDecodeError as e:
@@ -743,7 +794,9 @@ Also set page_has_lab_data:
         return HealthLabReport(lab_results=[]).model_dump(mode="json")
 
     # Pre-process: Fix common LLM issues before Pydantic validation
-    tool_result_dict = _fix_lab_results_format(tool_result_dict, client, model_id)
+    tool_result_dict = _fix_lab_results_format(
+        tool_result_dict, client, model_id
+    )
 
     # Validate with Pydantic
     try:
@@ -756,7 +809,9 @@ Also set page_has_lab_data:
             )
         else:
             if report_model.page_has_lab_data is False:
-                logger.debug("Document confirmed to have no lab data (text extraction)")
+                logger.debug(
+                    "Document confirmed to have no lab data (text extraction)"
+                )
             else:
                 logger.warning("Text extraction returned 0 lab results")
 
@@ -805,10 +860,10 @@ def _normalize_date_format(date_str: str | None) -> str | None:
 # Known LabResult field names for detecting flattened key-value format
 _LAB_RESULT_FIELDS = {
     "lab_name_raw",
-    "lab_name",   # NEW: standardized name from LLM
+    "lab_name",  # NEW: standardized name from LLM
     "value_raw",
     "lab_unit_raw",
-    "unit",       # NEW: standardized unit from LLM
+    "unit",  # NEW: standardized unit from LLM
     "reference_range",
     "reference_min_raw",
     "reference_max_raw",
@@ -837,7 +892,9 @@ def _parse_labresult_repr(s: str) -> dict | None:
         # Parse key=value pairs
         result = {}
         # Use regex to find key=value patterns, handling quoted strings and None values
-        pattern = r"(\w+)=(?:'([^']*)'|\"([^\"]*)\"|(\d+\.?\d*)|None|(True|False))"
+        pattern = (
+            r"(\w+)=(?:'([^']*)'|\"([^\"]*)\"|(\d+\.?\d*)|None|(True|False))"
+        )
         for match in re.finditer(pattern, content):
             key = match.group(1)
             # Get the matched value from whichever group matched
@@ -891,7 +948,9 @@ def _reassemble_flattened_key_values(items: list) -> list:
     if kv_matches < len(items[: min(10, len(items))]) * 0.5:
         return items
 
-    logger.info(f"Detected flattened key-value format, reassembling {len(items)} items")
+    logger.info(
+        f"Detected flattened key-value format, reassembling {len(items)} items"
+    )
 
     # Reassemble into objects - lab_name_raw starts a new record
     reassembled = []
@@ -972,7 +1031,9 @@ def _clean_numeric_field(value) -> float | None:
                 value = value.replace(",", ".")
             return float(value)
         except ValueError:
-            logger.warning(f"Could not parse numeric field value: {value[:50]}")
+            logger.warning(
+                f"Could not parse numeric field value: {value[:50]}"
+            )
             return None
     return None
 
@@ -1000,7 +1061,9 @@ def _fix_lab_results_format(
         if isinstance(item, dict):
             if "lab_name" in item:
                 std_name = item.pop("lab_name")
-                item["lab_name_standardized"] = std_name if std_name else _UNKNOWN_VALUE
+                item["lab_name_standardized"] = (
+                    std_name if std_name else _UNKNOWN_VALUE
+                )
             if "unit" in item:
                 std_unit = item.pop("unit")
                 # Map $UNKNOWN$ to None so unit inference in normalization can handle it
@@ -1061,7 +1124,9 @@ def _fix_lab_results_format(
         logger.info(
             f"Found {len(string_results)} lab results as strings, using LLM to parse them"
         )
-        parsed = _parse_string_results_with_llm(string_results, client, model_id)
+        parsed = _parse_string_results_with_llm(
+            string_results, client, model_id
+        )
 
         # Insert parsed results back
         skipped_count = 0

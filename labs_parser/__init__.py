@@ -1,33 +1,36 @@
 """Labs Parser - Medical lab report extraction and processing."""
 
 from labs_parser.config import (
-    ExtractionConfig,
-    ProfileConfig,
-    LabSpecsConfig,
-    Demographics,
     UNKNOWN_VALUE,
+    Demographics,
+    ExtractionConfig,
+    LabSpecsConfig,
+    ProfileConfig,
 )
 from labs_parser.extraction import (
-    LabResult,
     HealthLabReport,
+    LabResult,
     extract_labs_from_page_image,
     extract_labs_from_text,
     self_consistency,
 )
-from labs_parser.validation import ValueValidator
-from labs_parser.standardization import standardize_lab_names, standardize_lab_units
 from labs_parser.normalization import (
+    apply_dtype_conversions,
     apply_normalizations,
     deduplicate_results,
-    apply_dtype_conversions,
+)
+from labs_parser.standardization import (
+    standardize_lab_names,
+    standardize_lab_units,
 )
 from labs_parser.utils import (
+    ensure_columns,
     load_dotenv_with_env,
+    parse_llm_json_response,
     preprocess_page_image,
     setup_logging,
-    ensure_columns,
-    parse_llm_json_response,
 )
+from labs_parser.validation import ValueValidator
 
 __version__ = "0.1.0"
 
