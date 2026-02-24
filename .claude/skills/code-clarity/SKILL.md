@@ -6,7 +6,50 @@
 
 2. **Helpers MUST NOT silently catch errors.** Let exceptions propagate to orchestrator.
 
-3. **Every code block needs inline comments** explaining purpose/intent.
+3. **Every code block needs inline comments** explaining purpose/intent. 
+   - Comments must have a blank line before them (don't stack with code)
+   - Comment the block before it runs, not inline with the code:
+   ```python
+   # CORRECT - Comment has blank line before it, explains the block
+   
+   # Build and validate configuration from user args
+   config, errors = build_config(args)
+   
+   # Guard: Return errors if validation failed
+   if errors:
+       return None, errors
+   
+   # CORRECT - Multiple guards with blank lines separating blocks
+   
+   # Skip non-directory entries (files, symlinks, etc.)
+   if not pdf_dir.is_dir():
+       continue
+   
+   # Skip hidden directories (e.g., .git, .DS_Store)
+   if pdf_dir.name.startswith("."):
+       continue
+   
+   # Only check directories that match the input file pattern
+   if pdf_dir.name not in matching_stems:
+       continue
+   
+   # INCORRECT - Comment stacked directly after previous code block without blank line
+   config, errors = build_config(args)
+   # Guard: Return errors if validation failed
+   if errors:
+       return None, errors
+   
+   # INCORRECT - Multiple consecutive guards without blank lines between
+   # Skip non-directory entries (files, symlinks, etc.)
+   if not pdf_dir.is_dir():
+       continue
+   # Skip hidden directories (e.g., .git, .DS_Store)
+   if pdf_dir.name.startswith("."):
+       continue
+   # Only check directories that match the input file pattern
+   if pdf_dir.name not in matching_stems:
+       continue
+   ```
 
 4. **All if/elif/else branches must have comments** explaining the condition and why that path is taken:
 ```python
@@ -68,7 +111,11 @@ if not pdf_dir.is_dir():
 
 **NO EXCEPTIONS:** Even "obvious" conditions like `if errors:` or `if not data:` MUST have comments.
 
-6. **Extract helpers** for logic >5 lines or complex conditionals. Name by intent: `_extract_via_vision()`, not `_convert_pdf()`.
+6. **Extract helpers** for logic >5 lines or complex conditionals. 
+   - Name by intent: `_extract_via_vision()`, not `_convert_pdf()`
+   - Use verb phrases describing what the function accomplishes
+   - For functions returning tuples, document what each element represents in the docstring
+   - Keep helpers focused on a single responsibility
 
 7. **Use guard clauses** for early returns:
 ```python
