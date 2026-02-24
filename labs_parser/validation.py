@@ -277,6 +277,39 @@ class ValueValidator:
     # 2. Inter-Lab Relationship Checks
     # =========================================================================
 
+    def _evaluate_single_relationship(self, rel: dict, lab_values: dict) -> tuple[float | None, float]:
+        """Evaluate one relationship definition against lab values for a single date.
+
+        Returns:
+            (pct_diff, tolerance_pct) if relationship can be evaluated, (None, 0) otherwise
+        """
+        target = rel.get("target")
+        formula = rel.get("formula")
+        tolerance_pct = rel.get("tolerance_percent", 15)
+
+        # Missing definition
+        if not target or not formula:
+            return None, 0
+
+        # Target value not available for this date
+        target_value = lab_values.get(target)
+        if target_value is None:
+            return None, 0
+
+        # Calculate expected value from formula
+        calculated = self._evaluate_formula(formula, lab_values)
+        if calculated is None:
+            return None, 0
+
+        # Compute percentage difference
+        if target_value != 0:
+            pct_diff = abs(calculated - target_value) / abs(target_value) * 100
+        else:
+            # Use absolute diff for zero target
+            pct_diff = abs(calculated - target_value) * 100
+
+        return pct_diff, tolerance_pct
+
     def _check_inter_lab_relationships(self, df: pd.DataFrame) -> pd.DataFrame:
         """Validate mathematical relationships between labs.
 
@@ -306,40 +339,27 @@ class ValueValidator:
                 if pd.notna(lab_name) and pd.notna(value):
                     lab_values[lab_name] = value
 
-            # Check each relationship
+            # Check each relationship against this date's values
             for rel in relationships:
-                target = rel.get("target")
-                formula = rel.get("formula")
-                tolerance_pct = rel.get("tolerance_percent", 15)
-
-                if not target or not formula:
-                    continue
-
-                # Get target value
-                target_value = lab_values.get(target)
-                if target_value is None:
-                    continue
-
-                # Calculate expected value from formula
                 try:
-                    calculated = self._evaluate_formula(formula, lab_values)
-                    if calculated is None:
-                        continue
-
-                    # Check if within tolerance
-                    if target_value != 0:
-                        pct_diff = abs(calculated - target_value) / abs(target_value) * 100
-                    else:
-                        pct_diff = abs(calculated - target_value) * 100  # Use absolute diff for zero
-
-                    if pct_diff > tolerance_pct:
-                        # Flag the target row
-                        mask = (df[self._date_col] == date_val) & (df[self._lab_name_col] == target)
-                        df = self._flag_row(df, mask, "RELATIONSHIP_MISMATCH")
-                        logger.debug(f"Relationship mismatch for {target} on {date_val}: expected ~{calculated:.1f}, got {target_value:.1f} ({pct_diff:.1f}% diff)")
-
+                    pct_diff, tolerance_pct = self._evaluate_single_relationship(rel, lab_values)
                 except Exception as e:
                     logger.debug(f"Error evaluating relationship {rel.get('name')}: {e}")
+                    continue
+
+                # Relationship couldn't be evaluated (missing components)
+                if pct_diff is None:
+                    continue
+
+                # Within tolerance — no flag needed
+                if pct_diff <= tolerance_pct:
+                    continue
+
+                # Exceeds tolerance — flag the target row
+                target = rel.get("target")
+                mask = (df[self._date_col] == date_val) & (df[self._lab_name_col] == target)
+                df = self._flag_row(df, mask, "RELATIONSHIP_MISMATCH")
+                logger.debug(f"Relationship mismatch for {target} on {date_val}: {pct_diff:.1f}% diff (tolerance: {tolerance_pct}%)")
 
         return df
 
@@ -469,21 +489,28 @@ class ValueValidator:
                 curr_date = group_sorted.loc[idx, self._date_col]
                 curr_value = group_sorted.loc[idx, self._value_col]
 
+                # Skip rows with missing data
                 if pd.isna(curr_date) or pd.isna(curr_value):
                     continue
 
-                if prev_date is not None and prev_value is not None:
-                    # Calculate days between tests
-                    days_diff = (curr_date - prev_date).days
-                    if days_diff > 0:
-                        # Calculate actual daily change rate
-                        value_change = abs(curr_value - prev_value)
-                        daily_rate = value_change / days_diff
+                # First valid row — nothing to compare against
+                if prev_date is None or prev_value is None:
+                    prev_date = curr_date
+                    prev_value = curr_value
+                    continue
 
-                        # Check if exceeds max allowed daily change
-                        if daily_rate > max_daily_change:
-                            temporal_anomaly_indices.append(idx)
-                            logger.debug(f"Temporal anomaly for {lab_name}: {prev_value:.1f} -> {curr_value:.1f} over {days_diff} days (rate: {daily_rate:.2f}/day, max: {max_daily_change})")
+                # Same-day tests — skip temporal comparison
+                days_diff = (curr_date - prev_date).days
+                if days_diff <= 0:
+                    prev_date = curr_date
+                    prev_value = curr_value
+                    continue
+
+                # Check if daily change rate exceeds maximum
+                daily_rate = abs(curr_value - prev_value) / days_diff
+                if daily_rate > max_daily_change:
+                    temporal_anomaly_indices.append(idx)
+                    logger.debug(f"Temporal anomaly for {lab_name}: {prev_value:.1f} -> {curr_value:.1f} over {days_diff} days (rate: {daily_rate:.2f}/day, max: {max_daily_change})")
 
                 prev_date = curr_date
                 prev_value = curr_value
@@ -592,10 +619,13 @@ class ValueValidator:
             if pd.notna(value) and pd.notna(ref_min) and pd.notna(ref_max):
                 range_size = ref_max - ref_min
                 if range_size > 0:
+                    # Value below reference minimum
                     if value < ref_min:
                         deviation = ref_min - value
+                    # Value above reference maximum
                     elif value > ref_max:
                         deviation = value - ref_max
+                    # Value within reference range
                     else:
                         deviation = 0
 

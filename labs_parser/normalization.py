@@ -79,6 +79,42 @@ def extract_comparison_value(value) -> tuple[str, bool, bool]:
     return s, False, False
 
 
+def _infer_unit_by_plausibility(
+    lab_name_standardized: str,
+    value: float,
+    lab_specs: LabSpecsConfig,
+    percentage_lab_name: str,
+) -> str | None:
+    """Check if value is implausible for primary unit but fits percentage range.
+
+    Returns '%' if value clearly belongs to the percentage variant, None otherwise.
+    """
+    expected_default = lab_specs._specs.get(lab_name_standardized, {}).get("ranges", {}).get("default", [])
+    if len(expected_default) < 2:
+        return None
+
+    expected_min, expected_max = expected_default[0], expected_default[1]
+
+    # Value is plausible for primary unit
+    if not expected_max or value <= expected_max * 5:
+        return None
+
+    # Check if value fits percentage range instead
+    pct_default = lab_specs._specs.get(percentage_lab_name, {}).get("ranges", {}).get("default", [])
+    if len(pct_default) < 2:
+        return None
+
+    pct_min, pct_max = pct_default[0], pct_default[1]
+
+    # Value doesn't fit percentage range either
+    if not pct_min or not pct_max or not ((pct_min * 0.5) <= value <= (pct_max * 2)):
+        return None
+
+    primary_unit = lab_specs.get_primary_unit(lab_name_standardized)
+    logger.debug(f"[unit_inference] Value {value} implausible for {primary_unit} (expected {expected_min}-{expected_max}), assigning '%' instead")
+    return "%"
+
+
 def infer_missing_unit(
     lab_name_standardized: str,
     value: float,
@@ -141,32 +177,11 @@ def infer_missing_unit(
         logger.debug(f"[unit_inference] Inferring '%' for {lab_name_standardized}: value={value}, ref_range=({ref_min}, {ref_max})")
         return "%"
 
-    # Strategy 3b: Biological plausibility check
-    # Before using primary unit, verify value is plausible for that unit
-    # This catches cases where ref ranges are null but value is clearly a percentage
+    # Strategy 3b: Value implausible for primary unit but fits percentage range
     if lab_specs.exists and has_percentage_variant and value is not None:
-        primary_unit = lab_specs.get_primary_unit(lab_name_standardized)
-        expected_ranges = lab_specs._specs.get(lab_name_standardized, {}).get("ranges", {})
-        expected_default = expected_ranges.get("default", [])
-
-        if len(expected_default) >= 2:
-            expected_min, expected_max = (
-                expected_default[0],
-                expected_default[1],
-            )
-
-            # Check if value is impossibly high for primary unit (>5x max)
-            if expected_max and value > expected_max * 5:
-                # Check if value fits percentage range instead
-                pct_ranges = lab_specs._specs.get(percentage_lab_name, {}).get("ranges", {})
-                pct_default = pct_ranges.get("default", [])
-
-                if len(pct_default) >= 2:
-                    pct_min, pct_max = pct_default[0], pct_default[1]
-                    # Allow some margin (0.5x to 2x) for percentage range
-                    if pct_min and pct_max and (pct_min * 0.5) <= value <= (pct_max * 2):
-                        logger.debug(f"[unit_inference] Value {value} implausible for {primary_unit} (expected {expected_min}-{expected_max}), assigning '%' instead")
-                        return "%"
+        inferred = _infer_unit_by_plausibility(lab_name_standardized, value, lab_specs, percentage_lab_name)
+        if inferred:
+            return inferred
 
     # Strategy 4: Fallback to lab specs primary unit
     if lab_specs.exists:
@@ -306,6 +321,39 @@ def validate_reference_range(
     return ref_min, ref_max
 
 
+def _try_match_cross_variant_range(
+    lab_name: str,
+    ref_min: float,
+    ref_max: float,
+    variant_lab: str,
+    lab_specs: LabSpecsConfig,
+) -> bool:
+    """Check if PDF reference range matches a cross-variant lab (% vs absolute).
+
+    Returns True and logs if the range matches the variant, False otherwise.
+    """
+    if variant_lab not in lab_specs._specs:
+        return False
+
+    variant_ranges = lab_specs._specs[variant_lab].get("ranges", {}).get("default", [])
+    if len(variant_ranges) < 2:
+        return False
+
+    variant_min, variant_max = variant_ranges[0], variant_ranges[1]
+    if not (variant_min > 0 and variant_max > 0):
+        return False
+
+    # Check if ratios are close to 1 (0.3-3.0 tolerance for lab-to-lab variations)
+    ratio_min = abs(ref_min / variant_min) if variant_min != 0 else 0
+    ratio_max = abs(ref_max / variant_max) if variant_max != 0 else 0
+
+    if not (0.3 < ratio_min < 3.0 and 0.3 < ratio_max < 3.0):
+        return False
+
+    logger.info(f"[range_validation] Detected cross-variant range for {lab_name}: PDF=({ref_min:.2f}, {ref_max:.2f}) matches {variant_lab} range ({variant_min}, {variant_max}) - nullifying (cannot convert between variants)")
+    return True
+
+
 def _try_convert_mismatched_range(
     lab_name_standardized: str,
     ref_min: float,
@@ -364,56 +412,17 @@ def _try_convert_mismatched_range(
             )
             return converted_min, converted_max, False
 
-    # Strategy 2: Check for percentage/absolute value mix-up (protein electrophoresis)
-    # If lab is "Blood - X" (g/dL) and there's "Blood - X (%)", check if range fits %
+    # Strategy 2: Check if range belongs to percentage variant
     if not lab_name_standardized.endswith("(%)"):
         pct_lab_name = f"{lab_name_standardized} (%)"
-        if pct_lab_name in lab_specs._specs:
-            pct_config = lab_specs._specs[pct_lab_name]
-            pct_ranges = pct_config.get("ranges", {}).get("default", [])
-            if len(pct_ranges) >= 2:
-                pct_expected_min, pct_expected_max = (
-                    pct_ranges[0],
-                    pct_ranges[1],
-                )
-                # Check if PDF range matches percentage expected range
-                if pct_expected_min > 0 and pct_expected_max > 0:
-                    pct_ratio_min = abs(ref_min / pct_expected_min) if pct_expected_min != 0 else 0
-                    pct_ratio_max = abs(ref_max / pct_expected_max) if pct_expected_max != 0 else 0
-                    # If ratios are close to 1, the range is from the percentage variant
-                    # Use 0.3-3.0 tolerance to handle slight lab-to-lab variations
-                    if 0.3 < pct_ratio_min < 3.0 and 0.3 < pct_ratio_max < 3.0:
-                        logger.info(
-                            f"[range_validation] Detected percentage range for {lab_name_standardized}: "
-                            f"PDF=({ref_min:.2f}, {ref_max:.2f}) matches {pct_lab_name} range "
-                            f"({pct_expected_min}, {pct_expected_max}) - nullifying (cannot convert % to g/dL)"
-                        )
-                        return None, None, True
+        if _try_match_cross_variant_range(lab_name_standardized, ref_min, ref_max, pct_lab_name, lab_specs):
+            return None, None, True
 
-    # Strategy 3: Check reverse - if lab is "Blood - X (%)" and range fits g/dL variant
+    # Strategy 3: Check if range belongs to absolute variant
     if lab_name_standardized.endswith("(%)"):
-        base_lab_name = lab_name_standardized[:-4].strip()  # Remove " (%)"
-        if base_lab_name in lab_specs._specs:
-            base_config = lab_specs._specs[base_lab_name]
-            base_ranges = base_config.get("ranges", {}).get("default", [])
-            if len(base_ranges) >= 2:
-                base_expected_min, base_expected_max = (
-                    base_ranges[0],
-                    base_ranges[1],
-                )
-                # Check if PDF range matches absolute expected range
-                if base_expected_min > 0 and base_expected_max > 0:
-                    base_ratio_min = abs(ref_min / base_expected_min) if base_expected_min != 0 else 0
-                    base_ratio_max = abs(ref_max / base_expected_max) if base_expected_max != 0 else 0
-                    # If ratios are close to 1, the range is from the absolute variant
-                    # Use 0.3-3.0 tolerance to handle slight lab-to-lab variations
-                    if 0.3 < base_ratio_min < 3.0 and 0.3 < base_ratio_max < 3.0:
-                        logger.info(
-                            f"[range_validation] Detected g/dL range for {lab_name_standardized}: "
-                            f"PDF=({ref_min:.2f}, {ref_max:.2f}) matches {base_lab_name} range "
-                            f"({base_expected_min}, {base_expected_max}) - nullifying (cannot convert g/dL to %)"
-                        )
-                        return None, None, True
+        base_lab_name = lab_name_standardized[:-4].strip()
+        if _try_match_cross_variant_range(lab_name_standardized, ref_min, ref_max, base_lab_name, lab_specs):
+            return None, None, True
 
     return None, None, False
 
@@ -560,6 +569,41 @@ def correct_percentage_lab_names(results: list[dict], lab_specs: LabSpecsConfig)
     return results
 
 
+def _correct_percentage_names_in_df(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+    """Correct lab names in a DataFrame based on unit: add (%) when unit is %, remove (%) when not.
+
+    DataFrame equivalent of correct_percentage_lab_names (which operates on list[dict]).
+    """
+    corrected_to_pct = 0
+    corrected_to_abs = 0
+
+    for idx in df.index:
+        std_name = df.at[idx, "lab_name_standardized"]
+        std_unit = df.at[idx, "lab_unit_standardized"]
+
+        if not std_name or pd.isna(std_name):
+            continue
+
+        # Unit is % but name doesn't have (%) → add it
+        if std_unit == "%" and not std_name.endswith("(%)"):
+            pct_variant = lab_specs.get_percentage_variant(std_name)
+            if pct_variant:
+                df.at[idx, "lab_name_standardized"] = pct_variant
+                corrected_to_pct += 1
+
+        # Unit is NOT % but name has (%) → remove it
+        elif std_unit != "%" and not pd.isna(std_unit) and std_name.endswith("(%)"):
+            abs_variant = lab_specs.get_non_percentage_variant(std_name)
+            if abs_variant:
+                df.at[idx, "lab_name_standardized"] = abs_variant
+                corrected_to_abs += 1
+
+    if corrected_to_pct > 0 or corrected_to_abs > 0:
+        logger.info(f"[normalization] Corrected {corrected_to_pct} to percentage, {corrected_to_abs} to absolute lab names")
+
+    return df
+
+
 def apply_normalizations(
     df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
@@ -594,25 +638,7 @@ def apply_normalizations(
     # Correct percentage lab names based on unit
     # unit=% → name must end with (%), unit≠% → strip (%) from name
     if lab_specs.exists and "lab_name_standardized" in df.columns and "lab_unit_standardized" in df.columns:
-        corrected_to_pct = 0
-        corrected_to_abs = 0
-        for idx in df.index:
-            std_name = df.at[idx, "lab_name_standardized"]
-            std_unit = df.at[idx, "lab_unit_standardized"]
-            if not std_name or pd.isna(std_name):
-                continue
-            if std_unit == "%" and not std_name.endswith("(%)"):
-                pct_variant = lab_specs.get_percentage_variant(std_name)
-                if pct_variant:
-                    df.at[idx, "lab_name_standardized"] = pct_variant
-                    corrected_to_pct += 1
-            elif std_unit != "%" and not pd.isna(std_unit) and std_name.endswith("(%)"):
-                abs_variant = lab_specs.get_non_percentage_variant(std_name)
-                if abs_variant:
-                    df.at[idx, "lab_name_standardized"] = abs_variant
-                    corrected_to_abs += 1
-        if corrected_to_pct > 0 or corrected_to_abs > 0:
-            logger.info(f"[normalization] Corrected {corrected_to_pct} to percentage, {corrected_to_abs} to absolute lab names")
+        df = _correct_percentage_names_in_df(df, lab_specs)
 
     # Fix misassigned percentage units BEFORE other normalizations
     # This catches cases like Albumin 61.5 "g/dL" that should be 61.5 "%"
@@ -1035,7 +1061,7 @@ def apply_dtype_conversions(df: pd.DataFrame, dtype_map: dict) -> pd.DataFrame:
                 df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
             elif "float" in target_dtype:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             logger.warning(f"Dtype conversion failed for {col} to {target_dtype}: {e}")
 
     return df

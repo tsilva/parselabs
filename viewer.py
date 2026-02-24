@@ -253,6 +253,127 @@ def _is_out_of_range(value: float, range_min, range_max) -> bool:
     return (pd.notna(range_min) and value < range_min) or (pd.notna(range_max) and value > range_max)
 
 
+def _load_json_cached(json_path: Path, cache: dict) -> dict | None:
+    """Load and cache a JSON file, returning None on missing/invalid files."""
+    json_path_str = str(json_path)
+
+    if json_path_str in cache:
+        return cache[json_path_str]
+
+    # File doesn't exist
+    if not json_path.exists():
+        cache[json_path_str] = None
+        return None
+
+    # Load and cache the JSON data
+    try:
+        cache[json_path_str] = json.loads(json_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse JSON from {json_path}: {e}")
+        cache[json_path_str] = None
+    except (IOError, OSError) as e:
+        logger.warning(f"Failed to read JSON file {json_path}: {e}")
+        cache[json_path_str] = None
+
+    return cache[json_path_str]
+
+
+def _sync_review_statuses(df: pd.DataFrame, output_path: Path) -> list:
+    """Read review_status from JSON files for each row, using a file cache."""
+    json_cache: dict = {}
+    review_statuses = []
+
+    for row in df.itertuples():
+        result_index = getattr(row, "result_index", None)
+
+        # Skip rows without a result_index
+        if result_index is None or pd.isna(result_index):
+            review_statuses.append(None)
+            continue
+
+        # Load the JSON file for this row
+        entry = {
+            "source_file": getattr(row, "source_file", ""),
+            "page_number": getattr(row, "page_number", None),
+        }
+        json_data = _load_json_cached(get_json_path(entry, output_path), json_cache)
+
+        # Extract review_status from the matching lab_result entry
+        if json_data and "lab_results" in json_data:
+            result_idx = int(result_index)
+            if result_idx < len(json_data["lab_results"]):
+                review_statuses.append(json_data["lab_results"][result_idx].get("review_status"))
+                continue
+
+        review_statuses.append(None)
+
+    return review_statuses
+
+
+def _format_reference_range(row) -> str:
+    """Format reference_min/reference_max into a display string."""
+    ref_min = row["reference_min"]
+    ref_max = row["reference_max"]
+
+    # Both missing — show boolean default or empty
+    if pd.isna(ref_min) and pd.isna(ref_max):
+        if row.get("unit") == "boolean":
+            return "0 - 1"
+        return ""
+
+    # One-sided ranges
+    if pd.isna(ref_min):
+        return f"< {ref_max}"
+    if pd.isna(ref_max):
+        return f"> {ref_min}"
+
+    return f"{ref_min} - {ref_max}"
+
+
+def _check_out_of_reference(row) -> bool | None:
+    """Check if value falls outside the PDF reference range."""
+    val = row["value"]
+
+    # Missing value — cannot evaluate
+    if pd.isna(val):
+        return None
+
+    ref_min = row["reference_min"]
+    ref_max = row["reference_max"]
+
+    # No reference range — check boolean special case
+    if pd.isna(ref_min) and pd.isna(ref_max):
+        if row.get("unit") == "boolean":
+            return val > 0
+        return None
+
+    return _is_out_of_range(val, ref_min, ref_max)
+
+
+def _get_lab_spec_range(lab_name: str, lab_specs: LabSpecsConfig, gender: str | None, age: int | None) -> pd.Series:
+    """Look up healthy range for a lab from lab_specs, adjusted for demographics."""
+    range_min, range_max = lab_specs.get_healthy_range_for_demographics(lab_name, gender=gender, age=age)
+    return pd.Series({"lab_specs_min": range_min, "lab_specs_max": range_max})
+
+
+def _check_out_of_healthy_range(row) -> bool | None:
+    """Check if value falls outside the lab_specs healthy range."""
+    val = row.get("value")
+
+    # Missing value — cannot evaluate
+    if pd.isna(val):
+        return None
+
+    spec_min = row.get("lab_specs_min")
+    spec_max = row.get("lab_specs_max")
+
+    # No healthy range defined
+    if pd.isna(spec_min) and pd.isna(spec_max):
+        return None
+
+    return _is_out_of_range(val, spec_min, spec_max)
+
+
 def load_data(output_path: Path) -> pd.DataFrame:
     """Load lab results from all.csv and sync review status from JSON files."""
     csv_path = output_path / "all.csv"
@@ -265,83 +386,16 @@ def load_data(output_path: Path) -> pd.DataFrame:
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
-    # Sync review status from JSON files (cache to avoid repeated reads)
-    json_cache = {}
-    review_statuses = []
+    # Sync review status from JSON source files
+    df["review_status"] = _sync_review_statuses(df, output_path)
 
-    for row in df.itertuples():
-        result_index = getattr(row, "result_index", None)
-        review_status = None
-
-        if result_index is not None and pd.notna(result_index):
-            # Build entry dict with only fields needed for get_json_path
-            entry = {
-                "source_file": getattr(row, "source_file", ""),
-                "page_number": getattr(row, "page_number", None),
-            }
-            json_path = get_json_path(entry, output_path)
-            json_path_str = str(json_path)
-
-            if json_path_str not in json_cache:
-                if json_path.exists():
-                    try:
-                        json_cache[json_path_str] = json.loads(json_path.read_text(encoding="utf-8"))
-                    except json.JSONDecodeError as e:
-                        # Log JSON parsing errors but cache None to avoid re-reading
-                        logger.warning(f"Failed to parse JSON from {json_path}: {e}")
-                        json_cache[json_path_str] = None
-                    except (IOError, OSError) as e:
-                        # Log file read errors but cache None to avoid re-reading
-                        logger.warning(f"Failed to read JSON file {json_path}: {e}")
-                        json_cache[json_path_str] = None
-                else:
-                    json_cache[json_path_str] = None
-
-            json_data = json_cache.get(json_path_str)
-            if json_data and "lab_results" in json_data:
-                result_idx = int(result_index)
-                if result_idx < len(json_data["lab_results"]):
-                    json_entry = json_data["lab_results"][result_idx]
-                    review_status = json_entry.get("review_status")
-
-        review_statuses.append(review_status)
-
-    df["review_status"] = review_statuses
-
-    # Compute reference_range from reference_min and reference_max
+    # Compute reference_range display string
     if "reference_min" in df.columns and "reference_max" in df.columns:
+        df["reference_range"] = df.apply(_format_reference_range, axis=1)
 
-        def format_range(row):
-            ref_min = row["reference_min"]
-            ref_max = row["reference_max"]
-            if pd.isna(ref_min) and pd.isna(ref_max):
-                if row.get("unit") == "boolean":
-                    return "0 - 1"
-                return ""
-            if pd.isna(ref_min):
-                return f"< {ref_max}"
-            if pd.isna(ref_max):
-                return f"> {ref_min}"
-            return f"{ref_min} - {ref_max}"
-
-        df["reference_range"] = df.apply(format_range, axis=1)
-
-    # Compute is_out_of_reference
+    # Compute is_out_of_reference (PDF reference range)
     if "value" in df.columns and "reference_min" in df.columns and "reference_max" in df.columns:
-
-        def check_out_of_range(row):
-            val = row["value"]
-            ref_min = row["reference_min"]
-            ref_max = row["reference_max"]
-            if pd.isna(val):
-                return None
-            if pd.isna(ref_min) and pd.isna(ref_max):
-                if row.get("unit") == "boolean":
-                    return val > 0
-                return None
-            return _is_out_of_range(val, ref_min, ref_max)
-
-        df["is_out_of_reference"] = df.apply(check_out_of_range, axis=1)
+        df["is_out_of_reference"] = df.apply(_check_out_of_reference, axis=1)
 
     # Compute lab_specs healthy ranges based on demographics
     lab_specs = get_lab_specs()
@@ -350,29 +404,13 @@ def load_data(output_path: Path) -> pd.DataFrame:
     age = demographics.age if demographics else None
 
     if "lab_name" in df.columns and lab_specs.exists:
-
-        def get_lab_spec_range(lab_name):
-            range_min, range_max = lab_specs.get_healthy_range_for_demographics(lab_name, gender=gender, age=age)
-            return pd.Series({"lab_specs_min": range_min, "lab_specs_max": range_max})
-
-        range_df = df["lab_name"].apply(get_lab_spec_range)
+        range_df = df["lab_name"].apply(lambda name: _get_lab_spec_range(name, lab_specs, gender, age))
         df["lab_specs_min"] = range_df["lab_specs_min"]
         df["lab_specs_max"] = range_df["lab_specs_max"]
 
-    # Compute is_out_of_healthy_range (based on lab_specs healthy ranges)
+    # Compute is_out_of_healthy_range (lab_specs healthy range)
     if "value" in df.columns and "lab_specs_min" in df.columns and "lab_specs_max" in df.columns:
-
-        def check_out_of_healthy_range(row):
-            val = row.get("value")
-            spec_min = row.get("lab_specs_min")
-            spec_max = row.get("lab_specs_max")
-            if pd.isna(val):
-                return None
-            if pd.isna(spec_min) and pd.isna(spec_max):
-                return None  # No healthy range defined
-            return _is_out_of_range(val, spec_min, spec_max)
-
-        df["is_out_of_healthy_range"] = df.apply(check_out_of_healthy_range, axis=1)
+        df["is_out_of_healthy_range"] = df.apply(_check_out_of_healthy_range, axis=1)
 
     return df
 
@@ -424,8 +462,10 @@ def build_summary_cards(df: pd.DataFrame) -> str:
     # Review counts
     reviewed_count = 0
     needs_review_count = 0
+
     if "review_status" in df.columns:
         reviewed_count = int(df["review_status"].notna().sum())
+
     if "review_needed" in df.columns:
         # Only count those that need review AND haven't been reviewed yet
         needs_review_count = int(((df["review_needed"]) & (df["review_status"].isna() | (df["review_status"] == ""))).sum())
