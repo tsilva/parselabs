@@ -178,6 +178,34 @@ COLUMN_LABELS = {
 # Path Resolution
 # =============================================================================
 
+_doc_dir_cache: dict[tuple[str, str], Path | None] = {}
+
+
+def _resolve_doc_dir(stem: str, output_path: Path) -> Path | None:
+    """Resolve document directory, supporting both {stem}_{hash} and legacy {stem} layouts.
+
+    Results are cached to avoid repeated glob calls.
+    """
+
+    cache_key = (stem, str(output_path))
+    if cache_key in _doc_dir_cache:
+        return _doc_dir_cache[cache_key]
+
+    # Try new-style: {stem}_{8-char-hash}
+    matches = sorted(output_path.glob(f"{stem}_????????"))
+    if matches:
+        _doc_dir_cache[cache_key] = matches[0]
+        return matches[0]
+
+    # Fallback to legacy: {stem}
+    legacy = output_path / stem
+    if legacy.exists() and legacy.is_dir():
+        _doc_dir_cache[cache_key] = legacy
+        return legacy
+
+    _doc_dir_cache[cache_key] = None
+    return None
+
 
 def _resolve_page_path(entry: dict, output_path: Path, suffix: str) -> Path:
     """Resolve page-level file path from entry metadata.
@@ -206,7 +234,12 @@ def _resolve_page_path(entry: dict, output_path: Path, suffix: str) -> Path:
         # Default to first page
         page_str = "001"
 
-    return output_path / stem / f"{stem}.{page_str}{suffix}"
+    # Resolve document directory (supports hash-suffixed and legacy layouts)
+    doc_dir = _resolve_doc_dir(stem, output_path)
+    if doc_dir is None:
+        return Path()
+
+    return doc_dir / f"{stem}.{page_str}{suffix}"
 
 
 def get_image_path(entry: dict, output_path: Path) -> str | None:
@@ -601,7 +634,7 @@ def apply_filters(
         df: Full DataFrame
         lab_names: Lab name to filter by
         latest_only: Whether to show only latest result per lab
-        review_filter: Filter option ('All', 'Needs Review', 'Abnormal', 'Unhealthy', 'Unreviewed')
+        review_filter: Filter option ('All', 'Needs Review', 'Abnormal', 'Unhealthy', 'Unreviewed', 'Accepted', 'Rejected')
     """
 
     # Guard: no data to filter
@@ -639,6 +672,12 @@ def apply_filters(
         # Results outside lab_specs healthy range
         if "is_out_of_healthy_range" in filtered.columns:
             filtered = filtered[filtered["is_out_of_healthy_range"]]
+    elif review_filter == "Accepted":
+        if "review_status" in filtered.columns:
+            filtered = filtered[filtered["review_status"] == "accepted"]
+    elif review_filter == "Rejected":
+        if "review_status" in filtered.columns:
+            filtered = filtered[filtered["review_status"] == "rejected"]
 
     # Reset index so iloc positions match displayed row positions
     filtered = filtered.reset_index(drop=True)
@@ -1626,6 +1665,8 @@ def create_app():
                         "Abnormal",
                         "Unhealthy",
                         "Unreviewed",
+                        "Accepted",
+                        "Rejected",
                     ],
                     value="All",
                     label="Status",
