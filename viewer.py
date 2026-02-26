@@ -1978,7 +1978,7 @@ if __name__ == "__main__":
     demo = create_app()
 
     demo.launch(
-        server_name="0.0.0.0",
+        server_name="127.0.0.1",
         server_port=7862,  # New port for unified viewer
         show_error=True,
         allowed_paths=allowed_paths,

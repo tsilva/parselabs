@@ -26,11 +26,9 @@ class ExtractionConfig:
 
     # Model settings (required - set via .env)
     extract_model_id: str
-    self_consistency_model_id: str
 
     # Processing settings
     input_file_regex: str = "*.pdf"
-    n_extractions: int = 1
     max_workers: int = field(default_factory=lambda: os.cpu_count() or 1)
 
 

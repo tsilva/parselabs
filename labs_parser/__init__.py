@@ -13,7 +13,6 @@ from labs_parser.extraction import (
     LabResult,
     extract_labs_from_page_image,
     extract_labs_from_text,
-    self_consistency,
 )
 from labs_parser.normalization import (
     apply_dtype_conversions,
@@ -50,7 +49,6 @@ __all__ = [
     "HealthLabReport",
     "extract_labs_from_page_image",
     "extract_labs_from_text",
-    "self_consistency",
     # Validation
     "ValueValidator",
     # Standardization
