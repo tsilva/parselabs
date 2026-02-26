@@ -48,6 +48,7 @@ load_dotenv(
 
 LAB_SPECS_PATH = Path("config/lab_specs.json")
 TEMP_PATH = Path("temp_lab_specs.json")
+_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
 def validate_env():
@@ -123,8 +124,17 @@ def cmd_fix_encoding(args):
 def get_conversion_factor(lab_name, from_unit, to_unit, client, temperature=0.0):
     """Use LLM to get conversion factor from from_unit to to_unit."""
 
-    system_prompt = "You are a medical laboratory assistant. Given a lab test name and two units, provide the numeric conversion factor to convert a value from the first unit to the second. Respond with only the numeric factor."
-    user_prompt = f"Lab test: {lab_name}\nConvert from: {from_unit}\nConvert to: {to_unit}\nWhat is the numeric conversion factor? Respond with only the number."
+    system_prompt = (_PROMPTS_DIR / "conversion_factor_system.md").read_text(encoding="utf-8").strip()
+    user_prompt = (
+        (_PROMPTS_DIR / "conversion_factor_user.md")
+        .read_text(encoding="utf-8")
+        .strip()
+        .format(
+            lab_name=lab_name,
+            from_unit=from_unit,
+            to_unit=to_unit,
+        )
+    )
 
     completion = client.chat.completions.create(
         model=os.getenv("EXTRACT_MODEL_ID"),
@@ -152,13 +162,17 @@ def get_conversion_factor(lab_name, from_unit, to_unit, client, temperature=0.0)
 def get_health_range(lab_name, primary_unit, user_stats, client, temperature=0.0):
     """Use LLM to get healthy reference range for a lab test."""
 
-    system_prompt = (
-        "You are a medical laboratory assistant. "
-        "Given a lab test name, its primary unit, and user stats (gender, age, weight, height, activity level), "
-        "provide the healthy reference range for the test in the primary unit. "
-        "Respond with only the numeric range, e.g., '3.5-5.0' or '70-110'."
+    system_prompt = (_PROMPTS_DIR / "health_range_system.md").read_text(encoding="utf-8").strip()
+    user_prompt = (
+        (_PROMPTS_DIR / "health_range_user.md")
+        .read_text(encoding="utf-8")
+        .strip()
+        .format(
+            lab_name=lab_name,
+            primary_unit=primary_unit,
+            user_stats_json=json.dumps(user_stats),
+        )
     )
-    user_prompt = f"Lab test: {lab_name}\nPrimary unit: {primary_unit}\nUser stats: {json.dumps(user_stats)}\nWhat is the healthy reference range for this test in the primary unit? Respond with only the numeric range."
 
     completion = client.chat.completions.create(
         model=os.getenv("EXTRACT_MODEL_ID"),

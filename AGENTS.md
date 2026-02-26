@@ -42,9 +42,15 @@ The `utils/` directory contains helper scripts for building and maintaining conf
 See `utils/README.md` for detailed usage instructions.
 
 ### LLM Prompts
-Prompt templates live in `prompts/` as `.txt` files and are loaded at module level:
-- `prompts/extraction_system.txt`, `prompts/extraction_user.txt` - vision extraction prompts
-- `prompts/name_standardization.txt`, `prompts/unit_standardization.txt` - standardization prompts
+Prompt templates live in `prompts/` as `.md` files and are loaded at module level:
+- `extraction_system.md`, `extraction_user.md` - vision extraction prompts
+- `text_extraction_user.md` - text-based extraction user prompt (template: `{text}`, `{std_reminder}`)
+- `self_consistency_system.md` - self-consistency voting system prompt
+- `string_parsing_system.md`, `string_parsing.md` - string result parsing prompts (template: `{string_results_json}`)
+- `name_standardization.md`, `unit_standardization.md` - standardization prompts
+- `qualitative_classification.md` - qualitative value classification prompt
+- `conversion_factor_system.md`, `conversion_factor_user.md` - unit conversion factor prompts (template: `{lab_name}`, `{from_unit}`, `{to_unit}`)
+- `health_range_system.md`, `health_range_user.md` - healthy range prompts (template: `{lab_name}`, `{primary_unit}`, `{user_stats_json}`)
 
 ## Architecture
 

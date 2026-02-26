@@ -146,3 +146,39 @@ def _classify_server_error(error_msg: str, timeout: int) -> tuple[bool, str]:
 ```
 
 **Rule:** Blank line after docstring and before each comment-headed block.
+
+### 5. Early Exit Over Branching
+
+When one branch of an `if/else` is short (log, return, continue), flip it into a guard clause and remove the `else`. This reduces cognitive load — the reader can forget the short case before reading the main logic.
+
+```python
+# BAD - reader must hold both branches in mind
+def _send_notifications(errors: list[dict], recipients: list[str]) -> None:
+    """Send error notifications to recipients."""
+
+    # Check for errors and notify
+    if errors:
+        summary = f"{len(errors)} errors detected"
+        for recipient in recipients:
+            _send_email(recipient, summary, errors)
+        logger.info(f"Notified {len(recipients)} recipients")
+    else:
+        logger.info("No errors to report")
+
+# GOOD - early exit eliminates the else branch
+def _send_notifications(errors: list[dict], recipients: list[str]) -> None:
+    """Send error notifications to recipients."""
+
+    # Nothing to report
+    if not errors:
+        logger.info("No errors to report")
+        return
+
+    # Notify each recipient
+    summary = f"{len(errors)} errors detected"
+    for recipient in recipients:
+        _send_email(recipient, summary, errors)
+    logger.info(f"Notified {len(recipients)} recipients")
+```
+
+**When to flip:** The short branch should be 1-3 lines. If both branches are equally complex, an `if/else` is fine.

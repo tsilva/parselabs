@@ -99,36 +99,35 @@ COLUMN_SCHEMA = {
     },
 }
 
+# Canonical column order for CSV export
+COLUMN_ORDER = [
+    "date",
+    "source_file",
+    "page_number",
+    "lab_name",
+    "value",
+    "unit",
+    "reference_min",
+    "reference_max",
+    "lab_name_raw",
+    "value_raw",
+    "unit_raw",
+    "confidence",
+    "review_needed",
+    "review_reason",
+    "review_confidence",
+    "is_below_limit",
+    "is_above_limit",
+    "lab_type",
+    "result_index",
+]
+
 
 def get_column_lists(schema: dict):
     """Extract ordered lists from schema."""
 
-    # Define canonical column order for CSV export
-    ordered = [
-        # Core columns in logical order
-        "date",
-        "source_file",
-        "page_number",
-        "lab_name",
-        "value",
-        "unit",
-        "reference_min",
-        "reference_max",
-        "lab_name_raw",
-        "value_raw",
-        "unit_raw",
-        "confidence",
-        "review_needed",
-        "review_reason",
-        "review_confidence",
-        "is_below_limit",
-        "is_above_limit",
-        "lab_type",
-        "result_index",
-    ]
-
     # Filter to only columns present in the schema
-    export_cols = [k for k in ordered if k in schema]
+    export_cols = [k for k in COLUMN_ORDER if k in schema]
 
     # Identify columns that should be hidden in Excel output
     hidden_cols = [col for col, props in schema.items() if props.get("excel_hidden")]
@@ -392,11 +391,16 @@ def _extract_or_load_page_data(
     # Record any extraction failures for reporting
     _check_and_record_failure(page_data, pdf_stem, page_idx, failed_pages, page_name)
 
-    # Cache extraction results for future runs
-    json_path.write_text(
-        json.dumps(page_data, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    # Only cache extractions with meaningful results
+    has_results = bool(page_data.get("lab_results"))
+    confirmed_no_lab_data = page_data.get("page_has_lab_data") is False
+    if has_results or confirmed_no_lab_data:
+        json_path.write_text(
+            json.dumps(page_data, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    else:
+        logger.info(f"[{page_name}] Empty extraction, not caching (will retry next run)")
     return page_data
 
 
@@ -1100,146 +1104,6 @@ def _process_pdf_wrapper(args):
     return process_single_pdf(*args)
 
 
-def _is_empty_extraction_json(json_path: Path) -> bool:
-    """Check if a JSON extraction file has empty lab_results.
-
-    Returns True if the file is a valid extraction with no results.
-    Raises json.JSONDecodeError or UnicodeDecodeError for corrupted files.
-    """
-    data = json.loads(json_path.read_text(encoding="utf-8"))
-
-    # Empty extraction: valid dict with no lab_results but not explicitly marked as no-lab-data
-    return isinstance(data, dict) and not data.get("lab_results") and data.get("page_has_lab_data") is not False
-
-
-def _collect_empty_jsons(pdf_dir: Path) -> list[Path]:
-    """Collect JSON files with empty lab_results in a PDF output directory."""
-
-    empty_jsons = []
-    for json_path in pdf_dir.glob("*.json"):
-        try:
-            if _is_empty_extraction_json(json_path):
-                empty_jsons.append(json_path)
-        except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            # Skip corrupted or unreadable JSON files
-            logger.debug(f"Skipping unreadable JSON {json_path.name}: {e}")
-    return empty_jsons
-
-
-def _find_empty_extractions(output_path: Path, matching_stems: set[str]) -> list[tuple[Path, list[Path]]]:
-    """Find all PDFs that have empty extraction JSONs.
-
-    Only considers output directories that match the input file pattern.
-    """
-
-    # Initialize collection for PDFs with empty extractions
-    empty_by_pdf = []
-
-    # Iterate through all subdirectories in output path
-    for pdf_dir in output_path.iterdir():
-        # Skip non-directory entries (files, symlinks, etc.)
-        if not pdf_dir.is_dir():
-            continue
-
-        # Skip hidden directories (e.g., .git, .DS_Store)
-        if pdf_dir.name.startswith("."):
-            continue
-
-        # Only check directories that match the input file pattern
-        if pdf_dir.name not in matching_stems:
-            continue
-
-        # Collect JSON files with empty extraction results
-        empty_jsons = _collect_empty_jsons(pdf_dir)
-
-        # Record this PDF if it has any empty extraction files
-        if empty_jsons:
-            empty_by_pdf.append((pdf_dir, sorted(empty_jsons)))
-
-    # Return sorted by PDF name for consistent ordering
-    return sorted(empty_by_pdf, key=lambda x: x[0].name)
-
-
-def _delete_empty_extraction_files(pdf_dir: Path) -> None:
-    """Delete empty extraction JSON and CSV files for a PDF directory."""
-
-    # Delete empty JSON files (removes cached extraction results)
-    for json_path in pdf_dir.glob("*.json"):
-        try:
-            # Only delete if still empty (has no lab_results)
-            if _is_empty_extraction_json(json_path):
-                json_path.unlink()
-                logger.info(f"Deleted empty JSON: {json_path.name}")
-        except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            # Skip corrupted files (don't delete what we can't parse)
-            logger.debug(f"Skipping unreadable JSON {json_path.name}: {e}")
-
-    # Delete the CSV file to ensure clean reprocessing
-    csv_path = pdf_dir / f"{pdf_dir.name}.csv"
-    if csv_path.exists():
-        csv_path.unlink()
-        logger.info(f"Deleted CSV: {csv_path.name}")
-
-
-def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list[Path]:
-    """Check for empty extractions and prompt user to reprocess each one.
-
-    Interactive prompt allows user to choose which PDFs with empty extractions to reprocess.
-    Deleting the empty JSON/CSV files triggers reprocessing on next pipeline run.
-
-    Returns list of PDF directories selected for reprocessing.
-    """
-
-    # Scan output directory for PDFs with empty extraction files
-    empty_extractions = _find_empty_extractions(output_path, matching_stems)
-
-    # Guard: Exit early if no empty extractions found
-    if not empty_extractions:
-        return []
-
-    # Display summary of PDFs with empty extractions
-    logger.info(f"\nFound {len(empty_extractions)} PDF(s) with empty extraction pages:")
-    for pdf_dir, empty_jsons in empty_extractions:
-        logger.info(f"  - {pdf_dir.name}: {len(empty_jsons)} empty page(s)")
-
-    # Collect user responses for which PDFs to reprocess
-    pdfs_to_reprocess = []
-
-    # Iterate through each PDF and prompt user for reprocess decision
-    for pdf_dir, empty_jsons in empty_extractions:
-        # Display detailed list of empty extraction files for this PDF
-        logger.info(f"\n{pdf_dir.name}:")
-        for json_path in empty_jsons:
-            logger.info(f"  - {json_path.name}")
-
-        # Prompt user for decision (y=yes, N=no, a=all, q=quit)
-        response = input(f"Reprocess {pdf_dir.name}? [y/N/a(ll)/q(uit)]: ").strip().lower()
-
-        # Handle quit response - stop processing remaining PDFs
-        if response == "q":
-            logger.info("Skipping remaining files.")
-            break
-
-        # Handle accept-all response - add current and all remaining PDFs
-        elif response == "a":
-            pdfs_to_reprocess.append(pdf_dir)
-            for remaining_pdf_dir, _ in empty_extractions[empty_extractions.index((pdf_dir, empty_jsons)) + 1 :]:
-                pdfs_to_reprocess.append(remaining_pdf_dir)
-            break
-
-        # Handle yes response - add only this PDF to reprocess list
-        elif response == "y":
-            pdfs_to_reprocess.append(pdf_dir)
-
-    # Delete extraction files for selected PDFs to trigger reprocessing
-    if pdfs_to_reprocess:
-        logger.info(f"\nDeleting empty extractions for {len(pdfs_to_reprocess)} PDF(s)...")
-        for pdf_dir in pdfs_to_reprocess:
-            _delete_empty_extraction_files(pdf_dir)
-
-    return pdfs_to_reprocess
-
-
 # ========================================
 # Argument Parsing
 # ========================================
@@ -1623,15 +1487,11 @@ def run_for_profile(args, profile_name: str) -> None:
 
     # Discover PDF files matching the input pattern
     pdf_files = sorted(config.input_path.glob(config.input_file_regex))
-    matching_stems = {p.stem for p in pdf_files}
     logger.info(f"Found {len(pdf_files)} PDF(s) matching '{config.input_file_regex}'")
 
     # Guard: No PDFs found
     if not pdf_files:
         raise PipelineError(f"No PDF files found matching '{config.input_file_regex}' in {config.input_path}")
-
-    # Check for empty extractions and prompt user to reprocess
-    _prompt_reprocess_empty(config.output_path, matching_stems)
 
     # Filter out PDFs that already have valid CSV outputs (cache check)
     pdfs_to_process, skipped_count = _filter_pdfs_to_process(pdf_files, config.output_path)
