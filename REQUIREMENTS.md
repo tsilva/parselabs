@@ -7,7 +7,7 @@ Extract lab results from PDF documents with 100% accuracy, standardize units, an
 ## Extraction
 
 - Accepts PDF lab reports as input; processes page by page for accuracy and easy retry/resume.
-- Text-first approach: extracts text from PDF; falls back to vision if extractable text is under 1000 characters.
+- Text-first approach: extracts text from PDF; falls back to vision if extractable text is under 200 characters.
 - Image preprocessing: converts pages to grayscale, applies 2x contrast enhancement, downscales to max 1200px width.
 - Retry with temperature escalation on extraction failures: starts at 0.0, increments by 0.2, up to 3 retries (max 0.6).
 - Server health check before starting extraction to fail fast on unreachable endpoints.
@@ -63,7 +63,7 @@ Interactive web UI for browsing, plotting, and reviewing results:
 ## Output
 
 - Primary output: merged CSV and formatted Excel (frozen header, optimized widths, internal columns hidden).
-- 15-column schema: date, source file, page number, standardized name/value/unit, reference min/max, raw name/value/unit, review flags (needed/reason), lab type, result index.
+- 17-column schema: date, source file, page number, standardized name/value/unit, reference min/max, raw name/value/unit, review flags (needed/reason), limit indicators (below/above), lab type, result index.
 - Per-document folder (named by document stem + file hash) containing: original PDF, preprocessed page images, per-page JSON, and per-document CSV.
 
 ## Configuration

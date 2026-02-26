@@ -5,6 +5,7 @@ from labs_parser.utils import load_dotenv_with_env
 load_dotenv_with_env()
 
 import argparse  # noqa: E402
+import hashlib  # noqa: E402
 import json  # noqa: E402
 import logging  # noqa: E402
 import os  # noqa: E402
@@ -38,6 +39,7 @@ from labs_parser.normalization import (  # noqa: E402
     apply_dtype_conversions,
     apply_normalizations,
     deduplicate_results,
+    flag_duplicate_entries,
 )
 from labs_parser.standardization import (  # noqa: E402
     standardize_lab_names,
@@ -175,14 +177,50 @@ def _text_has_enough_content(text: str, min_chars: int = _MIN_TEXT_CHARS) -> boo
 
 
 # ========================================
+# File Hashing
+# ========================================
+
+_file_hash_cache: dict[Path, str] = {}
+
+
+def _compute_file_hash(file_path: Path, hash_length: int = 8) -> str:
+    """Compute SHA-256 hash of a file, returning first `hash_length` hex chars.
+
+    Results are cached to avoid re-hashing the same file.
+    """
+
+    # Return cached result if available
+    resolved = file_path.resolve()
+    if resolved in _file_hash_cache:
+        return _file_hash_cache[resolved]
+
+    h = hashlib.sha256()
+    with open(resolved, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+
+    result = h.hexdigest()[:hash_length]
+    _file_hash_cache[resolved] = result
+    return result
+
+
+# ========================================
 # PDF Processing - Helper Functions
 # ========================================
 
 
-def _setup_pdf_processing(pdf_path: Path, output_dir: Path) -> tuple[Path, Path, list]:
+def _setup_pdf_processing(pdf_path: Path, output_dir: Path, file_hash: str) -> tuple[Path, Path, list]:
     """Initialize processing: create directories, return paths."""
     pdf_stem = pdf_path.stem  # Extract filename without extension for directory naming
-    doc_out_dir = output_dir / pdf_stem  # Create document-specific output directory
+    dir_name = f"{pdf_stem}_{file_hash}"  # Include file hash for uniqueness
+    doc_out_dir = output_dir / dir_name  # Create document-specific output directory
+
+    # Backwards-compat migration: rename legacy directory if it exists
+    legacy_dir = output_dir / pdf_stem
+    if legacy_dir.exists() and not doc_out_dir.exists() and legacy_dir.is_dir():
+        legacy_dir.rename(doc_out_dir)
+        logger.info(f"Migrated legacy directory: {pdf_stem} -> {dir_name}")
+
     doc_out_dir.mkdir(exist_ok=True, parents=True)  # Ensure directory exists, create parents if needed
     csv_path = doc_out_dir / f"{pdf_stem}.csv"  # Define CSV output path within document directory
     return (
@@ -727,7 +765,8 @@ def process_single_pdf(
 
     # Initialize output directory structure and paths
     pdf_stem = pdf_path.stem
-    doc_out_dir, csv_path, failed_pages = _setup_pdf_processing(pdf_path, output_dir)
+    file_hash = _compute_file_hash(pdf_path)
+    doc_out_dir, csv_path, failed_pages = _setup_pdf_processing(pdf_path, output_dir, file_hash)
 
     try:
         logger.info(f"[{pdf_stem}] Processing...")
@@ -859,8 +898,20 @@ def _extract_document_date(data_dict: dict, pdf_stem: str) -> str | None:
 def _get_csv_path(pdf_path: Path, output_path: Path) -> Path:
     """Get the output CSV path for a given PDF file."""
 
-    # Build path: output/{stem}/{stem}.csv
-    return output_path / pdf_path.stem / f"{pdf_path.stem}.csv"
+    # Build path: output/{stem}_{hash}/{stem}.csv
+    file_hash = _compute_file_hash(pdf_path)
+    new_path = output_path / f"{pdf_path.stem}_{file_hash}" / f"{pdf_path.stem}.csv"
+
+    # Check new path first, then fall back to legacy path for pre-migration output
+    if new_path.exists():
+        return new_path
+
+    legacy_path = output_path / pdf_path.stem / f"{pdf_path.stem}.csv"
+    if legacy_path.exists():
+        return legacy_path
+
+    # Neither exists — return new-style path for creation
+    return new_path
 
 
 def _find_text_extraction_json(doc_out_dir: Path, page_results: list[dict]) -> list[Path]:
@@ -931,6 +982,28 @@ def _update_json_with_standardized_values(all_results: list[dict], doc_out_dir: 
 
 
 REQUIRED_CSV_COLS = ["result_index", "page_number", "source_file"]
+
+
+def _deduplicate_pdf_files(pdf_files: list[Path]) -> tuple[list[Path], list[tuple[Path, Path]]]:
+    """Deduplicate PDF files by content hash.
+
+    Returns:
+        (unique_files, duplicates) where duplicates is a list of (duplicate_path, original_path) tuples
+    """
+
+    seen_hashes: dict[str, Path] = {}
+    unique_files: list[Path] = []
+    duplicates: list[tuple[Path, Path]] = []
+
+    for pdf_path in pdf_files:
+        file_hash = _compute_file_hash(pdf_path)
+        if file_hash in seen_hashes:
+            duplicates.append((pdf_path, seen_hashes[file_hash]))
+        else:
+            seen_hashes[file_hash] = pdf_path
+            unique_files.append(pdf_path)
+
+    return unique_files, duplicates
 
 
 def _filter_pdfs_to_process(pdf_files: list[Path], output_path: Path) -> tuple[list[Path], int]:
@@ -1393,6 +1466,9 @@ def _process_and_transform_data(
     # Filter out rows that couldn't be mapped to known lab tests
     merged_df = _filter_unknown_labs(merged_df)
 
+    # Flag duplicate (date, lab_name) entries before deduplication so reviewers can verify
+    merged_df = flag_duplicate_entries(merged_df)
+
     # Remove duplicate results from same date/lab combinations (requires lab specs for priority rules)
     if lab_specs.exists:
         logger.info("Deduplicating results...")
@@ -1424,7 +1500,7 @@ def _export_final_results(
 
     # Select only the columns needed for final export
     final_cols = [col for col in export_cols if col in merged_df.columns]
-    merged_df = merged_df[final_cols]
+    merged_df = merged_df[final_cols].copy()
 
     # Convert columns to their proper data types
     logger.info("Applying data type conversions...")
@@ -1465,6 +1541,13 @@ def run_for_profile(args, profile_name: str) -> None:
     # Guard: No PDFs found
     if not pdf_files:
         raise PipelineError(f"No PDF files found matching '{config.input_file_regex}' in {config.input_path}")
+
+    # Deduplicate PDFs by file hash (skip identical files with different names)
+    pdf_files, duplicate_pdfs = _deduplicate_pdf_files(pdf_files)
+    for dup_path, orig_path in duplicate_pdfs:
+        logger.warning(f"Skipping duplicate PDF: {dup_path.name} (same content as {orig_path.name})")
+    if duplicate_pdfs:
+        logger.info(f"Skipped {len(duplicate_pdfs)} duplicate PDF(s), {len(pdf_files)} unique PDF(s) remaining")
 
     # Filter out PDFs that already have valid CSV outputs (cache check)
     pdfs_to_process, skipped_count = _filter_pdfs_to_process(pdf_files, config.output_path)

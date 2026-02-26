@@ -34,6 +34,7 @@ class ValueValidator:
         "PERCENTAGE_BOUNDS",
         "NEGATIVE_VALUE",
         "EXTREME_DEVIATION",
+        "DUPLICATE_ENTRY",
     }
 
     # Component-total constraints: component value must not exceed total value

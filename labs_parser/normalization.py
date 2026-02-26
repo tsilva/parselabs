@@ -1195,6 +1195,45 @@ def sanitize_percentage_reference_ranges(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def flag_duplicate_entries(df: pd.DataFrame) -> pd.DataFrame:
+    """Flag rows where (date, lab_name_standardized) appears more than once.
+
+    Sets review_needed=True and appends DUPLICATE_ENTRY to review_reason for all
+    rows in duplicate groups. The surviving row after dedup retains the flag so
+    reviewers can verify the correct value was kept.
+
+    Args:
+        df: DataFrame with lab results (must have 'date' and 'lab_name_standardized')
+
+    Returns:
+        DataFrame with duplicate entries flagged
+    """
+
+    # Skip if missing required columns
+    if df.empty or "date" not in df.columns or "lab_name_standardized" not in df.columns:
+        return df
+
+    # Initialize review columns if not present
+    if "review_needed" not in df.columns:
+        df["review_needed"] = False
+    if "review_reason" not in df.columns:
+        df["review_reason"] = ""
+
+    # Find all rows that are part of a duplicate group
+    dup_mask = df.duplicated(subset=["date", "lab_name_standardized"], keep=False)
+
+    if not dup_mask.any():
+        return df
+
+    count = int(dup_mask.sum())
+    logger.info(f"Flagging {count} rows as DUPLICATE_ENTRY")
+
+    df.loc[dup_mask, "review_needed"] = True
+    df.loc[dup_mask, "review_reason"] = df.loc[dup_mask, "review_reason"].fillna("").apply(lambda x: str(x) + "DUPLICATE_ENTRY; " if "DUPLICATE_ENTRY" not in str(x) else str(x))
+
+    return df
+
+
 def deduplicate_results(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
     """
     Deduplicate by (date, lab_name_standardized), keeping best match (prefer primary unit).
