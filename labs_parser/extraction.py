@@ -85,7 +85,6 @@ class LabResult(BaseModel):
         default=None,
         description="Reason why review is needed (auto-generated)",
     )
-    review_confidence: float | None = Field(default=1.0, description="Confidence score 0-1 (auto-generated)")
     review_status: str | None = Field(
         default=None,
         description="Human review status: 'accepted', 'rejected', or null",

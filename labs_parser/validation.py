@@ -3,7 +3,7 @@ Value-Based Accuracy Validation for Lab Results
 
 Detects extraction errors from the data itself (without re-checking source images),
 flagging suspicious values for review. Integrates with existing review workflow
-using review_needed, review_reason, and review_confidence fields.
+using review_needed and review_reason fields.
 """
 
 import logging
@@ -23,17 +23,17 @@ class ValueValidator:
     temporal anomalies, format artifacts, and reference range inconsistencies.
     """
 
-    # Reason codes with confidence multipliers (lower = more suspicious)
+    # Valid reason codes for flagging suspicious values
     REASON_CODES = {
-        "IMPOSSIBLE_VALUE": 0.3,  # Biologically impossible
-        "RELATIONSHIP_MISMATCH": 0.5,  # Calculated vs extracted mismatch
-        "COMPONENT_EXCEEDS_TOTAL": 0.3,  # Component value exceeds its total
-        "TEMPORAL_ANOMALY": 0.6,  # Implausible change rate
-        "FORMAT_ARTIFACT": 0.7,  # Parsing/format issue
-        "RANGE_INCONSISTENCY": 0.7,  # Reference range issues
-        "PERCENTAGE_BOUNDS": 0.4,  # Percentage outside 0-100
-        "NEGATIVE_VALUE": 0.3,  # Negative concentration
-        "EXTREME_DEVIATION": 0.5,  # Value far outside reference range
+        "IMPOSSIBLE_VALUE",
+        "RELATIONSHIP_MISMATCH",
+        "COMPONENT_EXCEEDS_TOTAL",
+        "TEMPORAL_ANOMALY",
+        "FORMAT_ARTIFACT",
+        "RANGE_INCONSISTENCY",
+        "PERCENTAGE_BOUNDS",
+        "NEGATIVE_VALUE",
+        "EXTREME_DEVIATION",
     }
 
     # Component-total constraints: component value must not exceed total value
@@ -110,7 +110,7 @@ class ValueValidator:
             df: DataFrame with lab results (must have 'value', 'lab_name', 'unit' columns)
 
         Returns:
-            DataFrame with review_needed, review_reason, review_confidence updated
+            DataFrame with review_needed and review_reason updated
         """
 
         # Empty DataFrame — nothing to validate
@@ -125,9 +125,6 @@ class ValueValidator:
             df["review_needed"] = False
         if "review_reason" not in df.columns:
             df["review_reason"] = ""
-        if "review_confidence" not in df.columns:
-            df["review_confidence"] = 1.0
-
         # Resolve column names once (supports both naming conventions)
         self._value_col = self._resolve_column(df, "value")
         self._lab_name_col = self._resolve_column(df, "lab_name")
@@ -173,16 +170,10 @@ class ValueValidator:
         if not mask.any():
             return df
 
-        # Look up the confidence multiplier for this reason code
-        confidence_mult = self.REASON_CODES.get(reason_code, 0.8)
-
         # Set review flag and append reason code to review_reason
         df.loc[mask, "review_needed"] = True
         # Handle NaN values in review_reason by converting to empty string first
         df.loc[mask, "review_reason"] = df.loc[mask, "review_reason"].fillna("").apply(lambda x: str(x) + f"{reason_code}; " if reason_code not in str(x) else str(x))
-
-        # Reduce confidence by the reason code's multiplier
-        df.loc[mask, "review_confidence"] = df.loc[mask, "review_confidence"] * confidence_mult
 
         # Update stats
         count = int(mask.sum())
