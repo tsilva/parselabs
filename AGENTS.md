@@ -170,7 +170,7 @@ Example entry:
 }
 ```
 
-### Output Schema (15 columns)
+### Output Schema (17 columns)
 
 ```csv
 # Core identification
@@ -196,6 +196,10 @@ unit_raw            # Original unit
 review_needed       # Boolean: needs human review?
 review_reason       # Reason codes (e.g., "FORMAT_ARTIFACT; EXTREME_DEVIATION;")
 
+# Limit indicators
+is_below_limit      # Value reported as below limit (e.g., "<0.05")
+is_above_limit      # Value reported as above limit (e.g., ">738")
+
 # Internal
 lab_type            # blood/urine/feces (hidden in Excel)
 result_index        # Index within page (hidden in Excel)
@@ -210,7 +214,7 @@ result_index        # Index within page (hidden in Excel)
 ### Output Files
 
 For each PDF `{doc_stem}.pdf`:
-- `{doc_stem}/` directory containing:
+- `{doc_stem}_{hash}/` directory (hash = first 8 chars of SHA-256) containing:
   - `{doc_stem}.{page}.jpg` - Preprocessed page images
   - `{doc_stem}.{page}.json` - Extracted structured data
   - `{doc_stem}.csv` - Combined results for the document
