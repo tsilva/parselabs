@@ -1,7 +1,4 @@
 /* Status badges */
-.status-accepted { background-color: #198754; color: #ffffff; padding: 8px 12px; border-radius: 5px; font-weight: 600; display: inline-block; }
-.status-rejected { background-color: #dc3545; color: #ffffff; padding: 8px 12px; border-radius: 5px; font-weight: 600; display: inline-block; }
-.status-pending { background-color: #6c757d; color: #ffffff; padding: 8px 12px; border-radius: 5px; font-weight: 600; display: inline-block; }
 .status-warning { background-color: #fd7e14; color: #ffffff; padding: 8px 12px; border-radius: 5px; font-weight: 600; display: inline-block; margin-top: 5px; }
 .status-info { background-color: #0d6efd; color: #ffffff; padding: 8px 12px; border-radius: 5px; font-weight: 600; display: inline-block; margin-top: 5px; }
 .review-actions { margin-top: 10px; }
