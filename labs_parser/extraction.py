@@ -4,14 +4,10 @@ import base64
 import json
 import logging
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any
 
 from openai import APIError, OpenAI
 from pydantic import BaseModel, Field, field_validator
-
-from labs_parser.utils import parse_llm_json_response
 
 logger = logging.getLogger(__name__)
 
@@ -336,141 +332,13 @@ def _build_standardized_names_section(standardized_names: list[str], lab_specs_d
 _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 EXTRACTION_SYSTEM_PROMPT = (_PROMPTS_DIR / "extraction_system.md").read_text(encoding="utf-8").strip()
 EXTRACTION_USER_PROMPT = (_PROMPTS_DIR / "extraction_user.md").read_text(encoding="utf-8").strip()
-SELF_CONSISTENCY_SYSTEM_PROMPT = (_PROMPTS_DIR / "self_consistency_system.md").read_text(encoding="utf-8").strip()
 TEXT_EXTRACTION_USER_PROMPT = (_PROMPTS_DIR / "text_extraction_user.md").read_text(encoding="utf-8").strip()
-STRING_PARSING_PROMPT = (_PROMPTS_DIR / "string_parsing.md").read_text(encoding="utf-8").strip()
-STRING_PARSING_SYSTEM_PROMPT = (_PROMPTS_DIR / "string_parsing_system.md").read_text(encoding="utf-8").strip()
 
 
 def _empty_report() -> dict:
     """Return a fresh empty lab report dict."""
 
     return HealthLabReport(lab_results=[]).model_dump(mode="json")
-
-
-# ========================================
-# Self-Consistency
-# ========================================
-
-
-def self_consistency(fn, model_id, n, *args, **kwargs):
-    """
-    Run a function multiple times and vote on the best result.
-
-    Args:
-        fn: Function to run
-        model_id: Model to use for voting
-        n: Number of times to run the function
-        *args, **kwargs: Arguments to pass to the function
-
-    Returns:
-        Tuple of (best_result, all_results)
-    """
-
-    # Guard: Single extraction requires no voting
-    if n == 1:
-        result = fn(*args, **kwargs)
-        return result, [result]
-
-    # Fixed temperature for i.i.d. sampling (aligned with self-consistency research)
-    # T=0.5 provides good diversity without being too creative
-    SELF_CONSISTENCY_TEMPERATURE = 0.5
-
-    # Collect results from parallel extractions
-    results = _run_parallel_extractions(fn, args, kwargs, n, SELF_CONSISTENCY_TEMPERATURE)
-
-    # Guard: All parallel calls failed
-    if not results:
-        raise RuntimeError("All self-consistency calls failed.")
-
-    # If all results are identical, return the first
-    if all(r == results[0] for r in results):
-        return results[0], results
-
-    # Vote on best result using LLM
-    return vote_on_best_result(results, model_id, fn.__name__)
-
-
-def _run_parallel_extractions(fn, args, kwargs, n: int, temperature: float) -> list:
-    """Execute multiple extractions in parallel with error propagation."""
-
-    results = []
-
-    with ThreadPoolExecutor(max_workers=n) as executor:
-        futures = []
-        for i in range(n):
-            effective_kwargs = kwargs.copy()
-            # Use fixed temperature if function accepts it and not already set
-            if "temperature" in fn.__code__.co_varnames and "temperature" not in kwargs:
-                effective_kwargs["temperature"] = temperature
-            futures.append(executor.submit(fn, *args, **effective_kwargs))
-
-        # Collect results, propagating first error
-        for future in as_completed(futures):
-            try:
-                results.append(future.result())
-            except Exception as e:
-                # Cancel remaining futures on first error
-                logger.error(f"Error during self-consistency task execution: {e}")
-                for f_cancel in futures:
-                    if not f_cancel.done():
-                        f_cancel.cancel()
-                raise
-
-    return results
-
-
-def vote_on_best_result(results: list, model_id: str, fn_name: str):
-    """Use LLM to vote on the most consistent result."""
-
-    import os
-
-    client = OpenAI(
-        base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-        api_key=os.getenv("OPENROUTER_API_KEY"),
-    )
-
-    system_prompt = SELF_CONSISTENCY_SYSTEM_PROMPT
-
-    # Format all extraction results for comparison
-    prompt = "".join(f"--- Output {i + 1} ---\n{json.dumps(v, ensure_ascii=False) if type(v) in [list, dict] else v}\n\n" for i, v in enumerate(results))
-
-    # Send to LLM for majority voting
-    voted_raw = None
-    try:
-        completion = client.chat.completions.create(
-            model=model_id,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
-        )
-        voted_raw = completion.choices[0].message.content
-
-        # Guard: Empty response from model
-        if not voted_raw:
-            logger.error("Empty response from voting model")
-            return results[0], results
-
-        voted_raw = voted_raw.strip()
-
-        # Parse voted result based on the function type
-        if fn_name == "extract_labs_from_page_image":
-            voted_result = parse_llm_json_response(voted_raw, fallback=None)
-            if voted_result:
-                return voted_result, results
-            else:
-                # JSON parse failed - fall back to first result
-                logger.error("Failed to parse voted result as JSON")
-                return results[0], results
-        else:
-            # Non-JSON function - return raw text
-            return voted_raw, results
-
-    except Exception as e:
-        # Voting failed - fall back to first result
-        logger.error(f"Error during self-consistency voting: {e}")
-        return results[0], results
 
 
 # ========================================
@@ -568,7 +436,7 @@ def _attempt_extraction_with_retries(
             return _empty_report()
 
         # Pre-process: Fix common LLM issues before Pydantic validation
-        tool_result_dict = _fix_lab_results_format(tool_result_dict, client, model_id)
+        tool_result_dict = _fix_lab_results_format(tool_result_dict)
 
         # Validate and process the extraction result
         validation_result = _validate_extraction_result(
@@ -783,7 +651,7 @@ def extract_labs_from_text(
     tool_result_dict = extraction_result
 
     # Pre-process: Fix common LLM issues before Pydantic validation
-    tool_result_dict = _fix_lab_results_format(tool_result_dict, client, model_id)
+    tool_result_dict = _fix_lab_results_format(tool_result_dict)
 
     # Validate and return results
     return _validate_text_extraction_result(tool_result_dict)
@@ -914,176 +782,6 @@ def _normalize_date_format(date_str: str | None) -> str | None:
     return None
 
 
-# Known LabResult field names for detecting flattened key-value format
-_LAB_RESULT_FIELDS = {
-    "lab_name_raw",
-    "lab_name",  # NEW: standardized name from LLM
-    "value_raw",
-    "lab_unit_raw",
-    "unit",  # NEW: standardized unit from LLM
-    "reference_range",
-    "reference_min_raw",
-    "reference_max_raw",
-    "is_abnormal",
-    "comments",
-    "source_text",
-}
-
-
-def _parse_labresult_repr(s: str) -> dict | None:
-    """
-    Parse Python repr() format of LabResult objects.
-
-    Some LLMs return strings like:
-    "LabResult(lab_name_raw='Glucose', value_raw='100', lab_unit_raw='mg/dL', ...)"
-
-    Returns a dict if parseable, None otherwise.
-    """
-
-    # Guard: Not a LabResult repr string
-    if not s.startswith("LabResult("):
-        return None
-
-    try:
-        # Extract the content inside LabResult(...)
-        content = s[10:-1]  # Remove 'LabResult(' and ')'
-
-        # Parse key=value pairs using regex
-        result = {}
-        pattern = r"(\w+)=(?:'([^']*)'|\"([^\"]*)\"|(\d+\.?\d*)|None|(True|False))"
-        for match in re.finditer(pattern, content):
-            key = match.group(1)
-            # Get the matched value from whichever group matched
-            if match.group(2) is not None:  # Single-quoted string
-                value = match.group(2)
-            elif match.group(3) is not None:  # Double-quoted string
-                value = match.group(3)
-            elif match.group(4) is not None:  # Number
-                value = float(match.group(4)) if "." in match.group(4) else int(match.group(4))
-            elif match.group(5) is not None:  # True/False
-                value = match.group(5) == "True"
-            else:  # None
-                value = None
-            result[key] = value
-
-        # Only return if we found the required field
-        return result if "lab_name_raw" in result else None
-
-    # Parsing failed - not a valid repr string
-    except Exception:
-        return None
-
-
-def _detects_flattened_format(items: list, kv_pattern: re.Pattern, fields: set) -> bool:
-    """Check if items match the flattened key-value pattern."""
-
-    # Guard: Empty input
-    if not items:
-        return False
-
-    # Sample up to 10 items to check for flattened format
-    sample_size = min(10, len(items))
-    kv_matches = 0
-
-    for item in items[:sample_size]:
-        # Skip non-string items
-        if not isinstance(item, str):
-            continue
-
-        # Count items that match "field_name: value" format
-        match = kv_pattern.match(item)
-        if match and match.group(1) in fields:
-            kv_matches += 1
-
-    # Consider it flattened format if at least 50% match
-    return kv_matches >= sample_size * 0.5
-
-
-def _convert_kv_value(key: str, value: str) -> Any:
-    """Convert a key-value pair value to the appropriate type."""
-
-    # Handle null/empty values
-    if value.lower() == "null" or value == "":
-        return None
-
-    # Parse numeric reference values
-    if key in ("reference_min_raw", "reference_max_raw"):
-        try:
-            return float(value) if value else None
-        # Non-numeric value
-        except (ValueError, TypeError):
-            return None
-
-    # Parse boolean is_abnormal field
-    if key == "is_abnormal":
-        return value.lower() == "true" if value else None
-
-    # Return as-is for other fields
-    return value
-
-
-def _reassemble_flattened_key_values(items: list) -> list:
-    """
-    Detect and reassemble flattened key-value strings into proper objects.
-
-    Some LLMs return lab_results as flattened key-value pairs:
-    ['lab_name_raw: Glucose', 'value_raw: 100', 'lab_unit_raw: mg/dL', ...]
-
-    This function detects this pattern and reassembles them into proper dicts.
-    Returns the original list if the pattern is not detected.
-    """
-
-    # Guard: empty input
-    if not items:
-        return items
-
-    # Pattern: strings like "field_name: value" where field_name is a known LabResult field
-    kv_pattern = re.compile(r"^(\w+):\s*(.*)$")
-
-    # Check if this looks like flattened key-value format
-    if not _detects_flattened_format(items, kv_pattern, _LAB_RESULT_FIELDS):
-        return items
-
-    logger.info(f"Detected flattened key-value format, reassembling {len(items)} items")
-
-    # Reassemble into objects - lab_name_raw starts a new record
-    reassembled = []
-    current_obj = {}
-
-    for item in items:
-        # Handle non-string items: save current object and append as-is
-        if not isinstance(item, str):
-            if current_obj:
-                reassembled.append(current_obj)
-                current_obj = {}
-            reassembled.append(item)
-            continue
-
-        # Parse key-value pair
-        match = kv_pattern.match(item)
-
-        # Guard: Skip lines that don't match key-value format
-        if not match:
-            continue
-
-        key, value = match.group(1), match.group(2).strip()
-
-        # lab_name_raw starts a new record - save previous if exists
-        if key == "lab_name_raw" and current_obj:
-            reassembled.append(current_obj)
-            current_obj = {}
-
-        # Convert and store the value
-        current_obj[key] = _convert_kv_value(key, value)
-
-    # Don't forget the last object
-    if current_obj:
-        reassembled.append(current_obj)
-
-    logger.info(f"Reassembled {len(items)} key-value items into {len(reassembled)} lab results")
-    return reassembled
-
-
 def _clean_numeric_field(value) -> float | None:
     """Strip embedded metadata from numeric fields.
 
@@ -1131,8 +829,8 @@ def _clean_numeric_field(value) -> float | None:
     return None
 
 
-def _fix_lab_results_format(tool_result_dict: dict, client: OpenAI, model_id: str) -> dict:
-    """Fix common LLM formatting issues in lab_results and dates using LLM-based parsing."""
+def _fix_lab_results_format(tool_result_dict: dict) -> dict:
+    """Fix common LLM formatting issues in lab_results and dates."""
 
     # Fix date formats at report level
     for date_field in ["collection_date", "report_date"]:
@@ -1146,14 +844,15 @@ def _fix_lab_results_format(tool_result_dict: dict, client: OpenAI, model_id: st
     # Map LLM-populated standardization fields to internal fields
     _map_standardization_fields(tool_result_dict)
 
-    # First, try to reassemble flattened key-value format (common LLM issue)
-    tool_result_dict["lab_results"] = _reassemble_flattened_key_values(tool_result_dict["lab_results"])
-
     # Clean numeric reference fields (strip embedded metadata like ", comments: ...")
     _clean_numeric_reference_fields(tool_result_dict)
 
-    # Parse any string-based lab results using LLM
-    tool_result_dict["lab_results"] = _parse_string_based_results(tool_result_dict["lab_results"], client, model_id)
+    # Filter out any non-dict items (string results from malformed output)
+    original_count = len(tool_result_dict["lab_results"])
+    tool_result_dict["lab_results"] = [r for r in tool_result_dict["lab_results"] if isinstance(r, dict)]
+    filtered_count = original_count - len(tool_result_dict["lab_results"])
+    if filtered_count > 0:
+        logger.warning(f"Filtered {filtered_count} non-dict lab_results items")
 
     return tool_result_dict
 
@@ -1188,176 +887,6 @@ def _clean_numeric_reference_fields(tool_result_dict: dict) -> None:
                 item["reference_max_raw"] = _clean_numeric_field(item["reference_max_raw"])
 
 
-def _parse_string_based_results(lab_results: list, client: OpenAI, model_id: str) -> list:
-    """Parse any string-based lab results into structured format."""
-
-    # Collect all string-based lab results that need parsing
-    string_results = []
-    string_indices = []
-    parsed_lab_results = []
-
-    for i, lr_data in enumerate(lab_results):
-        # String items need parsing into structured dicts
-        if isinstance(lr_data, str):
-            # Try to parse as JSON first (simple case)
-            parsed = _try_parse_string_as_json(lr_data)
-            if parsed:
-                parsed_lab_results.append(parsed)
-                continue
-
-            # Try to parse LabResult repr format
-            parsed_repr = _parse_labresult_repr(lr_data)
-            if parsed_repr:
-                parsed_lab_results.append(parsed_repr)
-                continue
-
-            # Collect for LLM-based parsing
-            string_results.append(lr_data)
-            string_indices.append(i)
-            parsed_lab_results.append(None)  # Placeholder
-        # Already a dict or other structured type - keep as-is
-        else:
-            parsed_lab_results.append(lr_data)
-
-    # If we have string results, use LLM to parse them
-    if string_results:
-        logger.info(f"Found {len(string_results)} lab results as strings, using LLM to parse them")
-        parsed = _parse_string_results_with_llm(string_results, client, model_id)
-        _insert_parsed_results(parsed_lab_results, string_indices, parsed, string_results)
-
-    # Remove None placeholders
-    return [r for r in parsed_lab_results if r is not None]
-
-
-def _try_parse_string_as_json(s: str) -> dict | None:
-    """Try to parse a string as JSON."""
-
-    # Guard: None or empty input
-    if not s:
-        return None
-
-    try:
-        return json.loads(s)
-    # Not valid JSON
-    except json.JSONDecodeError:
-        return None
-
-
-def _insert_parsed_results(
-    parsed_lab_results: list,
-    string_indices: list,
-    parsed: list,
-    string_results: list,
-) -> None:
-    """Insert parsed results back into the list, tracking failures."""
-
-    skipped_count = 0
-    for idx, parsed_result in zip(string_indices, parsed):
-        # Successfully parsed - insert back into result list
-        if parsed_result:
-            parsed_lab_results[idx] = parsed_result
-        else:
-            # Failed to parse, log for debugging
-            string_idx = string_indices.index(idx)
-            logger.debug(f"Failed to parse lab_result[{idx}], skipping. Data: {string_results[string_idx][:200]}")
-            skipped_count += 1
-
-    # Log summary if any failed
-    if skipped_count > 0:
-        logger.warning(f"Skipped {skipped_count}/{len(string_results)} unparseable lab results. This is normal during self-consistency voting - other extraction attempts may have proper structure.")
-
-
-def _parse_string_results_with_llm(string_results: list[str], client: OpenAI, model_id: str) -> list[dict | None]:
-    """
-    Use LLM to parse string-formatted lab results into structured format.
-
-    This is a soft parser that uses AI to extract structure from any text format,
-    avoiding hardcoded regex patterns.
-
-    Args:
-        string_results: List of lab result strings to parse
-        client: OpenAI client instance
-        model_id: Model to use for parsing
-
-    Returns:
-        List of parsed dictionaries (None for unparseable results)
-    """
-
-    # Guard: Empty input
-    if not string_results:
-        return []
-
-    # Build prompt for LLM to parse the strings
-    prompt = _build_string_parsing_prompt(string_results)
-
-    try:
-        completion = client.chat.completions.create(
-            model=model_id,
-            messages=[
-                {
-                    "role": "system",
-                    "content": STRING_PARSING_SYSTEM_PROMPT,
-                },
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.0,
-            response_format={"type": "json_object"},
-        )
-
-        response_text = completion.choices[0].message.content
-
-        # Guard: Empty response from model
-        if not response_text:
-            logger.error("Empty response from LLM for string parsing")
-            return [None] * len(string_results)
-
-        parsed_json = json.loads(response_text)
-
-        return _extract_results_from_parsed_json(parsed_json, len(string_results))
-
-    # LLM parsing failed - return None for all items
-    except Exception as e:
-        logger.error(f"Failed to parse string results with LLM: {e}")
-        return [None] * len(string_results)
-
-
-def _build_string_parsing_prompt(string_results: list[str]) -> str:
-    """Build the prompt for LLM-based string parsing."""
-
-    return STRING_PARSING_PROMPT.format(
-        string_results_json=json.dumps(string_results, indent=2, ensure_ascii=False),
-    )
-
-
-def _extract_results_from_parsed_json(parsed_json: dict | list, expected_count: int) -> list[dict | None]:
-    """Extract results from various possible LLM response formats."""
-
-    # Handle different possible response formats
-    if isinstance(parsed_json, dict) and "results" in parsed_json:
-        # Dict with "results" key
-        results = parsed_json["results"]
-    elif isinstance(parsed_json, dict) and "lab_results" in parsed_json:
-        # Dict with "lab_results" key
-        results = parsed_json["lab_results"]
-    elif isinstance(parsed_json, list):
-        # Direct list of results
-        results = parsed_json
-    else:
-        # Unrecognized format
-        logger.error(f"Unexpected LLM response format for string parsing: {parsed_json}")
-        return [None] * expected_count
-
-    # Pad or trim to match expected count
-    if len(results) != expected_count:
-        logger.warning(f"LLM returned {len(results)} results but expected {expected_count}")
-        # Pad or trim to match
-        while len(results) < expected_count:
-            results.append(None)
-        results = results[:expected_count]
-
-    return results
-
-
 def _salvage_lab_results(tool_result_dict: dict) -> dict:
     """Try to salvage valid lab results even if report validation fails."""
 
@@ -1368,9 +897,9 @@ def _salvage_lab_results(tool_result_dict: dict) -> dict:
     # Validate each lab result individually
     valid_results = []
     for i, lr_data in enumerate(tool_result_dict["lab_results"]):
-        # Skip string items that couldn't be parsed into dicts
-        if isinstance(lr_data, str):
-            logger.warning(f"Skipping string lab_result[{i}] in salvage: {lr_data[:100]}")
+        # Skip non-dict items
+        if not isinstance(lr_data, dict):
+            logger.warning(f"Skipping non-dict lab_result[{i}] in salvage")
             continue
 
         # Try to validate this individual result

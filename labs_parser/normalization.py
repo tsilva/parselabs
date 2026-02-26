@@ -4,7 +4,6 @@ import logging
 import re
 
 import pandas as pd
-from openai import OpenAI
 
 from labs_parser.config import UNKNOWN_VALUE, LabSpecsConfig
 from labs_parser.utils import ensure_columns
@@ -663,8 +662,6 @@ def _correct_percentage_names_in_df(df: pd.DataFrame, lab_specs: LabSpecsConfig)
 def apply_normalizations(
     df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
-    client: OpenAI | None = None,
-    model_id: str | None = None,
 ) -> pd.DataFrame:
     """
     Apply normalization transformations to the DataFrame.
@@ -675,8 +672,6 @@ def apply_normalizations(
     Args:
         df: DataFrame with raw lab results
         lab_specs: Lab specifications configuration
-        client: OpenAI client for qualitative value standardization
-        model_id: Model ID for qualitative value standardization
 
     Returns:
         DataFrame with normalized columns added
@@ -712,7 +707,7 @@ def apply_normalizations(
 
     # Convert to primary units (batched)
     if lab_specs.exists:
-        df = apply_unit_conversions(df, lab_specs, client, model_id)
+        df = apply_unit_conversions(df, lab_specs)
     # No conversions available, just copy values as-is
     else:
         df["value_primary"] = df.get("value_raw")
@@ -808,26 +803,133 @@ def _infer_missing_units(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Data
     return df
 
 
+def classify_qualitative_value(text: str) -> int | None:
+    """
+    Classify qualitative lab result text to boolean value (0/1/None).
+
+    Deterministic pattern matching built from 163-entry production cache.
+    Covers Portuguese/English/French/German medical terms.
+
+    Args:
+        text: Raw qualitative value from extraction
+
+    Returns:
+        0 (negative/normal/absent), 1 (positive/abnormal/present), or None (not classifiable)
+    """
+
+    # Guard: empty or missing input
+    if not text or not isinstance(text, str):
+        return None
+
+    normalized = text.strip().lower()
+
+    # Guard: empty after stripping
+    if not normalized or normalized in ("nan", "none", "null", "nr"):
+        return None
+
+    # Positive patterns (detected/present/abnormal)
+    _POSITIVE_PREFIXES = (
+        "positiv",  # positivo, positiva, positive
+        "detetad",  # detetado
+        "detected",
+        "détecté",
+        "resultado positivo",
+    )
+    _POSITIVE_KEYWORDS = {
+        "abundantes",
+        "levemente turvo",
+        "turvo",
+        "cultura polimicrobiana",
+    }
+
+    # Negative patterns (not detected/absent/normal)
+    _NEGATIVE_PREFIXES = (
+        "negativ",  # negativo, negativa, negative
+        "normal",
+        "ausent",  # ausente, ausentes, ausência
+        "ausenci",  # ausencia
+        "não det",  # não detetado, não det.
+        "not detected",
+        "nao contem",
+        "não contem",
+        "não contém",
+        "nao contém",
+        "nao se ",  # nao se isolaram, nao se observaram
+        "não se observaram ovos",
+        "não revelou",
+        "nao revelou",
+        "sem alterações",
+        "limpid",  # límpido, límpida, limpido
+        "amicrobiano",
+        "cultura estéril",
+        "por hplc não foram detectadas",
+        "não foram observad",
+        "exame ecográfico",  # normal findings
+        "forma e dimensões normais",
+        "de normal morfologia",
+        "morfologia celular: normal",
+        "o estudo electroforético",
+        "num exame químico com ausência",
+    )
+    _NEGATIVE_KEYWORDS = {
+        "amarela",
+        "amarelo",
+        "amarela clara",
+    }
+
+    # Check positive patterns
+    if any(normalized.startswith(p) for p in _POSITIVE_PREFIXES):
+        return 1
+    if normalized in _POSITIVE_KEYWORDS:
+        return 1
+    # "raras plaquetas gigantes" is positive (abnormal finding)
+    if normalized.startswith("raras plaquetas"):
+        return 1
+    # "observa-se mucosa cólica com folículo linfoide hiperplasiado" is positive
+    if "hiperplasiado" in normalized:
+        return 1
+    if "distendida, apresenta paredes finas" in normalized:
+        return 0
+
+    # Check negative patterns
+    if any(normalized.startswith(p) for p in _NEGATIVE_PREFIXES):
+        return 0
+    if normalized in _NEGATIVE_KEYWORDS:
+        return 0
+
+    # Not classifiable — return None (value stays in value_raw for review)
+    return None
+
+
+def _classify_qualitative_batch(values: list[str]) -> dict[str, int | None]:
+    """
+    Classify a batch of qualitative values using deterministic lookup.
+
+    Args:
+        values: List of raw qualitative values
+
+    Returns:
+        Dictionary mapping raw_value -> 0, 1, or None
+    """
+
+    result = {}
+    for v in values:
+        if v is not None:
+            result[v] = classify_qualitative_value(v)
+    return result
+
+
 def _convert_qualitative_values(
     df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
-    client: OpenAI | None,
-    model_id: str | None,
 ) -> pd.DataFrame:
     """
     Convert qualitative text values to 0/1 for boolean labs.
 
-    Uses LLM-based classification to convert values like "negativo"/"positivo"
+    Uses deterministic pattern matching to convert values like "negativo"/"positivo"
     to numeric 0/1 values. Handles both boolean labs and non-boolean labs
     with negative-like values.
     """
-
-    # Skip if no LLM client available for classification
-    if not client or not model_id:
-        return df
-
-    # Import here to avoid circular imports
-    from labs_parser.standardization import standardize_qualitative_values
 
     # Find labs with boolean primary unit
     boolean_labs = [lab_name for lab_name in df["lab_name_standardized"].unique() if pd.notna(lab_name) and lab_name != UNKNOWN_VALUE and lab_specs.get_primary_unit(lab_name) == "boolean"]
@@ -848,7 +950,7 @@ def _convert_qualitative_values(
             if not mask.any():
                 continue
 
-            qual_map = standardize_qualitative_values(df.loc[mask, source_col].tolist(), model_id, client)
+            qual_map = _classify_qualitative_batch(df.loc[mask, source_col].tolist())
             df.loc[mask, "value_primary"] = df.loc[mask, source_col].map(lambda v: qual_map.get(v))
             df.loc[mask, "lab_unit_primary"] = "boolean"
             logger.info(f"[normalization] Converted {mask.sum()} qualitative values from {source_col} (boolean labs)")
@@ -870,7 +972,7 @@ def _convert_qualitative_values(
         if not mask.any():
             continue
 
-        qual_map = standardize_qualitative_values(df.loc[mask, source_col].tolist(), model_id, client)
+        qual_map = _classify_qualitative_batch(df.loc[mask, source_col].tolist())
         converted_count = 0
         for idx in df.loc[mask].index:
             if qual_map.get(df.at[idx, source_col]) == 0:
@@ -995,15 +1097,13 @@ def _validate_reference_ranges(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> p
 def apply_unit_conversions(
     df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
-    client: OpenAI | None = None,
-    model_id: str | None = None,
 ) -> pd.DataFrame:
     """
     Convert values to primary units defined in lab specs.
 
     This function applies unit conversions in a vectorized manner where possible.
     Handles boolean tests by converting qualitative text values (e.g., "negativo", "positivo")
-    to 0/1 using LLM-based classification with caching.
+    to 0/1 using deterministic pattern matching.
     """
 
     # Initialize primary unit columns from standardized values
@@ -1018,7 +1118,7 @@ def apply_unit_conversions(
     df = _infer_missing_units(df, lab_specs)
 
     # Phase 3: Convert qualitative text values to 0/1
-    df = _convert_qualitative_values(df, lab_specs, client, model_id)
+    df = _convert_qualitative_values(df, lab_specs)
 
     # Phase 4: Apply unit conversion factors for each lab type
     for lab_name_standardized in df["lab_name_standardized"].unique():

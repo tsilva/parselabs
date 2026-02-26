@@ -25,7 +25,6 @@ INPUT_PATH/*.pdf
 │        └─ function calling (1 LLM call/page)         │
 │        └─ inline: lab_name + unit populated by LLM  │
 │        └─ temperature-escalation retry (up to 3x)   │
-│      → self_consistency(N) → LLM vote if N > 1      │
 │    cache → {doc}/{doc}.{page}.jpg + .json            │
 │    Standardized names list appended to system prompt │
 └────────────────────┬────────────────────────────────┘
@@ -41,8 +40,7 @@ INPUT_PATH/*.pdf
 │       - infer missing units (4-strategy heuristic)   │
 │       - apply conversion factors from lab_specs      │
 │    d. Qualitative → 0/1                              │
-│       cache → config/cache/qualitative_to_boolean.json│
-│       LLM fallback on cache miss                     │
+│       deterministic pattern matching (no LLM)        │
 │    e. Validate reference ranges (detect wrong units) │
 │    f. Sanitize % reference ranges                    │
 └────────────────────┬────────────────────────────────┘
@@ -100,9 +98,10 @@ INPUT_PATH/*.pdf
 - `unit` → mapped to `lab_unit_standardized` (format-normalized unit)
 
 **Post-extraction standardization fallback** is applied after extraction for any results still missing `lab_name_standardized` or `lab_unit_standardized`:
-1. **Name fallback**: calls `standardize_lab_names()` (cache + LLM) for all unmapped names → updates `lab_name_standardized`
-2. **Unit fallback**: calls `standardize_lab_units()` (cache + LLM) for all unmapped `(raw_unit, std_name)` pairs → updates `lab_unit_standardized`
-3. Both caches are persisted: `config/cache/name_standardization.json`, `config/cache/unit_standardization.json`
+1. **Name fallback**: calls `standardize_lab_names()` (cache-only) for all unmapped names → updates `lab_name_standardized`
+2. **Unit fallback**: calls `standardize_lab_units()` (cache-only) for all unmapped `(raw_unit, std_name)` pairs → updates `lab_unit_standardized`
+3. Cache misses return `$UNKNOWN$` and log a warning. Use `utils/update_standardization_caches.py` to batch-update caches via LLM.
+4. Caches stored at: `config/cache/name_standardization.json`, `config/cache/unit_standardization.json`
 
 **Retry strategy (temperature escalation):**
 - Attempt 0: `temperature=0.0`
@@ -113,13 +112,8 @@ INPUT_PATH/*.pdf
 **Pre-validation repair (`_fix_lab_results_format`):**
 1. Normalize date formats (DD/MM/YYYY → YYYY-MM-DD)
 2. Map `lab_name` → `lab_name_standardized`, `unit` → `lab_unit_standardized`
-3. Reassemble flattened key-value strings into dicts
-4. Strip embedded metadata from numeric reference fields
-5. Parse string results via LLM fallback (`_parse_string_results_with_llm`)
-
-**Self-consistency (`self_consistency`):**
-- `N_EXTRACTIONS=1` (default): single call, no voting
-- `N > 1`: parallel calls at `temperature=0.5`; if all identical → return first; else LLM votes on best
+3. Strip embedded metadata from numeric reference fields
+4. Filter out non-dict items
 
 **Cache:** preprocessed image saved as `{page}.jpg`; extracted JSON saved as `{page}.json` — both skipped if already present.
 
@@ -146,11 +140,12 @@ Detects protein-electrophoresis-style errors (e.g., Albumin `61.5 g/dL` that sho
 - Convert reference ranges by same factor
 - Special case: specific gravity `> 100` → divide by 1000
 
-**d. Qualitative values (`standardize_qualitative_values`):**
-- Cache-first lookup (`config/cache/qualitative_to_boolean.json`)
-- LLM fallback only on cache miss
+**d. Qualitative values (`classify_qualitative_value`):**
+- Deterministic pattern matching (~40 Portuguese/English/French/German medical terms)
+- No LLM call — pure string matching with prefix/exact patterns
 - Boolean labs: convert `value_raw` or `comments` to `0`/`1`
 - Non-boolean labs: only `0` (negative) values converted
+- Unknown values return `None` (safe default — stays in `value_raw` for review)
 
 **e. Reference range validation (`validate_reference_range`):**
 - Compare extracted range against `lab_specs.ranges.default`
@@ -186,16 +181,15 @@ Relationship formulas (e.g., LDL Friedewald) are defined in `lab_specs.json` und
 
 ---
 
-## LLM Calls: Before vs After
+## LLM Calls per Pipeline Run
 
-| Stage | Before | After |
-|-------|--------|-------|
-| Viability check | 1 (LLM) | 0 (simple char count) |
-| Extraction | 1/page | 1/page (includes inline standardization) |
-| Name standardization | 1/PDF | 0 on cache hit; 1 on miss (post-extraction fallback) |
-| Unit standardization | 1/PDF | 0 on cache hit; 1 on miss (post-extraction fallback) |
-| Qualitative→boolean | 0-2/PDF | 0 on cache hit, LLM on miss |
-| **Total (3-page PDF)** | **~5-7** | **~1-3** (extraction only, warm cache) |
+| Stage | LLM Calls |
+|-------|-----------|
+| Extraction | 1/page (function calling with inline standardization) |
+| Name standardization | 0 (cache-only; misses return `$UNKNOWN$`) |
+| Unit standardization | 0 (cache-only; misses return `$UNKNOWN$`) |
+| Qualitative→boolean | 0 (deterministic pattern matching) |
+| **Total (3-page PDF)** | **3** (extraction only) |
 
 ---
 
@@ -230,14 +224,15 @@ Relationship formulas (e.g., LDL Friedewald) are defined in `lab_specs.json` und
 | File | Purpose |
 |------|---------|
 | `main.py` | Pipeline orchestration (`run_for_profile`, `process_single_pdf`) |
-| `labs_parser/extraction.py` | Vision/text LLM extraction, `HealthLabReport`/`LabResult` Pydantic models, LLM-facing `HealthLabReportExtraction` schema, self-consistency, inline standardization |
-| `labs_parser/standardization.py` | Lab name, unit, and qualitative-value standardization with LLM + persistent cache |
+| `labs_parser/extraction.py` | Vision/text LLM extraction, `HealthLabReport`/`LabResult` Pydantic models, LLM-facing `HealthLabReportExtraction` schema, inline standardization |
+| `labs_parser/standardization.py` | Lab name and unit standardization via cache-only lookup (no LLM at runtime) |
 | `labs_parser/normalization.py` | Unit conversion, value preprocessing, unit inference, range validation, % name correction |
 | `labs_parser/validation.py` | `ValueValidator` — data-driven extraction error detection |
 | `labs_parser/config.py` | `ExtractionConfig`, `ProfileConfig`, `LabSpecsConfig` |
 | `labs_parser/utils.py` | `preprocess_page_image`, logging setup |
 | `config/lab_specs.json` | 328 standardized lab names, units, conversion factors, ranges, relationships |
 | `config/cache/` | Persistent LLM decision caches (user-editable JSON files) |
+| `utils/update_standardization_caches.py` | Batch-update name/unit standardization caches via LLM |
 | `prompts/` | Prompt templates: `extraction_system`, `extraction_user`, `name_standardization`, `unit_standardization` |
 | `viewer.py` | Interactive Gradio UI for reviewing extracted results |
 | `test.py` | Data integrity and schema validation tests |

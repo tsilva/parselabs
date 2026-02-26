@@ -33,7 +33,6 @@ from labs_parser.extraction import (  # noqa: E402
     _build_standardized_names_section,
     extract_labs_from_page_image,
     extract_labs_from_text,
-    self_consistency,
 )
 from labs_parser.normalization import (  # noqa: E402
     apply_dtype_conversions,
@@ -375,12 +374,9 @@ def _extract_or_load_page_data(
         _check_and_record_failure(page_data, pdf_stem, page_idx, failed_pages)
         return page_data
 
-    # Perform fresh extraction using vision model with self-consistency
+    # Perform fresh extraction using vision model
     logger.info(f"[{page_name}] Extracting data from image...")
-    page_data, _ = self_consistency(
-        extract_labs_from_page_image,
-        config.self_consistency_model_id,
-        config.n_extractions,
+    page_data = extract_labs_from_page_image(
         jpg_path,
         config.extract_model_id,
         client,
@@ -537,7 +533,6 @@ def _extract_via_vision(
 def _apply_name_standardization(
     all_results: list,
     lab_specs: LabSpecsConfig,
-    config: ExtractionConfig,
     pdf_stem: str,
 ) -> int:
     """Apply name standardization fallback. Returns count of updated results."""
@@ -549,12 +544,10 @@ def _apply_name_standardization(
     if not names_to_standardize:
         return 0
 
-    # Request standardization mappings from LLM
+    # Look up standardization mappings from cache
     name_mappings = standardize_lab_names(
         names_to_standardize,
-        config.extract_model_id,
         lab_specs.standardized_names,
-        client,
     )
 
     # Apply mappings to results and count updates
@@ -581,7 +574,6 @@ def _apply_name_standardization(
 def _apply_unit_standardization(
     all_results: list,
     lab_specs: LabSpecsConfig,
-    config: ExtractionConfig,
     pdf_stem: str,
 ) -> int:
     """Apply unit standardization fallback. Returns count of updated results."""
@@ -600,12 +592,10 @@ def _apply_unit_standardization(
     if not unit_contexts:
         return 0
 
-    # Request unit standardization mappings from LLM
+    # Look up unit standardization mappings from cache
     unit_mappings = standardize_lab_units(
         unit_contexts,
-        config.extract_model_id,
         lab_specs.standardized_units,
-        client,
         lab_specs,
     )
 
@@ -637,7 +627,6 @@ def _apply_unit_standardization(
 def _apply_standardization_fallbacks(
     all_results: list,
     lab_specs: LabSpecsConfig,
-    config: ExtractionConfig,
     pdf_stem: str,
 ) -> None:
     """Apply name and unit standardization fallbacks."""
@@ -647,10 +636,10 @@ def _apply_standardization_fallbacks(
         return
 
     # Apply name standardization to unmapped results
-    _apply_name_standardization(all_results, lab_specs, config, pdf_stem)
+    _apply_name_standardization(all_results, lab_specs, pdf_stem)
 
     # Apply unit standardization to unmapped results
-    _apply_unit_standardization(all_results, lab_specs, config, pdf_stem)
+    _apply_unit_standardization(all_results, lab_specs, pdf_stem)
 
 
 def _save_results_to_csv(
@@ -766,7 +755,7 @@ def process_single_pdf(
             return _handle_empty_results(csv_path, pdf_stem)[0], failed_pages
 
         # Apply standardization fallbacks for any missing standardized names/units
-        _apply_standardization_fallbacks(all_results, lab_specs, config, pdf_stem)
+        _apply_standardization_fallbacks(all_results, lab_specs, pdf_stem)
 
         # Persist standardized values back to per-page JSON files for future runs
         _update_json_with_standardized_values(all_results, doc_out_dir)
@@ -1196,8 +1185,6 @@ def _validate_profile_and_env(args) -> ProfileConfig:
         errors.append("OPENROUTER_API_KEY environment variable not set.")
     if not os.getenv("EXTRACT_MODEL_ID"):
         errors.append("EXTRACT_MODEL_ID environment variable not set.")
-    if not os.getenv("SELF_CONSISTENCY_MODEL_ID"):
-        errors.append("SELF_CONSISTENCY_MODEL_ID environment variable not set.")
 
     if errors:
         raise ConfigurationError("\n".join(errors))
@@ -1210,7 +1197,6 @@ def _build_config_from_profile(profile: ProfileConfig, args) -> ExtractionConfig
     # Load required environment variables
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
     extract_model_id = os.getenv("EXTRACT_MODEL_ID")
-    self_consistency_model_id = os.getenv("SELF_CONSISTENCY_MODEL_ID")
 
     # Build base configuration from profile and environment
     config = ExtractionConfig(
@@ -1218,16 +1204,13 @@ def _build_config_from_profile(profile: ProfileConfig, args) -> ExtractionConfig
         output_path=profile.output_path,
         openrouter_api_key=openrouter_api_key,
         extract_model_id=extract_model_id,
-        self_consistency_model_id=self_consistency_model_id,
         input_file_regex=profile.input_file_regex or "*.pdf",
-        n_extractions=int(os.getenv("N_EXTRACTIONS", "1")),
         max_workers=profile.workers or int(os.getenv("MAX_WORKERS", "0")) or (os.cpu_count() or 1),
     )
 
     # Apply CLI argument overrides (highest priority)
     if args.model:
         config.extract_model_id = args.model
-        config.self_consistency_model_id = args.model
     if args.workers:
         config.max_workers = args.workers
     if args.pattern:
@@ -1402,8 +1385,6 @@ def _process_and_transform_data(
     merged_df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
     export_cols: list,
-    client: OpenAI,
-    model_id: str,
 ) -> pd.DataFrame | None:
     """Apply all transformations to merged data: normalize, filter, dedupe, validate.
 
@@ -1412,7 +1393,7 @@ def _process_and_transform_data(
 
     # Apply value normalizations and unit conversions
     logger.info("Applying normalizations...")
-    merged_df = apply_normalizations(merged_df, lab_specs, client, model_id)
+    merged_df = apply_normalizations(merged_df, lab_specs)
 
     # Filter out rows that couldn't be mapped to known lab tests
     merged_df = _filter_unknown_labs(merged_df)
@@ -1531,8 +1512,6 @@ def run_for_profile(args, profile_name: str) -> None:
         merged_df,
         lab_specs,
         export_cols,
-        client,
-        config.self_consistency_model_id,
     )
 
     # Guard: Data processing failed

@@ -38,6 +38,7 @@ The `utils/` directory contains helper scripts for building and maintaining conf
 - `build_lab_specs_ranges.py` - Generate healthy ranges for lab_specs.json
 - `sort_lab_specs.py` - Sort lab specifications alphabetically
 - `analyze_unknowns.py` - Analyze $UNKNOWN$ values in extracted results
+- `update_standardization_caches.py` - Batch-update name/unit standardization caches via LLM
 
 See `utils/README.md` for detailed usage instructions.
 
@@ -45,10 +46,7 @@ See `utils/README.md` for detailed usage instructions.
 Prompt templates live in `prompts/` as `.md` files and are loaded at module level:
 - `extraction_system.md`, `extraction_user.md` - vision extraction prompts
 - `text_extraction_user.md` - text-based extraction user prompt (template: `{text}`, `{std_reminder}`)
-- `self_consistency_system.md` - self-consistency voting system prompt
-- `string_parsing_system.md`, `string_parsing.md` - string result parsing prompts (template: `{string_results_json}`)
-- `name_standardization.md`, `unit_standardization.md` - standardization prompts
-- `qualitative_classification.md` - qualitative value classification prompt
+- `name_standardization.md`, `unit_standardization.md` - standardization prompts (used by `utils/update_standardization_caches.py`)
 - `conversion_factor_system.md`, `conversion_factor_user.md` - unit conversion factor prompts (template: `{lab_name}`, `{from_unit}`, `{to_unit}`)
 - `health_range_system.md`, `health_range_user.md` - healthy range prompts (template: `{lab_name}`, `{primary_unit}`, `{user_stats_json}`)
 
@@ -231,10 +229,8 @@ Final outputs in `OUTPUT_PATH`:
 Required:
 - `OPENROUTER_API_KEY` - API key for OpenRouter
 - `EXTRACT_MODEL_ID` - Vision model for extraction
-- `SELF_CONSISTENCY_MODEL_ID` - Model for self-consistency checks
 
 Optional:
-- `N_EXTRACTIONS` - Self-consistency extractions (default: 1)
 - `MAX_WORKERS` - Parallel workers (default: CPU count)
 
 Note: Input and output paths must be specified via profiles. See `profiles/_template.yaml`.
