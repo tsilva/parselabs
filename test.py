@@ -1,11 +1,14 @@
 import hashlib
 import json
+import logging
 import sys
 from collections import defaultdict
 from functools import wraps
 
 import pandas as pd
 from dotenv import dotenv_values
+
+logger = logging.getLogger(__name__)
 
 # Load OUTPUT_PATH from .env
 env = dotenv_values(".env.local")
@@ -320,6 +323,8 @@ def test_lab_specs_schema(report):
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
     report = {}
 
     # Schema validation first (validates config structure)
@@ -339,14 +344,14 @@ def main():
     test_unique_date_lab_name(report)
 
     # Print summary report
-    print("\n=== Integrity Report ===")
+    logger.info("\n=== Integrity Report ===")
     if not report:
-        print("All checks passed.")
+        logger.info("All checks passed.")
     else:
         for file, errors in report.items():
-            print(f"\nFile: {file}")
+            logger.info(f"\nFile: {file}")
             for err in errors:
-                print(f"  - {err}")
+                logger.warning(f"  - {err}")
 
 
 if __name__ == "__main__":

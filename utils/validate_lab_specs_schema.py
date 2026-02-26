@@ -13,9 +13,12 @@ Validates:
 """
 
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class LabSpecsValidator:
@@ -413,33 +416,34 @@ class LabSpecsValidator:
     def print_report(self) -> None:
         """Print validation report."""
 
-        print("\n=== Lab Specs Schema Validation ===\n")
-        print(f"Config: {self.config_path}")
+        logger.info("\n=== Lab Specs Schema Validation ===\n")
+        logger.info(f"Config: {self.config_path}")
 
         # Count lab entries
         lab_count = sum(1 for k in self.config.keys() if not k.startswith("_"))
-        print(f"Lab entries: {lab_count}")
+        logger.info(f"Lab entries: {lab_count}")
 
         # Print errors if any
         if self.errors:
-            print(f"\n❌ Errors ({len(self.errors)}):")
+            logger.error(f"\n❌ Errors ({len(self.errors)}):")
             for error in self.errors:
-                print(f"  - {error}")
+                logger.error(f"  - {error}")
         # No errors
         else:
-            print("\n✅ No errors found")
+            logger.info("\n✅ No errors found")
 
         # Print warnings if any
         if self.warnings:
-            print(f"\n⚠️  Warnings ({len(self.warnings)}):")
+            logger.warning(f"\n⚠️  Warnings ({len(self.warnings)}):")
             for warning in self.warnings:
-                print(f"  - {warning}")
+                logger.warning(f"  - {warning}")
 
-        print()
+        logger.info("")
 
 
 def main():
     """Run validation and exit with appropriate code."""
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     validator = LabSpecsValidator()
 

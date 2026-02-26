@@ -7,6 +7,7 @@ from labs_parser.config import (
     LabSpecsConfig,
     ProfileConfig,
 )
+from labs_parser.exceptions import ConfigurationError, PipelineError
 from labs_parser.extraction import (
     HealthLabReport,
     LabResult,
@@ -35,6 +36,9 @@ from labs_parser.validation import ValueValidator
 __version__ = "0.1.0"
 
 __all__ = [
+    # Exceptions
+    "ConfigurationError",
+    "PipelineError",
     # Config
     "ExtractionConfig",
     "ProfileConfig",

@@ -1893,6 +1893,8 @@ Examples:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
     args = parse_args()
 
     # Handle --list-profiles
@@ -1900,12 +1902,12 @@ if __name__ == "__main__":
         profiles = ProfileConfig.list_profiles()
         # Print profiles if available
         if profiles:
-            print("Available profiles:")
+            logger.info("Available profiles:")
             for name in profiles:
-                print(f"  - {name}")
+                logger.info(f"  - {name}")
         else:
             # No profiles configured
-            print("No profiles found. Create profiles in the 'profiles/' directory.")
+            logger.info("No profiles found. Create profiles in the 'profiles/' directory.")
         sys.exit(0)
 
     # Determine which profile to use
@@ -1915,20 +1917,20 @@ if __name__ == "__main__":
         available = get_available_profiles()
         # No profiles configured at all
         if not available:
-            print("Error: No profiles found.")
-            print("Create profiles in the 'profiles/' directory.")
+            logger.error("No profiles found.")
+            logger.error("Create profiles in the 'profiles/' directory.")
             sys.exit(1)
         profile_name = available[0]
-        print(f"No profile specified, defaulting to: {profile_name}")
+        logger.info(f"No profile specified, defaulting to: {profile_name}")
 
     # Guard: profile must exist
     profile = load_profile(profile_name)
     if not profile:
-        print(f"Error: Profile '{profile_name}' not found")
-        print("Use --list-profiles to see available profiles.")
+        logger.error(f"Profile '{profile_name}' not found")
+        logger.error("Use --list-profiles to see available profiles.")
         sys.exit(1)
 
-    print(f"Using profile: {profile.name}")
+    logger.info(f"Using profile: {profile.name}")
 
     # Display demographics info if configured
     if profile.demographics:
@@ -1938,25 +1940,25 @@ if __name__ == "__main__":
         if profile.demographics.age is not None:
             demo_info.append(f"age={profile.demographics.age}")
         if demo_info:
-            print(f"Demographics: {', '.join(demo_info)}")
+            logger.info(f"Demographics: {', '.join(demo_info)}")
 
     # Guard: output_path must be configured
     if not profile.output_path:
-        print(f"Error: Profile '{profile_name}' has no output_path defined.")
+        logger.error(f"Profile '{profile_name}' has no output_path defined.")
         sys.exit(1)
 
     # Verify output path has all.csv
     output_path = get_output_path()
     csv_path = output_path / "all.csv"
     if not csv_path.exists():
-        print(f"Error: No all.csv found at {csv_path}")
-        print("Run extract.py first to extract lab results.")
+        logger.error(f"No all.csv found at {csv_path}")
+        logger.error("Run extract.py first to extract lab results.")
         sys.exit(1)
 
     # Build allowed paths for serving files from all profiles
     # Read profile configs directly without modifying global state
     available = get_available_profiles()
-    print(f"Available profiles: {', '.join(available)}")
+    logger.info(f"Available profiles: {', '.join(available)}")
 
     allowed_paths = set()
     for pname in available:
@@ -1970,8 +1972,8 @@ if __name__ == "__main__":
 
     allowed_paths = list(allowed_paths)
 
-    print(f"Output path: {output_path}")
-    print("Starting Lab Results Viewer on http://localhost:7862")
+    logger.info(f"Output path: {output_path}")
+    logger.info("Starting Lab Results Viewer on http://localhost:7862")
 
     demo = create_app()
 

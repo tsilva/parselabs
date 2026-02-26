@@ -28,6 +28,7 @@ import argparse
 import concurrent.futures
 import csv
 import json
+import logging
 import os
 import re
 import shutil
@@ -37,6 +38,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from openai import OpenAI
+
+logger = logging.getLogger(__name__)
 
 load_dotenv(
     Path(".env.local") if Path(".env.local").exists() else Path(".env"),
@@ -52,12 +55,12 @@ def validate_env():
 
     # Require extraction model ID
     if not os.getenv("EXTRACT_MODEL_ID"):
-        print("Error: EXTRACT_MODEL_ID environment variable not set")
+        logger.error("EXTRACT_MODEL_ID environment variable not set")
         sys.exit(1)
 
     # Require API key
     if not os.getenv("OPENROUTER_API_KEY"):
-        print("Error: OPENROUTER_API_KEY environment variable not set")
+        logger.error("OPENROUTER_API_KEY environment variable not set")
         sys.exit(1)
 
 
@@ -83,7 +86,7 @@ def cmd_sort(args):
         json.dump(sorted_data, f, ensure_ascii=False, indent=2)
         f.write("\n")
 
-    print(f"✓ Sorted {len(data)} lab entries in {LAB_SPECS_PATH}")
+    logger.info(f"✓ Sorted {len(data)} lab entries in {LAB_SPECS_PATH}")
 
 
 def cmd_fix_encoding(args):
@@ -97,7 +100,7 @@ def cmd_fix_encoding(args):
     if args.backup:
         backup_path = LAB_SPECS_PATH.with_suffix(".json.backup")
         shutil.copy2(LAB_SPECS_PATH, backup_path)
-        print(f"✓ Created backup: {backup_path}")
+        logger.info(f"✓ Created backup: {backup_path}")
 
     with open(LAB_SPECS_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -114,7 +117,7 @@ def cmd_fix_encoding(args):
     if data != validated_data:
         raise ValueError("Data integrity check failed!")
 
-    print(f"✓ Fixed encoding in {LAB_SPECS_PATH}")
+    logger.info(f"✓ Fixed encoding in {LAB_SPECS_PATH}")
 
 
 def get_conversion_factor(lab_name, from_unit, to_unit, client, temperature=0.0):
@@ -248,7 +251,7 @@ def cmd_build_conversions(args):
     def task_fn(args):
         lab_name, unit, primary_unit = args
         factor = get_conversion_factor(lab_name, unit, primary_unit, client)
-        print(f"  {lab_name}: {unit} → {primary_unit} = {factor}")
+        logger.info(f"  {lab_name}: {unit} → {primary_unit} = {factor}")
         return (lab_name, unit, primary_unit, factor)
 
     max_workers = args.workers or min(30, len(conversion_tasks))
@@ -266,7 +269,7 @@ def cmd_build_conversions(args):
     with open(output_json, "w", encoding="utf-8") as f:
         json.dump(labs_specs, f, indent=2, ensure_ascii=False)
 
-    print(f"✓ Generated conversion factors for {len(labs_specs)} labs → {output_json}")
+    logger.info(f"✓ Generated conversion factors for {len(labs_specs)} labs → {output_json}")
 
 
 def cmd_build_ranges(args):
@@ -290,7 +293,7 @@ def cmd_build_ranges(args):
         lab_name, primary_unit = args
         health_range = get_health_range(lab_name, primary_unit, user_stats, client)
         parsed = parse_range_string(health_range, primary_unit)
-        print(f"  {lab_name}: {health_range}")
+        logger.info(f"  {lab_name}: {health_range}")
         return (lab_name, parsed)
 
     max_workers = args.workers or min(10, len(health_range_tasks))
@@ -309,10 +312,12 @@ def cmd_build_ranges(args):
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(labs_specs, f, indent=2, ensure_ascii=False)
 
-    print(f"✓ Generated health ranges for {len(health_range_tasks)} labs → {output_path}")
+    logger.info(f"✓ Generated health ranges for {len(health_range_tasks)} labs → {output_path}")
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
     parser = argparse.ArgumentParser(
         description="Lab Specifications Manager - Manage lab_specs.json",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -385,7 +390,7 @@ Examples:
     try:
         commands[args.command](args)
     except Exception as e:
-        print(f"✗ Error: {e}")
+        logger.error(f"✗ Error: {e}")
         raise
 
 
