@@ -1,5 +1,15 @@
 <script>
 (function() {
+    function setReviewDropdown(value) {
+        var container = document.querySelector('#review-status-dropdown');
+        if (!container) return;
+        var input = container.querySelector('input');
+        if (!input) return;
+        input.value = value;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
     document.addEventListener('keydown', function(event) {
         // Skip if user is typing in an input field
         if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
@@ -7,11 +17,11 @@
         }
         switch(event.key.toLowerCase()) {
             case 'y':
-                document.querySelector('#accept-btn')?.click();
+                setReviewDropdown('Accepted');
                 event.preventDefault();
                 break;
             case 'n':
-                document.querySelector('#reject-btn')?.click();
+                setReviewDropdown('Rejected');
                 event.preventDefault();
                 break;
             case 'arrowright':

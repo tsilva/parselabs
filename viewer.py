@@ -293,7 +293,7 @@ def save_review_to_json(entry: dict, status: str, output_path: Path) -> tuple[bo
 
         # Update review status and timestamp
         data["lab_results"][result_index]["review_status"] = status
-        data["lab_results"][result_index]["review_completed_at"] = datetime.utcnow().isoformat() + "Z"
+        data["lab_results"][result_index]["review_completed_at"] = datetime.utcnow().isoformat() + "Z" if status else None
 
         # Persist updated data
         json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -1169,24 +1169,21 @@ def build_details_html(entry: dict) -> str:
     return html
 
 
-def build_review_status_html(entry: dict) -> str:
-    """Build HTML for current review status badge."""
+def get_review_status_label(entry: dict) -> str:
+    """Get review status label for dropdown display."""
 
     # Guard: no entry
     if not entry:
-        return ""
+        return "Pending"
 
     status = get_review_status(entry)
 
-    # Accepted status badge
     if status == "accepted":
-        return '<span class="status-accepted">Accepted</span>'
-    # Rejected status badge
+        return "Accepted"
     elif status == "rejected":
-        return '<span class="status-rejected">Rejected</span>'
-    # Default pending badge
+        return "Rejected"
     else:
-        return '<span class="status-pending">Pending</span>'
+        return "Pending"
 
 
 # =============================================================================
@@ -1203,7 +1200,7 @@ def _empty_nav_state(full_df: pd.DataFrame) -> tuple:
         "No results",
         None,
         "<p>No entry selected</p>",
-        "",
+        gr.update(value="Pending"),
         "",
     )
 
@@ -1226,14 +1223,14 @@ def _build_row_context(
     """Build common row context for navigation/selection handlers.
 
     Returns:
-        Tuple of (plot, row_idx, position_text, image_path, details_html, status_html, banner_html)
+        Tuple of (plot, row_idx, position_text, image_path, details_html, status_update, banner_html)
     """
 
     row = filtered_df.iloc[row_idx]
     position_text = f"**Row {row_idx + 1} of {len(filtered_df)}**"
     image_path = get_image_path(row.to_dict(), get_output_path())
     details_html = build_details_html(row.to_dict())
-    status_html = build_review_status_html(row.to_dict())
+    status_value = get_review_status_label(row.to_dict())
     banner_html = build_review_reason_banner(row.to_dict())
 
     # Determine which labs to plot
@@ -1255,7 +1252,7 @@ def _build_row_context(
         position_text,
         image_path,
         details_html,
-        status_html,
+        gr.update(value=status_value),
         banner_html,
     )
 
@@ -1280,7 +1277,7 @@ def handle_filter_change(
             position_text,
             image_path,
             details_html,
-            status_html,
+            status_update,
             banner_html,
         ) = _build_row_context(filtered_df, 0, full_df, lab_names)
     else:
@@ -1289,7 +1286,7 @@ def handle_filter_change(
         position_text = "No results"
         image_path = None
         details_html = "<p>No entry selected</p>"
-        status_html = ""
+        status_update = gr.update(value="Pending")
         banner_html = ""
         plot = create_interactive_plot(full_df, [lab_names] if lab_names else [])
 
@@ -1302,7 +1299,7 @@ def handle_filter_change(
         position_text,
         image_path,
         details_html,
-        status_html,
+        status_update,
         banner_html,
     )
 
@@ -1394,7 +1391,7 @@ def handle_review_action(
             "No results",  # position_text
             None,  # image
             "<p>No entry selected</p>",  # details
-            "",  # status_html
+            gr.update(value="Pending"),  # status dropdown
             build_summary_cards(full_df),  # summary
             "",  # banner_html
         )
@@ -1435,7 +1432,7 @@ def handle_review_action(
             "All done!",
             None,
             "<p>All entries reviewed in this filter!</p>",
-            "",
+            gr.update(value="Pending"),
             summary,
             "",  # banner_html
         )
@@ -1450,7 +1447,7 @@ def handle_review_action(
         position_text,
         image_path,
         details_html,
-        status_html,
+        status_update,
         banner_html,
     ) = _build_row_context(filtered_df, current_idx, full_df, lab_names)
 
@@ -1463,21 +1460,29 @@ def handle_review_action(
         position_text,
         image_path,
         details_html,
-        status_html,
+        status_update,
         summary,
         banner_html,
     )
 
 
-def handle_accept(
+def handle_status_dropdown_change(
+    dropdown_value: str,
     current_idx: int,
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
-    lab_names: list | None,
+    lab_names: str | None,
     latest_only: bool,
     review_filter: str,
 ):
-    """Mark current entry as accepted."""
+    """Handle review status dropdown change."""
+
+    status_map = {
+        "Accepted": "accepted",
+        "Rejected": "rejected",
+        "Pending": None,
+    }
+    status = status_map.get(dropdown_value)
 
     return handle_review_action(
         current_idx,
@@ -1486,28 +1491,7 @@ def handle_accept(
         lab_names,
         latest_only,
         review_filter,
-        "accepted",
-    )
-
-
-def handle_reject(
-    current_idx: int,
-    filtered_df: pd.DataFrame,
-    full_df: pd.DataFrame,
-    lab_names: list | None,
-    latest_only: bool,
-    review_filter: str,
-):
-    """Mark current entry as rejected."""
-
-    return handle_review_action(
-        current_idx,
-        filtered_df,
-        full_df,
-        lab_names,
-        latest_only,
-        review_filter,
-        "rejected",
+        status,
     )
 
 
@@ -1540,7 +1524,7 @@ def handle_profile_change(profile_name: str):
             None,  # image
             [],  # lab_name_choices
             "<p>No entry selected</p>",  # details
-            "",  # status_html
+            gr.update(value="Pending"),  # status dropdown
             "",  # banner_html
         )
 
@@ -1558,7 +1542,7 @@ def handle_profile_change(profile_name: str):
             None,
             [],
             "<p>No entry selected</p>",
-            "",
+            gr.update(value="Pending"),
             "",  # banner_html
         )
 
@@ -1571,7 +1555,7 @@ def handle_profile_change(profile_name: str):
     position_text = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
     image_path = get_image_path(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
     details_html = build_details_html(full_df.iloc[0].to_dict()) if not full_df.empty else "<p>No entry selected</p>"
-    status_html = build_review_status_html(full_df.iloc[0].to_dict()) if not full_df.empty else ""
+    status_label = get_review_status_label(full_df.iloc[0].to_dict()) if not full_df.empty else "Pending"
     banner_html = build_review_reason_banner(full_df.iloc[0].to_dict()) if not full_df.empty else ""
 
     # Auto-select first row - show its plot
@@ -1594,7 +1578,7 @@ def handle_profile_change(profile_name: str):
         image_path,
         gr.update(choices=lab_name_choices, value=None),
         details_html,
-        status_html,
+        gr.update(value=status_label),
         banner_html,
     )
 
@@ -1613,7 +1597,7 @@ def create_app():
     initial_position = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
     initial_image = get_image_path(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
     initial_details = build_details_html(full_df.iloc[0].to_dict()) if not full_df.empty else "<p>No entry selected</p>"
-    initial_status = build_review_status_html(full_df.iloc[0].to_dict()) if not full_df.empty else ""
+    initial_status = get_review_status_label(full_df.iloc[0].to_dict()) if not full_df.empty else "Pending"
 
     # Auto-select first row - get its lab name for the initial plot
     initial_plot_labs = []
@@ -1738,20 +1722,12 @@ def create_app():
                 review_reason_banner = gr.HTML(value=initial_banner)
 
                 with gr.Row():
-                    review_status_display = gr.HTML(value=initial_status)
-
-                with gr.Row():
-                    accept_btn = gr.Button(
-                        "Accept [Y]",
-                        variant="primary",
-                        elem_id="accept-btn",
-                        size="sm",
-                    )
-                    reject_btn = gr.Button(
-                        "Reject [N]",
-                        variant="secondary",
-                        elem_id="reject-btn",
-                        size="sm",
+                    review_status_dropdown = gr.Dropdown(
+                        choices=["Pending", "Accepted", "Rejected"],
+                        value=initial_status,
+                        label="Status",
+                        allow_custom_value=False,
+                        elem_id="review-status-dropdown",
                     )
 
         gr.Markdown("---")
@@ -1772,7 +1748,7 @@ def create_app():
                 source_image,
                 lab_name_filter,
                 details_display,
-                review_status_display,
+                review_status_dropdown,
                 review_reason_banner,
             ],
         )
@@ -1793,7 +1769,7 @@ def create_app():
             position_display,
             source_image,
             details_display,
-            review_status_display,
+            review_status_dropdown,
             review_reason_banner,
         ]
 
@@ -1823,7 +1799,7 @@ def create_app():
                 position_display,
                 source_image,
                 details_display,
-                review_status_display,
+                review_status_dropdown,
                 review_reason_banner,
             ],
         )
@@ -1841,15 +1817,16 @@ def create_app():
             position_display,
             source_image,
             details_display,
-            review_status_display,
+            review_status_dropdown,
             review_reason_banner,
         ]
 
         prev_btn.click(fn=handle_previous, inputs=nav_inputs, outputs=nav_outputs)
         next_btn.click(fn=handle_next, inputs=nav_inputs, outputs=nav_outputs)
 
-        # Review action buttons
-        review_inputs = [
+        # Review status dropdown
+        review_dropdown_inputs = [
+            review_status_dropdown,
             current_idx_state,
             filtered_df_state,
             full_df_state,
@@ -1866,13 +1843,12 @@ def create_app():
             position_display,
             source_image,
             details_display,
-            review_status_display,
+            review_status_dropdown,
             summary_display,
             review_reason_banner,
         ]
 
-        accept_btn.click(fn=handle_accept, inputs=review_inputs, outputs=review_outputs)
-        reject_btn.click(fn=handle_reject, inputs=review_inputs, outputs=review_outputs)
+        review_status_dropdown.change(fn=handle_status_dropdown_change, inputs=review_dropdown_inputs, outputs=review_outputs)
 
         # Export
         export_btn.click(fn=export_csv, inputs=[filtered_df_state], outputs=[export_file]).then(fn=lambda: gr.update(visible=True), outputs=[export_file])
