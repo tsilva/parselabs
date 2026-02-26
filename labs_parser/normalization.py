@@ -1213,11 +1213,15 @@ def flag_duplicate_entries(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty or "date" not in df.columns or "lab_name_standardized" not in df.columns:
         return df
 
-    # Initialize review columns if not present
+    # Initialize review columns if not present, ensuring correct dtypes
     if "review_needed" not in df.columns:
         df["review_needed"] = False
+    else:
+        df["review_needed"] = df["review_needed"].astype(bool)
     if "review_reason" not in df.columns:
         df["review_reason"] = ""
+    else:
+        df["review_reason"] = df["review_reason"].fillna("").astype(str)
 
     # Find all rows that are part of a duplicate group
     dup_mask = df.duplicated(subset=["date", "lab_name_standardized"], keep=False)
