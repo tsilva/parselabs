@@ -27,6 +27,7 @@ from labs_parser.config import (  # noqa: E402
     LabSpecsConfig,
     ProfileConfig,
 )
+from labs_parser.exceptions import ConfigurationError, PipelineError  # noqa: E402
 from labs_parser.extraction import (  # noqa: E402
     LabResult,
     _build_standardized_names_section,
@@ -101,6 +102,7 @@ COLUMN_SCHEMA = {
 
 def get_column_lists(schema: dict):
     """Extract ordered lists from schema."""
+
     # Define canonical column order for CSV export
     ordered = [
         # Core columns in logical order
@@ -153,6 +155,7 @@ def extract_text_from_pdf(pdf_path: Path) -> tuple[str, bool]:
         Tuple of (extracted_text, success). Returns ("", False) on non-zero exit code.
         May raise subprocess.TimeoutExpired on timeout.
     """
+
     # Execute pdftotext command with layout preservation and 30s timeout
     result = subprocess.run(
         ["pdftotext", "-layout", str(pdf_path), "-"],
@@ -199,6 +202,7 @@ def _setup_pdf_processing(pdf_path: Path, output_dir: Path) -> tuple[Path, Path,
 def _copy_pdf_to_output(pdf_path: Path, doc_out_dir: Path) -> Path:
     """Copy PDF to output directory if not already present."""
     copied_pdf = doc_out_dir / pdf_path.name  # Define destination path for PDF copy
+
     # Copy only if missing or file size differs (ensures we have latest version)
     if not copied_pdf.exists() or copied_pdf.stat().st_size != pdf_path.stat().st_size:
         shutil.copy2(pdf_path, copied_pdf)  # copy2 preserves metadata like timestamps
@@ -207,6 +211,7 @@ def _copy_pdf_to_output(pdf_path: Path, doc_out_dir: Path) -> Path:
 
 def _try_load_cached_text_extraction(doc_out_dir: Path, pdf_stem: str) -> dict | None:
     """Try to load cached text extraction results."""
+
     # Build path to cached JSON results
     text_json_path = doc_out_dir / f"{pdf_stem}.json"
 
@@ -224,6 +229,7 @@ def _extract_labs_from_pdf_text(
     standardization_section: str | None,
 ) -> dict:
     """Extract lab results from PDF text using LLM."""
+
     # Delegate to extraction module with configured model and client
     return extract_labs_from_text(
         pdf_text,
@@ -240,6 +246,7 @@ def _cache_text_extraction(
     pdf_stem: str,
 ) -> None:
     """Cache text extraction results and raw PDF text."""
+
     # Build paths for both structured results and raw text
     text_json_path = doc_out_dir / f"{pdf_stem}.json"  # Path for structured extraction results
     text_txt_path = doc_out_dir / f"{pdf_stem}.txt"  # Path for raw text content
@@ -268,6 +275,7 @@ def _try_text_extraction(
 
     Returns (used_text_extraction, extraction_data).
     """
+
     # Check for cached text extraction results from previous runs
     cached_data = _try_load_cached_text_extraction(doc_out_dir, pdf_stem)
     if cached_data:
@@ -310,6 +318,7 @@ def _try_text_extraction(
 
 def _process_text_results(text_extraction_data: dict, pdf_stem: str) -> tuple[list, str | None]:
     """Process text extraction results into standardized format."""
+
     # Initialize collection for all extracted results
     all_results = []
 
@@ -328,12 +337,14 @@ def _process_text_results(text_extraction_data: dict, pdf_stem: str) -> tuple[li
 
 def _convert_pdf_to_images(copied_pdf: Path, pdf_stem: str) -> list:
     """Convert PDF to PIL images."""
+
     # Use pdf2image to convert PDF pages to PIL Image objects
     return pdf2image.convert_from_path(str(copied_pdf))
 
 
 def _preprocess_and_save_image(page_image, page_name: str, jpg_path: Path) -> None:
     """Preprocess page image and save if not cached."""
+
     # Skip processing if image already exists (cache hit)
     if jpg_path.exists():
         return
@@ -357,6 +368,7 @@ def _extract_or_load_page_data(
     failed_pages: list,
 ) -> dict:
     """Extract data from image or load from cache."""
+
     # Check if extraction results already cached for this page
     if json_path.exists():
         logger.info(f"[{page_name}] Loading cached extraction data")
@@ -396,6 +408,7 @@ def _check_and_record_failure(
     page_name: str | None = None,
 ) -> None:
     """Check if extraction failed and record failure reason."""
+
     # Skip if extraction succeeded
     if not page_data.get("_extraction_failed"):
         return
@@ -413,6 +426,7 @@ def _check_and_record_failure(
 
 def _add_page_metadata(results: list, page_idx: int, page_name: str) -> list:
     """Add page metadata to extraction results."""
+
     # Initialize collection for enriched results
     enriched = []
 
@@ -440,6 +454,7 @@ def _process_single_page(
 
     Returns tuple of (page_results, page_data) where page_data is the full extraction data.
     """
+
     # Generate unique page identifier with zero-padding
     page_name = f"{pdf_stem}.{page_idx + 1:03d}"
     jpg_path = doc_out_dir / f"{page_name}.jpg"
@@ -477,6 +492,7 @@ def _extract_via_vision(
     failed_pages: list,
 ) -> tuple[list, str | None]:
     """Extract lab results using vision-based processing."""
+
     # Convert PDF pages to PIL images
     pil_pages = _convert_pdf_to_images(copied_pdf, pdf_stem)
 
@@ -521,6 +537,7 @@ def _apply_name_standardization(
     pdf_stem: str,
 ) -> int:
     """Apply name standardization fallback. Returns count of updated results."""
+
     # Collect raw names that need standardization (not already standardized or marked as unknown)
     names_to_standardize = [result.get("lab_name_raw", "") for result in all_results if not result.get("lab_name_standardized") or result.get("lab_name_standardized") == UNKNOWN_VALUE]
 
@@ -564,6 +581,7 @@ def _apply_unit_standardization(
     pdf_stem: str,
 ) -> int:
     """Apply unit standardization fallback. Returns count of updated results."""
+
     # Collect unit contexts that need standardization (with standardized names)
     unit_contexts = [
         (
@@ -619,6 +637,7 @@ def _apply_standardization_fallbacks(
     pdf_stem: str,
 ) -> None:
     """Apply name and unit standardization fallbacks."""
+
     # Guard: Skip standardization if lab specs not available
     if not lab_specs.exists:
         return
@@ -637,6 +656,7 @@ def _save_results_to_csv(
     pdf_stem: str,
 ) -> None:
     """Create DataFrame and save to CSV."""
+
     # Convert results to DataFrame for structured export
     df = pd.DataFrame(all_results)
 
@@ -656,6 +676,7 @@ def _save_results_to_csv(
 
 def _handle_empty_results(csv_path: Path, pdf_stem: str) -> tuple[Path, list]:
     """Handle case when no results were extracted."""
+
     # Log warning for debugging
     logger.warning(f"[{pdf_stem}] No results extracted")
 
@@ -678,6 +699,7 @@ def _extract_data_from_pdf(
 
     Returns tuple of (all_results, doc_date) or raises exception on failure.
     """
+
     # Attempt text-first extraction (cheaper), fall back to vision if needed
     used_text, text_data = _try_text_extraction(copied_pdf, config, standardization_section, doc_out_dir, pdf_stem)
 
@@ -685,6 +707,7 @@ def _extract_data_from_pdf(
         # Guard: Ensure text_data is valid before processing
         if not text_data:
             raise ValueError("Text extraction indicated success but returned no data")
+
         # Process text extraction results
         return _process_text_results(text_data, pdf_stem)
 
@@ -713,6 +736,7 @@ def process_single_pdf(
         - csv_path: Path to output CSV, or None if processing failed entirely
         - failed_pages: List of dicts with 'page' and 'reason' for any extraction failures
     """
+
     # Initialize output directory structure and paths
     pdf_stem = pdf_path.stem
     doc_out_dir, csv_path, failed_pages = _setup_pdf_processing(pdf_path, output_dir)
@@ -762,6 +786,7 @@ def process_single_pdf(
 
 def merge_csv_files(csv_paths: list[Path]) -> pd.DataFrame:
     """Merge multiple CSV files into a single DataFrame."""
+
     # Initialize collection for valid dataframes
     dataframes = []
 
@@ -791,6 +816,7 @@ def export_excel(
     widths: dict,
 ) -> None:
     """Export DataFrame to Excel with formatting."""
+
     # Create Excel writer with xlsxwriter engine and date formatting
     with pd.ExcelWriter(
         excel_path,
@@ -823,6 +849,7 @@ def export_excel(
 
 def _extract_document_date(data_dict: dict, pdf_stem: str) -> str | None:
     """Extract document date from extraction data or filename."""
+
     # Try to get date from extraction data fields
     doc_date = data_dict.get("collection_date") or data_dict.get("report_date")
 
@@ -833,6 +860,7 @@ def _extract_document_date(data_dict: dict, pdf_stem: str) -> str | None:
     # Fallback: Extract date from filename pattern (YYYY-MM-DD)
     if not doc_date:
         match = re.search(r"(\d{4}-\d{2}-\d{2})", pdf_stem)
+
         # Use date from filename if pattern matches
         if match:
             doc_date = match.group(1)
@@ -842,12 +870,14 @@ def _extract_document_date(data_dict: dict, pdf_stem: str) -> str | None:
 
 def _get_csv_path(pdf_path: Path, output_path: Path) -> Path:
     """Get the output CSV path for a given PDF file."""
+
     # Build path: output/{stem}/{stem}.csv
     return output_path / pdf_path.stem / f"{pdf_path.stem}.csv"
 
 
 def _find_text_extraction_json(doc_out_dir: Path, page_results: list[dict]) -> list[Path]:
     """Find JSON file for text extraction results."""
+
     # Check if any results are from text extraction (marked with .text suffix)
     is_text_extraction = any(str(r.get("source_file", "")).endswith(".text") for r in page_results)
 
@@ -865,6 +895,7 @@ def _find_text_extraction_json(doc_out_dir: Path, page_results: list[dict]) -> l
 
 def _apply_standardized_values_to_json(json_path: Path, page_results: list[dict]) -> None:
     """Update a single JSON file with standardized lab names and units from page results."""
+
     # Load JSON data - let exceptions propagate to orchestrator
     data = json.loads(json_path.read_text(encoding="utf-8"))
     lab_results = data.get("lab_results", [])
@@ -872,6 +903,7 @@ def _apply_standardized_values_to_json(json_path: Path, page_results: list[dict]
     # Update each result by result_index with standardized values
     for result in page_results:
         idx = result.get("result_index")
+
         # Update only if index is valid and within bounds
         if idx is not None and 0 <= idx < len(lab_results):
             lab_results[idx]["lab_name_standardized"] = result.get("lab_name_standardized")
@@ -883,10 +915,12 @@ def _apply_standardized_values_to_json(json_path: Path, page_results: list[dict]
 
 def _update_json_with_standardized_values(all_results: list[dict], doc_out_dir: Path) -> None:
     """Update JSON files with standardized lab names and units."""
+
     # Group results by page number to minimize file I/O
     results_by_page: dict[int, list[dict]] = {}
     for result in all_results:
         page_num = result.get("page_number")
+
         # Skip results without page number (can't locate JSON file)
         if page_num is not None:
             results_by_page.setdefault(page_num, []).append(result)
@@ -913,6 +947,7 @@ REQUIRED_CSV_COLS = ["result_index", "page_number", "source_file"]
 
 def _filter_pdfs_to_process(pdf_files: list[Path], output_path: Path) -> tuple[list[Path], int]:
     """Filter out PDFs that already have valid CSV outputs."""
+
     # Initialize collections for tracking
     pdfs_to_process = []
     skipped_count = 0
@@ -938,6 +973,7 @@ def _filter_pdfs_to_process(pdf_files: list[Path], output_path: Path) -> tuple[l
 
 def _is_csv_valid(csv_path: Path, required_cols: list[str] = REQUIRED_CSV_COLS) -> bool:
     """Check if CSV exists and has all required columns."""
+
     # Guard: File must exist
     if not csv_path.exists():
         return False
@@ -955,6 +991,7 @@ def _is_csv_valid(csv_path: Path, required_cols: list[str] = REQUIRED_CSV_COLS) 
 
 def _filter_unknown_labs(merged_df: pd.DataFrame) -> pd.DataFrame:
     """Filter out rows that couldn't be mapped to known lab tests."""
+
     # Identify rows with unknown lab names
     unknown_mask = merged_df["lab_name_standardized"] == UNKNOWN_VALUE
 
@@ -969,6 +1006,7 @@ def _filter_unknown_labs(merged_df: pd.DataFrame) -> pd.DataFrame:
 
 def _rename_columns_for_export(merged_df: pd.DataFrame) -> pd.DataFrame:
     """Rename columns from internal names to simplified export schema."""
+
     # Define mapping from internal to export column names
     column_renames = {
         "lab_name_standardized": "lab_name",
@@ -984,6 +1022,7 @@ def _rename_columns_for_export(merged_df: pd.DataFrame) -> pd.DataFrame:
 
 def _run_value_validation(merged_df: pd.DataFrame, lab_specs: LabSpecsConfig) -> tuple[pd.DataFrame, dict]:
     """Run value-based validation and return validated DataFrame with stats."""
+
     # Initialize validator and run validation checks
     validator = ValueValidator(lab_specs)
     merged_df = validator.validate(merged_df)
@@ -993,10 +1032,12 @@ def _run_value_validation(merged_df: pd.DataFrame, lab_specs: LabSpecsConfig) ->
 
 def _log_validation_stats(validation_stats: dict) -> None:
     """Log validation statistics if any rows were flagged."""
+
     # Check if any rows were flagged for review
     flagged_count = validation_stats.get("rows_flagged", 0)
     if flagged_count > 0:
         logger.info(f"Validation flagged {flagged_count} rows for review")
+
         # Log breakdown of flag reasons
         for reason, count in validation_stats.get("flags_by_reason", {}).items():
             logger.info(f"  - {reason}: {count}")
@@ -1016,6 +1057,7 @@ def _process_pdfs_in_parallel(
     Returns:
         Tuple of (csv_paths, all_failed_pages, pdfs_failed_count)
     """
+
     # Calculate optimal worker count (don't exceed CPU count or task count)
     n_workers = min(config.max_workers, len(pdfs_to_process))
     logger.info(f"Using {n_workers} worker(s) for PDF processing")
@@ -1065,6 +1107,7 @@ def _is_empty_extraction_json(json_path: Path) -> bool:
     Raises json.JSONDecodeError or UnicodeDecodeError for corrupted files.
     """
     data = json.loads(json_path.read_text(encoding="utf-8"))
+
     # Empty extraction: valid dict with no lab_results but not explicitly marked as no-lab-data
     return isinstance(data, dict) and not data.get("lab_results") and data.get("page_has_lab_data") is not False
 
@@ -1088,6 +1131,7 @@ def _find_empty_extractions(output_path: Path, matching_stems: set[str]) -> list
 
     Only considers output directories that match the input file pattern.
     """
+
     # Initialize collection for PDFs with empty extractions
     empty_by_pdf = []
 
@@ -1096,9 +1140,11 @@ def _find_empty_extractions(output_path: Path, matching_stems: set[str]) -> list
         # Skip non-directory entries (files, symlinks, etc.)
         if not pdf_dir.is_dir():
             continue
+
         # Skip hidden directories (e.g., .git, .DS_Store)
         if pdf_dir.name.startswith("."):
             continue
+
         # Only check directories that match the input file pattern
         if pdf_dir.name not in matching_stems:
             continue
@@ -1116,6 +1162,7 @@ def _find_empty_extractions(output_path: Path, matching_stems: set[str]) -> list
 
 def _delete_empty_extraction_files(pdf_dir: Path) -> None:
     """Delete empty extraction JSON and CSV files for a PDF directory."""
+
     # Delete empty JSON files (removes cached extraction results)
     for json_path in pdf_dir.glob("*.json"):
         try:
@@ -1142,6 +1189,7 @@ def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list
 
     Returns list of PDF directories selected for reprocessing.
     """
+
     # Scan output directory for PDFs with empty extraction files
     empty_extractions = _find_empty_extractions(output_path, matching_stems)
 
@@ -1150,9 +1198,9 @@ def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list
         return []
 
     # Display summary of PDFs with empty extractions
-    print(f"\nFound {len(empty_extractions)} PDF(s) with empty extraction pages:")
+    logger.info(f"\nFound {len(empty_extractions)} PDF(s) with empty extraction pages:")
     for pdf_dir, empty_jsons in empty_extractions:
-        print(f"  - {pdf_dir.name}: {len(empty_jsons)} empty page(s)")
+        logger.info(f"  - {pdf_dir.name}: {len(empty_jsons)} empty page(s)")
 
     # Collect user responses for which PDFs to reprocess
     pdfs_to_reprocess = []
@@ -1160,30 +1208,32 @@ def _prompt_reprocess_empty(output_path: Path, matching_stems: set[str]) -> list
     # Iterate through each PDF and prompt user for reprocess decision
     for pdf_dir, empty_jsons in empty_extractions:
         # Display detailed list of empty extraction files for this PDF
-        print(f"\n{pdf_dir.name}:")
+        logger.info(f"\n{pdf_dir.name}:")
         for json_path in empty_jsons:
-            print(f"  - {json_path.name}")
+            logger.info(f"  - {json_path.name}")
 
         # Prompt user for decision (y=yes, N=no, a=all, q=quit)
         response = input(f"Reprocess {pdf_dir.name}? [y/N/a(ll)/q(uit)]: ").strip().lower()
 
         # Handle quit response - stop processing remaining PDFs
         if response == "q":
-            print("Skipping remaining files.")
+            logger.info("Skipping remaining files.")
             break
+
         # Handle accept-all response - add current and all remaining PDFs
         elif response == "a":
             pdfs_to_reprocess.append(pdf_dir)
             for remaining_pdf_dir, _ in empty_extractions[empty_extractions.index((pdf_dir, empty_jsons)) + 1 :]:
                 pdfs_to_reprocess.append(remaining_pdf_dir)
             break
+
         # Handle yes response - add only this PDF to reprocess list
         elif response == "y":
             pdfs_to_reprocess.append(pdf_dir)
 
     # Delete extraction files for selected PDFs to trigger reprocessing
     if pdfs_to_reprocess:
-        print(f"\nDeleting empty extractions for {len(pdfs_to_reprocess)} PDF(s)...")
+        logger.info(f"\nDeleting empty extractions for {len(pdfs_to_reprocess)} PDF(s)...")
         for pdf_dir in pdfs_to_reprocess:
             _delete_empty_extraction_files(pdf_dir)
 
@@ -1202,6 +1252,7 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+
   # Run all profiles:
   python extract.py
 
@@ -1218,6 +1269,7 @@ Examples:
   python extract.py --profile tsilva --env local
         """,
     )
+
     # Profile-based
     parser.add_argument(
         "--profile",
@@ -1253,22 +1305,18 @@ Examples:
     return parser.parse_args()
 
 
-def _validate_profile_and_env(args) -> tuple[ProfileConfig | None, list[str]]:
-    """
-    Validate profile and environment configuration.
+def _validate_profile_and_env(args) -> ProfileConfig:
+    """Validate profile and environment configuration.
 
-    Returns:
-        Tuple of (profile_config, error_messages)
-        If validation fails, profile_config is None and error_messages contains details.
+    Returns validated ProfileConfig.
+    Raises ConfigurationError if validation fails.
     """
-    # Initialize collection for validation errors
     errors = []
 
     # Find and validate profile exists
     profile_path = ProfileConfig.find_path(args.profile)
     if not profile_path:
-        errors.append(f"Profile '{args.profile}' not found. Use --list-profiles to see available profiles.")
-        return None, errors
+        raise ConfigurationError(f"Profile '{args.profile}' not found. Use --list-profiles to see available profiles.")
 
     # Load profile configuration
     profile = ProfileConfig.from_file(profile_path)
@@ -1287,14 +1335,14 @@ def _validate_profile_and_env(args) -> tuple[ProfileConfig | None, list[str]]:
     if not os.getenv("SELF_CONSISTENCY_MODEL_ID"):
         errors.append("SELF_CONSISTENCY_MODEL_ID environment variable not set.")
 
-    # Return profile if no errors, otherwise None with error list
     if errors:
-        return None, errors
-    return profile, []
+        raise ConfigurationError("\n".join(errors))
+    return profile
 
 
 def _build_config_from_profile(profile: ProfileConfig, args) -> ExtractionConfig:
     """Build ExtractionConfig from validated profile and CLI args."""
+
     # Load required environment variables
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
     extract_model_id = os.getenv("EXTRACT_MODEL_ID")
@@ -1324,31 +1372,28 @@ def _build_config_from_profile(profile: ProfileConfig, args) -> ExtractionConfig
     return config
 
 
-def build_config(args) -> tuple[ExtractionConfig | None, list[str]]:
-    """
-    Build ExtractionConfig from args and env.
+def build_config(args) -> ExtractionConfig:
+    """Build ExtractionConfig from args and env.
 
-    Returns:
-        Tuple of (config, error_messages)
-        If validation fails, config is None and error_messages contains details.
+    Returns validated ExtractionConfig.
+    Raises ConfigurationError if validation fails.
     """
-    # Validate profile and environment - let errors propagate up
-    profile, errors = _validate_profile_and_env(args)
-    if errors:
-        return None, errors
+
+    # Validate profile and environment (raises ConfigurationError on failure)
+    profile = _validate_profile_and_env(args)
 
     # Build configuration from validated profile
     config = _build_config_from_profile(profile, args)
 
     # Validate input path exists (runtime check)
     if not config.input_path.exists():
-        return None, [f"Input path does not exist: {config.input_path}"]
+        raise ConfigurationError(f"Input path does not exist: {config.input_path}")
 
     # Ensure output directory exists
     config.output_path.mkdir(parents=True, exist_ok=True)
 
     logger.info(f"Using profile: {profile.name}")
-    return config, []
+    return config
 
 
 # ========================================
@@ -1361,18 +1406,23 @@ def _classify_server_error(error_msg: str, timeout: int) -> tuple[bool, str]:
 
     Returns tuple of (is_available, diagnostic_message).
     """
+
     # Authentication errors (invalid or missing API key)
     if "401" in error_msg or "Unauthorized" in error_msg:
         return False, f"Authentication failed - check your OPENROUTER_API_KEY: {error_msg}"
+
     # Timeout errors (server slow or unreachable)
     if "timeout" in error_msg.lower():
         return False, f"Server timeout after {timeout}s - server may be unreachable"
+
     # 404 errors - endpoint not implemented (common with local servers), server is still available
     if "404" in error_msg:
         return True, "Server is available (models endpoint not implemented)"
+
     # Connection failures (network issues, DNS problems, server down)
     if "Connection" in error_msg or "refused" in error_msg.lower() or "reset" in error_msg.lower() or "Name or service not known" in error_msg or "getaddrinfo" in error_msg:
         return False, f"Cannot connect to server: {error_msg}"
+
     # Unknown errors - assume unavailable to be safe
     return False, f"Server check failed: {error_msg}"
 
@@ -1397,22 +1447,20 @@ def check_server_availability(client: OpenAI, model_id: str, timeout: int = 10) 
         return _classify_server_error(str(e), timeout)
 
 
-def _build_and_validate_config(args, profile_name: str) -> tuple[ExtractionConfig | None, list[str]]:
+def _build_and_validate_config(args, profile_name: str) -> ExtractionConfig:
     """Build and validate configuration for a profile.
 
-    Returns tuple of (config, errors) where config is None if validation fails.
+    Returns validated ExtractionConfig.
+    Raises ConfigurationError if validation fails.
     """
+
     # Temporarily override args.profile for config building
     original_profile = args.profile
     args.profile = profile_name
 
     try:
-        # Build and validate configuration
-        config, errors = build_config(args)
-        # Guard: Return errors if validation failed (config will be None)
-        if errors:
-            return None, errors
-        return config, []
+        # Build and validate configuration (raises ConfigurationError on failure)
+        return build_config(args)
     finally:
         # Restore original profile name regardless of outcome
         args.profile = original_profile
@@ -1430,6 +1478,7 @@ def _process_pdfs_or_use_cache(
 
     Returns tuple of (csv_paths, all_failed_pages, pdfs_failed).
     """
+
     # All PDFs already have valid CSVs - just collect paths
     if not pdfs_to_process:
         logger.info("All PDFs already processed. Moving to merge step...")
@@ -1447,26 +1496,15 @@ def _process_pdfs_or_use_cache(
     )
 
 
-def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfig | None, LabSpecsConfig | None, str | None, list[str]]:
+def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfig, LabSpecsConfig, str | None]:
     """Setup environment for a profile: config, logging, lab specs.
 
-    Returns tuple of (config, lab_specs, standardization_section, errors).
-    If setup fails, returns (None, None, None, errors).
+    Returns tuple of (config, lab_specs, standardization_section).
+    Raises ConfigurationError if setup fails.
     """
-    # Build and validate configuration for this profile
-    config, errors = _build_and_validate_config(args, profile_name)
 
-    # Handle configuration validation failures
-    if errors:
-        print(f"\nConfiguration errors for profile '{profile_name}':")
-        for error in errors:
-            print(f"  - {error}")
-        return None, None, None, errors
-
-    # Guard: Config should exist if no errors were reported
-    if not config:
-        print("\nUnexpected error: Configuration failed but no errors reported")
-        return None, None, None, ["Configuration failed"]
+    # Build and validate configuration (raises ConfigurationError on failure)
+    config = _build_and_validate_config(args, profile_name)
 
     # Setup logging to output folder for later review
     global logger
@@ -1493,7 +1531,7 @@ def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfi
         standardization_section = _build_standardized_names_section(lab_specs.standardized_names, lab_specs._specs)
         logger.info(f"Built standardization section: {len(lab_specs.standardized_names)} lab names")
 
-    return config, lab_specs, standardization_section, []
+    return config, lab_specs, standardization_section
 
 
 def _process_and_transform_data(
@@ -1507,6 +1545,7 @@ def _process_and_transform_data(
 
     Returns transformed DataFrame or None if processing fails.
     """
+
     # Apply value normalizations and unit conversions
     logger.info("Applying normalizations...")
     merged_df = apply_normalizations(merged_df, lab_specs, client, model_id)
@@ -1545,6 +1584,7 @@ def _export_final_results(
     csv_paths: list[Path],
 ) -> None:
     """Export final results to CSV and Excel formats."""
+
     # Select only the columns needed for final export
     final_cols = [col for col in export_cols if col in merged_df.columns]
     merged_df = merged_df[final_cols]
@@ -1568,17 +1608,15 @@ def _export_final_results(
     _report_extraction_failures(all_failed_pages, csv_path, csv_paths)
 
 
-def run_for_profile(args, profile_name: str) -> bool:
+def run_for_profile(args, profile_name: str) -> None:
     """Run extraction pipeline for a single profile.
 
-    Returns True if successful, False otherwise.
+    Raises ConfigurationError for config/setup failures.
+    Raises PipelineError for runtime pipeline failures.
     """
-    # Setup environment: config, logging, server check, lab specs
-    config, lab_specs, standardization_section, errors = _setup_profile_environment(args, profile_name)
 
-    # Guard: Exit if setup failed or returned None values
-    if errors or not config or not lab_specs:
-        return False
+    # Setup environment: config, logging, lab specs (raises ConfigurationError on failure)
+    config, lab_specs, standardization_section = _setup_profile_environment(args, profile_name)
 
     # Get column configuration for export formatting
     export_cols, hidden_cols, widths, dtypes = get_column_lists(COLUMN_SCHEMA)
@@ -1588,10 +1626,9 @@ def run_for_profile(args, profile_name: str) -> bool:
     matching_stems = {p.stem for p in pdf_files}
     logger.info(f"Found {len(pdf_files)} PDF(s) matching '{config.input_file_regex}'")
 
-    # Guard: Exit if no PDFs found
+    # Guard: No PDFs found
     if not pdf_files:
-        logger.warning("No PDF files found.")
-        return False
+        raise PipelineError(f"No PDF files found matching '{config.input_file_regex}' in {config.input_path}")
 
     # Check for empty extractions and prompt user to reprocess
     _prompt_reprocess_empty(config.output_path, matching_stems)
@@ -1613,10 +1650,9 @@ def run_for_profile(args, profile_name: str) -> bool:
         log_dir,
     )
 
-    # Guard: Exit if no PDFs were successfully processed
+    # Guard: No PDFs were successfully processed
     if not csv_paths:
-        logger.error("No PDFs successfully processed.")
-        return False
+        raise PipelineError("No PDFs successfully processed.")
 
     logger.info(f"Successfully processed {len(csv_paths)} PDFs")
 
@@ -1626,10 +1662,9 @@ def run_for_profile(args, profile_name: str) -> bool:
     rows_after_merge = len(merged_df)
     logger.info(f"Merged data: {rows_after_merge} rows")
 
-    # Guard: Exit if merged dataset is empty
+    # Guard: Merged dataset is empty
     if merged_df.empty:
-        logger.error("No data to process")
-        return False
+        raise PipelineError("No data after merging CSV files.")
 
     # Apply all data transformations: normalize, filter, dedupe, validate
     merged_df = _process_and_transform_data(
@@ -1640,10 +1675,9 @@ def run_for_profile(args, profile_name: str) -> bool:
         config.self_consistency_model_id,
     )
 
-    # Guard: Exit if data processing failed
+    # Guard: Data processing failed
     if merged_df is None:
-        logger.error("Data processing failed")
-        return False
+        raise PipelineError("Data processing failed.")
 
     # Export final results to CSV and Excel
     _export_final_results(
@@ -1657,11 +1691,10 @@ def run_for_profile(args, profile_name: str) -> bool:
         csv_paths,
     )
 
-    return True
-
 
 def _report_extraction_failures(all_failed_pages: list[dict], csv_path: Path, csv_paths: list[Path]) -> None:
     """Log and report any extraction failures to user."""
+
     # Log final pipeline summary
     logger.info("=" * 50)
     logger.info("Pipeline completed")
@@ -1673,77 +1706,84 @@ def _report_extraction_failures(all_failed_pages: list[dict], csv_path: Path, cs
         logger.warning(f"  Pages with extraction failures: {len(all_failed_pages)}")
         for failure in all_failed_pages:
             logger.warning(f"    - {failure['page']}: {failure['reason']}")
-        print(f"\n⚠️  Extraction failures detected ({len(all_failed_pages)} pages):")
-        for failure in all_failed_pages:
-            print(f"    - {failure['page']}: {failure['reason']}")
     else:
         logger.info("  Extraction failures: 0")
 
 
 def main():
     """Main pipeline orchestration."""
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
     # Parse command-line arguments
     args = parse_args()
 
     # Handle --list-profiles flag (just list and exit)
     if args.list_profiles:
         profiles = ProfileConfig.list_profiles()
+
         # Display available profiles
         if profiles:
-            print("Available profiles:")
+            logger.info("Available profiles:")
             for name in profiles:
-                print(f"  - {name}")
+                logger.info(f"  - {name}")
+
         # No profiles configured yet
         else:
-            print("No profiles found. Create profiles in the 'profiles/' directory.")
+            logger.info("No profiles found. Create profiles in the 'profiles/' directory.")
         return
 
     # Determine which profiles to run (single specified or all available)
     if args.profile:
         profiles_to_run = [args.profile]
+
     # No profile specified - run all available
     else:
         profiles_to_run = ProfileConfig.list_profiles()
+
         # Guard: No profiles configured
         if not profiles_to_run:
-            print("No profiles found. Create profiles in the 'profiles/' directory.")
-            print("Or use --profile to specify one.")
+            logger.error("No profiles found. Create profiles in the 'profiles/' directory.")
+            logger.error("Or use --profile to specify one.")
             sys.exit(1)
-        print(f"Running all profiles: {', '.join(profiles_to_run)}")
+        logger.info(f"Running all profiles: {', '.join(profiles_to_run)}")
 
     # Check server availability once before processing any profiles
-    print("Checking OpenRouter server availability...")
+    logger.info("Checking OpenRouter server availability...")
     is_available, message = check_server_availability(client, os.getenv("EXTRACT_MODEL_ID", ""))
+
     # Guard: Abort if API server is unreachable
     if not is_available:
-        print(f"Error: Cannot start extraction - {message}")
-        print("Please check your internet connection and API key, then try again.")
+        logger.error(f"Cannot start extraction - {message}")
+        logger.error("Please check your internet connection and API key, then try again.")
         sys.exit(1)
-    print(f"Server check passed: {message}")
+    logger.info(f"Server check passed: {message}")
 
     # Initialize results tracking for each profile
     results = {}
 
     # Run extraction pipeline for each profile
     for profile_name in profiles_to_run:
-        print(f"\n{'=' * 60}")
-        print(f"Processing profile: {profile_name}")
-        print(f"{'=' * 60}")
+        logger.info(f"\n{'=' * 60}")
+        logger.info(f"Processing profile: {profile_name}")
+        logger.info(f"{'=' * 60}")
         try:
-            success = run_for_profile(args, profile_name)
-            results[profile_name] = "success" if success else "failed"
+            run_for_profile(args, profile_name)
+            results[profile_name] = "success"
+        except (ConfigurationError, PipelineError) as e:
+            logger.error(f"\nError in profile '{profile_name}':\n{e}")
+            results[profile_name] = "failed"
         # Catch-all for unexpected errors during profile processing
         except Exception as e:
-            print(f"Error processing profile {profile_name}: {e}")
+            logger.error(f"\nUnexpected error in profile '{profile_name}': {e}")
             results[profile_name] = f"error: {e}"
 
     # Print summary if multiple profiles were processed
     if len(profiles_to_run) > 1:
-        print(f"\n{'=' * 60}")
-        print("Summary:")
-        print(f"{'=' * 60}")
+        logger.info(f"\n{'=' * 60}")
+        logger.info("Summary:")
+        logger.info(f"{'=' * 60}")
         for profile_name, status in results.items():
-            print(f"  {profile_name}: {status}")
+            logger.info(f"  {profile_name}: {status}")
 
 
 if __name__ == "__main__":

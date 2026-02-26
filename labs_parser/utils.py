@@ -12,6 +12,8 @@ import pandas as pd
 from dotenv import load_dotenv
 from PIL import Image, ImageEnhance
 
+logger = logging.getLogger(__name__)
+
 
 def load_dotenv_with_env() -> str | None:
     """Load .env.{name} file based on --env flag (default: "local").
@@ -39,10 +41,10 @@ def load_dotenv_with_env() -> str | None:
     env_file = Path(f".env.{env_name}")
     if env_file.exists():
         load_dotenv(env_file, override=True)
-        print(f"Loaded environment: .env.{env_name}")
+        logger.info(f"Loaded environment: .env.{env_name}")
     else:
         # Warn when env file is not found
-        print(f"Warning: .env.{env_name} not found")
+        logger.warning(f".env.{env_name} not found")
 
     return env_name
 
