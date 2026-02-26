@@ -58,8 +58,7 @@ INPUT_PATH/*.pdf
 │    Biological plausibility, inter-lab relationships, │
 │    temporal consistency, format artifacts,           │
 │    reference range consistency                       │
-│    → sets review_needed / review_reason /            │
-│      review_confidence columns                       │
+│    → sets review_needed / review_reason columns      │
 └────────────────────┬────────────────────────────────┘
                      │
                      ▼
@@ -164,18 +163,18 @@ Detects protein-electrophoresis-style errors (e.g., Albumin `61.5 g/dL` that sho
 ### 5. Value Validation (`ValueValidator.validate`)
 Five sequential checks; each can set `review_needed=True` and append to `review_reason`:
 
-| Check | Reason Codes | Confidence Mult |
-|-------|-------------|-----------------|
-| Biological plausibility | `NEGATIVE_VALUE`, `PERCENTAGE_BOUNDS`, `IMPOSSIBLE_VALUE` | 0.3–0.4 |
-| Inter-lab relationships | `RELATIONSHIP_MISMATCH`, `COMPONENT_EXCEEDS_TOTAL` | 0.3–0.5 |
-| Temporal consistency | `TEMPORAL_ANOMALY` | 0.6 |
-| Format artifacts | `FORMAT_ARTIFACT` | 0.7 |
-| Reference range cross-check | `RANGE_INCONSISTENCY`, `EXTREME_DEVIATION` | 0.5–0.7 |
+| Check | Reason Codes |
+|-------|-------------|
+| Biological plausibility | `NEGATIVE_VALUE`, `PERCENTAGE_BOUNDS`, `IMPOSSIBLE_VALUE` |
+| Inter-lab relationships | `RELATIONSHIP_MISMATCH`, `COMPONENT_EXCEEDS_TOTAL` |
+| Temporal consistency | `TEMPORAL_ANOMALY` |
+| Format artifacts | `FORMAT_ARTIFACT` |
+| Reference range cross-check | `RANGE_INCONSISTENCY`, `EXTREME_DEVIATION` |
 
 Relationship formulas (e.g., LDL Friedewald) are defined in `lab_specs.json` under `_relationships[]` and evaluated per (date, lab) group.
 
 ### 6. Export
-- `all.csv` — UTF-8, 19 columns (see schema below)
+- `all.csv` — UTF-8, 17 columns (see schema below)
 - `all.xlsx` — frozen header, per-column widths, internal columns hidden (`lab_type`, `result_index`)
 - `lab_specs.json` copied to output for reproducibility
 
@@ -193,7 +192,7 @@ Relationship formulas (e.g., LDL Friedewald) are defined in `lab_specs.json` und
 
 ---
 
-## Output Schema (19 columns)
+## Output Schema (17 columns)
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -208,10 +207,8 @@ Relationship formulas (e.g., LDL Friedewald) are defined in `lab_specs.json` und
 | `lab_name_raw` | str | Exactly as extracted |
 | `value_raw` | str | Exactly as extracted |
 | `unit_raw` | str | Exactly as extracted |
-| `confidence` | float64 | Default `1.0` |
 | `review_needed` | boolean | Set by ValueValidator |
 | `review_reason` | str | Semicolon-separated reason codes |
-| `review_confidence` | float64 | Product of confidence multipliers |
 | `is_below_limit` | boolean | Value was `< X` |
 | `is_above_limit` | boolean | Value was `> X` |
 | `lab_type` | str | `blood`/`urine`/`feces` (hidden in Excel) |

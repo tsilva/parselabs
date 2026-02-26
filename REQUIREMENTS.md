@@ -7,8 +7,11 @@ Extract lab results from PDF documents with 100% accuracy, standardize units, an
 ## Extraction
 
 - Accepts PDF lab reports as input; processes page by page for accuracy and easy retry/resume.
-- Uses LLM structured extraction: text-based when possible, vision otherwise.
-- Skips failures and continues; re-running extracts only missing documents.
+- Text-first approach: extracts text from PDF; falls back to vision if extractable text is under 1000 characters.
+- Image preprocessing: converts pages to grayscale, applies 2x contrast enhancement, downscales to max 1200px width.
+- Retry with temperature escalation on extraction failures: starts at 0.0, increments by 0.2, up to 3 retries (max 0.6).
+- Server health check before starting extraction to fail fast on unreachable endpoints.
+- Resume behavior: re-running only processes missing or failed pages; already-extracted pages are skipped.
 - Preserves raw values alongside standardized values for audit.
 - Document date is resolved as: sample collection date > issue date > first date found. All pages share the same date.
 
@@ -17,6 +20,16 @@ Extract lab results from PDF documents with 100% accuracy, standardize units, an
 - Lab names map to a canonical vocabulary prefixed by type: "Blood - ", "Urine - ", or "Feces - ".
 - Percentage-unit labs end in "(%)" to distinguish from non-fraction counterparts.
 - Values are converted to primary units using configured conversion factors.
+- Cache-only at runtime: name and unit standardization use pre-built caches with no LLM calls during extraction. On cache miss, the value is marked `$UNKNOWN$` for later resolution.
+- Qualitative-to-boolean conversion: qualitative results (e.g., POSITIVO/NEGATIVO, REACTIVE/NON-REACTIVE) are converted to numeric values (1/0).
+
+## Data Cleaning
+
+- European decimal format: commas used as decimal separators are converted to periods.
+- Comparison value extraction: strips comparison operators from values like `<0.05` or `>100`, preserving the numeric part.
+- Trailing `=` characters are stripped from values (artifact of OCR/extraction errors).
+- Space-separated thousands (e.g., `1 234`) are joined into a single number.
+- Unit inference when missing: infers units from reference range heuristics and lab_specs lookup when the extraction returns no unit.
 
 ## Validation
 
@@ -38,17 +51,19 @@ Flagged results include one or more reason codes. Checks include:
 
 Interactive web UI for browsing, plotting, and reviewing results:
 
-- Data table filterable by lab name, review status (needs review, abnormal, unhealthy, unreviewed), and latest-only toggle.
+- Data table filterable by lab name, review status (All, Needs Review, Abnormal, Unhealthy, Unreviewed, Accepted, Rejected), and latest-only toggle.
+- Abnormal = value outside the PDF-reported reference range. Unhealthy = value outside the lab_specs healthy range. These are distinct concepts.
 - Summary statistics: total results, unique tests, date range, review/abnormal/unhealthy/reviewed counts.
 - Time-series plots with bands for PDF-reported and configured healthy ranges; multi-lab stacked subplots.
 - Source page image display for visual verification; raw vs. standardized value comparison.
 - Accept/Reject/Skip review workflow persisted across sessions; keyboard shortcuts for actions and navigation.
 - Healthy ranges adjusted by user demographics (age, gender) when provided.
+- CSV export of filtered data.
 
 ## Output
 
 - Primary output: merged CSV and formatted Excel (frozen header, optimized widths, internal columns hidden).
-- 17-column schema: date, source file, page number, standardized name/value/unit, reference min/max, raw name/value/unit, confidence, review flags (needed/reason/confidence), lab type, result index.
+- 15-column schema: date, source file, page number, standardized name/value/unit, reference min/max, raw name/value/unit, review flags (needed/reason), lab type, result index.
 - Per-document folder (named by document stem + file hash) containing: original PDF, preprocessed page images, per-page JSON, and per-document CSV.
 
 ## Configuration

@@ -552,47 +552,34 @@ def build_review_reason_banner(entry: dict) -> str:
     if not entry:
         return ""
 
-    review_needed = entry.get("review_needed")
     review_reason = entry.get("review_reason")
-    review_confidence = entry.get("review_confidence")
 
-    # Guard: no review flags set
-    if not review_needed and not review_reason:
+    # Guard: no review reason
+    if not review_reason or not pd.notna(review_reason):
         return ""
 
     # Parse reason codes (semicolon-separated)
     reasons = []
-    if review_reason and pd.notna(review_reason):
-        reason_str = str(review_reason).strip()
-        for code in reason_str.split(";"):
-            code = code.strip()
-            # Known reason code — use human-readable description
-            if code and code in REASON_DESCRIPTIONS:
-                reasons.append(REASON_DESCRIPTIONS[code])
-            # Unknown reason code — show as-is
-            elif code:
-                reasons.append(code)
+    reason_str = str(review_reason).strip()
+    for code in reason_str.split(";"):
+        code = code.strip()
+        # Known reason code — use human-readable description
+        if code and code in REASON_DESCRIPTIONS:
+            reasons.append(REASON_DESCRIPTIONS[code])
+        # Unknown reason code — show as-is
+        elif code:
+            reasons.append(code)
 
-    # Guard: no reasons and confidence is acceptable
-    if not reasons and not (review_confidence and pd.notna(review_confidence) and float(review_confidence) < 0.7):
+    # Guard: no reasons after parsing
+    if not reasons:
         return ""
 
     # Build banner HTML
-    banner_class = "warning" if reasons else "info"
-    title = "Review Needed" if reasons else "Low Confidence"
-
-    html = f'<div class="review-banner {banner_class}">'
-    html += f'<div class="review-banner-title">⚠️ {title}</div>'
-
-    if reasons:
-        html += '<div class="review-banner-reasons">'
-        html += "<br>".join(f"• {r}" for r in reasons)
-        html += "</div>"
-
-    if review_confidence and pd.notna(review_confidence):
-        conf_val = float(review_confidence)
-        html += f'<div style="margin-top: 4px; font-size: 0.85em;">Confidence: {conf_val:.0%}</div>'
-
+    html = '<div class="review-banner warning">'
+    html += '<div class="review-banner-title">⚠️ Review Needed</div>'
+    html += '<div class="review-banner-reasons">'
+    html += "<br>".join(f"• {r}" for r in reasons)
+    html += "</div>"
     html += "</div>"
     return html
 
@@ -1132,19 +1119,12 @@ def build_details_html(entry: dict) -> str:
     # Add review info if present
     review_needed = entry.get("review_needed")
     review_reason = entry.get("review_reason")
-    review_confidence = entry.get("review_confidence")
 
     # Show review details when flags are present
-    if review_needed or review_reason or (review_confidence and pd.notna(review_confidence)):
+    if review_needed or review_reason:
         html += '<div style="margin-top:15px;">'
-        # Display reason codes
         if review_reason and pd.notna(review_reason):
             html += f'<div class="status-warning">Reason: {review_reason}</div>'
-        # Display confidence score
-        if review_confidence and pd.notna(review_confidence):
-            conf_val = float(review_confidence)
-            css_class = "status-warning" if conf_val < 0.7 else "status-info"
-            html += f'<div class="{css_class}" style="margin-top:5px;">Confidence: {conf_val:.2f}</div>'
         html += "</div>"
 
     return html

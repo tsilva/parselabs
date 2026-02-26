@@ -104,7 +104,7 @@ The `ValueValidator` class detects extraction errors by analyzing the data itsel
 }
 ```
 
-Flagged rows appear in `viewer.py` under "Needs Review" filter with `review_needed=True`, `review_reason`, and `review_confidence` columns.
+Flagged rows appear in `viewer.py` under "Needs Review" filter with `review_needed=True` and `review_reason` columns.
 
 ### Viewer (viewer.py)
 
@@ -124,7 +124,7 @@ Interactive UI for browsing and reviewing extracted lab results:
 **Filters (all always visible):**
 - Lab name multi-select
 - Abnormal only / Latest only checkboxes
-- Review status dropdown (All, Unreviewed, Needs Review, Low Confidence, Accepted, Rejected)
+- Review status dropdown (All, Needs Review, Abnormal, Unhealthy, Unreviewed)
 
 **Keyboard shortcuts:**
 - `Y` = Accept, `N` = Reject, `S` = Skip
@@ -170,7 +170,7 @@ Example entry:
 }
 ```
 
-### Output Schema (17 columns)
+### Output Schema (15 columns)
 
 ```csv
 # Core identification
@@ -192,13 +192,9 @@ lab_name_raw        # Original name from PDF
 value_raw           # Original value (before conversion)
 unit_raw            # Original unit
 
-# Quality
-confidence          # Defaults to 1.0
-
 # Review flags (from validation.py)
 review_needed       # Boolean: needs human review?
 review_reason       # Reason codes (e.g., "FORMAT_ARTIFACT; EXTREME_DEVIATION;")
-review_confidence   # Adjusted confidence after validation
 
 # Internal
 lab_type            # blood/urine/feces (hidden in Excel)
@@ -309,9 +305,6 @@ df = pd.read_csv("output/all.csv")
 
 # Items flagged by validation
 needs_review = df[df['review_needed'] == True]
-
-# Low confidence items
-low_conf = df[df['confidence'] < 0.7]
 
 # Filter by specific validation reason
 format_errors = df[df['review_reason'].str.contains('FORMAT_ARTIFACT', na=False)]

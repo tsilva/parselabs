@@ -61,7 +61,7 @@ client = OpenAI(
 
 
 # ========================================
-# Column Schema (simplified - 15 columns)
+# Column Schema (simplified - 13 columns)
 # ========================================
 
 COLUMN_SCHEMA = {
@@ -80,12 +80,9 @@ COLUMN_SCHEMA = {
     "lab_name_raw": {"dtype": "str", "excel_width": 35},
     "value_raw": {"dtype": "str", "excel_width": 12},
     "unit_raw": {"dtype": "str", "excel_width": 15},
-    # Quality
-    "confidence": {"dtype": "float64", "excel_width": 12},
     # Review flags (from validation)
     "review_needed": {"dtype": "boolean", "excel_width": 12},
     "review_reason": {"dtype": "str", "excel_width": 30},
-    "review_confidence": {"dtype": "float64", "excel_width": 14},
     # Limit indicators (for values like <0.05 or >738)
     "is_below_limit": {"dtype": "boolean", "excel_width": 12},
     "is_above_limit": {"dtype": "boolean", "excel_width": 12},
@@ -111,10 +108,8 @@ COLUMN_ORDER = [
     "lab_name_raw",
     "value_raw",
     "unit_raw",
-    "confidence",
     "review_needed",
     "review_reason",
-    "review_confidence",
     "is_below_limit",
     "is_above_limit",
     "lab_type",
@@ -1411,9 +1406,6 @@ def _process_and_transform_data(
     logger.info("Running value-based validation...")
     merged_df, validation_stats = _run_value_validation(merged_df, lab_specs)
     _log_validation_stats(validation_stats)
-
-    # Initialize confidence column (all values valid at this stage)
-    merged_df["confidence"] = 1.0
 
     return merged_df
 
