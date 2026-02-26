@@ -334,8 +334,12 @@ def _build_standardized_names_section(standardized_names: list[str], lab_specs_d
 # ========================================
 
 _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
-EXTRACTION_SYSTEM_PROMPT = (_PROMPTS_DIR / "extraction_system.txt").read_text(encoding="utf-8").strip()
-EXTRACTION_USER_PROMPT = (_PROMPTS_DIR / "extraction_user.txt").read_text(encoding="utf-8").strip()
+EXTRACTION_SYSTEM_PROMPT = (_PROMPTS_DIR / "extraction_system.md").read_text(encoding="utf-8").strip()
+EXTRACTION_USER_PROMPT = (_PROMPTS_DIR / "extraction_user.md").read_text(encoding="utf-8").strip()
+SELF_CONSISTENCY_SYSTEM_PROMPT = (_PROMPTS_DIR / "self_consistency_system.md").read_text(encoding="utf-8").strip()
+TEXT_EXTRACTION_USER_PROMPT = (_PROMPTS_DIR / "text_extraction_user.md").read_text(encoding="utf-8").strip()
+STRING_PARSING_PROMPT = (_PROMPTS_DIR / "string_parsing.md").read_text(encoding="utf-8").strip()
+STRING_PARSING_SYSTEM_PROMPT = (_PROMPTS_DIR / "string_parsing_system.md").read_text(encoding="utf-8").strip()
 
 
 def _empty_report() -> dict:
@@ -426,15 +430,7 @@ def vote_on_best_result(results: list, model_id: str, fn_name: str):
         api_key=os.getenv("OPENROUTER_API_KEY"),
     )
 
-    system_prompt = (
-        "You are an expert at comparing multiple outputs of the same extraction task. "
-        "We have extracted several samples from the same prompt in order to average out any errors or inconsistencies. "
-        "Your job is to select the output that is most consistent with the majority of the provided samples. "
-        "Prioritize agreement on extracted content (test names, values, units, reference ranges, etc.). "
-        "Ignore formatting, whitespace, and layout differences. "
-        "Return ONLY the best output, verbatim, with no extra commentary. "
-        "Do NOT include any delimiters, output numbers, or extra labels in your response."
-    )
+    system_prompt = SELF_CONSISTENCY_SYSTEM_PROMPT
 
     # Format all extraction results for comparison
     prompt = "".join(f"--- Output {i + 1} ---\n{json.dumps(v, ensure_ascii=False) if type(v) in [list, dict] else v}\n\n" for i, v in enumerate(results))
@@ -799,32 +795,7 @@ def _build_text_extraction_prompt(text: str, standardization_section: str | None
     # Add standardization reminder only when standardization is active
     std_reminder = "\nAlso set lab_name (standardized name from the provided list) and unit (standardized unit format) for each result.\n" if standardization_section else ""
 
-    return f"""Please extract ALL lab test results from this medical lab report text.
-
-CRITICAL: For EACH lab test you find, you MUST extract:
-1. lab_name_raw - The test name EXACTLY as shown (required)
-2. value_raw - The result value EXACTLY as shown (ALWAYS PUT THE RESULT HERE - whether numeric or text)
-3. lab_unit_raw - The unit EXACTLY as shown (extract what you see, can be null if no unit)
-4. reference_range - The reference range text (if visible)
-5. reference_min_raw and reference_max_raw - Parse the numeric bounds from the reference range
-{std_reminder}
-Extract test names, values, units, and reference ranges EXACTLY as they appear.
-Pay special attention to preserving the exact formatting and symbols.
-
-CRITICAL: Extract EVERY lab test you see, including:
-- Numeric results → Put in value_raw (examples: "5.2", "14.8", "0.75")
-- Text-based qualitative results → Put in value_raw (examples: "NEGATIVO", "POSITIVO", "NORMAL", "AMARELA", "NAO CONTEM", "AUSENTE", "PRESENTE")
-- Range results → Put in value_raw (examples: "1 a 2", "1-5 / campo", "0-3 / campo")
-
-IMPORTANT: The value_raw field should contain the ACTUAL TEST RESULT, whether it's a number or text.
-
-Also set page_has_lab_data:
-- true if this document contains lab test results
-- false if this is a cover page, instructions, or administrative content with no lab tests
-
---- DOCUMENT TEXT ---
-{text}
---- END OF DOCUMENT ---"""
+    return TEXT_EXTRACTION_USER_PROMPT.format(std_reminder=std_reminder, text=text)
 
 
 def _execute_text_extraction_api_call(
@@ -1325,7 +1296,7 @@ def _parse_string_results_with_llm(string_results: list[str], client: OpenAI, mo
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a medical data parser. Parse lab result strings into structured JSON format.",
+                    "content": STRING_PARSING_SYSTEM_PROMPT,
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -1353,23 +1324,9 @@ def _parse_string_results_with_llm(string_results: list[str], client: OpenAI, mo
 def _build_string_parsing_prompt(string_results: list[str]) -> str:
     """Build the prompt for LLM-based string parsing."""
 
-    return f"""You are parsing lab test result strings into structured format.
-
-For each string below, extract:
-- lab_name_raw: The name of the lab test
-- value_raw: Numeric value (null if text-only result like "Negative")
-- lab_unit_raw: Unit of measurement (null if none)
-- reference_range: Reference range text (null if none)
-- reference_min_raw: Min reference value (null if not available)
-- reference_max_raw: Max reference value (null if not available)
-- comments: Any qualitative results or notes
-- source_text: The original string
-
-Input strings:
-{json.dumps(string_results, indent=2, ensure_ascii=False)}
-
-Return a JSON array of parsed lab results matching the LabResult schema.
-Each result must have at minimum: lab_name_raw, value_raw, lab_unit_raw, and source_text fields."""
+    return STRING_PARSING_PROMPT.format(
+        string_results_json=json.dumps(string_results, indent=2, ensure_ascii=False),
+    )
 
 
 def _extract_results_from_parsed_json(parsed_json: dict | list, expected_count: int) -> list[dict | None]:

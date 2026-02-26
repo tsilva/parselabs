@@ -20,7 +20,7 @@ _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 def _load_prompt(name: str) -> str:
     """Load a prompt template from the prompts directory."""
 
-    return (_PROMPTS_DIR / f"{name}.txt").read_text(encoding="utf-8")
+    return (_PROMPTS_DIR / f"{name}.md").read_text(encoding="utf-8")
 
 
 def load_cache(name: str) -> dict:
@@ -414,24 +414,8 @@ def standardize_qualitative_values(raw_values: list[str], model_id: str, client:
     # Build items for LLM
     items = {v: v for v in uncached_values}
 
-    # System prompt for qualitative classification
-    system_prompt_template = """You are a medical lab result classifier.
-
-Your task: Classify qualitative lab result text as boolean values.
-
-CLASSIFICATION RULES:
-- 0 (NEGATIVE): negativo, ausente, não detectado, normal, não reativo, negative, absent, not detected, non-reactive, nenhum, none, nil, clear, incolor, amarelo claro, amarelo, límpido, within normal limits
-- 1 (POSITIVE): positivo, presente, detectado, anormal, reativo, positive, present, detected, reactive, turvo, abnormal, elevated, increased
-- null: For values that are NOT qualitative (numbers, ranges, units, empty, or unclear)
-
-IMPORTANT:
-- Return a JSON object mapping each input value to 0, 1, or null
-- Be case-insensitive
-- Handle Portuguese and English terms
-- When in doubt, return null
-
-Return format: {{"value1": 0, "value2": 1, "value3": null, ...}}
-"""
+    # Load qualitative classification prompt from file
+    system_prompt_template = _load_prompt("qualitative_classification")
 
     # Call LLM for classification
     try:
