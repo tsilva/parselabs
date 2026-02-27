@@ -31,10 +31,7 @@ _JSON_RENAMES = {
     "lab_unit_raw": "raw_lab_unit",
     "reference_min_raw": "raw_reference_min",
     "reference_max_raw": "raw_reference_max",
-    "source_text": "raw_source_text",
     "reference_range": "raw_reference_range",
-    "reference_notes": "raw_reference_notes",
-    "is_abnormal": "raw_is_abnormal",
     "comments": "raw_comments",
 }
 
@@ -45,10 +42,7 @@ _CSV_INTERNAL_RENAMES = {
     "lab_unit_raw": "raw_lab_unit",
     "reference_min_raw": "raw_reference_min",
     "reference_max_raw": "raw_reference_max",
-    "source_text": "raw_source_text",
     "reference_range": "raw_reference_range",
-    "reference_notes": "raw_reference_notes",
-    "is_abnormal": "raw_is_abnormal",
     "comments": "raw_comments",
 }
 

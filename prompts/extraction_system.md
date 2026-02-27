@@ -37,11 +37,8 @@ CRITICAL RULES:
 5. REFERENCE RANGES - ALWAYS PARSE INTO NUMBERS:
    - `raw_reference_range`: Copy the complete reference range text EXACTLY as shown
    - `raw_reference_min` / `raw_reference_max`: Extract ONLY the numeric bounds (PLAIN NUMBERS ONLY)
-   - `raw_reference_notes`: Put any comments, methodology notes, or additional context here
-     Examples: "Confirmado por duplo ensaio", "Criança<400", "valores podem variar"
 
    IMPORTANT: raw_reference_min and raw_reference_max must be PLAIN NUMBERS.
-   Any text, comments, or notes go in raw_reference_notes instead.
 
    Parsing rules and examples:
    - "< 40" or "< 0.3" → raw_reference_min=null, raw_reference_max=40 (or 0.3)
@@ -50,7 +47,7 @@ CRITICAL RULES:
    - "26.5-32.6" → raw_reference_min=26.5, raw_reference_max=32.6
    - "0.2 a 1.0" → raw_reference_min=0.2, raw_reference_max=1.0 ("a" means "to" in Portuguese)
    - "4.0 - 10.0" → raw_reference_min=4.0, raw_reference_max=10.0
-   - "39-117;Criança<400" → raw_reference_min=39, raw_reference_max=117, raw_reference_notes="Criança<400"
+   - "39-117;Criança<400" → raw_reference_min=39, raw_reference_max=117
    - If no numeric values can be extracted → both null
 
    SPECIAL CASE - Multiple values with shared reference ranges (e.g., WBC differentials):
@@ -67,14 +64,10 @@ CRITICAL RULES:
      * Result 1: value=4.2, unit="10^9/L", reference_min=null, reference_max=null
      * Result 2: value=65, unit="%", reference_min=40, reference_max=80
 
-6. FLAGS & CONTEXT:
-   - `raw_is_abnormal`: Set to true if result is marked (H, L, *, ↑, ↓, "HIGH", "LOW", etc.)
+6. CONTEXT:
    - `raw_comments`: Capture any notes, qualitative results, or text values
 
-7. TRACEABILITY:
-   - `raw_source_text`: Copy the exact row/line containing this result
-
-8. DATES: Format as YYYY-MM-DD or leave null
+7. DATES: Format as YYYY-MM-DD or leave null
 
 SCHEMA FIELD NAMES:
 - Use `raw_lab_name` (raw test name from PDF)
@@ -91,8 +84,8 @@ A) Tests with BOTH qualitative AND quantitative results:
 
 B) Tests with visual markers/flags:
    Example: "Glucose ↑ 142 mg/dL"
-   → lab_name="Glucose", value="142", unit="mg/dL", raw_is_abnormal=true
-   → The arrow/marker indicates abnormal, don't include in value
+   → lab_name="Glucose", value="142", unit="mg/dL"
+   → The arrow/marker indicates abnormal, don't include it in the value field
 
 C) Tests with conditional/multi-part reference ranges:
    Example: "Colesterol < 200 (desejável); 200-239 (limite); ≥240 (alto)"
@@ -144,12 +137,12 @@ F) White blood cell differentials with BOTH absolute count AND percentage:
 
    CRITICAL: Do NOT skip or merge these values. Extract BOTH as separate LabResult entries.
 
-9. PAGE CLASSIFICATION:
+8. PAGE CLASSIFICATION:
    - `page_has_lab_data`: Set to true if this page contains ANY lab test results
    - Set to false if this is a cover page, instructions, administrative content, or has no lab tests
    - This helps distinguish empty pages from extraction failures
 
-10. FIELD SEPARATION - CRITICAL:
+9. FIELD SEPARATION - CRITICAL:
    - Each field must contain ONLY its designated data type
    - NEVER concatenate or embed multiple pieces of data in one field
    - NEVER include field labels (like "raw_value:") inside field values
@@ -164,7 +157,7 @@ F) White blood cell differentials with BOTH absolute count AND percentage:
    raw_value: "100"
    raw_lab_unit: "mg/dL"
 
-11. STANDARDIZATION (only when the list is provided below):
+10. STANDARDIZATION (only when the list is provided below):
    For each lab result, ALSO set standardized fields using the STANDARDIZED LAB NAMES AND UNITS list
    appended at the end of this prompt.
 

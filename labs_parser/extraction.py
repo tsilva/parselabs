@@ -45,63 +45,24 @@ class LabResult(BaseModel):
         alias="reference_range",
         description="Complete reference range text EXACTLY as shown.",
     )
-    raw_reference_notes: str | None = Field(
-        default=None,
-        alias="reference_notes",
-        description="Any notes, comments, or additional context about the reference range. "
-        "Examples: 'Confirmado por duplo ensaio', 'Criança<400', 'valores podem variar'. "
-        "Put methodology notes, population-specific ranges, or validation comments HERE.",
-    )
     raw_reference_min: float | None = Field(
         default=None,
         alias="reference_min_raw",
-        description="Minimum reference value as a PLAIN NUMBER ONLY. Parse from reference_range. Put any comments or notes in reference_notes instead. Examples: '< 40' → null, '150 - 400' → 150, '26.5-32.6' → 26.5",
+        description="Minimum reference value as a PLAIN NUMBER ONLY. Parse from reference_range. Examples: '< 40' → null, '150 - 400' → 150, '26.5-32.6' → 26.5",
     )
     raw_reference_max: float | None = Field(
         default=None,
         alias="reference_max_raw",
-        description="Maximum reference value as a PLAIN NUMBER ONLY. Parse from reference_range. Put any comments or notes in reference_notes instead. Examples: '< 40' → 40, '150 - 400' → 400, '26.5-32.6' → 32.6",
-    )
-    raw_is_abnormal: bool | None = Field(
-        default=None,
-        alias="is_abnormal",
-        description="Whether result is marked/flagged as abnormal in PDF",
+        description="Maximum reference value as a PLAIN NUMBER ONLY. Parse from reference_range. Examples: '< 40' → 40, '150 - 400' → 400, '26.5-32.6' → 32.6",
     )
     raw_comments: str | None = Field(
         default=None,
         alias="comments",
         description="Additional notes or remarks about the test (NOT the test result itself). Only use for extra information like methodology notes or special conditions.",
     )
-    raw_source_text: str | None = Field(
-        default="",
-        alias="source_text",
-        description="Exact row or section from PDF containing this result",
-    )
-
     # Internal fields (added by pipeline, not by LLM)
-    page_number: int | None = Field(default=None, ge=1, description="Page number in PDF")
-    source_file: str | None = Field(default=None, description="Source file identifier")
     lab_name_standardized: str | None = Field(default=None, description="Standardized lab name")
     lab_unit_standardized: str | None = Field(default=None, description="Standardized lab unit")
-
-    # Review tracking fields (all prefixed with review_)
-    result_index: int | None = Field(
-        default=None,
-        description="Index of this result in the source JSON lab_results array",
-    )
-    review_needed: bool | None = Field(
-        default=False,
-        description="Whether this result needs human review (auto-flagged)",
-    )
-    review_reason: str | None = Field(
-        default=None,
-        description="Reason why review is needed (auto-generated)",
-    )
-    review_status: str | None = Field(
-        default=None,
-        description="Human review status: 'accepted', 'rejected', or null",
-    )
-    review_completed_at: str | None = Field(default=None, description="ISO timestamp when review was completed")
 
     @field_validator("raw_value", mode="before")
     @classmethod
@@ -143,8 +104,6 @@ class LabResult(BaseModel):
             "raw_lab_unit:",
             "reference_range:",
             "raw_reference_range:",
-            "source_text:",
-            "raw_source_text:",
             "reference_min_raw:",
             "raw_reference_min:",
             "reference_max_raw:",
@@ -239,10 +198,6 @@ class LabResultExtraction(BaseModel):
         default=None,
         description="Complete reference range text EXACTLY as shown.",
     )
-    raw_reference_notes: str | None = Field(
-        default=None,
-        description="Any notes, comments, or additional context about the reference range.",
-    )
     raw_reference_min: float | None = Field(
         default=None,
         description="Minimum reference value as a PLAIN NUMBER ONLY. Parse from reference_range.",
@@ -251,17 +206,9 @@ class LabResultExtraction(BaseModel):
         default=None,
         description="Maximum reference value as a PLAIN NUMBER ONLY. Parse from reference_range.",
     )
-    raw_is_abnormal: bool | None = Field(
-        default=None,
-        description="Whether result is marked/flagged as abnormal in PDF",
-    )
     raw_comments: str | None = Field(
         default=None,
         description="Additional notes or remarks about the test (NOT the test result itself).",
-    )
-    raw_source_text: str | None = Field(
-        default="",
-        description="Exact row or section from PDF containing this result",
     )
 
 
@@ -804,7 +751,6 @@ def _clean_numeric_field(value) -> float | None:
 
     Some LLMs embed extra field data into numeric reference fields:
     - '1.20, raw_comments: Confirmado por duplo ensaio (mesma amostra)'
-    - '457.0, raw_is_abnormal: True'
 
     This function extracts just the numeric value.
     """
@@ -824,12 +770,6 @@ def _clean_numeric_field(value) -> float | None:
         for pattern in [
             ", comments:",
             ", raw_comments:",
-            ", is_abnormal:",
-            ", raw_is_abnormal:",
-            ", source_text:",
-            ", raw_source_text:",
-            ", reference_notes:",
-            ", raw_reference_notes:",
         ]:
             if pattern.lower() in value.lower():
                 value = value.split(",")[0].strip()
@@ -857,10 +797,7 @@ _RAW_FIELD_RENAMES = {
     "lab_unit_raw": "raw_lab_unit",
     "reference_min_raw": "raw_reference_min",
     "reference_max_raw": "raw_reference_max",
-    "source_text": "raw_source_text",
     "reference_range": "raw_reference_range",
-    "reference_notes": "raw_reference_notes",
-    "is_abnormal": "raw_is_abnormal",
     "comments": "raw_comments",
 }
 
