@@ -142,9 +142,9 @@ Detects protein-electrophoresis-style errors (e.g., Albumin `61.5 g/dL` that sho
 **d. Qualitative values (`classify_qualitative_value`):**
 - Deterministic pattern matching (~40 Portuguese/English/French/German medical terms)
 - No LLM call — pure string matching with prefix/exact patterns
-- Boolean labs: convert `value_raw` or `comments` to `0`/`1`
+- Boolean labs: convert `raw_value` or `raw_comments` to `0`/`1`
 - Non-boolean labs: only `0` (negative) values converted
-- Unknown values return `None` (safe default — stays in `value_raw` for review)
+- Unknown values return `None` (safe default — stays in `raw_value` for review)
 
 **e. Reference range validation (`validate_reference_range`):**
 - Compare extracted range against `lab_specs.ranges.default`
@@ -204,9 +204,9 @@ Relationship formulas (e.g., LDL Friedewald) are defined in `lab_specs.json` und
 | `unit` | str | Primary unit |
 | `reference_min` | float64 | From PDF, in primary unit |
 | `reference_max` | float64 | From PDF, in primary unit |
-| `lab_name_raw` | str | Exactly as extracted |
-| `value_raw` | str | Exactly as extracted |
-| `unit_raw` | str | Exactly as extracted |
+| `raw_lab_name` | str | Exactly as extracted |
+| `raw_value` | str | Exactly as extracted |
+| `raw_unit` | str | Exactly as extracted |
 | `review_needed` | boolean | Set by ValueValidator |
 | `review_reason` | str | Semicolon-separated reason codes |
 | `is_below_limit` | boolean | Value was `< X` |

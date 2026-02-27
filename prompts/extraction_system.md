@@ -17,7 +17,7 @@ CRITICAL RULES:
    - Example: If you see "BILIRRUBINAS" as header and "Total" below it, use "BILIRRUBINAS - Total"
 
 4. NUMERIC vs QUALITATIVE VALUES:
-   - `value_raw`: Extract EXACTLY as shown - can be numeric OR text
+   - `raw_value`: Extract EXACTLY as shown - can be numeric OR text
    - For NUMERIC results: Put the exact number as a string (e.g., "5.0", "14.2", "1.74")
    - For TEXT-ONLY results: Put the exact text (e.g., "AMARELA", "NAO CONTEM", "NORMAL", "POSITIVE", "NEGATIVE")
    - For RANGE results: Put the exact text (e.g., "1 a 2", "1-5 / campo", "0-3 / campo")
@@ -27,30 +27,30 @@ CRITICAL RULES:
    English: NEGATIVE, POSITIVE, NORMAL, ABSENT, PRESENT, RARE, ABUNDANT
    Ranges: "1 a 2", "1-5 / campo", "0-3 / campo", "< 5", "> 100"
 
-   When you see ANY of these text values, put the EXACT TEXT in the value_raw field.
+   When you see ANY of these text values, put the EXACT TEXT in the raw_value field.
 
-   - `lab_unit_raw`: Extract the unit EXACTLY as shown in the document
+   - `raw_lab_unit`: Extract the unit EXACTLY as shown in the document
      * Copy the unit symbol or abbreviation exactly
      * If NO unit is visible or implied in the document → use null or empty string
      * Do NOT infer or normalize units - just extract what you see
 
 5. REFERENCE RANGES - ALWAYS PARSE INTO NUMBERS:
-   - `reference_range`: Copy the complete reference range text EXACTLY as shown
-   - `reference_min_raw` / `reference_max_raw`: Extract ONLY the numeric bounds (PLAIN NUMBERS ONLY)
-   - `reference_notes`: Put any comments, methodology notes, or additional context here
+   - `raw_reference_range`: Copy the complete reference range text EXACTLY as shown
+   - `raw_reference_min` / `raw_reference_max`: Extract ONLY the numeric bounds (PLAIN NUMBERS ONLY)
+   - `raw_reference_notes`: Put any comments, methodology notes, or additional context here
      Examples: "Confirmado por duplo ensaio", "Criança<400", "valores podem variar"
 
-   IMPORTANT: reference_min_raw and reference_max_raw must be PLAIN NUMBERS.
-   Any text, comments, or notes go in reference_notes instead.
+   IMPORTANT: raw_reference_min and raw_reference_max must be PLAIN NUMBERS.
+   Any text, comments, or notes go in raw_reference_notes instead.
 
    Parsing rules and examples:
-   - "< 40" or "< 0.3" → reference_min_raw=null, reference_max_raw=40 (or 0.3)
-   - "> 150" → reference_min_raw=150, reference_max_raw=null
-   - "150 - 400" → reference_min_raw=150, reference_max_raw=400
-   - "26.5-32.6" → reference_min_raw=26.5, reference_max_raw=32.6
-   - "0.2 a 1.0" → reference_min_raw=0.2, reference_max_raw=1.0 ("a" means "to" in Portuguese)
-   - "4.0 - 10.0" → reference_min_raw=4.0, reference_max_raw=10.0
-   - "39-117;Criança<400" → reference_min_raw=39, reference_max_raw=117, reference_notes="Criança<400"
+   - "< 40" or "< 0.3" → raw_reference_min=null, raw_reference_max=40 (or 0.3)
+   - "> 150" → raw_reference_min=150, raw_reference_max=null
+   - "150 - 400" → raw_reference_min=150, raw_reference_max=400
+   - "26.5-32.6" → raw_reference_min=26.5, raw_reference_max=32.6
+   - "0.2 a 1.0" → raw_reference_min=0.2, raw_reference_max=1.0 ("a" means "to" in Portuguese)
+   - "4.0 - 10.0" → raw_reference_min=4.0, raw_reference_max=10.0
+   - "39-117;Criança<400" → raw_reference_min=39, raw_reference_max=117, raw_reference_notes="Criança<400"
    - If no numeric values can be extracted → both null
 
    SPECIAL CASE - Multiple values with shared reference ranges (e.g., WBC differentials):
@@ -62,24 +62,24 @@ CRITICAL RULES:
      * Check if the reference range units match the test value units
      * Percentage reference ranges are typically 0-100 (e.g., "40-80")
      * Absolute count reference ranges are typically small numbers (e.g., "1.5-7.0")
-     * If uncertain, copy the reference_range text but leave min/max as null
+     * If uncertain, copy the raw_reference_range text but leave min/max as null
    - Example: "Neutrophils 4.2 10^9/L 65% (40-80)" → Extract as TWO results:
      * Result 1: value=4.2, unit="10^9/L", reference_min=null, reference_max=null
      * Result 2: value=65, unit="%", reference_min=40, reference_max=80
 
 6. FLAGS & CONTEXT:
-   - `is_abnormal`: Set to true if result is marked (H, L, *, ↑, ↓, "HIGH", "LOW", etc.)
-   - `comments`: Capture any notes, qualitative results, or text values
+   - `raw_is_abnormal`: Set to true if result is marked (H, L, *, ↑, ↓, "HIGH", "LOW", etc.)
+   - `raw_comments`: Capture any notes, qualitative results, or text values
 
 7. TRACEABILITY:
-   - `source_text`: Copy the exact row/line containing this result
+   - `raw_source_text`: Copy the exact row/line containing this result
 
 8. DATES: Format as YYYY-MM-DD or leave null
 
 SCHEMA FIELD NAMES:
-- Use `lab_name_raw` (raw test name from PDF)
-- Use `value_raw` (raw result value - numeric OR text)
-- Use `lab_unit_raw` (raw unit from PDF)
+- Use `raw_lab_name` (raw test name from PDF)
+- Use `raw_value` (raw result value - numeric OR text)
+- Use `raw_lab_unit` (raw unit from PDF)
 
 COMMON COMPLEX SCENARIOS (generic patterns to handle):
 
@@ -91,13 +91,13 @@ A) Tests with BOTH qualitative AND quantitative results:
 
 B) Tests with visual markers/flags:
    Example: "Glucose ↑ 142 mg/dL"
-   → lab_name="Glucose", value="142", unit="mg/dL", is_abnormal=true
+   → lab_name="Glucose", value="142", unit="mg/dL", raw_is_abnormal=true
    → The arrow/marker indicates abnormal, don't include in value
 
 C) Tests with conditional/multi-part reference ranges:
    Example: "Colesterol < 200 (desejável); 200-239 (limite); ≥240 (alto)"
-   → reference_range="< 200 (desejável); 200-239 (limite); ≥240 (alto)" (copy all)
-   → reference_min_raw=null, reference_max_raw=200 (use the primary/desirable range)
+   → raw_reference_range="< 200 (desejável); 200-239 (limite); ≥240 (alto)" (copy all)
+   → raw_reference_min=null, raw_reference_max=200 (use the primary/desirable range)
 
 D) Tests where result appears in different locations:
    Some formats show: "Test Name        Result        Reference        Unit"
@@ -114,9 +114,9 @@ G) Tests with numeric value followed by "=" and qualitative interpretation:
    and the text after "=" is just the lab's classification (e.g., NR=Non-Reactive, R=Reactive).
    → ALWAYS extract the NUMERIC value, NOT the interpretation text.
    Example: "ANTICORPO ANTI SCL 70      9= NR       < 19 U"
-   → value_raw="9", unit="U", reference_range="< 19 U", comments="NR (Não reactivo)"
+   → raw_value="9", unit="U", raw_reference_range="< 19 U", raw_comments="NR (Não reactivo)"
    Example: "FACTOR REUMATOIDE          84          ate 30 UI/ml"
-   → value_raw="84", unit="UI/ml"
+   → raw_value="84", unit="UI/ml"
    The "=" sign separates the numeric result from its qualitative interpretation.
    The numeric value is ALWAYS preferred over the interpretation.
 
@@ -126,8 +126,8 @@ F) White blood cell differentials with BOTH absolute count AND percentage:
 
    Example line: "Neutrófilos    3,3  10⁹/L    62,9  %    35.0 - 85.0"
    → Extract as TWO separate results:
-     1) lab_name_raw="Neutrófilos", value_raw="3.3", lab_unit_raw="10⁹/L", reference_min_raw=null, reference_max_raw=null
-     2) lab_name_raw="Neutrófilos", value_raw="62.9", lab_unit_raw="%", reference_min_raw=35.0, reference_max_raw=85.0
+     1) raw_lab_name="Neutrófilos", raw_value="3.3", raw_lab_unit="10⁹/L", raw_reference_min=null, raw_reference_max=null
+     2) raw_lab_name="Neutrófilos", raw_value="62.9", raw_lab_unit="%", raw_reference_min=35.0, raw_reference_max=85.0
 
    How to identify which value is which:
    - The value NEXT TO "10⁹/L", "10^9/L", "/mm³", or similar is the ABSOLUTE COUNT
@@ -152,23 +152,23 @@ F) White blood cell differentials with BOTH absolute count AND percentage:
 10. FIELD SEPARATION - CRITICAL:
    - Each field must contain ONLY its designated data type
    - NEVER concatenate or embed multiple pieces of data in one field
-   - NEVER include field labels (like "value_raw:") inside field values
+   - NEVER include field labels (like "raw_value:") inside field values
 
    WRONG - DO NOT DO THIS:
-   lab_name_raw: "Glucose, value_raw: 100, lab_unit_raw: mg/dL"
-   lab_name_raw: "Hemoglobin value_raw: 14.2"
-   value_raw: "100 mg/dL"
+   raw_lab_name: "Glucose, raw_value: 100, raw_lab_unit: mg/dL"
+   raw_lab_name: "Hemoglobin raw_value: 14.2"
+   raw_value: "100 mg/dL"
 
    CORRECT - SEPARATE FIELDS:
-   lab_name_raw: "Glucose"
-   value_raw: "100"
-   lab_unit_raw: "mg/dL"
+   raw_lab_name: "Glucose"
+   raw_value: "100"
+   raw_lab_unit: "mg/dL"
 
 11. STANDARDIZATION (only when the list is provided below):
    For each lab result, ALSO set standardized fields using the STANDARDIZED LAB NAMES AND UNITS list
    appended at the end of this prompt.
 
-   - `lab_name`: Match lab_name_raw to the CLOSEST standardized name from the list.
+   - `lab_name`: Match raw_lab_name to the CLOSEST standardized name from the list.
      Strip Portuguese section prefixes before matching:
      - "bioquímica - {test}" → match "{test}"
      - "hematologia - hemograma - {test}" → match "{test}"

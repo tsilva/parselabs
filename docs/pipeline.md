@@ -85,12 +85,12 @@ Each `LabResult` contains:
 
 | Field | Description |
 |-------|-------------|
-| `lab_name_raw` | Test name as printed on the PDF |
-| `value_raw` | Numeric value as string |
-| `lab_unit_raw` | Unit symbol |
-| `reference_range` | Full range text |
-| `reference_min_raw`, `reference_max_raw` | Parsed range bounds |
-| `is_abnormal` | Abnormal flag from PDF |
+| `raw_lab_name` | Test name as printed on the PDF |
+| `raw_value` | Numeric value as string |
+| `raw_lab_unit` | Unit symbol |
+| `raw_reference_range` | Full range text |
+| `raw_reference_min`, `raw_reference_max` | Parsed range bounds |
+| `raw_is_abnormal` | Abnormal flag from PDF |
 | `lab_name_standardized` | Inline LLM mapping (may be `$UNKNOWN$`) |
 | `lab_unit_standardized` | Inline LLM mapping (may be `$UNKNOWN$`) |
 
@@ -161,7 +161,7 @@ Parses limit indicators and sets boolean flags:
 Converts values to primary units using factors from `lab_specs.json`:
 
 ```
-value_raw=5.0, unit_raw="mmol/L", lab="Blood - Glucose"
+raw_value=5.0, raw_unit="mmol/L", lab="Blood - Glucose"
   → primary_unit = "mg/dL"
   → factor = 18.0
   → value = 5.0 × 18.0 = 90.0 mg/dL
@@ -244,9 +244,9 @@ value             # Numeric value in primary unit
 unit              # Primary unit (e.g., "mg/dL")
 reference_min     # Min reference from report
 reference_max     # Max reference from report
-lab_name_raw      # Original name from PDF
-value_raw         # Original value (before conversion)
-unit_raw          # Original unit
+raw_lab_name      # Original name from PDF
+raw_value         # Original value (before conversion)
+raw_unit          # Original unit
 review_needed     # Boolean: needs human review?
 review_reason     # Reason codes (e.g., "FORMAT_ARTIFACT; EXTREME_DEVIATION;")
 is_below_limit    # Value was reported as below limit (e.g., "<0.05")

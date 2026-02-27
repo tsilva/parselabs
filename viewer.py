@@ -1129,9 +1129,9 @@ def build_details_html(entry: dict) -> str:
         return "<p>No entry selected</p>"
 
     paired_fields = [
-        ("Lab Name", "lab_name_raw", "lab_name"),
-        ("Value", "value_raw", "value"),
-        ("Unit", "unit_raw", "unit"),
+        ("Lab Name", "raw_lab_name", "lab_name"),
+        ("Value", "raw_value", "value"),
+        ("Unit", "raw_unit", "unit"),
         ("Ref Min", "reference_min", "reference_min"),
         ("Ref Max", "reference_max", "reference_max"),
     ]

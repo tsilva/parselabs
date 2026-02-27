@@ -188,9 +188,9 @@ reference_min       # Min reference from report
 reference_max       # Max reference from report
 
 # Raw values (for audit)
-lab_name_raw        # Original name from PDF
-value_raw           # Original value (before conversion)
-unit_raw            # Original unit
+raw_lab_name        # Original name from PDF
+raw_value           # Original value (before conversion)
+raw_unit            # Original unit
 
 # Review flags (from validation.py)
 review_needed       # Boolean: needs human review?
@@ -207,7 +207,7 @@ result_index        # Index within page (hidden in Excel)
 
 ### Pydantic Models
 
-- `LabResult`: Single test result with raw fields (`_raw` suffix) and metadata
+- `LabResult`: Single test result with raw fields (`raw_` prefix) and metadata
 - `HealthLabReport`: Document-level metadata + list of LabResult objects
 - `LabType`: Enum for test types (blood, urine, saliva, feces, unknown)
 
