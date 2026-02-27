@@ -79,9 +79,9 @@ COLUMN_SCHEMA = {
     "reference_min": {"dtype": "float64", "excel_width": 12},
     "reference_max": {"dtype": "float64", "excel_width": 12},
     # Raw values (for audit)
-    "lab_name_raw": {"dtype": "str", "excel_width": 35},
-    "value_raw": {"dtype": "str", "excel_width": 12},
-    "unit_raw": {"dtype": "str", "excel_width": 15},
+    "raw_lab_name": {"dtype": "str", "excel_width": 35},
+    "raw_value": {"dtype": "str", "excel_width": 12},
+    "raw_unit": {"dtype": "str", "excel_width": 15},
     # Review flags (from validation)
     "review_needed": {"dtype": "boolean", "excel_width": 12},
     "review_reason": {"dtype": "str", "excel_width": 30},
@@ -107,9 +107,9 @@ COLUMN_ORDER = [
     "unit",
     "reference_min",
     "reference_max",
-    "lab_name_raw",
-    "value_raw",
-    "unit_raw",
+    "raw_lab_name",
+    "raw_value",
+    "raw_unit",
     "review_needed",
     "review_reason",
     "is_below_limit",
@@ -571,7 +571,7 @@ def _apply_name_standardization(
     """Apply name standardization fallback. Returns count of updated results."""
 
     # Collect raw names that need standardization (not already standardized or marked as unknown)
-    names_to_standardize = [result.get("lab_name_raw", "") for result in all_results if not result.get("lab_name_standardized") or result.get("lab_name_standardized") == UNKNOWN_VALUE]
+    names_to_standardize = [result.get("raw_lab_name", "") for result in all_results if not result.get("lab_name_standardized") or result.get("lab_name_standardized") == UNKNOWN_VALUE]
 
     # Guard: Skip if no names need standardization
     if not names_to_standardize:
@@ -592,7 +592,7 @@ def _apply_name_standardization(
             continue
 
         # Apply mapping if available
-        raw_name = result.get("lab_name_raw", "")
+        raw_name = result.get("raw_lab_name", "")
         mapped = name_mappings.get(raw_name)
         if mapped:
             result["lab_name_standardized"] = mapped
@@ -614,7 +614,7 @@ def _apply_unit_standardization(
     # Collect unit contexts that need standardization (with standardized names)
     unit_contexts = [
         (
-            result.get("lab_unit_raw", ""),
+            result.get("raw_lab_unit", ""),
             result.get("lab_name_standardized", ""),
         )
         for result in all_results
@@ -645,7 +645,7 @@ def _apply_unit_standardization(
             continue
 
         # Apply mapping if available
-        pair = (result.get("lab_unit_raw", ""), std_name)
+        pair = (result.get("raw_lab_unit", ""), std_name)
         mapped = unit_mappings.get(pair)
         if mapped:
             result["lab_unit_standardized"] = mapped
@@ -1073,7 +1073,7 @@ def _rename_columns_for_export(merged_df: pd.DataFrame) -> pd.DataFrame:
         "lab_name_standardized": "lab_name",
         "value_primary": "value",
         "lab_unit_primary": "unit",
-        "lab_unit_raw": "unit_raw",
+        "raw_lab_unit": "raw_unit",
         "reference_min_primary": "reference_min",
         "reference_max_primary": "reference_max",
     }

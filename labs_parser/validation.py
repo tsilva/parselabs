@@ -82,7 +82,7 @@ class ValueValidator:
         self._date_col: str = "date"
         self._ref_min_col: str = ""
         self._ref_max_col: str = ""
-        self._value_raw_col: str = "value_raw"
+        self._value_raw_col: str = "raw_value"
 
     def _resolve_column(self, df: pd.DataFrame, key: str) -> str:
         """Resolve column name using preferred or fallback naming convention.

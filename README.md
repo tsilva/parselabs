@@ -175,7 +175,7 @@ For each PDF, the tool generates:
 | `value` | Numeric value in primary unit |
 | `unit` | Primary unit (e.g., "mg/dL") |
 | `reference_min/max` | Reference range from report |
-| `lab_name_raw`, `value_raw`, `unit_raw` | Original values for audit |
+| `raw_lab_name`, `raw_value`, `raw_unit` | Original values for audit |
 | `review_needed` | Boolean flag for items needing review |
 | `review_reason` | Validation reason codes |
 

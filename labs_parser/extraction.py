@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from openai import APIError, OpenAI
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -23,46 +23,58 @@ _UNKNOWN_VALUE = "$UNKNOWN$"
 class LabResult(BaseModel):
     """Single lab test result - optimized for extraction accuracy."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     # Raw extraction (exactly as shown in PDF)
-    lab_name_raw: str = Field(
-        description="Test name ONLY as written in the PDF. Must contain ONLY the test name - DO NOT include values, units, reference ranges, or field labels. WRONG: 'Glucose, value_raw: 100' CORRECT: 'Glucose'"
+    raw_lab_name: str = Field(
+        alias="lab_name_raw",
+        description="Test name ONLY as written in the PDF. Must contain ONLY the test name - DO NOT include values, units, reference ranges, or field labels. WRONG: 'Glucose, raw_value: 100' CORRECT: 'Glucose'",
     )
-    value_raw: str | None = Field(
+    raw_value: str | None = Field(
         default=None,
+        alias="value_raw",
         description="Result value ONLY. Must contain ONLY the numeric or text result - DO NOT include test names, units, or field labels. Examples: '5.2', '14.8', 'NEGATIVO', 'POSITIVO'",
     )
-    lab_unit_raw: str | None = Field(
+    raw_lab_unit: str | None = Field(
         default=None,
+        alias="lab_unit_raw",
         description="Unit ONLY as written in PDF. Must contain ONLY the unit symbol - DO NOT include values or test names. Examples: 'mg/dL', '%', 'U/L'",
     )
-    reference_range: str | None = Field(
+    raw_reference_range: str | None = Field(
         default=None,
+        alias="reference_range",
         description="Complete reference range text EXACTLY as shown.",
     )
-    reference_notes: str | None = Field(
+    raw_reference_notes: str | None = Field(
         default=None,
+        alias="reference_notes",
         description="Any notes, comments, or additional context about the reference range. "
         "Examples: 'Confirmado por duplo ensaio', 'Criança<400', 'valores podem variar'. "
         "Put methodology notes, population-specific ranges, or validation comments HERE.",
     )
-    reference_min_raw: float | None = Field(
+    raw_reference_min: float | None = Field(
         default=None,
+        alias="reference_min_raw",
         description="Minimum reference value as a PLAIN NUMBER ONLY. Parse from reference_range. Put any comments or notes in reference_notes instead. Examples: '< 40' → null, '150 - 400' → 150, '26.5-32.6' → 26.5",
     )
-    reference_max_raw: float | None = Field(
+    raw_reference_max: float | None = Field(
         default=None,
+        alias="reference_max_raw",
         description="Maximum reference value as a PLAIN NUMBER ONLY. Parse from reference_range. Put any comments or notes in reference_notes instead. Examples: '< 40' → 40, '150 - 400' → 400, '26.5-32.6' → 32.6",
     )
-    is_abnormal: bool | None = Field(
+    raw_is_abnormal: bool | None = Field(
         default=None,
+        alias="is_abnormal",
         description="Whether result is marked/flagged as abnormal in PDF",
     )
-    comments: str | None = Field(
+    raw_comments: str | None = Field(
         default=None,
+        alias="comments",
         description="Additional notes or remarks about the test (NOT the test result itself). Only use for extra information like methodology notes or special conditions.",
     )
-    source_text: str | None = Field(
+    raw_source_text: str | None = Field(
         default="",
+        alias="source_text",
         description="Exact row or section from PDF containing this result",
     )
 
@@ -91,9 +103,9 @@ class LabResult(BaseModel):
     )
     review_completed_at: str | None = Field(default=None, description="ISO timestamp when review was completed")
 
-    @field_validator("value_raw", mode="before")
+    @field_validator("raw_value", mode="before")
     @classmethod
-    def coerce_value_raw_to_string(cls, v):
+    def coerce_raw_value_to_string(cls, v):
         """Coerce numeric values to strings - LLMs often return floats instead of strings."""
 
         # Guard: None passthrough
@@ -108,9 +120,9 @@ class LabResult(BaseModel):
         # Already a string or other type - return as-is
         return v
 
-    @field_validator("lab_name_raw", mode="before")
+    @field_validator("raw_lab_name", mode="before")
     @classmethod
-    def validate_lab_name_raw(cls, v):
+    def validate_raw_lab_name(cls, v):
         """Reject malformed lab names with embedded metadata.
 
         Previously this cleaned malformed entries. Now it fails fast
@@ -123,20 +135,26 @@ class LabResult(BaseModel):
 
         v_str = str(v)
 
-        # Check for embedded metadata patterns
+        # Check for embedded metadata patterns (both old and new field name formats)
         malformed_patterns = [
             "value_raw:",
+            "raw_value:",
             "lab_unit_raw:",
+            "raw_lab_unit:",
             "reference_range:",
+            "raw_reference_range:",
             "source_text:",
+            "raw_source_text:",
             "reference_min_raw:",
+            "raw_reference_min:",
             "reference_max_raw:",
+            "raw_reference_max:",
         ]
         v_lower = v_str.lower()
 
         # Reject lab names that contain embedded field data from other columns
         if any(pattern in v_lower for pattern in malformed_patterns):
-            raise ValueError(f"MALFORMED OUTPUT: lab_name_raw contains embedded field data. Model returned: '{v_str[:100]}...'. This indicates the extraction prompt needs improvement.")
+            raise ValueError(f"MALFORMED OUTPUT: raw_lab_name contains embedded field data. Model returned: '{v_str[:100]}...'. This indicates the extraction prompt needs improvement.")
 
         return v_str
 
@@ -198,18 +216,18 @@ class LabResultExtraction(BaseModel):
     token usage and avoid confusing the model.
     """
 
-    lab_name_raw: str = Field(
-        description="Test name ONLY as written in the PDF. Must contain ONLY the test name - DO NOT include values, units, reference ranges, or field labels. WRONG: 'Glucose, value_raw: 100' CORRECT: 'Glucose'"
+    raw_lab_name: str = Field(
+        description="Test name ONLY as written in the PDF. Must contain ONLY the test name - DO NOT include values, units, reference ranges, or field labels. WRONG: 'Glucose, raw_value: 100' CORRECT: 'Glucose'"
     )
     lab_name: str | None = Field(
         default=None,
         description="Standardized lab name from the provided list. Match the raw name to the CLOSEST entry. Use '$UNKNOWN$' if no match.",
     )
-    value_raw: str | None = Field(
+    raw_value: str | None = Field(
         default=None,
         description="Result value ONLY. Must contain ONLY the numeric or text result - DO NOT include test names, units, or field labels. Examples: '5.2', '14.8', 'NEGATIVO', 'POSITIVO'",
     )
-    lab_unit_raw: str | None = Field(
+    raw_lab_unit: str | None = Field(
         default=None,
         description="Unit ONLY as written in PDF. Must contain ONLY the unit symbol - DO NOT include values or test names. Examples: 'mg/dL', '%', 'U/L'",
     )
@@ -217,31 +235,31 @@ class LabResultExtraction(BaseModel):
         default=None,
         description="Standardized unit from the provided list for this lab. Normalize FORMAT only (e.g., 'mg/dl' → 'mg/dL'). Do NOT convert units. Use '$UNKNOWN$' if no match.",
     )
-    reference_range: str | None = Field(
+    raw_reference_range: str | None = Field(
         default=None,
         description="Complete reference range text EXACTLY as shown.",
     )
-    reference_notes: str | None = Field(
+    raw_reference_notes: str | None = Field(
         default=None,
         description="Any notes, comments, or additional context about the reference range.",
     )
-    reference_min_raw: float | None = Field(
+    raw_reference_min: float | None = Field(
         default=None,
         description="Minimum reference value as a PLAIN NUMBER ONLY. Parse from reference_range.",
     )
-    reference_max_raw: float | None = Field(
+    raw_reference_max: float | None = Field(
         default=None,
         description="Maximum reference value as a PLAIN NUMBER ONLY. Parse from reference_range.",
     )
-    is_abnormal: bool | None = Field(
+    raw_is_abnormal: bool | None = Field(
         default=None,
         description="Whether result is marked/flagged as abnormal in PDF",
     )
-    comments: str | None = Field(
+    raw_comments: str | None = Field(
         default=None,
         description="Additional notes or remarks about the test (NOT the test result itself).",
     )
-    source_text: str | None = Field(
+    raw_source_text: str | None = Field(
         default="",
         description="Exact row or section from PDF containing this result",
     )
@@ -595,7 +613,7 @@ def _log_extraction_quality(report_model: HealthLabReport, image_path: Path) -> 
         return
 
     # Calculate percentage of null values
-    null_count = sum(1 for r in report_model.lab_results if r.value_raw is None)
+    null_count = sum(1 for r in report_model.lab_results if r.raw_value is None)
     total_count = len(report_model.lab_results)
     null_pct = (null_count / total_count * 100) if total_count > 0 else 0
 
@@ -785,8 +803,8 @@ def _clean_numeric_field(value) -> float | None:
     """Strip embedded metadata from numeric fields.
 
     Some LLMs embed extra field data into numeric reference fields:
-    - '1.20, comments: Confirmado por duplo ensaio (mesma amostra)'
-    - '457.0, is_abnormal: True'
+    - '1.20, raw_comments: Confirmado por duplo ensaio (mesma amostra)'
+    - '457.0, raw_is_abnormal: True'
 
     This function extracts just the numeric value.
     """
@@ -805,9 +823,13 @@ def _clean_numeric_field(value) -> float | None:
         # Strip embedded field markers
         for pattern in [
             ", comments:",
+            ", raw_comments:",
             ", is_abnormal:",
+            ", raw_is_abnormal:",
             ", source_text:",
+            ", raw_source_text:",
             ", reference_notes:",
+            ", raw_reference_notes:",
         ]:
             if pattern.lower() in value.lower():
                 value = value.split(",")[0].strip()
@@ -828,6 +850,32 @@ def _clean_numeric_field(value) -> float | None:
     return None
 
 
+# Backward compatibility: mapping from old _raw suffix field names to new raw_ prefix names
+_RAW_FIELD_RENAMES = {
+    "lab_name_raw": "raw_lab_name",
+    "value_raw": "raw_value",
+    "lab_unit_raw": "raw_lab_unit",
+    "reference_min_raw": "raw_reference_min",
+    "reference_max_raw": "raw_reference_max",
+    "source_text": "raw_source_text",
+    "reference_range": "raw_reference_range",
+    "reference_notes": "raw_reference_notes",
+    "is_abnormal": "raw_is_abnormal",
+    "comments": "raw_comments",
+}
+
+
+def _normalize_raw_field_names(lab_results: list[dict]) -> None:
+    """Rename old _raw suffix keys to new raw_ prefix keys in lab result dicts."""
+
+    for item in lab_results:
+        if not isinstance(item, dict):
+            continue
+        for old_key, new_key in _RAW_FIELD_RENAMES.items():
+            if old_key in item and new_key not in item:
+                item[new_key] = item.pop(old_key)
+
+
 def _fix_lab_results_format(tool_result_dict: dict) -> dict:
     """Fix common LLM formatting issues in lab_results and dates."""
 
@@ -839,6 +887,9 @@ def _fix_lab_results_format(tool_result_dict: dict) -> dict:
     # Guard: No lab_results to process
     if "lab_results" not in tool_result_dict or not isinstance(tool_result_dict["lab_results"], list):
         return tool_result_dict
+
+    # Normalize old _raw suffix field names to new raw_ prefix names
+    _normalize_raw_field_names(tool_result_dict["lab_results"])
 
     # Map LLM-populated standardization fields to internal fields
     _map_standardization_fields(tool_result_dict)
@@ -880,10 +931,10 @@ def _clean_numeric_reference_fields(tool_result_dict: dict) -> None:
 
     for item in tool_result_dict["lab_results"]:
         if isinstance(item, dict):
-            if "reference_min_raw" in item:
-                item["reference_min_raw"] = _clean_numeric_field(item["reference_min_raw"])
-            if "reference_max_raw" in item:
-                item["reference_max_raw"] = _clean_numeric_field(item["reference_max_raw"])
+            if "raw_reference_min" in item:
+                item["raw_reference_min"] = _clean_numeric_field(item["raw_reference_min"])
+            if "raw_reference_max" in item:
+                item["raw_reference_max"] = _clean_numeric_field(item["raw_reference_max"])
 
 
 def _salvage_lab_results(tool_result_dict: dict) -> dict:

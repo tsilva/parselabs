@@ -185,17 +185,17 @@ def main():
 
     # Find uncached names
     name_cache = load_cache("name_standardization")
-    raw_names = df["lab_name_raw"].dropna().unique().tolist()
+    raw_names = df["raw_lab_name"].dropna().unique().tolist()
     uncached_names = [n for n in raw_names if n.lower().strip() not in name_cache]
 
     # Find uncached units
     unit_cache = load_cache("unit_standardization")
     unit_pairs = []
-    if "unit_raw" in df.columns and "lab_name" in df.columns:
-        for _, row in df[["unit_raw", "lab_name"]].dropna().drop_duplicates().iterrows():
-            key = f"{str(row['unit_raw']).lower().strip()}|{str(row['lab_name']).lower().strip()}"
+    if "raw_unit" in df.columns and "lab_name" in df.columns:
+        for _, row in df[["raw_unit", "lab_name"]].dropna().drop_duplicates().iterrows():
+            key = f"{str(row['raw_unit']).lower().strip()}|{str(row['lab_name']).lower().strip()}"
             if key not in unit_cache:
-                unit_pairs.append((str(row["unit_raw"]), str(row["lab_name"])))
+                unit_pairs.append((str(row["raw_unit"]), str(row["lab_name"])))
 
     logger.info(f"Uncached names: {len(uncached_names)}")
     logger.info(f"Uncached unit pairs: {len(unit_pairs)}")

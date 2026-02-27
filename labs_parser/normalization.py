@@ -134,7 +134,7 @@ def infer_missing_unit(
     lab_specs: LabSpecsConfig,
 ) -> str | None:
     """
-    Infer missing unit when lab_unit_raw is null using generic heuristics.
+    Infer missing unit when raw_lab_unit is null using generic heuristics.
 
     Generic approach (no test-specific hardcoding):
     1. Reference range magnitude heuristic - percentages typically have ranges > 10
@@ -499,10 +499,10 @@ def fix_misassigned_percentage_units(df: pd.DataFrame, lab_specs: LabSpecsConfig
 
     for idx in df.index:
         lab_name_std = df.at[idx, "lab_name_standardized"]
-        value = df.at[idx, "value_raw"]
+        value = df.at[idx, "raw_value"]
         unit = df.at[idx, "lab_unit_standardized"]
-        ref_min = df.at[idx, "reference_min_raw"]
-        ref_max = df.at[idx, "reference_max_raw"]
+        ref_min = df.at[idx, "raw_reference_min"]
+        ref_max = df.at[idx, "raw_reference_max"]
 
         # Skip if missing key data
         if pd.isna(lab_name_std) or pd.isna(value) or pd.isna(unit):
@@ -684,7 +684,7 @@ def apply_normalizations(
     # Ensure required columns exist
     ensure_columns(
         df,
-        ["lab_name_standardized", "lab_unit_standardized", "lab_name_raw"],
+        ["lab_name_standardized", "lab_unit_standardized", "raw_lab_name"],
         default=None,
     )
 
@@ -710,10 +710,10 @@ def apply_normalizations(
         df = apply_unit_conversions(df, lab_specs)
     # No conversions available, just copy values as-is
     else:
-        df["value_primary"] = df.get("value_raw")
+        df["value_primary"] = df.get("raw_value")
         df["lab_unit_primary"] = df.get("lab_unit_standardized")
-        df["reference_min_primary"] = df.get("reference_min_raw")
-        df["reference_max_primary"] = df.get("reference_max_raw")
+        df["reference_min_primary"] = df.get("raw_reference_min")
+        df["reference_max_primary"] = df.get("raw_reference_max")
 
     return df
 
@@ -731,7 +731,7 @@ def _preprocess_values(df: pd.DataFrame) -> pd.DataFrame:
     df["is_above_limit"] = False
 
     # Extract comparison operators and preprocess values
-    comparison_results = df["value_raw"].apply(extract_comparison_value)
+    comparison_results = df["raw_value"].apply(extract_comparison_value)
     df["_preprocessed_value"] = comparison_results.apply(lambda x: x[0])
     df["is_below_limit"] = comparison_results.apply(lambda x: x[1])
     df["is_above_limit"] = comparison_results.apply(lambda x: x[2])
@@ -774,8 +774,8 @@ def _infer_missing_units(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.Data
     for idx in df[missing_unit_mask].index:
         lab_name_std = df.at[idx, "lab_name_standardized"]
         value = df.at[idx, "value_primary"]
-        ref_min = df.at[idx, "reference_min_raw"]
-        ref_max = df.at[idx, "reference_max_raw"]
+        ref_min = df.at[idx, "raw_reference_min"]
+        ref_max = df.at[idx, "raw_reference_max"]
 
         inferred_unit = infer_missing_unit(lab_name_std, value, ref_min, ref_max, lab_specs)
 
@@ -897,7 +897,7 @@ def classify_qualitative_value(text: str) -> int | None:
     if normalized in _NEGATIVE_KEYWORDS:
         return 0
 
-    # Not classifiable — return None (value stays in value_raw for review)
+    # Not classifiable — return None (value stays in raw_value for review)
     return None
 
 
@@ -934,17 +934,17 @@ def _convert_qualitative_values(
     # Find labs with boolean primary unit
     boolean_labs = [lab_name for lab_name in df["lab_name_standardized"].unique() if pd.notna(lab_name) and lab_name != UNKNOWN_VALUE and lab_specs.get_primary_unit(lab_name) == "boolean"]
 
-    # Boolean labs: convert qualitative text to 0/1 from value_raw, then comments
+    # Boolean labs: convert qualitative text to 0/1 from raw_value, then comments
     if boolean_labs:
-        for source_col, needs_val_raw_isna in [
-            ("value_raw", False),
-            ("comments", True),
+        for source_col, needs_raw_value_isna in [
+            ("raw_value", False),
+            ("raw_comments", True),
         ]:
             mask = df["lab_name_standardized"].isin(boolean_labs) & df["value_primary"].isna() & df[source_col].notna()
 
-            # For comments source, only use when value_raw is also missing
-            if needs_val_raw_isna:
-                mask &= df["value_raw"].isna()
+            # For raw_comments source, only use when raw_value is also missing
+            if needs_raw_value_isna:
+                mask &= df["raw_value"].isna()
 
             # No qualifying rows for this source
             if not mask.any():
@@ -955,18 +955,18 @@ def _convert_qualitative_values(
             df.loc[mask, "lab_unit_primary"] = "boolean"
             logger.info(f"[normalization] Converted {mask.sum()} qualitative values from {source_col} (boolean labs)")
 
-    # Non-boolean labs: convert only negative-like values to 0 from value_raw, then comments
+    # Non-boolean labs: convert only negative-like values to 0 from raw_value, then comments
     non_boolean_exclude = boolean_labs if boolean_labs else []
 
-    for source_col, needs_val_raw_isna in [
-        ("value_raw", False),
-        ("comments", True),
+    for source_col, needs_raw_value_isna in [
+        ("raw_value", False),
+        ("raw_comments", True),
     ]:
         mask = df["value_primary"].isna() & df[source_col].notna() & ~df["lab_name_standardized"].isin(non_boolean_exclude)
 
-        # For comments source, only use when value_raw is also missing
-        if needs_val_raw_isna:
-            mask &= df["value_raw"].isna()
+        # For raw_comments source, only use when raw_value is also missing
+        if needs_raw_value_isna:
+            mask &= df["raw_value"].isna()
 
         # No qualifying rows for this source
         if not mask.any():
@@ -1027,8 +1027,8 @@ def _apply_unit_conversions_for_lab(
 
         # Apply conversion to all matching rows (vectorized)
         df.loc[unit_mask, "value_primary"] = df.loc[unit_mask, "value_primary"] * factor
-        df.loc[unit_mask, "reference_min_primary"] = df.loc[unit_mask, "reference_min_raw"] * factor
-        df.loc[unit_mask, "reference_max_primary"] = df.loc[unit_mask, "reference_max_raw"] * factor
+        df.loc[unit_mask, "reference_min_primary"] = df.loc[unit_mask, "raw_reference_min"] * factor
+        df.loc[unit_mask, "reference_max_primary"] = df.loc[unit_mask, "raw_reference_max"] * factor
         df.loc[unit_mask, "lab_unit_primary"] = primary_unit
 
 
@@ -1108,8 +1108,8 @@ def apply_unit_conversions(
 
     # Initialize primary unit columns from standardized values
     df["lab_unit_primary"] = df["lab_unit_standardized"]
-    df["reference_min_primary"] = df["reference_min_raw"]
-    df["reference_max_primary"] = df["reference_max_raw"]
+    df["reference_min_primary"] = df["raw_reference_min"]
+    df["reference_max_primary"] = df["raw_reference_max"]
 
     # Phase 1: Extract comparison operators and preprocess values
     df = _preprocess_values(df)
@@ -1164,9 +1164,9 @@ def sanitize_percentage_reference_ranges(df: pd.DataFrame) -> pd.DataFrame:
 
     # Determine column names based on what's available
     unit_col = "lab_unit_primary" if "lab_unit_primary" in df.columns else "lab_unit_standardized"
-    value_col = "value_primary" if "value_primary" in df.columns else "value_raw"
-    ref_min_col = "reference_min_primary" if "reference_min_primary" in df.columns else "reference_min_raw"
-    ref_max_col = "reference_max_primary" if "reference_max_primary" in df.columns else "reference_max_raw"
+    value_col = "value_primary" if "value_primary" in df.columns else "raw_value"
+    ref_min_col = "reference_min_primary" if "reference_min_primary" in df.columns else "raw_reference_min"
+    ref_max_col = "reference_max_primary" if "reference_max_primary" in df.columns else "raw_reference_max"
 
     # Required columns not present
     if unit_col not in df.columns or value_col not in df.columns:

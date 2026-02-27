@@ -50,12 +50,12 @@ def mode_search(df: pd.DataFrame):
         logger.info(f"UNKNOWN LAB NAMES: {len(unknown_names)} rows")
         logger.info(f"{'=' * 80}")
 
-        name_counts = unknown_names.groupby(["lab_name_raw", "lab_type"]).size().reset_index(name="count")
+        name_counts = unknown_names.groupby(["raw_lab_name", "lab_type"]).size().reset_index(name="count")
         name_counts = name_counts.sort_values("count", ascending=False)
 
         logger.info("\nRaw test names that couldn't be standardized:")
         for _, row in name_counts.iterrows():
-            logger.info(f"  [{row['lab_type']}] {row['lab_name_raw']:60s} ({row['count']} occurrences)")
+            logger.info(f"  [{row['lab_type']}] {row['raw_lab_name']:60s} ({row['count']} occurrences)")
     # No unknown lab names
     else:
         logger.info("\n No unknown lab names found!")
@@ -69,12 +69,12 @@ def mode_search(df: pd.DataFrame):
         logger.info(f"UNKNOWN UNITS: {len(unknown_units)} rows")
         logger.info(f"{'=' * 80}")
 
-        unit_counts = unknown_units.groupby(["lab_name_raw", "lab_unit_raw", "lab_type"]).size().reset_index(name="count")
+        unit_counts = unknown_units.groupby(["raw_lab_name", "raw_lab_unit", "lab_type"]).size().reset_index(name="count")
         unit_counts = unit_counts.sort_values("count", ascending=False)
 
         logger.info("\nRaw units that couldn't be standardized:")
         for _, row in unit_counts.iterrows():
-            logger.info(f"  [{row['lab_type']}] {row['lab_name_raw']:50s} | Unit: {row['lab_unit_raw']:15s} ({row['count']} occurrences)")
+            logger.info(f"  [{row['lab_type']}] {row['raw_lab_name']:50s} | Unit: {row['raw_lab_unit']:15s} ({row['count']} occurrences)")
     # No unknown units
     else:
         logger.info("\n No unknown units found!")
@@ -86,7 +86,7 @@ def mode_search(df: pd.DataFrame):
     logger.info(f"Total rows: {len(df)}")
     logger.info(f"Rows with unknown lab names: {len(unknown_names)} ({len(unknown_names) / len(df) * 100:.1f}%)")
     logger.info(f"Rows with unknown units: {len(unknown_units)} ({len(unknown_units) / len(df) * 100:.1f}%)")
-    logger.info(f"Unique lab names in data: {df['lab_name_raw'].nunique()}")
+    logger.info(f"Unique lab names in data: {df['raw_lab_name'].nunique()}")
     logger.info(f"Unique standardized names: {df[df['lab_name_standardized'] != '$UNKNOWN$']['lab_name_standardized'].nunique()}")
 
 
@@ -102,10 +102,10 @@ def mode_analyze(df: pd.DataFrame):
     # Print details for each unknown lab name
     if len(unknown_names) > 0:
         for _, row in unknown_names.iterrows():
-            logger.info(f"\nRaw lab_name: {row['lab_name_raw']}")
+            logger.info(f"\nRaw lab_name: {row['raw_lab_name']}")
             logger.info(f"  Lab type: {row['lab_type']}")
-            logger.info(f"  Unit: {row['lab_unit_raw']}")
-            logger.info(f"  Value: {row['value_raw']}")
+            logger.info(f"  Unit: {row['raw_lab_unit']}")
+            logger.info(f"  Value: {row['raw_value']}")
             logger.info(f"  Date: {row['date']}")
 
     logger.info("\n" + "=" * 80)
@@ -118,17 +118,17 @@ def mode_analyze(df: pd.DataFrame):
     if len(unknown_units) > 0:
         unique_combos = unknown_units[
             [
-                "lab_name_raw",
-                "lab_unit_raw",
+                "raw_lab_name",
+                "raw_lab_unit",
                 "lab_type",
                 "lab_name_standardized",
             ]
         ].drop_duplicates()
 
         for _, row in unique_combos.iterrows():
-            logger.info(f"\nTest: {row['lab_name_raw']}")
+            logger.info(f"\nTest: {row['raw_lab_name']}")
             logger.info(f"  Standardized as: {row['lab_name_standardized']}")
-            logger.info(f"  Raw unit: {row['lab_unit_raw']}")
+            logger.info(f"  Raw unit: {row['raw_lab_unit']}")
             logger.info(f"  Lab type: {row['lab_type']}")
 
     # Check lab_specs.json
@@ -177,8 +177,8 @@ def mode_categorize(df: pd.DataFrame):
     reference_indicators = []
     actual_tests = []
 
-    for lab_name_raw in unknown_names["lab_name_raw"].unique():
-        test_lower = lab_name_raw.lower()
+    for raw_lab_name in unknown_names["raw_lab_name"].unique():
+        test_lower = raw_lab_name.lower()
 
         # Matches a reference/interpretation keyword
         if any(
@@ -194,15 +194,15 @@ def mode_categorize(df: pd.DataFrame):
                 "avaliação de risco",
             ]
         ):
-            reference_indicators.append(lab_name_raw)
+            reference_indicators.append(raw_lab_name)
         # Not a reference indicator - treat as actual test
         else:
-            actual_tests.append(lab_name_raw)
+            actual_tests.append(raw_lab_name)
 
     logger.info(f"\nCATEGORY 1: REFERENCE INDICATORS ({len(reference_indicators)})")
     logger.info("These are NOT lab tests, but interpretation thresholds:")
     for name in sorted(reference_indicators):
-        count = len(unknown_names[unknown_names["lab_name_raw"] == name])
+        count = len(unknown_names[unknown_names["raw_lab_name"] == name])
         logger.info(f"  - {name} ({count} occurrences)")
 
     logger.info(f"\nCATEGORY 2: ACTUAL LAB TESTS ({len(actual_tests)})")
@@ -212,7 +212,7 @@ def mode_categorize(df: pd.DataFrame):
     by_category = defaultdict(list)
 
     for name in sorted(actual_tests):
-        count = len(unknown_names[unknown_names["lab_name_raw"] == name])
+        count = len(unknown_names[unknown_names["raw_lab_name"] == name])
         name_lower = name.lower()
 
         # Hepatitis A markers
@@ -304,14 +304,14 @@ def mode_categorize(df: pd.DataFrame):
     logger.info("=" * 80)
 
     unknown_units = df[df["lab_unit_standardized"] == "$UNKNOWN$"]
-    unit_combos = unknown_units.groupby(["lab_unit_raw"]).size().reset_index(name="count")
+    unit_combos = unknown_units.groupby(["raw_lab_unit"]).size().reset_index(name="count")
     unit_combos = unit_combos.sort_values("count", ascending=False)
 
     logger.info("\nUnits that need to be added to lab_specs.json:")
     for _, row in unit_combos.iterrows():
         # Skip rows with missing unit values
-        if pd.notna(row["lab_unit_raw"]):
-            logger.info(f"  - '{row['lab_unit_raw']}' ({row['count']} occurrences)")
+        if pd.notna(row["raw_lab_unit"]):
+            logger.info(f"  - '{row['raw_lab_unit']}' ({row['count']} occurrences)")
 
 
 def main():
