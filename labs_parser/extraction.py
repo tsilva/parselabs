@@ -136,11 +136,11 @@ class HealthLabReport(BaseModel):
         default=None,
         description="True if page contains lab test results, False if page is cover/instructions/administrative with no lab data",
     )
+    source_file: str | None = Field(default=None, description="Source PDF filename")
     lab_results: list[LabResult] = Field(
         default_factory=list,
         description="List of all lab test results extracted from this page/document",
     )
-    source_file: str | None = Field(default=None, description="Source PDF filename")
 
     @staticmethod
     def _clear_empty_strings(model: BaseModel):
