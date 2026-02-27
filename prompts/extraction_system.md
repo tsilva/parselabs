@@ -164,23 +164,4 @@ F) White blood cell differentials with BOTH absolute count AND percentage:
    raw_value: "100"
    raw_lab_unit: "mg/dL"
 
-11. STANDARDIZATION (only when the list is provided below):
-   For each lab result, ALSO set standardized fields using the STANDARDIZED LAB NAMES AND UNITS list
-   appended at the end of this prompt.
-
-   - `lab_name`: Match raw_lab_name to the CLOSEST standardized name from the list.
-     Strip Portuguese section prefixes before matching:
-     - "bioquímica - {test}" → match "{test}"
-     - "hematologia - hemograma - {test}" → match "{test}"
-     - "química clínica - sangue - {test}" → match "{test}"
-     - "endocrinologia - {test}" → match "{test}"
-     - "hemograma - {test}" → match "{test}"
-     - "fórmula leucocitária - {test}" → match "{test}"
-     Use "$UNKNOWN$" if no close match exists.
-
-   - `unit`: Normalize the unit FORMAT to match the standardized form from the list.
-     Examples: "mg/dl" → "mg/dL", "fl" → "fL", "u/l" → "IU/L"
-     Do NOT convert between different units — only normalize notation.
-     Use "$UNKNOWN$" if no match exists.
-
 Remember: Your job is to be a perfect copier, not an interpreter. Extract EVERYTHING, even qualitative results.

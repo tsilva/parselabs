@@ -31,7 +31,6 @@ from labs_parser.config import (  # noqa: E402
 from labs_parser.exceptions import ConfigurationError, PipelineError  # noqa: E402
 from labs_parser.extraction import (  # noqa: E402
     LabResult,
-    _build_standardized_names_section,
     extract_labs_from_page_image,
     extract_labs_from_text,
 )
@@ -257,7 +256,6 @@ def _try_load_cached_text_extraction(doc_out_dir: Path, pdf_stem: str) -> dict |
 def _extract_labs_from_pdf_text(
     pdf_text: str,
     config: ExtractionConfig,
-    standardization_section: str | None,
 ) -> dict:
     """Extract lab results from PDF text using LLM."""
 
@@ -266,7 +264,6 @@ def _extract_labs_from_pdf_text(
         pdf_text,
         config.extract_model_id,
         client,
-        standardization_section=standardization_section,
     )
 
 
@@ -295,7 +292,6 @@ def _cache_text_extraction(
 def _try_text_extraction(
     copied_pdf: Path,
     config: ExtractionConfig,
-    standardization_section: str | None,
     doc_out_dir: Path,
     pdf_stem: str,
 ) -> tuple[bool, dict | None]:
@@ -330,7 +326,7 @@ def _try_text_extraction(
 
     # Attempt LLM-based extraction from extracted text
     try:
-        text_extraction_data = _extract_labs_from_pdf_text(pdf_text, config, standardization_section)
+        text_extraction_data = _extract_labs_from_pdf_text(pdf_text, config)
     except Exception as e:
         # Text extraction failed - log and fall back to vision
         logger.warning(f"[{pdf_stem}] Text extraction failed: {e}")
@@ -393,7 +389,6 @@ def _extract_or_load_page_data(
     json_path: Path,
     page_name: str,
     config: ExtractionConfig,
-    standardization_section: str | None,
     pdf_stem: str,
     page_idx: int,
     failed_pages: list,
@@ -413,7 +408,6 @@ def _extract_or_load_page_data(
         jpg_path,
         config.extract_model_id,
         client,
-        standardization_section=standardization_section,
     )
     logger.info(f"[{page_name}] Extraction completed")
 
@@ -480,7 +474,6 @@ def _process_single_page(
     pdf_stem: str,
     doc_out_dir: Path,
     config: ExtractionConfig,
-    standardization_section: str | None,
     failed_pages: list,
 ) -> tuple[list, dict | None]:
     """Process a single PDF page: preprocess, extract, and return results with metadata.
@@ -504,7 +497,6 @@ def _process_single_page(
         json_path,
         page_name,
         config,
-        standardization_section,
         pdf_stem,
         page_idx,
         failed_pages,
@@ -519,7 +511,6 @@ def _process_single_page(
 def _extract_via_vision(
     copied_pdf: Path,
     config: ExtractionConfig,
-    standardization_section: str | None,
     doc_out_dir: Path,
     pdf_stem: str,
     failed_pages: list,
@@ -549,7 +540,6 @@ def _extract_via_vision(
             pdf_stem,
             doc_out_dir,
             config,
-            standardization_section,
             failed_pages,
         )
 
@@ -561,118 +551,6 @@ def _extract_via_vision(
         all_results.extend(page_results)
 
     return all_results, doc_date
-
-
-def _apply_name_standardization(
-    all_results: list,
-    lab_specs: LabSpecsConfig,
-    pdf_stem: str,
-) -> int:
-    """Apply name standardization fallback. Returns count of updated results."""
-
-    # Collect raw names that need standardization (not already standardized or marked as unknown)
-    names_to_standardize = [result.get("raw_lab_name", "") for result in all_results if not result.get("lab_name_standardized") or result.get("lab_name_standardized") == UNKNOWN_VALUE]
-
-    # Guard: Skip if no names need standardization
-    if not names_to_standardize:
-        return 0
-
-    # Look up standardization mappings from cache
-    name_mappings = standardize_lab_names(
-        names_to_standardize,
-        lab_specs.standardized_names,
-    )
-
-    # Apply mappings to results and count updates
-    fallback_count = 0
-    for result in all_results:
-        # Skip already standardized results
-        std_name = result.get("lab_name_standardized")
-        if std_name and std_name != UNKNOWN_VALUE:
-            continue
-
-        # Apply mapping if available
-        raw_name = result.get("raw_lab_name", "")
-        mapped = name_mappings.get(raw_name)
-        if mapped:
-            result["lab_name_standardized"] = mapped
-            fallback_count += 1
-
-    # Log summary if any mappings were applied
-    if fallback_count > 0:
-        logger.info(f"[{pdf_stem}] Name standardization applied to {fallback_count} results")
-    return fallback_count
-
-
-def _apply_unit_standardization(
-    all_results: list,
-    lab_specs: LabSpecsConfig,
-    pdf_stem: str,
-) -> int:
-    """Apply unit standardization fallback. Returns count of updated results."""
-
-    # Collect unit contexts that need standardization (with standardized names)
-    unit_contexts = [
-        (
-            result.get("raw_lab_unit", ""),
-            result.get("lab_name_standardized", ""),
-        )
-        for result in all_results
-        if not result.get("lab_unit_standardized") and result.get("lab_name_standardized") and result.get("lab_name_standardized") != UNKNOWN_VALUE
-    ]
-
-    # Guard: Skip if no units need standardization
-    if not unit_contexts:
-        return 0
-
-    # Look up unit standardization mappings from cache
-    unit_mappings = standardize_lab_units(
-        unit_contexts,
-        lab_specs.standardized_units,
-        lab_specs,
-    )
-
-    # Apply mappings to results and count updates
-    unit_count = 0
-    for result in all_results:
-        # Skip already standardized units
-        if result.get("lab_unit_standardized"):
-            continue
-
-        # Skip results without valid standardized names
-        std_name = result.get("lab_name_standardized", "")
-        if not std_name or std_name == UNKNOWN_VALUE:
-            continue
-
-        # Apply mapping if available
-        pair = (result.get("raw_lab_unit", ""), std_name)
-        mapped = unit_mappings.get(pair)
-        if mapped:
-            result["lab_unit_standardized"] = mapped
-            unit_count += 1
-
-    # Log summary if any mappings were applied
-    if unit_count > 0:
-        logger.info(f"[{pdf_stem}] Unit standardization applied to {unit_count} results")
-    return unit_count
-
-
-def _apply_standardization_fallbacks(
-    all_results: list,
-    lab_specs: LabSpecsConfig,
-    pdf_stem: str,
-) -> None:
-    """Apply name and unit standardization fallbacks."""
-
-    # Guard: Skip standardization if lab specs not available
-    if not lab_specs.exists:
-        return
-
-    # Apply name standardization to unmapped results
-    _apply_name_standardization(all_results, lab_specs, pdf_stem)
-
-    # Apply unit standardization to unmapped results
-    _apply_unit_standardization(all_results, lab_specs, pdf_stem)
 
 
 def _save_results_to_csv(
@@ -716,7 +594,6 @@ def _handle_empty_results(csv_path: Path, pdf_stem: str) -> tuple[Path, list]:
 def _extract_data_from_pdf(
     copied_pdf: Path,
     config: ExtractionConfig,
-    standardization_section: str | None,
     doc_out_dir: Path,
     pdf_stem: str,
     failed_pages: list,
@@ -727,7 +604,7 @@ def _extract_data_from_pdf(
     """
 
     # Attempt text-first extraction (cheaper), fall back to vision if needed
-    used_text, text_data = _try_text_extraction(copied_pdf, config, standardization_section, doc_out_dir, pdf_stem)
+    used_text, text_data = _try_text_extraction(copied_pdf, config, doc_out_dir, pdf_stem)
 
     if used_text:
         # Guard: Ensure text_data is valid before processing
@@ -741,7 +618,6 @@ def _extract_data_from_pdf(
     return _extract_via_vision(
         copied_pdf,
         config,
-        standardization_section,
         doc_out_dir,
         pdf_stem,
         failed_pages,
@@ -753,9 +629,8 @@ def process_single_pdf(
     output_dir: Path,
     config: ExtractionConfig,
     lab_specs: LabSpecsConfig,
-    standardization_section: str | None = None,
 ) -> tuple[Path | None, list[dict]]:
-    """Process a single PDF file: extract, standardize, and save results.
+    """Process a single PDF file: extract and save raw results.
 
     Returns:
         Tuple of (csv_path, failed_pages) where:
@@ -778,7 +653,6 @@ def process_single_pdf(
         all_results, doc_date = _extract_data_from_pdf(
             copied_pdf,
             config,
-            standardization_section,
             doc_out_dir,
             pdf_stem,
             failed_pages,
@@ -788,13 +662,7 @@ def process_single_pdf(
         if not all_results:
             return _handle_empty_results(csv_path, pdf_stem)[0], failed_pages
 
-        # Apply standardization fallbacks for any missing standardized names/units
-        _apply_standardization_fallbacks(all_results, lab_specs, pdf_stem)
-
-        # Persist standardized values back to per-page JSON files for future runs
-        _update_json_with_standardized_values(all_results, doc_out_dir)
-
-        # Export final results to CSV format
+        # Export results to CSV format
         _save_results_to_csv(all_results, doc_date, csv_path, pdf_stem)
 
         logger.info(f"[{pdf_stem}] Completed successfully")
@@ -912,73 +780,6 @@ def _get_csv_path(pdf_path: Path, output_path: Path) -> Path:
 
     # Neither exists — return new-style path for creation
     return new_path
-
-
-def _find_text_extraction_json(doc_out_dir: Path, page_results: list[dict]) -> list[Path]:
-    """Find JSON file for text extraction results."""
-
-    # Check if any results are from text extraction (marked with .text suffix)
-    is_text_extraction = any(str(r.get("source_file", "")).endswith(".text") for r in page_results)
-
-    # Return empty list if not text extraction
-    if not is_text_extraction:
-        return []
-
-    # Check if the document-level JSON exists for text extraction
-    candidate = doc_out_dir / f"{doc_out_dir.name}.json"
-    if candidate.exists():
-        return [candidate]
-
-    return []
-
-
-def _apply_standardized_values_to_json(json_path: Path, page_results: list[dict]) -> None:
-    """Update a single JSON file with standardized lab names and units from page results."""
-
-    # Load JSON data - let exceptions propagate to orchestrator
-    data = json.loads(json_path.read_text(encoding="utf-8"))
-    lab_results = data.get("lab_results", [])
-
-    # Update each result by result_index with standardized values
-    for result in page_results:
-        idx = result.get("result_index")
-
-        # Update only if index is valid and within bounds
-        if idx is not None and 0 <= idx < len(lab_results):
-            lab_results[idx]["lab_name_standardized"] = result.get("lab_name_standardized")
-            lab_results[idx]["lab_unit_standardized"] = result.get("lab_unit_standardized")
-
-    # Write updated data back to JSON file
-    json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-
-
-def _update_json_with_standardized_values(all_results: list[dict], doc_out_dir: Path) -> None:
-    """Update JSON files with standardized lab names and units."""
-
-    # Group results by page number to minimize file I/O
-    results_by_page: dict[int, list[dict]] = {}
-    for result in all_results:
-        page_num = result.get("page_number")
-
-        # Skip results without page number (can't locate JSON file)
-        if page_num is not None:
-            results_by_page.setdefault(page_num, []).append(result)
-
-    # Update each JSON file with standardized values
-    for page_num, page_results in results_by_page.items():
-        # Find the JSON file for this page using glob pattern
-        json_files = list(doc_out_dir.glob(f"*.{page_num:03d}.json"))
-
-        # Handle text extraction results which use {pdf_stem}.json naming
-        if not json_files:
-            json_files = _find_text_extraction_json(doc_out_dir, page_results)
-
-        # Skip if no JSON file found
-        if not json_files:
-            continue
-
-        # Apply standardized values to this page's JSON file
-        _apply_standardized_values_to_json(json_files[0], page_results)
 
 
 REQUIRED_CSV_COLS = ["result_index", "page_number", "source_file"]
@@ -1109,7 +910,6 @@ def _process_pdfs_in_parallel(
     pdf_files: list[Path],
     config: ExtractionConfig,
     lab_specs: LabSpecsConfig,
-    standardization_section: str | None,
     log_dir: Path,
 ) -> tuple[list[Path], list[dict], int]:
     """
@@ -1124,7 +924,7 @@ def _process_pdfs_in_parallel(
     logger.info(f"Using {n_workers} worker(s) for PDF processing")
 
     # Build task tuples for each PDF to process
-    tasks = [(pdf, config.output_path, config, lab_specs, standardization_section) for pdf in pdfs_to_process]
+    tasks = [(pdf, config.output_path, config, lab_specs) for pdf in pdfs_to_process]
 
     # Execute parallel processing with progress bar
     with Pool(n_workers, initializer=_init_worker_logging, initargs=(log_dir,)) as pool:
@@ -1386,7 +1186,6 @@ def _process_pdfs_or_use_cache(
     pdfs_to_process: list[Path],
     config: ExtractionConfig,
     lab_specs: LabSpecsConfig,
-    standardization_section: str | None,
     log_dir: Path,
 ) -> tuple[list[Path], list[dict], int]:
     """Process PDFs or use cached results if all already processed.
@@ -1406,15 +1205,14 @@ def _process_pdfs_or_use_cache(
         pdf_files,
         config,
         lab_specs,
-        standardization_section,
         log_dir,
     )
 
 
-def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfig, LabSpecsConfig, str | None]:
+def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfig, LabSpecsConfig]:
     """Setup environment for a profile: config, logging, lab specs.
 
-    Returns tuple of (config, lab_specs, standardization_section).
+    Returns tuple of (config, lab_specs).
     Raises ConfigurationError if setup fails.
     """
 
@@ -1440,13 +1238,65 @@ def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfi
         shutil.copy2(lab_specs.config_path, lab_specs_dest)
         logger.info(f"Copied lab specs to output: {lab_specs_dest}")
 
-    # Build standardization section for inline standardization during extraction
-    standardization_section: str | None = None
-    if lab_specs.exists:
-        standardization_section = _build_standardized_names_section(lab_specs.standardized_names, lab_specs._specs)
-        logger.info(f"Built standardization section: {len(lab_specs.standardized_names)} lab names")
+    return config, lab_specs
 
-    return config, lab_specs, standardization_section
+
+def _apply_standardization_to_df(
+    df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+) -> pd.DataFrame:
+    """Apply name and unit standardization to the merged DataFrame.
+
+    Maps raw_lab_name -> lab_name_standardized and raw_lab_unit -> lab_unit_standardized
+    using persistent cache lookups (no LLM calls).
+    """
+
+    # Guard: Skip if lab specs not available
+    if not lab_specs.exists:
+        return df
+
+    # Ensure target columns exist
+    if "lab_name_standardized" not in df.columns:
+        df["lab_name_standardized"] = None
+    if "lab_unit_standardized" not in df.columns:
+        df["lab_unit_standardized"] = None
+
+    # --- Name standardization ---
+    raw_names = df["raw_lab_name"].dropna().unique().tolist()
+
+    if raw_names:
+        # Batch cache lookup for all unique raw names
+        name_mappings = standardize_lab_names(raw_names, lab_specs.standardized_names)
+
+        # Apply mappings to DataFrame
+        df["lab_name_standardized"] = df["raw_lab_name"].map(name_mappings)
+
+        mapped_count = (df["lab_name_standardized"].notna() & (df["lab_name_standardized"] != UNKNOWN_VALUE)).sum()
+        logger.info(f"Name standardization: {mapped_count}/{len(df)} rows mapped")
+
+    # --- Unit standardization ---
+    # Only standardize units for rows with valid standardized names
+    unit_mask = df["lab_name_standardized"].notna() & (df["lab_name_standardized"] != UNKNOWN_VALUE) & df["raw_lab_unit"].notna()
+
+    if unit_mask.any():
+        # Build unique (raw_unit, std_name) pairs for batch lookup
+        pairs_df = df.loc[unit_mask, ["raw_lab_unit", "lab_name_standardized"]].drop_duplicates()
+        unit_contexts = list(pairs_df.itertuples(index=False, name=None))
+
+        # Batch cache lookup
+        unit_mappings = standardize_lab_units(unit_contexts, lab_specs.standardized_units, lab_specs)
+
+        # Apply mappings row-by-row for matched rows
+        for idx in df[unit_mask].index:
+            pair = (df.at[idx, "raw_lab_unit"], df.at[idx, "lab_name_standardized"])
+            mapped_unit = unit_mappings.get(pair)
+            if mapped_unit and mapped_unit != UNKNOWN_VALUE:
+                df.at[idx, "lab_unit_standardized"] = mapped_unit
+
+        unit_count = df["lab_unit_standardized"].notna().sum()
+        logger.info(f"Unit standardization: {unit_count}/{len(df)} rows mapped")
+
+    return df
 
 
 def _process_and_transform_data(
@@ -1454,10 +1304,14 @@ def _process_and_transform_data(
     lab_specs: LabSpecsConfig,
     export_cols: list,
 ) -> pd.DataFrame | None:
-    """Apply all transformations to merged data: normalize, filter, dedupe, validate.
+    """Apply all transformations to merged data: standardize, normalize, filter, dedupe, validate.
 
     Returns transformed DataFrame or None if processing fails.
     """
+
+    # Apply standardization (name + unit mapping from cache)
+    logger.info("Applying standardization...")
+    merged_df = _apply_standardization_to_df(merged_df, lab_specs)
 
     # Apply value normalizations and unit conversions
     logger.info("Applying normalizations...")
@@ -1529,7 +1383,7 @@ def run_for_profile(args, profile_name: str) -> None:
     """
 
     # Setup environment: config, logging, lab specs (raises ConfigurationError on failure)
-    config, lab_specs, standardization_section = _setup_profile_environment(args, profile_name)
+    config, lab_specs = _setup_profile_environment(args, profile_name)
 
     # Get column configuration for export formatting
     export_cols, hidden_cols, widths, dtypes = get_column_lists(COLUMN_SCHEMA)
@@ -1562,7 +1416,6 @@ def run_for_profile(args, profile_name: str) -> None:
         pdfs_to_process,
         config,
         lab_specs,
-        standardization_section,
         log_dir,
     )
 

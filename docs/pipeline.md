@@ -9,9 +9,9 @@ PDF Files
   │
   ├─ 1. PDF Processing & Hashing
   ├─ 2. Extraction (text-first, vision fallback)
-  ├─ 3. Standardization (cache-based mapping)
-  ├─ 4. Per-PDF CSV Export
-  ├─ 5. Merge All CSVs
+  ├─ 3. Per-PDF CSV Export
+  ├─ 4. Merge All CSVs
+  ├─ 5. Standardization (cache-based mapping)
   ├─ 6. Normalization (unit conversion, dedup)
   ├─ 7. Validation (flag suspicious values)
   └─ 8. Final Export (CSV + Excel)
@@ -31,7 +31,7 @@ Each PDF is processed independently (parallelized via `multiprocessing.Pool`):
 
 **Modules:** `main.py` — `process_single_pdf()`, `labs_parser/extraction.py`
 
-The pipeline uses a **text-first strategy** with vision fallback to optimize API costs.
+The pipeline uses a **text-first strategy** with vision fallback to optimize API costs. Extraction is purely objective — it copies raw values exactly as they appear in the document.
 
 ### Path A: Text Extraction (Cheap)
 
@@ -63,7 +63,7 @@ PDF → pdf2image (page-by-page)
 
 Both paths use OpenRouter API with **function calling** (structured output):
 
-- **LLM-facing schema** (`LabResultExtraction`): Smaller, token-efficient — excludes internal fields (`review_*`, `page_number`, `source_file`, `result_index`)
+- **LLM-facing schema** (`LabResultExtraction`): Smaller, token-efficient — excludes internal fields (`review_*`, `page_number`, `source_file`, `result_index`) and standardization fields
 - **Internal schema** (`HealthLabReport` / `LabResult`): Full schema with all metadata
 
 **Retry logic** with temperature escalation on malformed output:
@@ -75,13 +75,11 @@ Both paths use OpenRouter API with **function calling** (structured output):
 
 **Prompt templates** (loaded from `prompts/`):
 - `extraction_system.md` + `extraction_user.md` — vision extraction
-- `text_extraction_user.md` — text-based extraction (templates: `{text}`, `{std_reminder}`)
-
-The system prompt includes a list of standardized lab names from `lab_specs.json` to guide inline standardization.
+- `text_extraction_user.md` — text-based extraction (template: `{text}`)
 
 ### Extraction Output
 
-Each `LabResult` contains:
+Each `LabResult` contains raw fields only:
 
 | Field | Description |
 |-------|-------------|
@@ -91,19 +89,31 @@ Each `LabResult` contains:
 | `raw_reference_range` | Full range text |
 | `raw_reference_min`, `raw_reference_max` | Parsed range bounds |
 | `raw_is_abnormal` | Abnormal flag from PDF |
-| `lab_name_standardized` | Inline LLM mapping (may be `$UNKNOWN$`) |
-| `lab_unit_standardized` | Inline LLM mapping (may be `$UNKNOWN$`) |
 
-## Stage 3: Standardization
+## Stage 3: Per-PDF CSV Export
 
-**Modules:** `main.py` — `_apply_standardization_fallbacks()`, `labs_parser/standardization.py`
+**Module:** `main.py` — `_save_results_to_csv()`
 
-Maps raw lab names and units to standardized enum values using **persistent JSON caches**. No LLM calls at runtime.
+Each PDF produces a CSV in its output directory: `{stem}_{hash}/{stem}_{hash}.csv`
+
+Contains all LabResult fields mapped to the output column schema.
+
+## Stage 4: Merge
+
+**Module:** `main.py` — `merge_csv_files()`
+
+All per-PDF CSVs are concatenated into a single `all.csv` in the profile's output directory.
+
+## Stage 5: Standardization
+
+**Modules:** `main.py` — `_apply_standardization_to_df()`, `labs_parser/standardization.py`
+
+Maps raw lab names and units to standardized values using **persistent JSON caches**. No LLM calls at runtime. Runs on the merged DataFrame before normalization.
 
 ```
-For each LabResult where lab_name_standardized == $UNKNOWN$ or missing:
-  → standardize_lab_names(): cache lookup raw_name → standardized_name
-  → standardize_lab_units(): cache lookup (raw_unit, lab_name) → standardized_unit
+For each row in merged DataFrame:
+  → standardize_lab_names(): cache lookup raw_lab_name → lab_name_standardized
+  → standardize_lab_units(): cache lookup (raw_lab_unit, lab_name_standardized) → lab_unit_standardized
 ```
 
 ### Cache Files
@@ -116,20 +126,6 @@ config/cache/unit_standardization.json   # raw_unit|lab_name → standardized_un
 - **Cache hit:** return standardized value
 - **Cache miss:** return `$UNKNOWN$` + log warning
 - **Updating caches:** run `utils/update_standardization_caches.py` (batch LLM processing)
-
-## Stage 4: Per-PDF CSV Export
-
-**Module:** `main.py` — `_save_results_to_csv()`
-
-Each PDF produces a CSV in its output directory: `{stem}_{hash}/{stem}_{hash}.csv`
-
-Contains all LabResult fields mapped to the output column schema.
-
-## Stage 5: Merge
-
-**Module:** `main.py` — `merge_csv_files()`
-
-All per-PDF CSVs are concatenated into a single `all.csv` in the profile's output directory.
 
 ## Stage 6: Normalization
 
@@ -279,14 +275,15 @@ INPUT: PDF files (per profile)
     │       ├── extract_labs_from_page_image() ── LLM vision + retry
     │       └── cache JPG + JSON
     │
-    ├── _apply_standardization_fallbacks()
-    │   ├── standardize_lab_names() ── cache lookup
-    │   └── standardize_lab_units() ── cache lookup
-    │
-    └── _save_results_to_csv() ── per-PDF CSV
+    └── _save_results_to_csv() ── per-PDF CSV (raw values only)
          │
          ▼
 [merge_csv_files] ── concatenate all per-PDF CSVs
+         │
+         ▼
+[_apply_standardization_to_df]
+    ├── standardize_lab_names() ── cache lookup
+    └── standardize_lab_units() ── cache lookup
          │
          ▼
 [apply_normalizations]

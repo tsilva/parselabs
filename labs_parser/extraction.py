@@ -11,9 +11,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
-# Sentinel for unknown standardized values (imported from config to avoid circular import)
-_UNKNOWN_VALUE = "$UNKNOWN$"
-
 
 # ========================================
 # Pydantic Models
@@ -219,10 +216,6 @@ class LabResultExtraction(BaseModel):
     raw_lab_name: str = Field(
         description="Test name ONLY as written in the PDF. Must contain ONLY the test name - DO NOT include values, units, reference ranges, or field labels. WRONG: 'Glucose, raw_value: 100' CORRECT: 'Glucose'"
     )
-    lab_name: str | None = Field(
-        default=None,
-        description="Standardized lab name from the provided list. Match the raw name to the CLOSEST entry. Use '$UNKNOWN$' if no match.",
-    )
     raw_value: str | None = Field(
         default=None,
         description="Result value ONLY. Must contain ONLY the numeric or text result - DO NOT include test names, units, or field labels. Examples: '5.2', '14.8', 'NEGATIVO', 'POSITIVO'",
@@ -230,10 +223,6 @@ class LabResultExtraction(BaseModel):
     raw_lab_unit: str | None = Field(
         default=None,
         description="Unit ONLY as written in PDF. Must contain ONLY the unit symbol - DO NOT include values or test names. Examples: 'mg/dL', '%', 'U/L'",
-    )
-    unit: str | None = Field(
-        default=None,
-        description="Standardized unit from the provided list for this lab. Normalize FORMAT only (e.g., 'mg/dl' → 'mg/dL'). Do NOT convert units. Use '$UNKNOWN$' if no match.",
     )
     raw_reference_range: str | None = Field(
         default=None,
@@ -305,43 +294,6 @@ TOOLS = [
 ]
 
 
-def _build_standardized_names_section(standardized_names: list[str], lab_specs_data: dict) -> str:
-    """Build the standardized names reference section for the extraction prompt.
-
-    Args:
-        standardized_names: Sorted list of all standardized lab names
-        lab_specs_data: Raw lab specs dict for looking up primary units and lab types
-
-    Returns:
-        Formatted string to append to the system prompt
-    """
-
-    sections: dict[str, list[str]] = {
-        "blood": [],
-        "urine": [],
-        "feces": [],
-        "saliva": [],
-        "other": [],
-    }
-
-    # Build entries grouped by lab type
-    for name in standardized_names:
-        spec = lab_specs_data.get(name, {})
-        primary_unit = spec.get("primary_unit", "")
-        lab_type = spec.get("lab_type", "blood")
-        entry = f"- {name} [{primary_unit}]"
-        sections.setdefault(lab_type, []).append(entry)
-
-    # Format each non-empty lab type section
-    result = "\n\nSTANDARDIZED LAB NAMES AND UNITS:\n"
-    for lab_type in ["blood", "urine", "feces", "saliva", "other"]:
-        entries = sections.get(lab_type, [])
-        if entries:
-            result += f"\n### {lab_type.title()}\n" + "\n".join(entries) + "\n"
-
-    return result
-
-
 # ========================================
 # Extraction Prompts
 # ========================================
@@ -370,7 +322,6 @@ def extract_labs_from_page_image(
     temperature: float = 0.0,
     max_retries: int = 3,
     temperature_step: float = 0.2,
-    standardization_section: str | None = None,
 ) -> dict:
     """
     Extract lab results from a page image using vision model.
@@ -387,8 +338,6 @@ def extract_labs_from_page_image(
         temperature: Initial temperature for sampling (default: 0.0)
         max_retries: Maximum retry attempts with escalating temperature (default: 3)
         temperature_step: Temperature increment per retry (default: 0.2)
-        standardization_section: Optional standardized names/units list to append to system prompt.
-            When provided, the model also populates lab_name and unit fields inline.
 
     Returns:
         Dictionary with extracted report data (validated by Pydantic).
@@ -399,16 +348,13 @@ def extract_labs_from_page_image(
     with open(image_path, "rb") as img_file:
         img_data = base64.standard_b64encode(img_file.read()).decode("utf-8")
 
-    # Build effective system prompt with optional standardization section
-    effective_system_prompt = EXTRACTION_SYSTEM_PROMPT + standardization_section if standardization_section else EXTRACTION_SYSTEM_PROMPT
-
     # Attempt extraction with retry logic
     result = _attempt_extraction_with_retries(
         image_path=image_path,
         img_data=img_data,
         model_id=model_id,
         client=client,
-        effective_system_prompt=effective_system_prompt,
+        effective_system_prompt=EXTRACTION_SYSTEM_PROMPT,
         temperature=temperature,
         max_retries=max_retries,
         temperature_step=temperature_step,
@@ -627,7 +573,6 @@ def extract_labs_from_text(
     model_id: str,
     client: OpenAI,
     temperature: float = 0.0,
-    standardization_section: str | None = None,
 ) -> dict:
     """
     Extract lab results from text using a text-only LLM (no vision).
@@ -640,23 +585,19 @@ def extract_labs_from_text(
         model_id: Model to use for extraction
         client: OpenAI client instance
         temperature: Temperature for sampling
-        standardization_section: Optional standardized names/units list to append to system prompt.
 
     Returns:
         Dictionary with extracted report data (validated by Pydantic)
     """
 
-    # Build effective system prompt with optional standardization section
-    effective_system_prompt = EXTRACTION_SYSTEM_PROMPT + standardization_section if standardization_section else EXTRACTION_SYSTEM_PROMPT
-
     # Build user prompt for text extraction
-    user_prompt = _build_text_extraction_prompt(text, standardization_section)
+    user_prompt = _build_text_extraction_prompt(text)
 
     # Attempt extraction via API
     extraction_result = _execute_text_extraction_api_call(
         model_id=model_id,
         client=client,
-        effective_system_prompt=effective_system_prompt,
+        effective_system_prompt=EXTRACTION_SYSTEM_PROMPT,
         user_prompt=user_prompt,
         temperature=temperature,
     )
@@ -674,13 +615,10 @@ def extract_labs_from_text(
     return _validate_text_extraction_result(tool_result_dict)
 
 
-def _build_text_extraction_prompt(text: str, standardization_section: str | None) -> str:
+def _build_text_extraction_prompt(text: str) -> str:
     """Build the user prompt for text-based extraction."""
 
-    # Add standardization reminder only when standardization is active
-    std_reminder = "\nAlso set lab_name (standardized name from the provided list) and unit (standardized unit format) for each result.\n" if standardization_section else ""
-
-    return TEXT_EXTRACTION_USER_PROMPT.format(std_reminder=std_reminder, text=text)
+    return TEXT_EXTRACTION_USER_PROMPT.format(text=text)
 
 
 def _execute_text_extraction_api_call(
@@ -891,9 +829,6 @@ def _fix_lab_results_format(tool_result_dict: dict) -> dict:
     # Normalize old _raw suffix field names to new raw_ prefix names
     _normalize_raw_field_names(tool_result_dict["lab_results"])
 
-    # Map LLM-populated standardization fields to internal fields
-    _map_standardization_fields(tool_result_dict)
-
     # Clean numeric reference fields (strip embedded metadata like ", comments: ...")
     _clean_numeric_reference_fields(tool_result_dict)
 
@@ -905,25 +840,6 @@ def _fix_lab_results_format(tool_result_dict: dict) -> dict:
         logger.warning(f"Filtered {filtered_count} non-dict lab_results items")
 
     return tool_result_dict
-
-
-def _map_standardization_fields(tool_result_dict: dict) -> None:
-    """Map LLM-populated standardization fields to internal field names."""
-
-    # lab_name (standardized name) → lab_name_standardized
-    # unit (standardized unit) → lab_unit_standardized
-    for item in tool_result_dict["lab_results"]:
-        if isinstance(item, dict):
-            # Rename lab_name to lab_name_standardized
-            if "lab_name" in item:
-                std_name = item.pop("lab_name")
-                item["lab_name_standardized"] = std_name if std_name else _UNKNOWN_VALUE
-
-            # Rename unit to lab_unit_standardized (map $UNKNOWN$ to None)
-            if "unit" in item:
-                std_unit = item.pop("unit")
-                # Map $UNKNOWN$ to None so unit inference in normalization can handle it
-                item["lab_unit_standardized"] = std_unit if (std_unit and std_unit != _UNKNOWN_VALUE) else None
 
 
 def _clean_numeric_reference_fields(tool_result_dict: dict) -> None:

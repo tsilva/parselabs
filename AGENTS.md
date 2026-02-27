@@ -45,7 +45,7 @@ See `utils/README.md` for detailed usage instructions.
 ### LLM Prompts
 Prompt templates live in `prompts/` as `.md` files and are loaded at module level:
 - `extraction_system.md`, `extraction_user.md` - vision extraction prompts
-- `text_extraction_user.md` - text-based extraction user prompt (template: `{text}`, `{std_reminder}`)
+- `text_extraction_user.md` - text-based extraction user prompt (template: `{text}`)
 - `name_standardization.md`, `unit_standardization.md` - standardization prompts (used by `utils/update_standardization_caches.py`)
 - `conversion_factor_system.md`, `conversion_factor_user.md` - unit conversion factor prompts (template: `{lab_name}`, `{from_unit}`, `{to_unit}`)
 - `health_range_system.md`, `health_range_user.md` - healthy range prompts (template: `{lab_name}`, `{primary_unit}`, `{user_stats_json}`)
@@ -54,22 +54,26 @@ Prompt templates live in `prompts/` as `.md` files and are loaded at module leve
 
 ### Core Pipeline (main.py)
 
-The processing pipeline has 3 main stages:
+The processing pipeline has 4 main stages:
 
 1. **PDF Processing** (`process_single_pdf`)
    - Converts each PDF page to preprocessed JPG images (grayscale, contrast-enhanced)
    - Each page is processed independently
 
 2. **Extraction** (`extract_labs_from_page_image`)
-   - Extracts structured lab data directly from page images using vision models
+   - Extracts raw lab data directly from page images using vision models
    - Returns `HealthLabReport` with nested `LabResult` objects validated by Pydantic
+   - Extraction is purely objective — copies values exactly as they appear
 
-3. **Normalization & Mapping**
-   - Maps raw lab names/units to standardized enums via config files
+3. **Standardization** (`_apply_standardization_to_df`)
+   - Runs on merged DataFrame after all per-PDF CSVs are concatenated
+   - Maps raw lab names/units to standardized values via cache files (no LLM calls)
+
+4. **Normalization & Mapping**
    - Converts values to primary units using conversion factors
    - Deduplicates by (date, lab_name) pairs
 
-4. **Value Validation** (`validation.py`)
+5. **Value Validation** (`validation.py`)
    - Detects extraction errors from the data itself (no source image re-check)
    - Flags suspicious values for review in `viewer.py`
 
