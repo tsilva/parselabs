@@ -63,7 +63,7 @@ PDF → pdf2image (page-by-page)
 
 Both paths use OpenRouter API with **function calling** (structured output):
 
-- **LLM-facing schema** (`LabResultExtraction`): Smaller, token-efficient — excludes internal fields (`review_*`, `page_number`, `source_file`, `result_index`)
+- **LLM-facing schema** (`LabResultExtraction`): Smaller, token-efficient — excludes internal fields (`review_*`, `page_number`, `source_file`, `result_index`) and unused fields (`raw_is_abnormal`, `raw_reference_notes`, `raw_source_text`)
 - **Internal schema** (`HealthLabReport` / `LabResult`): Full schema with all metadata
 
 **Retry logic** with temperature escalation on malformed output:
@@ -90,7 +90,6 @@ Each `LabResult` contains:
 | `raw_lab_unit` | Unit symbol |
 | `raw_reference_range` | Full range text |
 | `raw_reference_min`, `raw_reference_max` | Parsed range bounds |
-| `raw_is_abnormal` | Abnormal flag from PDF |
 | `lab_name_standardized` | Inline LLM mapping (may be `$UNKNOWN$`) |
 | `lab_unit_standardized` | Inline LLM mapping (may be `$UNKNOWN$`) |
 
