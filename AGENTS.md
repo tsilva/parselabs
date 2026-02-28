@@ -176,13 +176,15 @@ Example entry:
 ```csv
 # Core identification
 date                # Report/collection date
-source_file         # Original PDF filename
-page_number         # Page number
 
 # Extracted values (standardized)
 lab_name            # Standardized name (e.g., "Blood - Glucose")
 value               # Numeric value in primary unit
 unit                # Primary unit (e.g., "mg/dL")
+
+# Source identification
+source_file         # Original PDF filename
+page_number         # Page number
 
 # Reference ranges from PDF
 reference_min       # Min reference from report
