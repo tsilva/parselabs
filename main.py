@@ -1,6 +1,6 @@
 """Main entry point for lab results extraction and processing."""
 
-from labs_parser.utils import load_dotenv_with_env
+from parselabs.utils import load_dotenv_with_env
 
 load_dotenv_with_env()
 
@@ -22,34 +22,34 @@ from openai import OpenAI  # noqa: E402
 from tqdm import tqdm  # noqa: E402
 
 # Local imports
-from labs_parser.config import (  # noqa: E402
+from parselabs.config import (  # noqa: E402
     UNKNOWN_VALUE,
     ExtractionConfig,
     LabSpecsConfig,
     ProfileConfig,
 )
-from labs_parser.exceptions import ConfigurationError, PipelineError  # noqa: E402
-from labs_parser.extraction import (  # noqa: E402
+from parselabs.exceptions import ConfigurationError, PipelineError  # noqa: E402
+from parselabs.extraction import (  # noqa: E402
     LabResult,
     extract_labs_from_page_image,
     extract_labs_from_text,
 )
-from labs_parser.normalization import (  # noqa: E402
+from parselabs.normalization import (  # noqa: E402
     apply_dtype_conversions,
     apply_normalizations,
     deduplicate_results,
     flag_duplicate_entries,
 )
-from labs_parser.standardization import (  # noqa: E402
+from parselabs.standardization import (  # noqa: E402
     standardize_lab_names,
     standardize_lab_units,
 )
-from labs_parser.utils import (  # noqa: E402
+from parselabs.utils import (  # noqa: E402
     ensure_columns,
     preprocess_page_image,
     setup_logging,
 )
-from labs_parser.validation import ValueValidator  # noqa: E402
+from parselabs.validation import ValueValidator  # noqa: E402
 
 # Module-level logger (file handlers added after config is loaded)
 logger = logging.getLogger(__name__)

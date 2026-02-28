@@ -1,6 +1,6 @@
 # Extraction Pipeline
 
-This document describes the data flow through the labs-parser extraction pipeline, from PDF input to validated CSV/Excel output.
+This document describes the data flow through the parselabs extraction pipeline, from PDF input to validated CSV/Excel output.
 
 ## Pipeline Overview
 
@@ -29,7 +29,7 @@ Each PDF is processed independently (parallelized via `multiprocessing.Pool`):
 
 ## Stage 2: Extraction
 
-**Modules:** `main.py` — `process_single_pdf()`, `labs_parser/extraction.py`
+**Modules:** `main.py` — `process_single_pdf()`, `parselabs/extraction.py`
 
 The pipeline uses a **text-first strategy** with vision fallback to optimize API costs.
 
@@ -91,7 +91,7 @@ Each `LabResult` contains:
 
 ## Stage 3: Standardization
 
-**Modules:** `main.py` — `_apply_standardization()`, `labs_parser/standardization.py`
+**Modules:** `main.py` — `_apply_standardization()`, `parselabs/standardization.py`
 
 Maps raw lab names and units to standardized enum values using **persistent JSON caches**. No LLM calls at runtime. This is the sole standardization path — the LLM extracts only raw data.
 
@@ -128,7 +128,7 @@ All per-PDF CSVs are concatenated into a single `all.csv` in the profile's outpu
 
 ## Stage 6: Normalization
 
-**Module:** `labs_parser/normalization.py`
+**Module:** `parselabs/normalization.py`
 
 Transforms the merged DataFrame through several steps:
 
@@ -174,7 +174,7 @@ Forces proper column types: `date` → datetime, `value` → float64, booleans, 
 
 ## Stage 7: Validation
 
-**Module:** `labs_parser/validation.py` — `ValueValidator`
+**Module:** `parselabs/validation.py` — `ValueValidator`
 
 Detects extraction errors by analyzing the data itself (no source image re-check). Sets `review_needed=True` and appends reason codes to `review_reason`.
 

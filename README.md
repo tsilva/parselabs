@@ -1,21 +1,21 @@
 <div align="center">
-  <img src="logo.png" alt="labs-parser" width="512"/>
+  <img src="logo.png" alt="parselabs" width="512"/>
 
-  # labs-parser
+  # parselabs
 
   [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
   [![Python](https://img.shields.io/badge/Python-≥3.8-3776ab.svg)](https://python.org)
 
   **🔬 Extract lab results from medical PDFs using AI vision with self-consistency 📊**
 
-  [Documentation](docs/pipeline.md) · [Issues](https://github.com/tsilva/labs-parser/issues)
+  [Documentation](docs/pipeline.md) · [Issues](https://github.com/tsilva/parselabs/issues)
 </div>
 
 ---
 
 ## Overview
 
-labs-parser uses AI vision models to extract laboratory test results from PDF documents and images, converting unstructured medical reports into clean, standardized CSV/Excel data. It automatically normalizes test names, converts units, and validates results for accuracy.
+parselabs uses AI vision models to extract laboratory test results from PDF documents and images, converting unstructured medical reports into clean, standardized CSV/Excel data. It automatically normalizes test names, converts units, and validates results for accuracy.
 
 ## Features
 
@@ -58,8 +58,8 @@ python review.py --profile myname
 ### Setup
 
 ```bash
-git clone https://github.com/tsilva/labs-parser.git
-cd labs-parser
+git clone https://github.com/tsilva/parselabs.git
+cd parselabs
 uv sync
 ```
 

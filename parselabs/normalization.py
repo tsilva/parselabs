@@ -5,8 +5,8 @@ import re
 
 import pandas as pd
 
-from labs_parser.config import UNKNOWN_VALUE, LabSpecsConfig
-from labs_parser.utils import ensure_columns
+from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig
+from parselabs.utils import ensure_columns
 
 logger = logging.getLogger(__name__)
 

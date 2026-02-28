@@ -1,4 +1,4 @@
-"""CLI entry point for labs-parser."""
+"""CLI entry point for parselabs."""
 
 import os
 import sys

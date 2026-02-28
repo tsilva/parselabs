@@ -4,7 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-from labs_parser.config import UNKNOWN_VALUE
+from parselabs.config import UNKNOWN_VALUE
 
 logger = logging.getLogger(__name__)
 

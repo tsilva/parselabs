@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "parselabs/__init__.py"
+
+jobs:
+  test:
+    uses: tsilva/.github/.github/workflows/test.yml@main
+
+  pii-scan:
+    uses: tsilva/.github/.github/workflows/pii-scan.yml@main
+
+  build-and-publish:
+    needs: [test, pii-scan]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/p/parselabs
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

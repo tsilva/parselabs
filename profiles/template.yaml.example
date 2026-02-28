@@ -1,5 +1,5 @@
 # Profile Template - Copy this file and rename to {your_name}.yaml
-# This is the simplified profile format for labs-parser
+# This is the simplified profile format for parselabs
 
 name: "Your Name"
 

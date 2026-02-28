@@ -14,7 +14,7 @@ Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate
 
 from __future__ import annotations
 
-from labs_parser.utils import load_dotenv_with_env
+from parselabs.utils import load_dotenv_with_env
 
 load_dotenv_with_env()
 
@@ -31,7 +31,7 @@ import pandas as pd  # noqa: E402
 import plotly.graph_objects as go  # noqa: E402
 from plotly.subplots import make_subplots  # noqa: E402
 
-from labs_parser.config import Demographics, LabSpecsConfig, ProfileConfig  # noqa: E402
+from parselabs.config import Demographics, LabSpecsConfig, ProfileConfig  # noqa: E402
 
 # Initialize module logger
 logger = logging.getLogger(__name__)
