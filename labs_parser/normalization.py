@@ -1254,36 +1254,21 @@ def deduplicate_results(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataF
     if df.empty or "date" not in df.columns or "lab_name_standardized" not in df.columns:
         return df
 
-    def pick_best_dupe(group):
-        """Pick best duplicate: prefer primary unit if multiple entries exist."""
+    # Build priority column: prefer rows already in primary unit (priority 0)
+    def _dedup_priority(row):
+        lab_name = row["lab_name_standardized"]
+        if pd.isna(lab_name) or lab_name == UNKNOWN_VALUE:
+            return 1
+        primary_unit = lab_specs.get_primary_unit(lab_name) if lab_specs.exists else None
+        if primary_unit and row.get("lab_unit_standardized") == primary_unit:
+            return 0
+        return 1
 
-        lab_name_standardized = group.iloc[0]["lab_name_standardized"]
-        primary_unit = lab_specs.get_primary_unit(lab_name_standardized) if lab_specs.exists else None
-
-        # Prefer the row already in primary unit
-        if primary_unit and "lab_unit_standardized" in group.columns and (group["lab_unit_standardized"] == primary_unit).any():
-            return group[group["lab_unit_standardized"] == primary_unit].iloc[0]
-        # Fall back to first row
-        else:
-            return group.iloc[0]
-
-    # Group and apply deduplication
-    import warnings
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", FutureWarning)
-        deduplicated = (
-            df.groupby(
-                ["date", "lab_name_standardized"],
-                dropna=False,
-                as_index=False,
-                group_keys=False,
-            )
-            .apply(pick_best_dupe)
-            .reset_index(drop=True)
-        )
-
-    return deduplicated
+    df["_dedup_priority"] = df.apply(_dedup_priority, axis=1)
+    df = df.sort_values(["date", "lab_name_standardized", "_dedup_priority"])
+    df = df.drop_duplicates(subset=["date", "lab_name_standardized"], keep="first")
+    df = df.drop(columns=["_dedup_priority"])
+    return df.reset_index(drop=True)
 
 
 def apply_dtype_conversions(df: pd.DataFrame, dtype_map: dict) -> pd.DataFrame:
