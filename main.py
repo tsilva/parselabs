@@ -68,12 +68,13 @@ client = OpenAI(
 COLUMN_SCHEMA = {
     # Core identification
     "date": {"dtype": "datetime64[ns]", "excel_width": 13},
-    "source_file": {"dtype": "str", "excel_width": 25},
-    "page_number": {"dtype": "Int64", "excel_width": 8},
     # Extracted values (standardized)
     "lab_name": {"dtype": "str", "excel_width": 35},
     "value": {"dtype": "float64", "excel_width": 12},
     "unit": {"dtype": "str", "excel_width": 15},
+    # Source identification
+    "source_file": {"dtype": "str", "excel_width": 25},
+    "page_number": {"dtype": "Int64", "excel_width": 8},
     # Reference ranges from PDF
     "reference_min": {"dtype": "float64", "excel_width": 12},
     "reference_max": {"dtype": "float64", "excel_width": 12},
@@ -99,11 +100,11 @@ COLUMN_SCHEMA = {
 # Canonical column order for CSV export
 COLUMN_ORDER = [
     "date",
-    "source_file",
-    "page_number",
     "lab_name",
     "value",
     "unit",
+    "source_file",
+    "page_number",
     "reference_min",
     "reference_max",
     "raw_lab_name",
