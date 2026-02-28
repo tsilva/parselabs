@@ -57,9 +57,9 @@ class LabResult(BaseModel):
         alias="comments",
         description="Additional notes or remarks about the test (NOT the test result itself). Only use for extra information like methodology notes or special conditions.",
     )
-    # Internal fields (added by pipeline, not by LLM)
-    lab_name_standardized: str | None = Field(default=None, description="Standardized lab name")
-    lab_unit_standardized: str | None = Field(default=None, description="Standardized lab unit")
+    # Internal fields (added by pipeline, not by LLM) — excluded from JSON serialization
+    lab_name_standardized: str | None = Field(default=None, exclude=True)
+    lab_unit_standardized: str | None = Field(default=None, exclude=True)
 
     @field_validator("raw_value", mode="before")
     @classmethod
