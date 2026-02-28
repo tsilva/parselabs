@@ -77,6 +77,33 @@ Usage:
 python utils/analyze_unknowns.py
 ```
 
+## Migration
+
+### migrate_output_dirs.py
+Batch-rename legacy output directories to include the file hash suffix (`{stem}/` → `{stem}_{hash}/`).
+
+Usage:
+```bash
+# Preview changes without renaming
+python utils/migrate_output_dirs.py --dry-run
+
+# Migrate a single profile
+python utils/migrate_output_dirs.py --profile tsilva
+
+# Migrate all profiles
+python utils/migrate_output_dirs.py
+```
+
+### migrate_raw_columns.py
+Rename `_raw` suffix columns to `raw_` prefix in JSON, per-document CSV, and all.csv files.
+
+Usage:
+```bash
+python utils/migrate_raw_columns.py --profile tsilva
+python utils/migrate_raw_columns.py --profile tsilva --dry-run
+python utils/migrate_raw_columns.py
+```
+
 ## Legacy Scripts (Consolidated)
 
 The following scripts have been consolidated into `lab_specs_manager.py`:

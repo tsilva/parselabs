@@ -39,6 +39,7 @@ The `utils/` directory contains helper scripts for building and maintaining conf
 - `sort_lab_specs.py` - Sort lab specifications alphabetically
 - `analyze_unknowns.py` - Analyze $UNKNOWN$ values in extracted results
 - `update_standardization_caches.py` - Batch-update name/unit standardization caches via LLM
+- `migrate_output_dirs.py` - Batch-rename legacy output directories to include file hash suffix
 
 See `utils/README.md` for detailed usage instructions.
 
