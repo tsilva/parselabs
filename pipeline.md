@@ -16,17 +16,15 @@ INPUT_PATH/*.pdf
                      │  one PDF at a time (multiprocessing Pool)
                      ▼
 ┌─────────────────────────────────────────────────────┐
-│ 2. Extraction (with inline standardization)          │
+│ 2. Extraction (raw data only)                         │
 │    Text-first: pdftotext → ≥200 non-ws chars?        │
 │      → extract_labs_from_text() → cache .json + .txt  │
 │    Vision fallback (per page):                       │
 │      → pdf2image → preprocess_page_image()           │
 │      → extract_labs_from_page_image()               │
 │        └─ function calling (1 LLM call/page)         │
-│        └─ inline: lab_name + unit populated by LLM  │
 │        └─ temperature-escalation retry (up to 3x)   │
 │    cache → {doc}/{doc}.{page}.jpg + .json            │
-│    Standardized names list appended to system prompt │
 └────────────────────┬────────────────────────────────┘
                      │
                      ▼
@@ -90,15 +88,11 @@ INPUT_PATH/*.pdf
 
 **Vision path (per-page, fallback):**
 
-**Function calling:** The model is forced to invoke `extract_lab_results` (JSON schema derived from `HealthLabReportExtraction.model_json_schema()`), eliminating free-text responses.
+**Function calling:** The model is forced to invoke `extract_lab_results` (JSON schema derived from `HealthLabReportExtraction.model_json_schema()`), eliminating free-text responses. The LLM extracts only raw data — no standardization is performed during extraction.
 
-**Inline standardization:** The system prompt includes a dynamically built `STANDARDIZED LAB NAMES AND UNITS` section (generated from `lab_specs.json`) so the LLM populates:
-- `lab_name` → mapped to `lab_name_standardized` (standardized name from the list)
-- `unit` → mapped to `lab_unit_standardized` (format-normalized unit)
-
-**Post-extraction standardization fallback** is applied after extraction for any results still missing `lab_name_standardized` or `lab_unit_standardized`:
-1. **Name fallback**: calls `standardize_lab_names()` (cache-only) for all unmapped names → updates `lab_name_standardized`
-2. **Unit fallback**: calls `standardize_lab_units()` (cache-only) for all unmapped `(raw_unit, std_name)` pairs → updates `lab_unit_standardized`
+**Post-extraction standardization** (`_apply_standardization`) maps raw names and units to standardized values via cache-based lookup:
+1. **Name standardization**: calls `standardize_lab_names()` (cache-only) for all results → sets `lab_name_standardized`
+2. **Unit standardization**: calls `standardize_lab_units()` (cache-only) for all `(raw_unit, std_name)` pairs → sets `lab_unit_standardized`
 3. Cache misses return `$UNKNOWN$` and log a warning. Use `utils/update_standardization_caches.py` to batch-update caches via LLM.
 4. Caches stored at: `config/cache/name_standardization.json`, `config/cache/unit_standardization.json`
 
@@ -110,9 +104,8 @@ INPUT_PATH/*.pdf
 
 **Pre-validation repair (`_fix_lab_results_format`):**
 1. Normalize date formats (DD/MM/YYYY → YYYY-MM-DD)
-2. Map `lab_name` → `lab_name_standardized`, `unit` → `lab_unit_standardized`
-3. Strip embedded metadata from numeric reference fields
-4. Filter out non-dict items
+2. Strip embedded metadata from numeric reference fields
+3. Filter out non-dict items
 
 **Cache:** preprocessed image saved as `{page}.jpg`; extracted JSON saved as `{page}.json` — both skipped if already present.
 
@@ -184,7 +177,7 @@ Relationship formulas (e.g., LDL Friedewald) are defined in `lab_specs.json` und
 
 | Stage | LLM Calls |
 |-------|-----------|
-| Extraction | 1/page (function calling with inline standardization) |
+| Extraction | 1/page (function calling, raw data only) |
 | Name standardization | 0 (cache-only; misses return `$UNKNOWN$`) |
 | Unit standardization | 0 (cache-only; misses return `$UNKNOWN$`) |
 | Qualitative→boolean | 0 (deterministic pattern matching) |
@@ -221,7 +214,7 @@ Relationship formulas (e.g., LDL Friedewald) are defined in `lab_specs.json` und
 | File | Purpose |
 |------|---------|
 | `main.py` | Pipeline orchestration (`run_for_profile`, `process_single_pdf`) |
-| `labs_parser/extraction.py` | Vision/text LLM extraction, `HealthLabReport`/`LabResult` Pydantic models, LLM-facing `HealthLabReportExtraction` schema, inline standardization |
+| `labs_parser/extraction.py` | Vision/text LLM extraction, `HealthLabReport`/`LabResult` Pydantic models, LLM-facing `HealthLabReportExtraction` schema |
 | `labs_parser/standardization.py` | Lab name and unit standardization via cache-only lookup (no LLM at runtime) |
 | `labs_parser/normalization.py` | Unit conversion, value preprocessing, unit inference, range validation, % name correction |
 | `labs_parser/validation.py` | `ValueValidator` — data-driven extraction error detection |

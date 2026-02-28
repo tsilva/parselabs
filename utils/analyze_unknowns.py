@@ -42,7 +42,7 @@ def mode_search(df: pd.DataFrame):
     logger.info(f"\nTotal rows: {len(df)}")
 
     # Unknown lab names
-    unknown_names = df[df["lab_name_standardized"] == "$UNKNOWN$"]
+    unknown_names = df[df["lab_name"] == "$UNKNOWN$"]
 
     # Display unknown lab name details if any found
     if len(unknown_names) > 0:
@@ -61,7 +61,7 @@ def mode_search(df: pd.DataFrame):
         logger.info("\n No unknown lab names found!")
 
     # Unknown units
-    unknown_units = df[df["lab_unit_standardized"] == "$UNKNOWN$"]
+    unknown_units = df[df["unit"] == "$UNKNOWN$"]
 
     # Display unknown unit details if any found
     if len(unknown_units) > 0:
@@ -87,7 +87,7 @@ def mode_search(df: pd.DataFrame):
     logger.info(f"Rows with unknown lab names: {len(unknown_names)} ({len(unknown_names) / len(df) * 100:.1f}%)")
     logger.info(f"Rows with unknown units: {len(unknown_units)} ({len(unknown_units) / len(df) * 100:.1f}%)")
     logger.info(f"Unique lab names in data: {df['raw_lab_name'].nunique()}")
-    logger.info(f"Unique standardized names: {df[df['lab_name_standardized'] != '$UNKNOWN$']['lab_name_standardized'].nunique()}")
+    logger.info(f"Unique standardized names: {df[df['lab_name'] != '$UNKNOWN$']['lab_name'].nunique()}")
 
 
 def mode_analyze(df: pd.DataFrame):
@@ -97,7 +97,7 @@ def mode_analyze(df: pd.DataFrame):
     logger.info("UNKNOWN LAB NAMES - Detailed Analysis")
     logger.info("=" * 80)
 
-    unknown_names = df[df["lab_name_standardized"] == "$UNKNOWN$"]
+    unknown_names = df[df["lab_name"] == "$UNKNOWN$"]
 
     # Print details for each unknown lab name
     if len(unknown_names) > 0:
@@ -112,7 +112,7 @@ def mode_analyze(df: pd.DataFrame):
     logger.info("UNKNOWN UNITS - Detailed Analysis")
     logger.info("=" * 80)
 
-    unknown_units = df[df["lab_unit_standardized"] == "$UNKNOWN$"]
+    unknown_units = df[df["unit"] == "$UNKNOWN$"]
 
     # Print unique test/unit combinations for unknown units
     if len(unknown_units) > 0:
@@ -121,13 +121,13 @@ def mode_analyze(df: pd.DataFrame):
                 "raw_lab_name",
                 "raw_lab_unit",
                 "lab_type",
-                "lab_name_standardized",
+                "lab_name",
             ]
         ].drop_duplicates()
 
         for _, row in unique_combos.iterrows():
             logger.info(f"\nTest: {row['raw_lab_name']}")
-            logger.info(f"  Standardized as: {row['lab_name_standardized']}")
+            logger.info(f"  Standardized as: {row['lab_name']}")
             logger.info(f"  Raw unit: {row['raw_lab_unit']}")
             logger.info(f"  Lab type: {row['lab_type']}")
 
@@ -147,7 +147,7 @@ def mode_analyze(df: pd.DataFrame):
 
         # Check which standardized names have unknown units
         if len(unknown_units) > 0:
-            standardized_names_with_unknown_units = unknown_units["lab_name_standardized"].unique()
+            standardized_names_with_unknown_units = unknown_units["lab_name"].unique()
             logger.info("\nStandardized names with unknown units:")
             for name in standardized_names_with_unknown_units:
                 # Lab exists in config - show its unit info
@@ -167,7 +167,7 @@ def mode_analyze(df: pd.DataFrame):
 def mode_categorize(df: pd.DataFrame):
     """Categorize unknowns into reference indicators vs actual tests."""
 
-    unknown_names = df[df["lab_name_standardized"] == "$UNKNOWN$"]
+    unknown_names = df[df["lab_name"] == "$UNKNOWN$"]
 
     logger.info("=" * 80)
     logger.info("CATEGORIZING UNKNOWN LAB NAMES")
@@ -303,7 +303,7 @@ def mode_categorize(df: pd.DataFrame):
     logger.info("MISSING UNITS ANALYSIS")
     logger.info("=" * 80)
 
-    unknown_units = df[df["lab_unit_standardized"] == "$UNKNOWN$"]
+    unknown_units = df[df["unit"] == "$UNKNOWN$"]
     unit_combos = unknown_units.groupby(["raw_lab_unit"]).size().reset_index(name="count")
     unit_combos = unit_combos.sort_values("count", ascending=False)
 

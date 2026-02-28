@@ -63,7 +63,7 @@ PDF → pdf2image (page-by-page)
 
 Both paths use OpenRouter API with **function calling** (structured output):
 
-- **LLM-facing schema** (`LabResultExtraction`): Smaller, token-efficient — excludes internal fields (`review_*`, `page_number`, `source_file`, `result_index`) and unused fields (`raw_is_abnormal`, `raw_reference_notes`, `raw_source_text`)
+- **LLM-facing schema** (`LabResultExtraction`): Smaller, token-efficient — only raw extraction fields (excludes internal fields like `review_*`, `page_number`, `source_file`, `result_index`, `lab_name_standardized`, `lab_unit_standardized`)
 - **Internal schema** (`HealthLabReport` / `LabResult`): Full schema with all metadata
 
 **Retry logic** with temperature escalation on malformed output:
@@ -75,9 +75,7 @@ Both paths use OpenRouter API with **function calling** (structured output):
 
 **Prompt templates** (loaded from `prompts/`):
 - `extraction_system.md` + `extraction_user.md` — vision extraction
-- `text_extraction_user.md` — text-based extraction (templates: `{text}`, `{std_reminder}`)
-
-The system prompt includes a list of standardized lab names from `lab_specs.json` to guide inline standardization.
+- `text_extraction_user.md` — text-based extraction (template: `{text}`)
 
 ### Extraction Output
 
@@ -90,17 +88,15 @@ Each `LabResult` contains:
 | `raw_lab_unit` | Unit symbol |
 | `raw_reference_range` | Full range text |
 | `raw_reference_min`, `raw_reference_max` | Parsed range bounds |
-| `lab_name_standardized` | Inline LLM mapping (may be `$UNKNOWN$`) |
-| `lab_unit_standardized` | Inline LLM mapping (may be `$UNKNOWN$`) |
 
 ## Stage 3: Standardization
 
-**Modules:** `main.py` — `_apply_standardization_fallbacks()`, `labs_parser/standardization.py`
+**Modules:** `main.py` — `_apply_standardization()`, `labs_parser/standardization.py`
 
-Maps raw lab names and units to standardized enum values using **persistent JSON caches**. No LLM calls at runtime.
+Maps raw lab names and units to standardized enum values using **persistent JSON caches**. No LLM calls at runtime. This is the sole standardization path — the LLM extracts only raw data.
 
 ```
-For each LabResult where lab_name_standardized == $UNKNOWN$ or missing:
+For each LabResult:
   → standardize_lab_names(): cache lookup raw_name → standardized_name
   → standardize_lab_units(): cache lookup (raw_unit, lab_name) → standardized_unit
 ```
@@ -278,7 +274,7 @@ INPUT: PDF files (per profile)
     │       ├── extract_labs_from_page_image() ── LLM vision + retry
     │       └── cache JPG + JSON
     │
-    ├── _apply_standardization_fallbacks()
+    ├── _apply_standardization()
     │   ├── standardize_lab_names() ── cache lookup
     │   └── standardize_lab_units() ── cache lookup
     │
