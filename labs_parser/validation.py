@@ -57,7 +57,7 @@ class ValueValidator:
     COLUMN_MAPPINGS = {
         "value": ("value", "value_primary"),
         "lab_name": ("lab_name", "lab_name_standardized"),
-        "unit": ("unit", "lab_unit_primary"),
+        "unit": ("lab_unit", "lab_unit_primary"),
         "ref_min": ("reference_min", "reference_min_primary"),
         "ref_max": ("reference_max", "reference_max_primary"),
     }

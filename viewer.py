@@ -156,7 +156,7 @@ DISPLAY_COLUMNS = [
     "date",
     "lab_name",
     "value",
-    "unit",
+    "lab_unit",
     "reference_range",
     "is_out_of_reference",
     "review_status",
@@ -167,7 +167,7 @@ COLUMN_LABELS = {
     "date": "Date",
     "lab_name": "Lab",
     "value": "Value",
-    "unit": "Unit",
+    "lab_unit": "Unit",
     "reference_range": "Ref",
     "is_out_of_reference": "Abn",
     "review_status": "Review",
@@ -381,7 +381,7 @@ def _format_reference_range(row) -> str:
 
     # Both missing — show boolean default or empty
     if pd.isna(ref_min) and pd.isna(ref_max):
-        if row.get("unit") == "boolean":
+        if row.get("lab_unit") == "boolean":
             return "0 - 1"
         return ""
 
@@ -408,7 +408,7 @@ def _check_out_of_reference(row) -> bool | None:
 
     # No reference range — check boolean special case
     if pd.isna(ref_min) and pd.isna(ref_max):
-        if row.get("unit") == "boolean":
+        if row.get("lab_unit") == "boolean":
             return val > 0
         return None
 
@@ -773,8 +773,8 @@ def create_single_lab_plot(
         return fig, ""
 
     unit = ""
-    if "unit" in lab_df.columns:
-        units = lab_df["unit"].dropna()
+    if "lab_unit" in lab_df.columns:
+        units = lab_df["lab_unit"].dropna()
         if not units.empty:
             unit = str(units.iloc[0])
 
@@ -1029,8 +1029,8 @@ def create_interactive_plot(
             continue
 
         unit = ""
-        if "unit" in lab_df.columns:
-            units = lab_df["unit"].dropna()
+        if "lab_unit" in lab_df.columns:
+            units = lab_df["lab_unit"].dropna()
             if not units.empty:
                 unit = str(units.iloc[0])
 
@@ -1131,7 +1131,7 @@ def build_details_html(entry: dict) -> str:
     paired_fields = [
         ("Lab Name", "raw_lab_name", "lab_name"),
         ("Value", "raw_value", "value"),
-        ("Unit", "raw_unit", "unit"),
+        ("Unit", "raw_unit", "lab_unit"),
         ("Ref Min", "reference_min", "reference_min"),
         ("Ref Max", "reference_max", "reference_max"),
     ]

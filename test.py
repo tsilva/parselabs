@@ -77,11 +77,11 @@ def test_all_rows_have_dates_and_no_duplicates(df, report, errors):
 def test_lab_unit_percent_vs_lab_name(df, report, errors):
 
     # Guard: Skip if required columns are missing
-    if "unit" not in df.columns or "lab_name" not in df.columns:
+    if "lab_unit" not in df.columns or "lab_name" not in df.columns:
         return
 
     # Find rows where unit is % but lab name doesn't end with (%)
-    mask = (df["unit"] == "%") & (~df["lab_name"].astype(str).str.endswith("(%)"))
+    mask = (df["lab_unit"] == "%") & (~df["lab_name"].astype(str).str.endswith("(%)"))
 
     for idx in df[mask].index:
         row = df.loc[idx]
@@ -94,11 +94,11 @@ def test_lab_unit_percent_vs_lab_name(df, report, errors):
 def test_lab_unit_percent_value_range(df, report, errors):
 
     # Guard: Skip if required columns are missing
-    if "unit" not in df.columns or "value" not in df.columns:
+    if "lab_unit" not in df.columns or "value" not in df.columns:
         return
 
     # Find percentage values outside valid 0-100 range
-    mask = (df["unit"] == "%") & ((df["value"] < 0) | (df["value"] > 100))
+    mask = (df["lab_unit"] == "%") & ((df["value"] < 0) | (df["value"] > 100))
 
     for idx in df[mask].index:
         row = df.loc[idx]
@@ -112,11 +112,11 @@ def test_lab_unit_percent_value_range(df, report, errors):
 def test_lab_unit_boolean_value(df, report, errors):
 
     # Guard: Skip if required columns are missing
-    if "unit" not in df.columns or "value" not in df.columns:
+    if "lab_unit" not in df.columns or "value" not in df.columns:
         return
 
     # Find boolean labs with values other than 0 or 1
-    mask = (df["unit"] == "boolean") & (~df["value"].isin([0, 1]))
+    mask = (df["lab_unit"] == "boolean") & (~df["value"].isin([0, 1]))
 
     for idx in df[mask].index:
         row = df.loc[idx]
@@ -130,11 +130,11 @@ def test_lab_unit_boolean_value(df, report, errors):
 def test_lab_name_unit_consistency(df, report, errors):
 
     # Guard: Skip if required columns are missing
-    if "lab_name" not in df.columns or "unit" not in df.columns:
+    if "lab_name" not in df.columns or "lab_unit" not in df.columns:
         return
 
     # Check each lab name uses a single consistent unit
-    grouped = df.groupby("lab_name")["unit"].unique()
+    grouped = df.groupby("lab_name")["lab_unit"].unique()
     for lab_name, units in grouped.items():
         units = [u for u in units if pd.notnull(u)]
 
@@ -156,12 +156,12 @@ def test_lab_value_outliers_by_lab_name(df, report, errors):
 
     for lab_name, group in df.groupby("lab_name"):
         # Determine most frequent unit to compare against
-        if "unit" in group.columns:
-            unit_counts = group["unit"].value_counts()
+        if "lab_unit" in group.columns:
+            unit_counts = group["lab_unit"].value_counts()
             if unit_counts.empty:
                 continue
             most_freq_unit = unit_counts.idxmax()
-            values = group[group["unit"] == most_freq_unit]["value"]
+            values = group[group["lab_unit"] == most_freq_unit]["value"]
         else:
             values = group["value"]
             most_freq_unit = "N/A"
@@ -181,8 +181,8 @@ def test_lab_value_outliers_by_lab_name(df, report, errors):
             continue
 
         # Find values more than 3 standard deviations from mean
-        if "unit" in group.columns:
-            outliers = group[(group["unit"] == most_freq_unit) & ((group["value"] > mean + 3 * std) | (group["value"] < mean - 3 * std))]
+        if "lab_unit" in group.columns:
+            outliers = group[(group["lab_unit"] == most_freq_unit) & ((group["value"] > mean + 3 * std) | (group["value"] < mean - 3 * std))]
         else:
             outliers = group[(group["value"] > mean + 3 * std) | (group["value"] < mean - 3 * std)]
 

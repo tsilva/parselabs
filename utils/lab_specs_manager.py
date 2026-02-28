@@ -239,7 +239,7 @@ def cmd_build_conversions(args):
         reader = csv.DictReader(csvfile)
         for row in reader:
             lab_name = row.get("lab_name_enum") or row.get("lab_name")
-            lab_unit = row.get("lab_unit_enum") or row.get("unit")
+            lab_unit = row.get("lab_unit_enum") or row.get("lab_unit")
 
             # Only track rows with both lab name and unit
             if lab_name and lab_unit:

@@ -61,7 +61,7 @@ def mode_search(df: pd.DataFrame):
         logger.info("\n No unknown lab names found!")
 
     # Unknown units
-    unknown_units = df[df["unit"] == "$UNKNOWN$"]
+    unknown_units = df[df["lab_unit"] == "$UNKNOWN$"]
 
     # Display unknown unit details if any found
     if len(unknown_units) > 0:
@@ -112,7 +112,7 @@ def mode_analyze(df: pd.DataFrame):
     logger.info("UNKNOWN UNITS - Detailed Analysis")
     logger.info("=" * 80)
 
-    unknown_units = df[df["unit"] == "$UNKNOWN$"]
+    unknown_units = df[df["lab_unit"] == "$UNKNOWN$"]
 
     # Print unique test/unit combinations for unknown units
     if len(unknown_units) > 0:
@@ -303,7 +303,7 @@ def mode_categorize(df: pd.DataFrame):
     logger.info("MISSING UNITS ANALYSIS")
     logger.info("=" * 80)
 
-    unknown_units = df[df["unit"] == "$UNKNOWN$"]
+    unknown_units = df[df["lab_unit"] == "$UNKNOWN$"]
     unit_combos = unknown_units.groupby(["raw_lab_unit"]).size().reset_index(name="count")
     unit_combos = unit_combos.sort_values("count", ascending=False)
 

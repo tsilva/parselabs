@@ -180,7 +180,7 @@ date                # Report/collection date
 # Extracted values (standardized)
 lab_name            # Standardized name (e.g., "Blood - Glucose")
 value               # Numeric value in primary unit
-unit                # Primary unit (e.g., "mg/dL")
+lab_unit            # Primary unit (e.g., "mg/dL")
 
 # Source identification
 source_file         # Original PDF filename
