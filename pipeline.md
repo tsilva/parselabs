@@ -214,12 +214,12 @@ Relationship formulas (e.g., LDL Friedewald) are defined in `lab_specs.json` und
 | File | Purpose |
 |------|---------|
 | `main.py` | Pipeline orchestration (`run_for_profile`, `process_single_pdf`) |
-| `labs_parser/extraction.py` | Vision/text LLM extraction, `HealthLabReport`/`LabResult` Pydantic models, LLM-facing `HealthLabReportExtraction` schema |
-| `labs_parser/standardization.py` | Lab name and unit standardization via cache-only lookup (no LLM at runtime) |
-| `labs_parser/normalization.py` | Unit conversion, value preprocessing, unit inference, range validation, % name correction |
-| `labs_parser/validation.py` | `ValueValidator` — data-driven extraction error detection |
-| `labs_parser/config.py` | `ExtractionConfig`, `ProfileConfig`, `LabSpecsConfig` |
-| `labs_parser/utils.py` | `preprocess_page_image`, logging setup |
+| `parselabs/extraction.py` | Vision/text LLM extraction, `HealthLabReport`/`LabResult` Pydantic models, LLM-facing `HealthLabReportExtraction` schema |
+| `parselabs/standardization.py` | Lab name and unit standardization via cache-only lookup (no LLM at runtime) |
+| `parselabs/normalization.py` | Unit conversion, value preprocessing, unit inference, range validation, % name correction |
+| `parselabs/validation.py` | `ValueValidator` — data-driven extraction error detection |
+| `parselabs/config.py` | `ExtractionConfig`, `ProfileConfig`, `LabSpecsConfig` |
+| `parselabs/utils.py` | `preprocess_page_image`, logging setup |
 | `config/lab_specs.json` | 328 standardized lab names, units, conversion factors, ranges, relationships |
 | `config/cache/` | Persistent LLM decision caches (user-editable JSON files) |
 | `utils/update_standardization_caches.py` | Batch-update name/unit standardization caches via LLM |

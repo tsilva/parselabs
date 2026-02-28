@@ -1,12 +1,12 @@
 [project]
-name = "labs-parser"
-version = "0.1.0"
+name = "parselabs"
+dynamic = ["version"]
 description = "Extract structured lab test results from medical documents with AI precision"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-    {name = "tsilva"}
+    {name = "tsilva", email = "tsilva@parselabs.dev"}
 ]
 keywords = ["medical", "lab-parser", "ai", "document-processing", "claude"]
 classifiers = [
@@ -33,20 +33,28 @@ dependencies = [
     "gradio>=5.0.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+]
+
 [project.urls]
-Homepage = "https://github.com/tsilva/labs-parser"
-Repository = "https://github.com/tsilva/labs-parser"
-Issues = "https://github.com/tsilva/labs-parser/issues"
+Homepage = "https://github.com/tsilva/parselabs"
+Repository = "https://github.com/tsilva/parselabs"
+Issues = "https://github.com/tsilva/parselabs/issues"
 
 [project.scripts]
-labs-parser = "labs_parser.cli:main"
+parselabs = "parselabs.cli:main"
 
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.setuptools]
-packages = ["labs_parser"]
+[tool.hatch.version]
+path = "parselabs/__init__.py"
 
 [tool.ruff]
 line-length = 230
@@ -54,8 +62,3 @@ line-length = 230
 [tool.ruff.lint]
 select = ["E", "W", "F", "I"]
 ignore = []
-
-[dependency-groups]
-dev = [
-    "ruff>=0.15.2",
-]

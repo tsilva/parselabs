@@ -1,40 +1,41 @@
 """Labs Parser - Medical lab report extraction and processing."""
 
-from labs_parser.config import (
+from parselabs.config import (
     UNKNOWN_VALUE,
     Demographics,
     ExtractionConfig,
     LabSpecsConfig,
     ProfileConfig,
 )
-from labs_parser.exceptions import ConfigurationError, PipelineError
-from labs_parser.extraction import (
+from parselabs.exceptions import ConfigurationError, PipelineError
+from parselabs.extraction import (
     HealthLabReport,
     LabResult,
     extract_labs_from_page_image,
     extract_labs_from_text,
 )
-from labs_parser.normalization import (
+from parselabs.normalization import (
     apply_dtype_conversions,
     apply_normalizations,
     deduplicate_results,
 )
-from labs_parser.standardization import (
+from parselabs.standardization import (
     standardize_lab_names,
     standardize_lab_units,
 )
-from labs_parser.utils import (
+from parselabs.utils import (
     ensure_columns,
     load_dotenv_with_env,
     parse_llm_json_response,
     preprocess_page_image,
     setup_logging,
 )
-from labs_parser.validation import ValueValidator
+from parselabs.validation import ValueValidator
 
 __version__ = "0.1.0"
 
 __all__ = [
+    "__version__",
     # Exceptions
     "ConfigurationError",
     "PipelineError",

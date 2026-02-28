@@ -11,7 +11,7 @@ import re
 
 import pandas as pd
 
-from labs_parser.config import LabSpecsConfig
+from parselabs.config import LabSpecsConfig
 
 logger = logging.getLogger(__name__)
 

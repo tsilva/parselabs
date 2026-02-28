@@ -18,16 +18,16 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from labs_parser.utils import load_dotenv_with_env
+from parselabs.utils import load_dotenv_with_env
 
 load_dotenv_with_env()
 
 import pandas as pd  # noqa: E402
 from openai import OpenAI  # noqa: E402
 
-from labs_parser.config import UNKNOWN_VALUE, LabSpecsConfig, ProfileConfig  # noqa: E402
-from labs_parser.standardization import load_cache, save_cache  # noqa: E402
-from labs_parser.utils import parse_llm_json_response  # noqa: E402
+from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig, ProfileConfig  # noqa: E402
+from parselabs.standardization import load_cache, save_cache  # noqa: E402
+from parselabs.utils import parse_llm_json_response  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

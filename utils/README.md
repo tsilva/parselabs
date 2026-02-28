@@ -1,6 +1,6 @@
 # Utility Scripts
 
-Helper scripts for building and maintaining the labs-parser configuration and validation.
+Helper scripts for building and maintaining the parselabs configuration and validation.
 
 ## Lab Specifications Manager
 
