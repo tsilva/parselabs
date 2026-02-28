@@ -236,7 +236,7 @@ source_file       # Original PDF filename
 page_number       # Page number in PDF
 lab_name          # Standardized name (e.g., "Blood - Glucose")
 value             # Numeric value in primary unit
-unit              # Primary unit (e.g., "mg/dL")
+lab_unit          # Primary unit (e.g., "mg/dL")
 reference_min     # Min reference from report
 reference_max     # Max reference from report
 raw_lab_name      # Original name from PDF

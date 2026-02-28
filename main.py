@@ -71,7 +71,7 @@ COLUMN_SCHEMA = {
     # Extracted values (standardized)
     "lab_name": {"dtype": "str", "excel_width": 35},
     "value": {"dtype": "float64", "excel_width": 12},
-    "unit": {"dtype": "str", "excel_width": 15},
+    "lab_unit": {"dtype": "str", "excel_width": 15},
     # Source identification
     "source_file": {"dtype": "str", "excel_width": 25},
     "page_number": {"dtype": "Int64", "excel_width": 8},
@@ -102,7 +102,7 @@ COLUMN_ORDER = [
     "date",
     "lab_name",
     "value",
-    "unit",
+    "lab_unit",
     "source_file",
     "page_number",
     "reference_min",
@@ -993,7 +993,7 @@ def _rename_columns_for_export(merged_df: pd.DataFrame) -> pd.DataFrame:
     column_renames = {
         "lab_name_standardized": "lab_name",
         "value_primary": "value",
-        "lab_unit_primary": "unit",
+        "lab_unit_primary": "lab_unit",
         "raw_lab_unit": "raw_unit",
         "reference_min_primary": "reference_min",
         "reference_max_primary": "reference_max",
