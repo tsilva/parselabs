@@ -46,7 +46,7 @@ See `utils/README.md` for detailed usage instructions.
 ### LLM Prompts
 Prompt templates live in `prompts/` as `.md` files and are loaded at module level:
 - `extraction_system.md`, `extraction_user.md` - vision extraction prompts
-- `text_extraction_user.md` - text-based extraction user prompt (template: `{text}`, `{std_reminder}`)
+- `text_extraction_user.md` - text-based extraction user prompt (template: `{text}`)
 - `name_standardization.md`, `unit_standardization.md` - standardization prompts (used by `utils/update_standardization_caches.py`)
 - `conversion_factor_system.md`, `conversion_factor_user.md` - unit conversion factor prompts (template: `{lab_name}`, `{from_unit}`, `{to_unit}`)
 - `health_range_system.md`, `health_range_user.md` - healthy range prompts (template: `{lab_name}`, `{primary_unit}`, `{user_stats_json}`)

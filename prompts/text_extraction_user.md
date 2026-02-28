@@ -6,7 +6,7 @@ CRITICAL: For EACH lab test you find, you MUST extract:
 3. raw_lab_unit - The unit EXACTLY as shown (extract what you see, can be null if no unit)
 4. raw_reference_range - The reference range text (if visible)
 5. raw_reference_min and raw_reference_max - Parse the numeric bounds from the reference range
-{std_reminder}
+
 Extract test names, values, units, and reference ranges EXACTLY as they appear.
 Pay special attention to preserving the exact formatting and symbols.
 

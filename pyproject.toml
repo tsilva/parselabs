@@ -38,6 +38,9 @@ Homepage = "https://github.com/tsilva/labs-parser"
 Repository = "https://github.com/tsilva/labs-parser"
 Issues = "https://github.com/tsilva/labs-parser/issues"
 
+[project.scripts]
+labs-parser = "labs_parser.cli:main"
+
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"

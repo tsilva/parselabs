@@ -23,8 +23,6 @@ Also set page_has_lab_data:
 - true if this page contains lab test results
 - false if this is a cover page, instructions, or administrative content with no lab tests
 
-Also set lab_name (standardized name from the list) and unit (standardized unit format) for each result.
-
 BEFORE OUTPUTTING EACH RESULT, VERIFY:
 ✓ raw_lab_name contains ONLY the test name (no values, units, or ranges)
 ✓ raw_value contains ONLY the result (no test names or units)
