@@ -46,6 +46,7 @@ from parselabs.standardization import (  # noqa: E402
     standardize_lab_names,
     standardize_lab_units,
 )
+from parselabs.paths import get_profiles_dir  # noqa: E402
 from parselabs.utils import (  # noqa: E402
     create_page_image_variants,
     ensure_columns,
@@ -55,6 +56,7 @@ from parselabs.validation import ValueValidator  # noqa: E402
 
 # Module-level logger (file handlers added after config is loaded)
 logger = logging.getLogger(__name__)
+PROFILES_DIR = get_profiles_dir()
 
 # Initialize OpenAI client for OpenRouter
 client = OpenAI(
@@ -1068,19 +1070,19 @@ def parse_args():
 Examples:
 
   # Run all profiles:
-  python extract.py
+  parselabs
 
   # Run specific profile:
-  python extract.py --profile tsilva
+  parselabs --profile tsilva
 
   # List available profiles:
-  python extract.py --list-profiles
+  parselabs --list-profiles
 
   # Override settings:
-  python extract.py --profile tsilva --model google/gemini-2.5-pro
+  parselabs --profile tsilva --model google/gemini-2.5-pro
 
   # Use alternate environment (loads .env.local after .env):
-  python extract.py --profile tsilva --env local
+  parselabs --profile tsilva --env local
         """,
     )
 
@@ -1554,7 +1556,7 @@ def main():
 
         # No profiles configured yet
         else:
-            logger.info("No profiles found. Create profiles in the 'profiles/' directory.")
+            logger.info(f"No profiles found. Create profile files in {PROFILES_DIR}.")
         return
 
     # Determine which profiles to run (single specified or all available)
@@ -1567,7 +1569,7 @@ def main():
 
         # Guard: No profiles configured
         if not profiles_to_run:
-            logger.error("No profiles found. Create profiles in the 'profiles/' directory.")
+            logger.error(f"No profiles found. Create profile files in {PROFILES_DIR}.")
             logger.error("Or use --profile to specify one.")
             sys.exit(1)
         logger.info(f"Running all profiles: {', '.join(profiles_to_run)}")

@@ -1333,6 +1333,7 @@ dependencies = [
     { name = "plotly" },
     { name = "pydantic" },
     { name = "python-dotenv" },
+    { name = "pyyaml" },
     { name = "tqdm" },
     { name = "xlsxwriter" },
 ]
@@ -1359,6 +1360,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-cov", marker = "extra == 'dev'" },
     { name = "python-dotenv" },
+    { name = "pyyaml" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "tqdm" },
     { name = "xlsxwriter" },

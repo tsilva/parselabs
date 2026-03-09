@@ -18,6 +18,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from parselabs.paths import get_lab_specs_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,8 +45,8 @@ class LabSpecsValidator:
         "sample": ["Sample - "],
     }
 
-    def __init__(self, config_path: str = "config/lab_specs.json"):
-        self.config_path = Path(config_path)
+    def __init__(self, config_path: str | Path | None = None):
+        self.config_path = Path(config_path).expanduser() if config_path else get_lab_specs_path()
         self.errors: list[str] = []
         self.warnings: list[str] = []
         self.config: dict[str, Any] = {}

@@ -5,9 +5,9 @@ Interactive UI for browsing and reviewing extracted lab results.
 Shows data table with interactive plots and review actions side-by-side.
 
 Usage:
-  python viewer.py --profile tiago
-  python viewer.py --list-profiles
-  python viewer.py --profile tiago --env local
+  parselabs-viewer --profile tiago
+  parselabs-viewer --list-profiles
+  parselabs-viewer --profile tiago --env local
 
 Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate
 """
@@ -32,11 +32,13 @@ import plotly.graph_objects as go  # noqa: E402
 from plotly.subplots import make_subplots  # noqa: E402
 
 from parselabs.config import Demographics, LabSpecsConfig, ProfileConfig  # noqa: E402
+from parselabs.paths import get_profiles_dir, get_static_dir  # noqa: E402
 
 # Initialize module logger
 logger = logging.getLogger(__name__)
 
-_STATIC_DIR = Path(__file__).parent / "static"
+PROFILES_DIR = get_profiles_dir()
+_STATIC_DIR = get_static_dir()
 KEYBOARD_JS = (_STATIC_DIR / "viewer.js").read_text()
 CUSTOM_CSS = (_STATIC_DIR / "viewer.css").read_text()
 
@@ -1865,10 +1867,10 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python viewer.py --profile tiago     # Start with specific profile
-  python viewer.py                     # Uses first available profile
-  python viewer.py --list-profiles     # List available profiles
-  python viewer.py --profile tiago --env local  # Use .env.local
+  parselabs-viewer --profile tiago     # Start with specific profile
+  parselabs-viewer                     # Uses first available profile
+  parselabs-viewer --list-profiles     # List available profiles
+  parselabs-viewer --profile tiago --env local  # Use .env.local
         """,
     )
     parser.add_argument(
@@ -1890,7 +1892,9 @@ Examples:
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Viewer CLI entry point."""
+
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     args = parse_args()
@@ -1905,7 +1909,7 @@ if __name__ == "__main__":
                 logger.info(f"  - {name}")
         else:
             # No profiles configured
-            logger.info("No profiles found. Create profiles in the 'profiles/' directory.")
+            logger.info(f"No profiles found. Create profile files in {PROFILES_DIR}.")
         sys.exit(0)
 
     # Determine which profile to use
@@ -1916,7 +1920,7 @@ if __name__ == "__main__":
         # No profiles configured at all
         if not available:
             logger.error("No profiles found.")
-            logger.error("Create profiles in the 'profiles/' directory.")
+            logger.error(f"Create profile files in {PROFILES_DIR}.")
             sys.exit(1)
         profile_name = available[0]
         logger.info(f"No profile specified, defaulting to: {profile_name}")
@@ -1950,7 +1954,7 @@ if __name__ == "__main__":
     csv_path = output_path / "all.csv"
     if not csv_path.exists():
         logger.error(f"No all.csv found at {csv_path}")
-        logger.error("Run extract.py first to extract lab results.")
+        logger.error("Run parselabs first to extract lab results.")
         sys.exit(1)
 
     # Build allowed paths for serving files from all profiles
@@ -1983,3 +1987,7 @@ if __name__ == "__main__":
         head=KEYBOARD_JS,
         css=CUSTOM_CSS,
     )
+
+
+if __name__ == "__main__":
+    main()

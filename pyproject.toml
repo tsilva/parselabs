@@ -31,6 +31,7 @@ dependencies = [
     "numpy",
     "tqdm",
     "gradio>=5.0.0",
+    "pyyaml",
 ]
 
 [project.optional-dependencies]
@@ -48,6 +49,7 @@ Issues = "https://github.com/tsilva/parselabs/issues"
 
 [project.scripts]
 parselabs = "parselabs.cli:main"
+parselabs-viewer = "parselabs.cli:viewer"
 
 [build-system]
 requires = ["hatchling"]

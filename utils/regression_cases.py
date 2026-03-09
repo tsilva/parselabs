@@ -63,7 +63,7 @@ def load_profile(profile_name: str) -> ProfileConfig:
 
     profile_path = ProfileConfig.find_path(profile_name)
     if not profile_path:
-        raise SystemExit(f"Profile '{profile_name}' not found. Use an existing file under profiles/.")
+        raise SystemExit(f"Profile '{profile_name}' not found. Use an existing file under {ProfileConfig.get_profiles_dir()}.")
 
     profile = ProfileConfig.from_file(profile_path)
     if not profile.input_path:

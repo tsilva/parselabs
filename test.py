@@ -8,7 +8,11 @@ from functools import wraps
 import pandas as pd
 from dotenv import dotenv_values
 
+from parselabs.paths import get_lab_specs_path
+
 logger = logging.getLogger(__name__)
+
+LAB_SPECS_PATH = get_lab_specs_path()
 
 # Load OUTPUT_PATH from .env
 env = dotenv_values(".env.local")
@@ -218,11 +222,11 @@ def test_unique_date_lab_name(df, report, errors):
 
 def test_loinc_critical_codes(report):
     """Ensure critical LOINC codes are correct."""
-    file = "config/lab_specs.json"
+    file = str(LAB_SPECS_PATH)
     errors = []
 
     try:
-        with open(file, "r") as f:
+        with open(LAB_SPECS_PATH, "r", encoding="utf-8") as f:
             config = json.load(f)
 
         # Expected LOINC codes for critical tests
@@ -262,11 +266,11 @@ def test_loinc_critical_codes(report):
 
 def test_no_critical_loinc_duplicates(report):
     """Ensure completely different tests don't share LOINC codes."""
-    file = "config/lab_specs.json"
+    file = str(LAB_SPECS_PATH)
     errors = []
 
     try:
-        with open(file, "r") as f:
+        with open(LAB_SPECS_PATH, "r", encoding="utf-8") as f:
             config = json.load(f)
 
         # Build reverse mapping: LOINC code -> list of lab names
@@ -301,7 +305,7 @@ def test_no_critical_loinc_duplicates(report):
 
 def test_lab_specs_schema(report):
     """Validate lab_specs.json schema and completeness."""
-    file = "config/lab_specs.json"
+    file = str(LAB_SPECS_PATH)
     errors = []
 
     try:

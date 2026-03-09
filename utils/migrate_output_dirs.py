@@ -137,15 +137,11 @@ def main():
             return 1
         profiles = [ProfileConfig.from_file(profile_path)]
     else:
-        # Find all profiles
-        profiles_dir = Path("profiles")
-        if not profiles_dir.exists():
-            logger.error("No profiles directory found")
+        profile_paths = ProfileConfig.iter_paths()
+        if not profile_paths:
+            logger.error(f"No profiles found in {ProfileConfig.get_profiles_dir()}")
             return 1
-        profiles = []
-        for p in sorted(profiles_dir.glob("*")):
-            if p.suffix in (".yaml", ".yml", ".json") and p.stem != "_template":
-                profiles.append(ProfileConfig.from_file(p))
+        profiles = [ProfileConfig.from_file(path) for path in profile_paths]
 
     total_stats = {"renamed": 0, "already_migrated": 0, "pdf_not_found": 0, "target_exists": 0}
 

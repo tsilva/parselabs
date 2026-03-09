@@ -8,6 +8,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from parselabs.paths import get_lab_specs_path, get_profiles_dir
+
 logger = logging.getLogger(__name__)
 
 UNKNOWN_VALUE = "$UNKNOWN$"
@@ -51,9 +53,23 @@ class ProfileConfig:
     # Demographics for personalized healthy ranges
     demographics: Demographics | None = None
 
+    @staticmethod
+    def _resolve_profile_value_path(path_value: str | None, profile_path: Path) -> Path | None:
+        """Resolve a profile-managed filesystem path relative to the profile file."""
+
+        if not path_value:
+            return None
+
+        candidate = Path(path_value).expanduser()
+        if candidate.is_absolute():
+            return candidate
+        return (profile_path.parent / candidate).resolve()
+
     @classmethod
     def from_file(cls, profile_path: Path) -> "ProfileConfig":
         """Load profile from YAML or JSON file."""
+
+        profile_path = profile_path.expanduser().resolve()
 
         # Guard: profile file must exist
         if not profile_path.exists():
@@ -94,16 +110,24 @@ class ProfileConfig:
 
         return cls(
             name=data.get("name", profile_path.stem),
-            input_path=Path(input_path_str) if input_path_str else None,
-            output_path=Path(output_path_str) if output_path_str else None,
+            input_path=cls._resolve_profile_value_path(input_path_str, profile_path),
+            output_path=cls._resolve_profile_value_path(output_path_str, profile_path),
             input_file_regex=input_file_regex,
             workers=workers,
             demographics=demographics,
         )
 
     @classmethod
-    def find_path(cls, name: str, profiles_dir: Path = Path("profiles")) -> Path | None:
+    def get_profiles_dir(cls) -> Path:
+        """Return the configured profiles directory."""
+
+        return get_profiles_dir()
+
+    @classmethod
+    def find_path(cls, name: str, profiles_dir: Path | None = None) -> Path | None:
         """Find profile file path by name, trying yaml/yml/json extensions."""
+
+        profiles_dir = (profiles_dir or cls.get_profiles_dir()).expanduser()
 
         # Try each supported extension in priority order
         for ext in (".yaml", ".yml", ".json"):
@@ -115,8 +139,10 @@ class ProfileConfig:
         return None
 
     @classmethod
-    def list_profiles(cls, profiles_dir: Path = Path("profiles")) -> list[str]:
+    def list_profiles(cls, profiles_dir: Path | None = None) -> list[str]:
         """List available profile names."""
+
+        profiles_dir = (profiles_dir or cls.get_profiles_dir()).expanduser()
 
         # Guard: return empty if profiles directory doesn't exist
         if not profiles_dir.exists():
@@ -130,6 +156,13 @@ class ProfileConfig:
                     profiles.append(f.stem)
 
         return sorted(set(profiles))
+
+    @classmethod
+    def iter_paths(cls, profiles_dir: Path | None = None) -> list[Path]:
+        """Return resolved profile file paths in name order."""
+
+        profiles_dir = profiles_dir or cls.get_profiles_dir()
+        return [path for name in cls.list_profiles(profiles_dir) if (path := cls.find_path(name, profiles_dir))]
 
 
 # Keep Demographics class for future use in review tool
@@ -170,23 +203,23 @@ class LabSpecsConfig:
     Loads lab_specs.json once and provides multiple views.
     """
 
-    def __init__(self, config_path: Path = Path("config/lab_specs.json")):
+    def __init__(self, config_path: Path | None = None):
         """Load lab specs configuration."""
 
         # Initialize empty state
-        self.config_path = config_path
+        self.config_path = (config_path or get_lab_specs_path()).expanduser().resolve()
         self._specs = {}
         self._standardized_names = []
         self._standardized_units = []
         self._lab_type_map = {}
 
         # Guard: config file must exist
-        if not config_path.exists():
-            logger.warning(f"lab_specs.json not found at {config_path}")
+        if not self.config_path.exists():
+            logger.warning(f"lab_specs.json not found at {self.config_path}")
             return
 
         # Load raw specs from JSON
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(self.config_path, "r", encoding="utf-8") as f:
             self._specs = json.load(f)
 
         # Pre-compute all views (filter out meta keys starting with _)

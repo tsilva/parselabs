@@ -26,12 +26,13 @@ import pandas as pd  # noqa: E402
 from openai import OpenAI  # noqa: E402
 
 from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig, ProfileConfig  # noqa: E402
+from parselabs.paths import get_prompts_dir  # noqa: E402
 from parselabs.standardization import load_cache, save_cache  # noqa: E402
 from parselabs.utils import parse_llm_json_response  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+_PROMPTS_DIR = get_prompts_dir()
 
 
 def _load_prompt(name: str) -> str:

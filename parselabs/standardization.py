@@ -2,14 +2,14 @@
 
 import json
 import logging
-from pathlib import Path
 
 from parselabs.config import UNKNOWN_VALUE
+from parselabs.paths import get_cache_dir
 
 logger = logging.getLogger(__name__)
 
 # Cache directory for standardization results (user-editable JSON files)
-CACHE_DIR = Path("config/cache")
+CACHE_DIR = get_cache_dir()
 
 
 def load_cache(name: str) -> dict:

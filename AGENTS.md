@@ -13,22 +13,22 @@ Labs Parser is a Python tool that uses AI (via OpenRouter API) to extract labora
 ### Running the Parser
 ```bash
 # Run all profiles:
-python main.py
+parselabs
 
 # Run specific profile:
-python main.py --profile tsilva
+parselabs --profile tsilva
 
 # List available profiles:
-python main.py --list-profiles
+parselabs --list-profiles
 
 # Override settings:
-python main.py --profile tsilva --model google/gemini-2.5-pro
+parselabs --profile tsilva --model google/gemini-2.5-pro
 
 # Data integrity validation:
 python test.py
 
 # View and review extracted results:
-python viewer.py --profile tsilva
+parselabs-viewer --profile tsilva
 ```
 
 ### Development
@@ -135,9 +135,9 @@ Interactive UI for browsing and reviewing extracted lab results:
 
 ### Configuration System
 
-**Profiles** (`profiles/*.yaml` or `profiles/*.json`):
+**Profiles** (`~/.config/parselabs/*.yaml` or `~/.config/parselabs/*.json`):
 ```yaml
-# profiles/john.yaml
+# ~/.config/parselabs/john.yaml
 name: "John Doe"
 input_path: "/path/to/labs"
 output_path: "/path/to/output"
@@ -236,7 +236,7 @@ Required:
 Optional:
 - `MAX_WORKERS` - Parallel workers (default: CPU count)
 
-Note: Input and output paths must be specified via profiles. See `profiles/_template.yaml`.
+Note: Input and output paths must be specified via profiles in `~/.config/parselabs/`.
 
 ## Validation (test.py)
 
@@ -302,7 +302,7 @@ Lab names MUST start with lab type prefix:
 
 Use the unified viewer for interactive review:
 ```bash
-python viewer.py --profile tsilva
+parselabs-viewer --profile tsilva
 ```
 
 Or filter programmatically:
