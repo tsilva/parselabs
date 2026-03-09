@@ -24,7 +24,7 @@ parselabs uses AI vision models to extract laboratory test results from PDF docu
 - **AI-Powered Extraction** — Vision models extract lab names, values, units, and reference ranges directly from PDF pages
 - **Smart Validation** — Detects extraction errors across 5 categories: biological plausibility, inter-lab relationships, temporal consistency, format artifacts, and reference range deviations
 - **Cost-Optimized** — Text-first extraction uses cheaper LLM calls when PDF text is parseable, falling back to vision only when needed
-- **Profile-Based Workflow** — Configure multiple profiles for different users or data sources with simple YAML files in `~/.config/parselabs/`
+- **Profile-Based Workflow** — Configure multiple profiles for different users or data sources with simple YAML files in `~/.config/parselabs/profiles/`
 - **Gradio Review UI** — Side-by-side comparison of source documents and extracted data with keyboard shortcuts
 - **335+ Standardized Labs** — Comprehensive lab specifications with unit conversions and reference ranges
 
@@ -35,9 +35,9 @@ parselabs uses AI vision models to extract laboratory test results from PDF docu
 uv tool install . --editable
 
 # Create your profile directory
-mkdir -p ~/.config/parselabs
+mkdir -p ~/.config/parselabs/profiles
 
-# Create ~/.config/parselabs/myname.yaml with your input/output paths
+# Create ~/.config/parselabs/profiles/myname.yaml with your input/output paths
 # Example:
 # name: "My Labs"
 # input_path: "/path/to/lab/pdfs"
@@ -97,10 +97,10 @@ MAX_WORKERS=4      # Parallel workers
 
 ### Profiles
 
-Profiles define input/output paths and optional settings. Store them under `~/.config/parselabs/`, one file per user or data source:
+Profiles define input/output paths and optional settings. Store them under `~/.config/parselabs/profiles/`, one file per user or data source:
 
 ```yaml
-# ~/.config/parselabs/john.yaml
+# ~/.config/parselabs/profiles/john.yaml
 name: "John Doe"
 input_path: "/path/to/lab/pdfs"
 output_path: "/path/to/output"

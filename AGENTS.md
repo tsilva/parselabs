@@ -135,9 +135,9 @@ Interactive UI for browsing and reviewing extracted lab results:
 
 ### Configuration System
 
-**Profiles** (`~/.config/parselabs/*.yaml` or `~/.config/parselabs/*.json`):
+**Profiles** (`~/.config/parselabs/profiles/*.yaml` or `~/.config/parselabs/profiles/*.json`):
 ```yaml
-# ~/.config/parselabs/john.yaml
+# ~/.config/parselabs/profiles/john.yaml
 name: "John Doe"
 input_path: "/path/to/labs"
 output_path: "/path/to/output"
@@ -236,7 +236,7 @@ Required:
 Optional:
 - `MAX_WORKERS` - Parallel workers (default: CPU count)
 
-Note: Input and output paths must be specified via profiles in `~/.config/parselabs/`.
+Note: Input and output paths must be specified via profiles in `~/.config/parselabs/profiles/`.
 
 ## Validation (test.py)
 
