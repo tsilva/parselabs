@@ -10,7 +10,7 @@ from typing import Any
 
 import pandas as pd
 from dotenv import load_dotenv
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 logger = logging.getLogger(__name__)
 
@@ -49,21 +49,49 @@ def load_dotenv_with_env() -> str | None:
     return env_name
 
 
+_PRIMARY_IMAGE_MAX_WIDTH = 1800
+_FALLBACK_IMAGE_MAX_WIDTH = 1800
+
+
+def _resize_image(image: Image.Image, max_width: int) -> Image.Image:
+    """Resize an image while preserving aspect ratio."""
+
+    if image.width <= max_width:
+        return image
+
+    ratio = max_width / image.width
+    new_height = int(image.height * ratio)
+    return image.resize((max_width, new_height), Image.Resampling.LANCZOS)
+
+
+def create_page_image_variants(image: Image.Image) -> dict[str, Image.Image]:
+    """Create image variants for extraction.
+
+    The primary variant preserves color and more detail for table structure,
+    while the fallback variant exaggerates contrast in grayscale for difficult OCR.
+    """
+
+    base_image = ImageOps.exif_transpose(image)
+
+    primary = _resize_image(base_image.convert("RGB"), _PRIMARY_IMAGE_MAX_WIDTH)
+    primary = ImageOps.autocontrast(primary, cutoff=1)
+    primary = ImageEnhance.Sharpness(primary).enhance(1.15)
+
+    fallback = _resize_image(base_image.convert("L"), _FALLBACK_IMAGE_MAX_WIDTH)
+    fallback = ImageOps.autocontrast(fallback, cutoff=1)
+    fallback = ImageEnhance.Contrast(fallback).enhance(2.2)
+    fallback = fallback.filter(ImageFilter.SHARPEN)
+
+    return {
+        "primary": primary,
+        "fallback": fallback,
+    }
+
+
 def preprocess_page_image(image: Image.Image) -> Image.Image:
-    """Convert image to grayscale, resize, and enhance contrast."""
+    """Backward-compatible grayscale preprocessing wrapper."""
 
-    # Convert to grayscale
-    gray_image = image.convert("L")
-
-    # Downscale if wider than max width
-    MAX_WIDTH = 1200
-    if gray_image.width > MAX_WIDTH:
-        ratio = MAX_WIDTH / gray_image.width
-        new_height = int(gray_image.height * ratio)
-        gray_image = gray_image.resize((MAX_WIDTH, new_height), Image.Resampling.LANCZOS)
-
-    # Enhance contrast for better OCR readability
-    return ImageEnhance.Contrast(gray_image).enhance(2.0)
+    return create_page_image_variants(image)["fallback"]
 
 
 def slugify(value: Any) -> str:
