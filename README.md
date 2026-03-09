@@ -161,19 +161,32 @@ Checks for duplicate rows, missing dates, outliers, and naming conventions.
 
 Use the private approved-document suite to rerun real PDFs and compare the final CSV output after normalization, deduplication, and validation.
 
-Approve or refresh cases from an existing profile:
+Workflow:
+
+1. Approve or refresh one or more real PDFs from an existing profile.
+
+By pattern:
 
 ```bash
 uv run python utils/regression_cases.py approve --profile myname --pattern "2024-*.pdf"
 ```
 
-Run the regression suite explicitly:
+By explicit filenames:
+
+```bash
+uv run python utils/regression_cases.py approve --profile myname --files "2024-01-15 analises.pdf" "2024-03-20 analises.pdf"
+```
+
+2. Run the approved-document regression suite:
 
 ```bash
 RUN_APPROVED_DOCS=1 uv run pytest -m approved_docs
 ```
 
 Notes:
+- The approval command copies the selected PDFs into `tests/fixtures/approved/` and rebuilds `expected.csv` for the full approved corpus.
+- The pytest command reruns the full approved corpus together, then compares each document's final CSV output against its approved `expected.csv`.
+- `OPENROUTER_API_KEY` and `EXTRACT_MODEL_ID` must be set before running either command.
 - Approved fixtures live under `tests/fixtures/approved/` and remain uncommitted/private.
 - Each case directory contains `document.pdf`, `expected.csv`, and `case.json`.
 - The `approve` command rebuilds baselines for the full approved corpus, not just the newly selected files.
