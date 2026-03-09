@@ -13,6 +13,7 @@ import re  # noqa: E402
 import shutil  # noqa: E402
 import subprocess  # noqa: E402
 import sys  # noqa: E402
+from dataclasses import dataclass  # noqa: E402
 from multiprocessing import Pool  # noqa: E402
 from pathlib import Path  # noqa: E402
 
@@ -29,6 +30,7 @@ from parselabs.config import (  # noqa: E402
     ProfileConfig,
 )
 from parselabs.exceptions import ConfigurationError, PipelineError  # noqa: E402
+from parselabs.export_schema import COLUMN_SCHEMA, get_column_lists  # noqa: E402
 from parselabs.extraction import (  # noqa: E402
     LabResult,
     extract_labs_from_page_image,
@@ -45,8 +47,8 @@ from parselabs.standardization import (  # noqa: E402
     standardize_lab_units,
 )
 from parselabs.utils import (  # noqa: E402
+    create_page_image_variants,
     ensure_columns,
-    preprocess_page_image,
     setup_logging,
 )
 from parselabs.validation import ValueValidator  # noqa: E402
@@ -59,82 +61,6 @@ client = OpenAI(
     base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
     api_key=os.getenv("OPENROUTER_API_KEY"),
 )
-
-
-# ========================================
-# Column Schema (simplified - 13 columns)
-# ========================================
-
-COLUMN_SCHEMA = {
-    # Core identification
-    "date": {"dtype": "datetime64[ns]", "excel_width": 13},
-    # Extracted values (standardized)
-    "lab_name": {"dtype": "str", "excel_width": 35},
-    "value": {"dtype": "float64", "excel_width": 12},
-    "lab_unit": {"dtype": "str", "excel_width": 15},
-    # Source identification
-    "source_file": {"dtype": "str", "excel_width": 25},
-    "page_number": {"dtype": "Int64", "excel_width": 8},
-    # Reference ranges from PDF
-    "reference_min": {"dtype": "float64", "excel_width": 12},
-    "reference_max": {"dtype": "float64", "excel_width": 12},
-    # Raw values (for audit)
-    "raw_lab_name": {"dtype": "str", "excel_width": 35},
-    "raw_value": {"dtype": "str", "excel_width": 12},
-    "raw_unit": {"dtype": "str", "excel_width": 15},
-    # Review flags (from validation)
-    "review_needed": {"dtype": "boolean", "excel_width": 12},
-    "review_reason": {"dtype": "str", "excel_width": 30},
-    # Limit indicators (for values like <0.05 or >738)
-    "is_below_limit": {"dtype": "boolean", "excel_width": 12},
-    "is_above_limit": {"dtype": "boolean", "excel_width": 12},
-    # Internal (hidden in Excel)
-    "lab_type": {"dtype": "str", "excel_width": 10, "excel_hidden": True},
-    "result_index": {
-        "dtype": "Int64",
-        "excel_width": 10,
-        "excel_hidden": True,
-    },
-}
-
-# Canonical column order for CSV export
-COLUMN_ORDER = [
-    "date",
-    "lab_name",
-    "value",
-    "lab_unit",
-    "source_file",
-    "page_number",
-    "reference_min",
-    "reference_max",
-    "raw_lab_name",
-    "raw_value",
-    "raw_unit",
-    "review_needed",
-    "review_reason",
-    "is_below_limit",
-    "is_above_limit",
-    "lab_type",
-    "result_index",
-]
-
-
-def get_column_lists(schema: dict):
-    """Extract ordered lists from schema."""
-
-    # Filter to only columns present in the schema
-    export_cols = [k for k in COLUMN_ORDER if k in schema]
-
-    # Identify columns that should be hidden in Excel output
-    hidden_cols = [col for col, props in schema.items() if props.get("excel_hidden")]
-
-    # Build column width mapping for Excel formatting
-    widths = {col: props["excel_width"] for col, props in schema.items() if "excel_width" in props}
-
-    # Build data type mapping for column conversion
-    dtypes = {col: props["dtype"] for col, props in schema.items() if "dtype" in props}
-
-    return export_cols, hidden_cols, widths, dtypes
 
 
 # ========================================
@@ -168,12 +94,40 @@ def extract_text_from_pdf(pdf_path: Path) -> tuple[str, bool]:
 
 
 _MIN_TEXT_CHARS = 200  # Minimum non-whitespace characters to attempt text extraction
+_MIN_PAGE_TEXT_CHARS = 80  # Lower threshold for page-level text routing
 
 
 def _text_has_enough_content(text: str, min_chars: int = _MIN_TEXT_CHARS) -> bool:
     """Check if extracted text has enough content to attempt LLM extraction."""
     clean_text = text.replace(" ", "").replace("\n", "").replace("\t", "")
     return len(clean_text) >= min_chars
+
+
+def _split_pdf_text_into_pages(text: str) -> list[str]:
+    """Split pdftotext output into per-page chunks."""
+
+    return [page.strip() for page in text.split("\f")]
+
+
+def _extract_page_texts_from_pdf(pdf_path: Path, expected_pages: int) -> list[str]:
+    """Extract PDF text once and return one text chunk per page."""
+
+    pdf_text, pdftotext_success = extract_text_from_pdf(pdf_path)
+    if not pdftotext_success:
+        return [""] * expected_pages
+
+    page_texts = _split_pdf_text_into_pages(pdf_text)
+
+    # pdftotext often emits a trailing empty page after the final form-feed.
+    while page_texts and page_texts[-1] == "":
+        page_texts.pop()
+
+    if len(page_texts) < expected_pages:
+        page_texts.extend([""] * (expected_pages - len(page_texts)))
+    elif len(page_texts) > expected_pages:
+        page_texts = page_texts[:expected_pages]
+
+    return page_texts
 
 
 # ========================================
@@ -240,129 +194,6 @@ def _copy_pdf_to_output(pdf_path: Path, doc_out_dir: Path) -> Path:
     return copied_pdf  # Return path to the copied PDF (whether newly copied or existing)
 
 
-def _try_load_cached_text_extraction(doc_out_dir: Path, pdf_stem: str) -> dict | None:
-    """Try to load cached text extraction results."""
-
-    # Build path to cached JSON results
-    text_json_path = doc_out_dir / f"{pdf_stem}.json"
-
-    # Return None if no cache exists (caller will perform fresh extraction)
-    if not text_json_path.exists():
-        return None
-
-    # Parse and return cached data - let exceptions propagate
-    return json.loads(text_json_path.read_text(encoding="utf-8"))
-
-
-def _extract_labs_from_pdf_text(
-    pdf_text: str,
-    config: ExtractionConfig,
-) -> dict:
-    """Extract lab results from PDF text using LLM."""
-
-    # Delegate to extraction module with configured model and client
-    return extract_labs_from_text(
-        pdf_text,
-        config.extract_model_id,
-        client,
-    )
-
-
-def _cache_text_extraction(
-    text_extraction_data: dict,
-    pdf_text: str,
-    doc_out_dir: Path,
-    pdf_stem: str,
-) -> None:
-    """Cache text extraction results and raw PDF text."""
-
-    # Build paths for both structured results and raw text
-    text_json_path = doc_out_dir / f"{pdf_stem}.json"  # Path for structured extraction results
-    text_txt_path = doc_out_dir / f"{pdf_stem}.txt"  # Path for raw text content
-
-    # Serialize and save structured extraction data
-    text_json_path.write_text(
-        json.dumps(text_extraction_data, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-
-    # Save raw PDF text for debugging and audit purposes
-    text_txt_path.write_text(pdf_text, encoding="utf-8")
-
-
-def _try_text_extraction(
-    copied_pdf: Path,
-    config: ExtractionConfig,
-    doc_out_dir: Path,
-    pdf_stem: str,
-) -> tuple[bool, dict | None]:
-    """Attempt text-first extraction with fallback to vision.
-
-    Strategy: Text extraction is cheaper than vision, so we try it first.
-    Falls back to vision if PDF has no text, insufficient content, or extraction fails.
-
-    Returns (used_text_extraction, extraction_data).
-    """
-
-    # Check for cached text extraction results from previous runs
-    cached_data = _try_load_cached_text_extraction(doc_out_dir, pdf_stem)
-    if cached_data:
-        logger.info(f"[{pdf_stem}] Strategy: TEXT (cached)")
-        return True, cached_data
-
-    # Extract raw text from PDF using pdftotext (fast, no AI cost)
-    pdf_text, pdftotext_success = extract_text_from_pdf(copied_pdf)
-
-    # Guard: Fall back to vision if PDF has no extractable text layer
-    if not pdftotext_success:
-        logger.info(f"[{pdf_stem}] Strategy: VISION (no embedded text in PDF)")
-        return False, None
-
-    # Guard: Fall back to vision if text content is too sparse for reliable extraction
-    if not _text_has_enough_content(pdf_text):
-        logger.info(f"[{pdf_stem}] Strategy: VISION (insufficient text content)")
-        return False, None
-
-    logger.info(f"[{pdf_stem}] Strategy: TEXT (sufficient content, {len(pdf_text)} chars)")
-
-    # Attempt LLM-based extraction from extracted text
-    try:
-        text_extraction_data = _extract_labs_from_pdf_text(pdf_text, config)
-    except Exception as e:
-        # Text extraction failed - log and fall back to vision
-        logger.warning(f"[{pdf_stem}] Text extraction failed: {e}")
-        return False, None
-
-    # Guard: Fall back to vision if extraction succeeded but returned no lab results
-    if not text_extraction_data or not text_extraction_data.get("lab_results"):
-        logger.warning(f"[{pdf_stem}] Strategy: TEXT -> VISION (no results from text)")
-        return False, None
-
-    # Cache successful text extraction for future runs
-    _cache_text_extraction(text_extraction_data, pdf_text, doc_out_dir, pdf_stem)
-    logger.info(f"[{pdf_stem}] Text extraction complete: {len(text_extraction_data['lab_results'])} results")
-    return True, text_extraction_data
-
-
-def _process_text_results(text_extraction_data: dict, pdf_stem: str) -> tuple[list, str | None]:
-    """Process text extraction results into standardized format."""
-
-    # Initialize collection for all extracted results
-    all_results = []
-
-    # Extract document date from extraction data or filename
-    doc_date = _extract_document_date(text_extraction_data, pdf_stem)
-
-    # Iterate through each lab result and add metadata
-    for result_idx, result in enumerate(text_extraction_data.get("lab_results", [])):
-        result["result_index"] = result_idx  # Track position within document
-        result["page_number"] = 1  # Text extraction treats entire PDF as single page
-        result["source_file"] = f"{pdf_stem}.text"  # Mark as text-based extraction
-        all_results.append(result)
-
-    return all_results, doc_date
-
-
 def _convert_pdf_to_images(copied_pdf: Path, pdf_stem: str) -> list:
     """Convert PDF to PIL images."""
 
@@ -370,29 +201,133 @@ def _convert_pdf_to_images(copied_pdf: Path, pdf_stem: str) -> list:
     return pdf2image.convert_from_path(str(copied_pdf))
 
 
-def _preprocess_and_save_image(page_image, page_name: str, jpg_path: Path) -> None:
-    """Preprocess page image and save if not cached."""
+def _get_page_image_paths(doc_out_dir: Path, page_name: str) -> dict[str, Path]:
+    """Build filesystem paths for the extraction image variants."""
 
-    # Skip processing if image already exists (cache hit)
-    if jpg_path.exists():
-        return
+    return {
+        "primary": doc_out_dir / f"{page_name}.jpg",
+        "fallback": doc_out_dir / f"{page_name}.fallback.jpg",
+    }
 
-    # Apply preprocessing (grayscale, contrast enhancement, etc.)
-    processed = preprocess_page_image(page_image)
 
-    # Save preprocessed image with high quality JPEG
-    processed.save(jpg_path, "JPEG", quality=95)
-    logger.info(f"[{page_name}] Image preprocessed and saved")
+def _prepare_page_images(page_image, page_name: str, doc_out_dir: Path) -> dict[str, Path]:
+    """Create and cache the image variants used for page extraction."""
+
+    image_paths = _get_page_image_paths(doc_out_dir, page_name)
+    if all(path.exists() for path in image_paths.values()):
+        return image_paths
+
+    variants = create_page_image_variants(page_image)
+    for variant_name, processed_image in variants.items():
+        image_path = image_paths[variant_name]
+        if image_path.exists():
+            continue
+        processed_image.save(image_path, "JPEG", quality=95)
+        logger.info(f"[{page_name}] Saved {variant_name} extraction image")
+
+    return image_paths
+
+
+def _page_extraction_quality(page_data: dict) -> int:
+    """Heuristic score for choosing between page extraction attempts."""
+
+    results = [result for result in page_data.get("lab_results", []) if isinstance(result, dict)]
+    if not results:
+        return 25 if page_data.get("page_has_lab_data") is False else -25
+
+    score = len(results) * 12
+    null_value_count = sum(1 for result in results if not result.get("raw_value"))
+    empty_name_count = sum(1 for result in results if not str(result.get("raw_lab_name", "")).strip())
+    unique_name_count = len({str(result.get("raw_lab_name", "")).strip() for result in results if str(result.get("raw_lab_name", "")).strip()})
+
+    score -= null_value_count * 4
+    score -= empty_name_count * 8
+    score += unique_name_count
+
+    if null_value_count and (null_value_count / len(results)) > 0.5:
+        score -= 20
+
+    return score
+
+
+def _page_extraction_needs_reread(page_data: dict) -> bool:
+    """Detect weak page extractions that should trigger another pass."""
+
+    results = [result for result in page_data.get("lab_results", []) if isinstance(result, dict)]
+    if page_data.get("page_has_lab_data") is False:
+        return False
+    if not results:
+        return True
+
+    null_value_count = sum(1 for result in results if not result.get("raw_value"))
+    if (null_value_count / len(results)) > 0.5:
+        return True
+
+    empty_name_count = sum(1 for result in results if not str(result.get("raw_lab_name", "")).strip())
+    return empty_name_count > 0
+
+
+def _finalize_page_candidate(page_data: dict, method: str) -> dict:
+    """Annotate a page candidate with internal selection metadata."""
+
+    page_data["_extraction_method"] = method
+    page_data["_extraction_quality"] = _page_extraction_quality(page_data)
+    return page_data
+
+
+def _extract_page_data_from_text(page_text: str, config: ExtractionConfig, page_name: str) -> dict:
+    """Extract a single page from pdftotext output."""
+
+    logger.info(f"[{page_name}] Attempting TEXT extraction")
+    page_data = extract_labs_from_text(page_text, config.extract_model_id, client)
+    return _finalize_page_candidate(page_data, "text")
+
+
+def _extract_page_data_from_image(
+    image_path: Path,
+    config: ExtractionConfig,
+    page_name: str,
+    variant_name: str,
+) -> dict:
+    """Extract a single page from an image variant."""
+
+    logger.info(f"[{page_name}] Attempting VISION extraction ({variant_name})")
+    page_data = extract_labs_from_page_image(
+        image_path,
+        config.extract_model_id,
+        client,
+    )
+    return _finalize_page_candidate(page_data, f"vision:{variant_name}")
+
+
+def _select_best_page_candidate(page_name: str, candidates: list[dict]) -> dict:
+    """Choose the strongest extraction candidate for a page."""
+
+    best_candidate = max(
+        candidates,
+        key=lambda candidate: (
+            candidate.get("_extraction_quality", float("-inf")),
+            len(candidate.get("lab_results", [])),
+            candidate.get("_extraction_method") == "text",
+        ),
+    )
+    logger.info(
+        f"[{page_name}] Selected {best_candidate.get('_extraction_method')} "
+        f"(score={best_candidate.get('_extraction_quality')}, "
+        f"results={len(best_candidate.get('lab_results', []))})"
+    )
+    return best_candidate
 
 
 def _extract_or_load_page_data(
-    jpg_path: Path,
+    image_paths: dict[str, Path],
     json_path: Path,
     page_name: str,
     config: ExtractionConfig,
     pdf_stem: str,
     page_idx: int,
     failed_pages: list,
+    page_text: str,
 ) -> dict:
     """Extract data from image or load from cache."""
 
@@ -404,14 +339,41 @@ def _extract_or_load_page_data(
         _check_and_record_failure(page_data, pdf_stem, page_idx, failed_pages)
         return page_data
 
-    # Perform fresh extraction using vision model
-    logger.info(f"[{page_name}] Extracting data from image...")
-    page_data = extract_labs_from_page_image(
-        jpg_path,
-        config.extract_model_id,
-        client,
-    )
-    logger.info(f"[{page_name}] Extraction completed")
+    candidates = []
+
+    if _text_has_enough_content(page_text, min_chars=_MIN_PAGE_TEXT_CHARS):
+        text_candidate = _extract_page_data_from_text(page_text, config, page_name)
+        candidates.append(text_candidate)
+        if not _page_extraction_needs_reread(text_candidate):
+            page_data = _select_best_page_candidate(page_name, candidates)
+        else:
+            logger.warning(
+                f"[{page_name}] TEXT extraction looked weak "
+                f"(score={text_candidate.get('_extraction_quality')}); trying VISION"
+            )
+            page_data = None
+    else:
+        page_data = None
+
+    if page_data is None:
+        primary_candidate = _extract_page_data_from_image(
+            image_paths["primary"],
+            config,
+            page_name,
+            "primary",
+        )
+        candidates.append(primary_candidate)
+
+        if _page_extraction_needs_reread(primary_candidate):
+            fallback_candidate = _extract_page_data_from_image(
+                image_paths["fallback"],
+                config,
+                page_name,
+                "fallback",
+            )
+            candidates.append(fallback_candidate)
+
+        page_data = _select_best_page_candidate(page_name, candidates)
 
     # Set source_file programmatically (LLM can't know the filename)
     page_data["source_file"] = page_name
@@ -480,6 +442,7 @@ def _process_single_page(
     doc_out_dir: Path,
     config: ExtractionConfig,
     failed_pages: list,
+    page_text: str,
 ) -> tuple[list, dict | None]:
     """Process a single PDF page: preprocess, extract, and return results with metadata.
 
@@ -488,23 +451,23 @@ def _process_single_page(
 
     # Generate unique page identifier with zero-padding
     page_name = f"{pdf_stem}.{page_idx + 1:03d}"
-    jpg_path = doc_out_dir / f"{page_name}.jpg"
     json_path = doc_out_dir / f"{page_name}.json"
 
     logger.info(f"[{page_name}] Processing page {page_idx + 1}/{total_pages}...")
 
-    # Preprocess and cache page image
-    _preprocess_and_save_image(page_image, page_name, jpg_path)
+    # Preprocess and cache page image variants
+    image_paths = _prepare_page_images(page_image, page_name, doc_out_dir)
 
-    # Extract data using vision model or load from cache
+    # Extract data using page-level text/vision routing or load from cache
     page_data = _extract_or_load_page_data(
-        jpg_path,
+        image_paths,
         json_path,
         page_name,
         config,
         pdf_stem,
         page_idx,
         failed_pages,
+        page_text,
     )
 
     # Add page metadata to results
@@ -513,14 +476,14 @@ def _process_single_page(
     return page_results, page_data
 
 
-def _extract_via_vision(
+def _extract_via_pages(
     copied_pdf: Path,
     config: ExtractionConfig,
     doc_out_dir: Path,
     pdf_stem: str,
     failed_pages: list,
 ) -> tuple[list, str | None]:
-    """Extract lab results using vision-based processing."""
+    """Extract lab results using per-page hybrid text/vision routing."""
 
     # Convert PDF pages to PIL images
     pil_pages = _convert_pdf_to_images(copied_pdf, pdf_stem)
@@ -529,7 +492,10 @@ def _extract_via_vision(
     if pil_pages is None:
         return [], None
 
-    logger.info(f"[{pdf_stem}] Processing {len(pil_pages)} page(s) with vision...")
+    logger.info(f"[{pdf_stem}] Processing {len(pil_pages)} page(s) with hybrid extraction...")
+
+    # Extract page text once so each page can be routed independently.
+    page_texts = _extract_page_texts_from_pdf(copied_pdf, len(pil_pages))
 
     # Initialize collection for all extracted results
     all_results = []
@@ -546,6 +512,7 @@ def _extract_via_vision(
             doc_out_dir,
             config,
             failed_pages,
+            page_texts[page_idx],
         )
 
         # Extract document date from first page only
@@ -715,24 +682,12 @@ def _extract_data_from_pdf(
     pdf_stem: str,
     failed_pages: list,
 ) -> tuple[list, str | None]:
-    """Extract lab data from PDF using text-first strategy with vision fallback.
+    """Extract lab data from PDF using per-page hybrid extraction.
 
     Returns tuple of (all_results, doc_date) or raises exception on failure.
     """
 
-    # Attempt text-first extraction (cheaper), fall back to vision if needed
-    used_text, text_data = _try_text_extraction(copied_pdf, config, doc_out_dir, pdf_stem)
-
-    if used_text:
-        # Guard: Ensure text_data is valid before processing
-        if not text_data:
-            raise ValueError("Text extraction indicated success but returned no data")
-
-        # Process text extraction results
-        return _process_text_results(text_data, pdf_stem)
-
-    # Fall back to vision-based extraction
-    return _extract_via_vision(
+    return _extract_via_pages(
         copied_pdf,
         config,
         doc_out_dir,
@@ -905,6 +860,16 @@ def _get_csv_path(pdf_path: Path, output_path: Path) -> Path:
 REQUIRED_CSV_COLS = ["result_index", "page_number", "source_file"]
 
 
+@dataclass
+class PipelineRunResult:
+    """Final dataframe plus pipeline metadata for one corpus run."""
+
+    final_df: pd.DataFrame
+    csv_paths: list[Path]
+    failed_pages: list[dict]
+    pdfs_failed: int
+
+
 def _deduplicate_pdf_files(pdf_files: list[Path]) -> tuple[list[Path], list[tuple[Path, Path]]]:
     """Deduplicate PDF files by content hash.
 
@@ -1046,15 +1011,23 @@ def _process_pdfs_in_parallel(
     # Build task tuples for each PDF to process
     tasks = [(pdf, config.output_path, config, lab_specs) for pdf in pdfs_to_process]
 
-    # Execute parallel processing with progress bar
-    with Pool(n_workers, initializer=_init_worker_logging, initargs=(log_dir,)) as pool:
+    if n_workers == 1:
+        _init_worker_logging(log_dir)
         results = []
-
-        # Track progress with tqdm as tasks complete
         with tqdm(total=len(tasks), desc="Processing PDFs", unit="pdf") as pbar:
-            for result in pool.imap(_process_pdf_wrapper, tasks):
-                results.append(result)
+            for task in tasks:
+                results.append(_process_pdf_wrapper(task))
                 pbar.update(1)
+    else:
+        # Execute parallel processing with progress bar
+        with Pool(n_workers, initializer=_init_worker_logging, initargs=(log_dir,)) as pool:
+            results = []
+
+            # Track progress with tqdm as tasks complete
+            with tqdm(total=len(tasks), desc="Processing PDFs", unit="pdf") as pbar:
+                for result in pool.imap(_process_pdf_wrapper, tasks):
+                    results.append(result)
+                    pbar.update(1)
 
     # Unpack results and collect statistics
     pdfs_failed = sum(1 for csv_path, _ in results if csv_path is None)
@@ -1399,38 +1372,116 @@ def _process_and_transform_data(
 
 
 def _export_final_results(
-    merged_df: pd.DataFrame,
-    export_cols: list,
+    final_df: pd.DataFrame,
     hidden_cols: list,
     widths: dict,
-    dtypes: dict,
     output_path: Path,
     all_failed_pages: list[dict],
     csv_paths: list[Path],
 ) -> None:
     """Export final results to CSV and Excel formats."""
 
-    # Select only the columns needed for final export
-    final_cols = [col for col in export_cols if col in merged_df.columns]
-    merged_df = merged_df[final_cols].copy()
-
-    # Convert columns to their proper data types
-    logger.info("Applying data type conversions...")
-    merged_df = apply_dtype_conversions(merged_df, dtypes)
-
     # Export merged results to CSV format
     logger.info("Saving merged CSV...")
     csv_path = output_path / "all.csv"
-    merged_df.to_csv(csv_path, index=False, encoding="utf-8")
+    final_df.to_csv(csv_path, index=False, encoding="utf-8")
     logger.info(f"Saved merged CSV: {csv_path}")
 
     # Export merged results to Excel format with formatting
     logger.info("Exporting to Excel...")
     excel_path = output_path / "all.xlsx"
-    export_excel(merged_df, excel_path, hidden_cols, widths)
+    export_excel(final_df, excel_path, hidden_cols, widths)
 
     # Report extraction results and failures
     _report_extraction_failures(all_failed_pages, csv_path, csv_paths)
+
+
+def _prepare_final_export_dataframe(
+    merged_df: pd.DataFrame,
+    export_cols: list[str],
+    dtypes: dict[str, str],
+) -> pd.DataFrame:
+    """Finalize transformed rows into the export schema used by all.csv."""
+
+    final_cols = [col for col in export_cols if col in merged_df.columns]
+    final_df = merged_df[final_cols].copy()
+
+    logger.info("Applying data type conversions...")
+    return apply_dtype_conversions(final_df, dtypes)
+
+
+def run_pipeline_for_pdf_files(
+    pdf_files: list[Path],
+    config: ExtractionConfig,
+    lab_specs: LabSpecsConfig,
+) -> PipelineRunResult:
+    """Process explicit PDF files and return the final export DataFrame plus metadata."""
+
+    export_cols, _, _, dtypes = get_column_lists(COLUMN_SCHEMA)
+
+    pdf_files = sorted(pdf_files)
+    logger.info(f"Found {len(pdf_files)} PDF(s) for explicit pipeline run")
+
+    if not pdf_files:
+        raise PipelineError("No PDF files provided for processing.")
+
+    pdf_files, duplicate_pdfs = _deduplicate_pdf_files(pdf_files)
+    for dup_path, orig_path in duplicate_pdfs:
+        logger.warning(f"Skipping duplicate PDF: {dup_path.name} (same content as {orig_path.name})")
+    if duplicate_pdfs:
+        logger.info(f"Skipped {len(duplicate_pdfs)} duplicate PDF(s), {len(pdf_files)} unique PDF(s) remaining")
+
+    pdfs_to_process, skipped_count = _filter_pdfs_to_process(pdf_files, config.output_path)
+    logger.info(f"Skipping {skipped_count} already-processed PDF(s)")
+    logger.info(f"Processing {len(pdfs_to_process)} PDF(s)")
+
+    log_dir = config.output_path / "logs"
+    csv_paths, all_failed_pages, pdfs_failed = _process_pdfs_or_use_cache(
+        pdf_files,
+        pdfs_to_process,
+        config,
+        lab_specs,
+        log_dir,
+    )
+
+    if not csv_paths:
+        raise PipelineError("No PDFs successfully processed.")
+
+    logger.info(f"Successfully processed {len(csv_paths)} PDFs")
+    logger.info("Merging CSV files...")
+    merged_df = merge_csv_files(csv_paths)
+    rows_after_merge = len(merged_df)
+    logger.info(f"Merged data: {rows_after_merge} rows")
+
+    if merged_df.empty:
+        raise PipelineError("No data after merging CSV files.")
+
+    merged_df = _process_and_transform_data(
+        merged_df,
+        lab_specs,
+        export_cols,
+    )
+
+    if merged_df is None:
+        raise PipelineError("Data processing failed.")
+
+    final_df = _prepare_final_export_dataframe(merged_df, export_cols, dtypes)
+    return PipelineRunResult(
+        final_df=final_df,
+        csv_paths=csv_paths,
+        failed_pages=all_failed_pages,
+        pdfs_failed=pdfs_failed,
+    )
+
+
+def build_final_output_dataframe(
+    pdf_files: list[Path],
+    config: ExtractionConfig,
+    lab_specs: LabSpecsConfig,
+) -> pd.DataFrame:
+    """Return the final post-validation export DataFrame for explicit PDFs."""
+
+    return run_pipeline_for_pdf_files(pdf_files, config, lab_specs).final_df
 
 
 def run_for_profile(args, profile_name: str) -> None:
@@ -1444,76 +1495,25 @@ def run_for_profile(args, profile_name: str) -> None:
     config, lab_specs = _setup_profile_environment(args, profile_name)
 
     # Get column configuration for export formatting
-    export_cols, hidden_cols, widths, dtypes = get_column_lists(COLUMN_SCHEMA)
+    _, hidden_cols, widths, _ = get_column_lists(COLUMN_SCHEMA)
 
     # Discover PDF files matching the input pattern
     pdf_files = sorted(config.input_path.glob(config.input_file_regex))
     logger.info(f"Found {len(pdf_files)} PDF(s) matching '{config.input_file_regex}'")
 
-    # Guard: No PDFs found
     if not pdf_files:
         raise PipelineError(f"No PDF files found matching '{config.input_file_regex}' in {config.input_path}")
 
-    # Deduplicate PDFs by file hash (skip identical files with different names)
-    pdf_files, duplicate_pdfs = _deduplicate_pdf_files(pdf_files)
-    for dup_path, orig_path in duplicate_pdfs:
-        logger.warning(f"Skipping duplicate PDF: {dup_path.name} (same content as {orig_path.name})")
-    if duplicate_pdfs:
-        logger.info(f"Skipped {len(duplicate_pdfs)} duplicate PDF(s), {len(pdf_files)} unique PDF(s) remaining")
-
-    # Filter out PDFs that already have valid CSV outputs (cache check)
-    pdfs_to_process, skipped_count = _filter_pdfs_to_process(pdf_files, config.output_path)
-
-    logger.info(f"Skipping {skipped_count} already-processed PDF(s)")
-    logger.info(f"Processing {len(pdfs_to_process)} PDF(s)")
-
-    # Process PDFs or use cached results (handles both cache hit and miss cases)
-    log_dir = config.output_path / "logs"
-    csv_paths, all_failed_pages, pdfs_failed = _process_pdfs_or_use_cache(
-        pdf_files,
-        pdfs_to_process,
-        config,
-        lab_specs,
-        log_dir,
-    )
-
-    # Guard: No PDFs were successfully processed
-    if not csv_paths:
-        raise PipelineError("No PDFs successfully processed.")
-
-    logger.info(f"Successfully processed {len(csv_paths)} PDFs")
-
-    # Merge all individual PDF CSVs into single dataset
-    logger.info("Merging CSV files...")
-    merged_df = merge_csv_files(csv_paths)
-    rows_after_merge = len(merged_df)
-    logger.info(f"Merged data: {rows_after_merge} rows")
-
-    # Guard: Merged dataset is empty
-    if merged_df.empty:
-        raise PipelineError("No data after merging CSV files.")
-
-    # Apply all data transformations: normalize, filter, dedupe, validate
-    merged_df = _process_and_transform_data(
-        merged_df,
-        lab_specs,
-        export_cols,
-    )
-
-    # Guard: Data processing failed
-    if merged_df is None:
-        raise PipelineError("Data processing failed.")
+    pipeline_result = run_pipeline_for_pdf_files(pdf_files, config, lab_specs)
 
     # Export final results to CSV and Excel
     _export_final_results(
-        merged_df,
-        export_cols,
+        pipeline_result.final_df,
         hidden_cols,
         widths,
-        dtypes,
         config.output_path,
-        all_failed_pages,
-        csv_paths,
+        pipeline_result.failed_pages,
+        pipeline_result.csv_paths,
     )
 
 

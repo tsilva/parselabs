@@ -15,6 +15,8 @@
 
 ## Overview
 
+[![CI](https://github.com/tsilva/parselabs/actions/workflows/release.yml/badge.svg)](https://github.com/tsilva/parselabs/actions/workflows/release.yml)
+
 parselabs uses AI vision models to extract laboratory test results from PDF documents and images, converting unstructured medical reports into clean, standardized CSV/Excel data. It automatically normalizes test names, converts units, and validates results for accuracy.
 
 ## Features
@@ -150,10 +152,31 @@ The Gradio-based review UI provides:
 ### Validate Data Integrity
 
 ```bash
-python test.py
+uv run python test.py
 ```
 
 Checks for duplicate rows, missing dates, outliers, and naming conventions.
+
+### Approved Document Regression
+
+Use the private approved-document suite to rerun real PDFs and compare the final CSV output after normalization, deduplication, and validation.
+
+Approve or refresh cases from an existing profile:
+
+```bash
+uv run python utils/regression_cases.py approve --profile myname --pattern "2024-*.pdf"
+```
+
+Run the regression suite explicitly:
+
+```bash
+RUN_APPROVED_DOCS=1 uv run pytest -m approved_docs
+```
+
+Notes:
+- Approved fixtures live under `tests/fixtures/approved/` and remain uncommitted/private.
+- Each case directory contains `document.pdf`, `expected.csv`, and `case.json`.
+- The `approve` command rebuilds baselines for the full approved corpus, not just the newly selected files.
 
 ## Output
 

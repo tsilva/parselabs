@@ -62,3 +62,8 @@ line-length = 230
 [tool.ruff.lint]
 select = ["E", "W", "F", "I"]
 ignore = []
+
+[tool.pytest.ini_options]
+markers = [
+    "approved_docs: end-to-end approved document regression tests that rerun private PDFs",
+]
