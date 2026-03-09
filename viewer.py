@@ -1870,7 +1870,7 @@ Examples:
   parselabs-viewer --profile tiago     # Start with specific profile
   parselabs-viewer                     # Uses first available profile
   parselabs-viewer --list-profiles     # List available profiles
-  parselabs-viewer --profile tiago --env local  # Use .env.local
+  parselabs-viewer --profile tiago --env local  # Use ~/.config/parselabs/.env.local
         """,
     )
     parser.add_argument(
@@ -1887,7 +1887,7 @@ Examples:
     parser.add_argument(
         "--env",
         type=str,
-        help="Environment name to load (loads .env.{name} instead of .env)",
+        help="Environment name to load (loads .env plus .env.{name}, preferring ~/.config/parselabs first)",
     )
     return parser.parse_args()
 

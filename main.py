@@ -1081,7 +1081,7 @@ Examples:
   # Override settings:
   parselabs --profile tsilva --model google/gemini-2.5-pro
 
-  # Use alternate environment (loads .env.local after .env):
+  # Use alternate environment (loads ~/.config/parselabs/.env and .env, then ~/.config/parselabs/.env.local and .env.local):
   parselabs --profile tsilva --env local
         """,
     )
@@ -1115,7 +1115,7 @@ Examples:
     parser.add_argument(
         "--env",
         type=str,
-        help="Environment name to load (loads .env.{name} instead of .env)",
+        help="Environment name to load (loads .env plus .env.{name}, preferring ~/.config/parselabs first)",
     )
 
     return parser.parse_args()
