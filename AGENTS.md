@@ -139,15 +139,21 @@ Interactive UI for browsing and reviewing extracted lab results:
 ```yaml
 # ~/.config/parselabs/profiles/john.yaml
 name: "John Doe"
-input_path: "/path/to/labs"
-output_path: "/path/to/output"
-input_file_regex: "*.pdf"  # optional
+paths:
+  input_path: "/path/to/labs"
+  output_path: "/path/to/output"
+  input_file_regex: "*.pdf"  # optional
 
-# Optional overrides:
-workers: 4
+openrouter:
+  api_key: "your_api_key"
+  base_url: "https://openrouter.ai/api/v1"  # optional
+
+models:
+  extract_model_id: "google/gemini-2.5-pro"
+
+processing:
+  workers: 4
 ```
-
-Note: Model IDs are configured via `.env` only (not in profiles). Paths are configured via profiles only (not in `.env`).
 
 **Lab Specs** (`config/lab_specs.json`):
 - 328 standardized lab test names
@@ -222,21 +228,22 @@ For each PDF `{doc_stem}.pdf`:
   - `{doc_stem}.{page}.json` - Extracted structured data
   - `{doc_stem}.csv` - Combined results for the document
 
-Final outputs in `OUTPUT_PATH`:
+Final outputs in the profile `output_path`:
 - `all.csv` - Merged results from all documents
 - `all.xlsx` - Excel with formatted data
 - `lab_specs.json` - Copy of lab specifications used for this extraction (for reproducibility)
 
-## Environment Configuration
+## Profile Configuration
 
-Required:
-- `OPENROUTER_API_KEY` - API key for OpenRouter
-- `EXTRACT_MODEL_ID` - Vision model for extraction
+Required in each extraction profile:
+- `openrouter.api_key` (or top-level `openrouter_api_key`) - API key for OpenRouter
+- `models.extract_model_id` (or top-level `extract_model_id`) - Vision model for extraction
+- `paths.input_path`
+- `paths.output_path`
 
 Optional:
-- `MAX_WORKERS` - Parallel workers (default: CPU count)
-
-Note: Input and output paths must be specified via profiles in `~/.config/parselabs/profiles/`.
+- `openrouter.base_url` - Alternate OpenRouter-compatible endpoint
+- `processing.workers` (or top-level `workers`) - Parallel workers (default: CPU count)
 
 ## Validation (test.py)
 

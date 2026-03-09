@@ -25,9 +25,8 @@ class ExtractionConfig:
     input_path: Path
     output_path: Path
     openrouter_api_key: str
-
-    # Model settings (required - set via .env)
     extract_model_id: str
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
     # Processing settings
     input_file_regex: str = "*.pdf"
@@ -47,11 +46,23 @@ class ProfileConfig:
     output_path: Path | None = None
     input_file_regex: str | None = None
 
-    # Optional overrides
+    # Runtime settings
+    openrouter_api_key: str | None = None
+    openrouter_base_url: str | None = None
+    extract_model_id: str | None = None
     workers: int | None = None
 
     # Demographics for personalized healthy ranges
     demographics: Demographics | None = None
+
+    @staticmethod
+    def _first_value(*values):
+        """Return the first non-empty value from the provided candidates."""
+
+        for value in values:
+            if value not in (None, ""):
+                return value
+        return None
 
     @staticmethod
     def _resolve_profile_value_path(path_value: str | None, profile_path: Path) -> Path | None:
@@ -90,10 +101,34 @@ class ProfileConfig:
         paths = data.get("paths", {})
         input_path_str = paths.get("input_path") or data.get("input_path")
         output_path_str = paths.get("output_path") or data.get("output_path")
-        input_file_regex = paths.get("input_file_regex") or data.get("input_file_regex")
+        processing = data.get("processing", {})
+        input_file_regex = cls._first_value(
+            paths.get("input_file_regex"),
+            processing.get("input_file_regex"),
+            data.get("input_file_regex"),
+        )
+
+        # Extract runtime settings
+        openrouter = data.get("openrouter", {})
+        models = data.get("models", {})
+        openrouter_api_key = cls._first_value(
+            openrouter.get("api_key"),
+            data.get("openrouter_api_key"),
+            data.get("api_key"),
+        )
+        openrouter_base_url = cls._first_value(
+            openrouter.get("base_url"),
+            data.get("openrouter_base_url"),
+            data.get("base_url"),
+        )
+        extract_model_id = cls._first_value(
+            models.get("extract_model_id"),
+            data.get("extract_model_id"),
+            data.get("model"),
+        )
 
         # Extract optional overrides
-        workers = data.get("workers")
+        workers = cls._first_value(processing.get("workers"), data.get("workers"))
 
         # Extract demographics (for personalized healthy ranges)
         demographics = None
@@ -113,6 +148,9 @@ class ProfileConfig:
             input_path=cls._resolve_profile_value_path(input_path_str, profile_path),
             output_path=cls._resolve_profile_value_path(output_path_str, profile_path),
             input_file_regex=input_file_regex,
+            openrouter_api_key=openrouter_api_key,
+            openrouter_base_url=openrouter_base_url,
+            extract_model_id=extract_model_id,
             workers=workers,
             demographics=demographics,
         )

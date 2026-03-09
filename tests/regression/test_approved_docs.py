@@ -10,7 +10,7 @@ from parselabs.regression import (
     build_case_diff,
     discover_approved_cases,
     empty_export_dataframe,
-    get_required_regression_env,
+    get_required_regression_profile,
     split_final_output_by_stem,
 )
 from parselabs.utils import setup_logging
@@ -26,40 +26,51 @@ def approved_regression_run(tmp_path_factory):
         pytest.fail("RUN_APPROVED_DOCS=1 is set, but no approved cases were found under tests/fixtures/approved/.")
 
     try:
-        env = get_required_regression_env()
-    except RuntimeError as exc:
-        pytest.fail(str(exc))
-
-    temp_root = tmp_path_factory.mktemp("approved-docs")
-    input_dir = temp_root / "input"
-    output_dir = temp_root / "output"
-    input_dir.mkdir(parents=True, exist_ok=True)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    pdf_files = []
-    for case in cases:
-        target_pdf = input_dir / f"{case.stem}.pdf"
-        shutil.copy2(case.document_path, target_pdf)
-        pdf_files.append(target_pdf)
-
-    setup_logging(output_dir / "logs", clear_logs=True)
-    lab_specs = LabSpecsConfig()
-    config = ExtractionConfig(
-        input_path=input_dir,
-        output_path=output_dir,
-        openrouter_api_key=env["OPENROUTER_API_KEY"],
-        extract_model_id=env["EXTRACT_MODEL_ID"],
-        input_file_regex="*.pdf",
-        max_workers=1,
-    )
-
-    try:
         from main import build_final_output_dataframe
     except ModuleNotFoundError as exc:
         pytest.fail(f"Approved document regressions require the extraction runtime dependencies: {exc}")
 
-    final_df = build_final_output_dataframe(pdf_files, config, lab_specs)
-    return cases, split_final_output_by_stem(final_df)
+    cases_by_profile = {}
+    for case in cases:
+        profile_name = case.profile
+        if not profile_name:
+            pytest.fail(f"Approved case '{case.case_id}' is missing its profile metadata.")
+        cases_by_profile.setdefault(profile_name, []).append(case)
+
+    actual_by_stem = {}
+    for profile_name, profile_cases in cases_by_profile.items():
+        try:
+            profile = get_required_regression_profile(profile_name)
+        except RuntimeError as exc:
+            pytest.fail(str(exc))
+
+        temp_root = tmp_path_factory.mktemp(f"approved-docs-{profile_name}")
+        input_dir = temp_root / "input"
+        output_dir = temp_root / "output"
+        input_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        pdf_files = []
+        for case in profile_cases:
+            target_pdf = input_dir / f"{case.stem}.pdf"
+            shutil.copy2(case.document_path, target_pdf)
+            pdf_files.append(target_pdf)
+
+        setup_logging(output_dir / "logs", clear_logs=True)
+        lab_specs = LabSpecsConfig()
+        config = ExtractionConfig(
+            input_path=input_dir,
+            output_path=output_dir,
+            openrouter_api_key=profile.openrouter_api_key,
+            openrouter_base_url=profile.openrouter_base_url or "https://openrouter.ai/api/v1",
+            extract_model_id=profile.extract_model_id,
+            input_file_regex="*.pdf",
+            max_workers=1,
+        )
+        final_df = build_final_output_dataframe(pdf_files, config, lab_specs)
+        actual_by_stem.update(split_final_output_by_stem(final_df))
+
+    return cases, actual_by_stem
 
 
 @pytest.mark.approved_docs

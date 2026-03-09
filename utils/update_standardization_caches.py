@@ -11,16 +11,11 @@ Usage:
 import argparse
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from parselabs.utils import load_dotenv_with_env
-
-load_dotenv_with_env()
 
 import pandas as pd  # noqa: E402
 from openai import OpenAI  # noqa: E402
@@ -158,7 +153,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Update standardization caches using LLM")
     parser.add_argument("--profile", "-p", required=True, help="Profile name to scan for uncached values")
-    parser.add_argument("--model", "-m", type=str, help="Model ID (default: EXTRACT_MODEL_ID from .env)")
+    parser.add_argument("--model", "-m", type=str, help="Model ID (overrides the profile value)")
     parser.add_argument("--dry-run", action="store_true", help="Show uncached values without calling LLM")
     args = parser.parse_args()
 
@@ -168,6 +163,9 @@ def main():
         logger.error(f"Profile '{args.profile}' not found")
         sys.exit(1)
     profile = ProfileConfig.from_file(profile_path)
+    if not profile.output_path:
+        logger.error(f"Profile '{args.profile}' has no output_path defined")
+        sys.exit(1)
 
     # Load lab specs
     lab_specs = LabSpecsConfig()
@@ -217,14 +215,17 @@ def main():
         return
 
     # Initialize LLM client
-    model_id = args.model or os.getenv("EXTRACT_MODEL_ID")
+    model_id = args.model or profile.extract_model_id
     if not model_id:
-        logger.error("No model specified. Use --model or set EXTRACT_MODEL_ID.")
+        logger.error(f"Profile '{args.profile}' has no extract_model_id defined. Use --model to override it.")
+        sys.exit(1)
+    if not profile.openrouter_api_key:
+        logger.error(f"Profile '{args.profile}' has no openrouter_api_key defined.")
         sys.exit(1)
 
     client = OpenAI(
-        base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-        api_key=os.getenv("OPENROUTER_API_KEY"),
+        base_url=profile.openrouter_base_url or "https://openrouter.ai/api/v1",
+        api_key=profile.openrouter_api_key,
     )
 
     # Update name cache

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass
 from difflib import unified_diff
 from pathlib import Path
@@ -11,6 +10,7 @@ from typing import Any
 
 import pandas as pd
 
+from parselabs.config import ProfileConfig
 from parselabs.export_schema import COLUMN_ORDER, COLUMN_SCHEMA
 from parselabs.utils import ensure_columns
 
@@ -45,18 +45,26 @@ class ApprovedCase:
     metadata: dict[str, Any]
 
 
-def get_required_regression_env() -> dict[str, str]:
-    """Return required API env vars or raise a descriptive error."""
+def get_required_regression_profile(profile_name: str | None) -> ProfileConfig:
+    """Load a profile with the runtime settings required for regression runs."""
 
-    required = {
-        "OPENROUTER_API_KEY": os.getenv("OPENROUTER_API_KEY", "").strip(),
-        "EXTRACT_MODEL_ID": os.getenv("EXTRACT_MODEL_ID", "").strip(),
-    }
-    missing = [name for name, value in required.items() if not value]
+    if not profile_name:
+        raise RuntimeError("Approved document regression cases must record the source profile.")
+
+    profile_path = ProfileConfig.find_path(profile_name)
+    if not profile_path:
+        raise RuntimeError(f"Approved document regression profile '{profile_name}' was not found.")
+
+    profile = ProfileConfig.from_file(profile_path)
+    missing = []
+    if not profile.openrouter_api_key:
+        missing.append("openrouter_api_key")
+    if not profile.extract_model_id:
+        missing.append("extract_model_id")
     if missing:
         missing_str = ", ".join(missing)
-        raise RuntimeError(f"Missing required env vars for approved document regression: {missing_str}")
-    return required
+        raise RuntimeError(f"Profile '{profile_name}' is missing required regression settings: {missing_str}")
+    return profile
 
 
 def empty_export_dataframe() -> pd.DataFrame:

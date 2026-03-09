@@ -1,23 +1,36 @@
+import argparse
 import hashlib
 import json
 import logging
 import sys
 from collections import defaultdict
 from functools import wraps
+from pathlib import Path
 
 import pandas as pd
-from dotenv import dotenv_values
 
+from parselabs.config import ProfileConfig
 from parselabs.paths import get_lab_specs_path
 
 logger = logging.getLogger(__name__)
 
 LAB_SPECS_PATH = get_lab_specs_path()
+ALL_FINAL_CSV = "output/all.csv"
 
-# Load OUTPUT_PATH from .env
-env = dotenv_values(".env.local")
-OUTPUT_PATH = env.get("OUTPUT_PATH", "output")
-ALL_FINAL_CSV = f"{OUTPUT_PATH}/all.csv"
+
+def parse_args():
+    """Parse CLI arguments."""
+
+    parser = argparse.ArgumentParser(description="Validate parselabs configuration and extracted outputs")
+    parser.add_argument("--profile", "-p", help="Profile name to validate (omit to validate all configured profiles)")
+    return parser.parse_args()
+
+
+def set_results_path(csv_path: Path) -> None:
+    """Set the current results file used by integrity checks."""
+
+    global ALL_FINAL_CSV
+    ALL_FINAL_CSV = str(csv_path)
 
 
 def integrity_test(func):
@@ -329,6 +342,7 @@ def test_lab_specs_schema(report):
 def main():
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
+    args = parse_args()
     report = {}
 
     # Schema validation first (validates config structure)
@@ -338,14 +352,35 @@ def main():
     test_loinc_critical_codes(report)
     test_no_critical_loinc_duplicates(report)
 
-    # Then data integrity tests
-    test_all_rows_have_dates_and_no_duplicates(report)
-    test_lab_unit_percent_vs_lab_name(report)
-    test_lab_unit_percent_value_range(report)
-    test_lab_unit_boolean_value(report)
-    test_lab_name_unit_consistency(report)
-    test_lab_value_outliers_by_lab_name(report)
-    test_unique_date_lab_name(report)
+    if args.profile:
+        profile_names = [args.profile]
+    else:
+        profile_names = ProfileConfig.list_profiles()
+
+    if not profile_names:
+        logger.warning("No profiles found. Only schema checks were run.")
+
+    for profile_name in profile_names:
+        profile_path = ProfileConfig.find_path(profile_name)
+        if not profile_path:
+            report.setdefault(profile_name, []).append(f"Profile '{profile_name}' not found")
+            continue
+
+        profile = ProfileConfig.from_file(profile_path)
+        if not profile.output_path:
+            report.setdefault(profile_name, []).append(f"Profile '{profile_name}' has no output_path defined")
+            continue
+
+        set_results_path(profile.output_path / "all.csv")
+
+        # Then data integrity tests for the profile output
+        test_all_rows_have_dates_and_no_duplicates(report)
+        test_lab_unit_percent_vs_lab_name(report)
+        test_lab_unit_percent_value_range(report)
+        test_lab_unit_boolean_value(report)
+        test_lab_name_unit_consistency(report)
+        test_lab_value_outliers_by_lab_name(report)
+        test_unique_date_lab_name(report)
 
     # Print summary report
     logger.info("\n=== Integrity Report ===")

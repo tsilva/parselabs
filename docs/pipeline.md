@@ -392,4 +392,4 @@ Behavior:
 
 - skips cleanly when `RUN_APPROVED_DOCS` is not set
 - fails setup if the flag is set but no approved fixtures exist
-- fails setup if `OPENROUTER_API_KEY` or `EXTRACT_MODEL_ID` is missing
+- fails setup if the selected profile is missing `openrouter_api_key` or `extract_model_id`

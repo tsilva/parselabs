@@ -1,9 +1,5 @@
 """Main entry point for lab results extraction and processing."""
 
-from parselabs.utils import load_dotenv_with_env
-
-load_dotenv_with_env()
-
 import argparse  # noqa: E402
 import hashlib  # noqa: E402
 import json  # noqa: E402
@@ -42,11 +38,11 @@ from parselabs.normalization import (  # noqa: E402
     deduplicate_results,
     flag_duplicate_entries,
 )
+from parselabs.paths import get_profiles_dir  # noqa: E402
 from parselabs.standardization import (  # noqa: E402
     standardize_lab_names,
     standardize_lab_units,
 )
-from parselabs.paths import get_profiles_dir  # noqa: E402
 from parselabs.utils import (  # noqa: E402
     create_page_image_variants,
     ensure_columns,
@@ -57,12 +53,21 @@ from parselabs.validation import ValueValidator  # noqa: E402
 # Module-level logger (file handlers added after config is loaded)
 logger = logging.getLogger(__name__)
 PROFILES_DIR = get_profiles_dir()
+_client_cache: dict[tuple[str, str], OpenAI] = {}
 
-# Initialize OpenAI client for OpenRouter
-client = OpenAI(
-    base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-    api_key=os.getenv("OPENROUTER_API_KEY"),
-)
+
+def get_openai_client(config: ExtractionConfig) -> OpenAI:
+    """Return a cached OpenAI client for the current profile configuration."""
+
+    cache_key = (config.openrouter_base_url, config.openrouter_api_key)
+    cached_client = _client_cache.get(cache_key)
+    if cached_client is None:
+        cached_client = OpenAI(
+            base_url=config.openrouter_base_url,
+            api_key=config.openrouter_api_key,
+        )
+        _client_cache[cache_key] = cached_client
+    return cached_client
 
 
 # ========================================
@@ -281,7 +286,7 @@ def _extract_page_data_from_text(page_text: str, config: ExtractionConfig, page_
     """Extract a single page from pdftotext output."""
 
     logger.info(f"[{page_name}] Attempting TEXT extraction")
-    page_data = extract_labs_from_text(page_text, config.extract_model_id, client)
+    page_data = extract_labs_from_text(page_text, config.extract_model_id, get_openai_client(config))
     return _finalize_page_candidate(page_data, "text")
 
 
@@ -297,7 +302,7 @@ def _extract_page_data_from_image(
     page_data = extract_labs_from_page_image(
         image_path,
         config.extract_model_id,
-        client,
+        get_openai_client(config),
     )
     return _finalize_page_candidate(page_data, f"vision:{variant_name}")
 
@@ -1080,9 +1085,6 @@ Examples:
 
   # Override settings:
   parselabs --profile tsilva --model google/gemini-2.5-pro
-
-  # Use alternate environment (loads ~/.config/parselabs/.env and .env, then ~/.config/parselabs/.env.local and .env.local):
-  parselabs --profile tsilva --env local
         """,
     )
 
@@ -1104,7 +1106,7 @@ Examples:
         "--model",
         "-m",
         type=str,
-        help="Model ID for extraction (overrides EXTRACT_MODEL_ID from .env)",
+        help="Model ID for extraction (overrides the profile value)",
     )
     parser.add_argument("--workers", "-w", type=int, help="Number of parallel workers")
     parser.add_argument(
@@ -1112,17 +1114,12 @@ Examples:
         type=str,
         help="Glob pattern for input files (overrides profile, default: *.pdf)",
     )
-    parser.add_argument(
-        "--env",
-        type=str,
-        help="Environment name to load (loads .env plus .env.{name}, preferring ~/.config/parselabs first)",
-    )
 
     return parser.parse_args()
 
 
-def _validate_profile_and_env(args) -> ProfileConfig:
-    """Validate profile and environment configuration.
+def _validate_profile(args) -> ProfileConfig:
+    """Validate profile configuration.
 
     Returns validated ProfileConfig.
     Raises ConfigurationError if validation fails.
@@ -1143,11 +1140,11 @@ def _validate_profile_and_env(args) -> ProfileConfig:
     if not profile.output_path:
         errors.append(f"Profile '{args.profile}' has no output_path defined.")
 
-    # Validate required environment variables
-    if not os.getenv("OPENROUTER_API_KEY"):
-        errors.append("OPENROUTER_API_KEY environment variable not set.")
-    if not os.getenv("EXTRACT_MODEL_ID"):
-        errors.append("EXTRACT_MODEL_ID environment variable not set.")
+    # Validate required runtime settings
+    if not profile.openrouter_api_key:
+        errors.append(f"Profile '{args.profile}' has no openrouter_api_key defined.")
+    if not profile.extract_model_id:
+        errors.append(f"Profile '{args.profile}' has no extract_model_id defined.")
 
     if errors:
         raise ConfigurationError("\n".join(errors))
@@ -1157,18 +1154,15 @@ def _validate_profile_and_env(args) -> ProfileConfig:
 def _build_config_from_profile(profile: ProfileConfig, args) -> ExtractionConfig:
     """Build ExtractionConfig from validated profile and CLI args."""
 
-    # Load required environment variables
-    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-    extract_model_id = os.getenv("EXTRACT_MODEL_ID")
-
-    # Build base configuration from profile and environment
+    # Build base configuration from profile
     config = ExtractionConfig(
         input_path=profile.input_path,
         output_path=profile.output_path,
-        openrouter_api_key=openrouter_api_key,
-        extract_model_id=extract_model_id,
+        openrouter_api_key=profile.openrouter_api_key,
+        openrouter_base_url=profile.openrouter_base_url or "https://openrouter.ai/api/v1",
+        extract_model_id=profile.extract_model_id,
         input_file_regex=profile.input_file_regex or "*.pdf",
-        max_workers=profile.workers or int(os.getenv("MAX_WORKERS", "0")) or (os.cpu_count() or 1),
+        max_workers=profile.workers or (os.cpu_count() or 1),
     )
 
     # Apply CLI argument overrides (highest priority)
@@ -1183,14 +1177,14 @@ def _build_config_from_profile(profile: ProfileConfig, args) -> ExtractionConfig
 
 
 def build_config(args) -> ExtractionConfig:
-    """Build ExtractionConfig from args and env.
+    """Build ExtractionConfig from args and profile.
 
     Returns validated ExtractionConfig.
     Raises ConfigurationError if validation fails.
     """
 
-    # Validate profile and environment (raises ConfigurationError on failure)
-    profile = _validate_profile_and_env(args)
+    # Validate profile configuration (raises ConfigurationError on failure)
+    profile = _validate_profile(args)
 
     # Build configuration from validated profile
     config = _build_config_from_profile(profile, args)
@@ -1219,7 +1213,7 @@ def _classify_server_error(error_msg: str, timeout: int) -> tuple[bool, str]:
 
     # Authentication errors (invalid or missing API key)
     if "401" in error_msg or "Unauthorized" in error_msg:
-        return False, f"Authentication failed - check your OPENROUTER_API_KEY: {error_msg}"
+        return False, f"Authentication failed - check the profile openrouter_api_key: {error_msg}"
 
     # Timeout errors (server slow or unreachable)
     if "timeout" in error_msg.lower():
@@ -1237,12 +1231,11 @@ def _classify_server_error(error_msg: str, timeout: int) -> tuple[bool, str]:
     return False, f"Server check failed: {error_msg}"
 
 
-def check_server_availability(client: OpenAI, model_id: str, timeout: int = 10) -> tuple[bool, str]:
+def check_server_availability(client: OpenAI, timeout: int = 10) -> tuple[bool, str]:
     """Check if OpenRouter API server is available and responsive.
 
     Args:
         client: OpenAI client configured for OpenRouter
-        model_id: Model ID to check availability for
         timeout: Timeout in seconds for the check
 
     Returns:
@@ -1496,6 +1489,12 @@ def run_for_profile(args, profile_name: str) -> None:
     # Setup environment: config, logging, lab specs (raises ConfigurationError on failure)
     config, lab_specs = _setup_profile_environment(args, profile_name)
 
+    logger.info("Checking OpenRouter server availability...")
+    is_available, message = check_server_availability(get_openai_client(config))
+    if not is_available:
+        raise ConfigurationError(f"Cannot start extraction for profile '{profile_name}' - {message}")
+    logger.info(f"Server check passed: {message}")
+
     # Get column configuration for export formatting
     _, hidden_cols, widths, _ = get_column_lists(COLUMN_SCHEMA)
 
@@ -1573,17 +1572,6 @@ def main():
             logger.error("Or use --profile to specify one.")
             sys.exit(1)
         logger.info(f"Running all profiles: {', '.join(profiles_to_run)}")
-
-    # Check server availability once before processing any profiles
-    logger.info("Checking OpenRouter server availability...")
-    is_available, message = check_server_availability(client, os.getenv("EXTRACT_MODEL_ID", ""))
-
-    # Guard: Abort if API server is unreachable
-    if not is_available:
-        logger.error(f"Cannot start extraction - {message}")
-        logger.error("Please check your internet connection and API key, then try again.")
-        sys.exit(1)
-    logger.info(f"Server check passed: {message}")
 
     # Initialize results tracking for each profile
     results = {}
