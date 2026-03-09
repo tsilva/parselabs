@@ -25,7 +25,7 @@ def get_user_config_dir() -> Path:
 def get_profiles_dir() -> Path:
     """Return the directory where profile YAML/JSON files are stored."""
 
-    return get_user_config_dir()
+    return get_user_config_dir() / "profiles"
 
 
 def get_prompts_dir() -> Path:
