@@ -8,7 +8,7 @@ This document describes the data flow through the parselabs extraction pipeline,
 PDF Files
   │
   ├─ 1. PDF Processing & Hashing
-  ├─ 2. Extraction (text-first, vision fallback)
+  ├─ 2. Extraction (per-page text/vision hybrid)
   ├─ 3. Standardization (cache-based mapping)
   ├─ 4. Per-PDF CSV Export
   ├─ 5. Merge All CSVs
@@ -31,32 +31,36 @@ Each PDF is processed independently (parallelized via `multiprocessing.Pool`):
 
 **Modules:** `main.py` — `process_single_pdf()`, `parselabs/extraction.py`
 
-The pipeline uses a **text-first strategy** with vision fallback to optimize API costs.
+The pipeline uses a **per-page hybrid strategy** to improve recall on mixed-quality PDFs.
 
-### Path A: Text Extraction (Cheap)
+### Path A: Page Text Extraction (Preferred When Strong)
 
 ```
-PDF → pdftotext (layout mode) → raw text
-  → Check if ≥200 non-whitespace chars
-  → extract_labs_from_text() → LLM function calling
-  → HealthLabReport with LabResult objects
+PDF → pdftotext (layout mode) → split into per-page text
+  → Check each page for sufficient text content
+  → extract_labs_from_text() per page → LLM function calling
+  → Keep text result if page-level quality looks strong
 ```
 
 - Uses `pdftotext` (poppler) with `-layout` flag
-- Threshold: 200 non-whitespace characters minimum
-- If text is sufficient, sends to LLM as text (no image tokens)
+- Threshold: 80 non-whitespace characters minimum per page
+- Text extraction is accepted only when the page result looks complete enough (non-empty rows, reasonable value coverage)
 
-### Path B: Vision Extraction (Fallback)
+### Path B: Vision Extraction (Fallback + Re-read)
 
 ```
 PDF → pdf2image (page-by-page)
-  → preprocess_page_image() (grayscale, resize ≤1200px, contrast 2x)
-  → extract_labs_from_page_image() → LLM vision function calling
-  → HealthLabReport with LabResult objects
+  → create_page_image_variants()
+      → primary: color, autocontrast, sharpen, resize ≤1800px
+      → fallback: grayscale, autocontrast, sharpen, contrast boost, resize ≤1800px
+  → extract_labs_from_page_image() on primary image
+  → If page output looks weak: retry on fallback image
+  → Keep the strongest page candidate
 ```
 
 - Each page converted to JPG independently
-- Image preprocessing: grayscale → downscale to max 1200px width → 2x contrast enhancement
+- Primary image preserves color/table structure; fallback image exaggerates contrast for hard-to-read scans
+- Weak pages trigger a second pass on the alternate image variant instead of trusting the first pass
 - Results cached as `{stem}.{page}.json` — skips re-extraction on rerun
 
 ### LLM Extraction Details
@@ -76,6 +80,15 @@ Both paths use OpenRouter API with **function calling** (structured output):
 **Prompt templates** (loaded from `prompts/`):
 - `extraction_system.md` + `extraction_user.md` — vision extraction
 - `text_extraction_user.md` — text-based extraction (template: `{text}`)
+
+### Page-Level Candidate Selection
+
+For each page, the pipeline chooses the strongest available candidate:
+
+1. Try text extraction if the page has enough embedded text
+2. If the text result is weak, run vision on the primary image
+3. If the primary vision result is weak, run vision again on the fallback image
+4. Score candidates heuristically (result count, null-value rate, empty names) and keep the best one
 
 ### Extraction Output
 
@@ -218,7 +231,7 @@ Inter-lab relationships use formulas from the `_relationships` key:
 
 ## Stage 8: Final Export
 
-**Module:** `main.py` — `export_excel()`
+**Module:** `main.py` — `run_pipeline_for_pdf_files()`, `build_final_output_dataframe()`, `export_excel()`
 
 ### Output Files
 
@@ -307,3 +320,76 @@ INPUT: PDF files (per profile)
          ▼
 OUTPUT: all.csv + all.xlsx + lab_specs.json
 ```
+
+## Approved Document Regression
+
+Approved-document regressions rerun a private PDF corpus and compare the final CSV output instead of page-level JSON.
+
+### Shared Pipeline Entry Point
+
+`main.py` now exposes:
+
+- `run_pipeline_for_pdf_files(pdf_files, config, lab_specs)` — runs the same extraction, merge, normalization, deduplication, validation, and export-shaping flow used by the CLI, and returns the final DataFrame plus run metadata.
+- `build_final_output_dataframe(pdf_files, config, lab_specs)` — convenience wrapper that returns only the final `all.csv`-shape DataFrame.
+
+These are used by both the CLI profile flow and the regression tooling so there is only one implementation of the pipeline logic.
+
+### Fixture Layout
+
+Private approved fixtures live under `tests/fixtures/approved/`:
+
+```text
+tests/fixtures/approved/
+  <stem>_<hash>/
+    document.pdf
+    expected.csv
+    case.json
+```
+
+`case.json` records:
+
+- `case_id`
+- `original_filename`
+- `stem`
+- `file_hash`
+- `profile`
+- `approved_at`
+- `model_id`
+
+### Canonical CSV Comparison
+
+Regression comparisons canonicalize the final export before comparing:
+
+- keep the final `all.csv` column set
+- sort rows by `date`, `lab_name`, `page_number`, `result_index`, `raw_lab_name`, `raw_value`, `raw_unit`
+- normalize dates to `YYYY-MM-DD`
+- normalize floats with `.15g`
+- normalize nullable ints to decimal strings
+- normalize booleans to `true` / `false` / empty string
+- trim leading/trailing whitespace in string cells
+
+The comparison remains exact after canonicalization; there is no numeric tolerance and no ignored final-output columns.
+
+### Approval Workflow
+
+Use the helper to add or refresh cases from a real profile:
+
+```bash
+uv run python utils/regression_cases.py approve --profile myname --pattern "2024-*.pdf"
+```
+
+The helper copies selected PDFs into the private fixture area, enforces unique document stems, reruns the entire approved corpus in a temporary workspace, and rewrites `expected.csv` for every approved case.
+
+### Running the Suite
+
+The pytest suite is intentionally opt-in because it uses real PDFs and live extraction calls:
+
+```bash
+RUN_APPROVED_DOCS=1 uv run pytest -m approved_docs
+```
+
+Behavior:
+
+- skips cleanly when `RUN_APPROVED_DOCS` is not set
+- fails setup if the flag is set but no approved fixtures exist
+- fails setup if `OPENROUTER_API_KEY` or `EXTRACT_MODEL_ID` is missing
