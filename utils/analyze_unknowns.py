@@ -12,11 +12,16 @@ import argparse
 import json
 import logging
 import os
+import sys
 from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from parselabs.paths import get_lab_specs_path
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +141,7 @@ def mode_analyze(df: pd.DataFrame):
     logger.info("CHECKING LAB_SPECS.JSON")
     logger.info("=" * 80)
 
-    lab_specs_path = Path("config/lab_specs.json")
+    lab_specs_path = get_lab_specs_path()
 
     # Cross-reference unknown units against lab_specs config
     if lab_specs_path.exists():

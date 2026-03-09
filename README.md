@@ -24,36 +24,41 @@ parselabs uses AI vision models to extract laboratory test results from PDF docu
 - **AI-Powered Extraction** — Vision models extract lab names, values, units, and reference ranges directly from PDF pages
 - **Smart Validation** — Detects extraction errors across 5 categories: biological plausibility, inter-lab relationships, temporal consistency, format artifacts, and reference range deviations
 - **Cost-Optimized** — Text-first extraction uses cheaper LLM calls when PDF text is parseable, falling back to vision only when needed
-- **Profile-Based Workflow** — Configure multiple profiles for different users or data sources with simple YAML files
+- **Profile-Based Workflow** — Configure multiple profiles for different users or data sources with simple YAML files in `~/.config/parselabs/`
 - **Gradio Review UI** — Side-by-side comparison of source documents and extracted data with keyboard shortcuts
 - **335+ Standardized Labs** — Comprehensive lab specifications with unit conversions and reference ranges
 
 ## Quick Start
 
 ```bash
-# Install dependencies
-uv sync
+# Install the tool
+uv tool install . --editable
 
-# Create your profile
-cp profiles/_template.yaml profiles/myname.yaml
-# Edit profiles/myname.yaml with your input/output paths
+# Create your profile directory
+mkdir -p ~/.config/parselabs
+
+# Create ~/.config/parselabs/myname.yaml with your input/output paths
+# Example:
+# name: "My Labs"
+# input_path: "/path/to/lab/pdfs"
+# output_path: "/path/to/output"
 
 # Configure environment (copy .env.example and edit)
 cp .env.example .env
 # Edit .env with your API key and model settings
 
 # Extract lab results
-python main.py --profile myname
+parselabs --profile myname
 
 # Review results
-python review.py --profile myname
+parselabs-viewer --profile myname
 ```
 
 ## Installation
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.10+
 - [uv](https://docs.astral.sh/uv/) package manager
 - [Poppler](https://poppler.freedesktop.org/) for PDF processing
 
@@ -62,8 +67,10 @@ python review.py --profile myname
 ```bash
 git clone https://github.com/tsilva/parselabs.git
 cd parselabs
-uv sync
+uv tool install . --editable
 ```
+
+If `parselabs` is not found after installation, add `~/.local/bin` to your `PATH`.
 
 ### macOS (Poppler)
 
@@ -90,10 +97,10 @@ MAX_WORKERS=4      # Parallel workers
 
 ### Profiles
 
-Profiles define input/output paths and optional settings. Create one per user or data source:
+Profiles define input/output paths and optional settings. Store them under `~/.config/parselabs/`, one file per user or data source:
 
 ```yaml
-# profiles/john.yaml
+# ~/.config/parselabs/john.yaml
 name: "John Doe"
 input_path: "/path/to/lab/pdfs"
 output_path: "/path/to/output"
@@ -108,7 +115,7 @@ demographics:
 List available profiles:
 
 ```bash
-python main.py --list-profiles
+parselabs --list-profiles
 ```
 
 ### Lab Specifications
@@ -125,22 +132,22 @@ The `config/lab_specs.json` file contains 335+ standardized lab tests with:
 
 ```bash
 # Run all profiles (default)
-python main.py
+parselabs
 
 # Run specific profile
-python main.py --profile myname
+parselabs --profile myname
 
 # Override model
-python main.py --profile myname --model google/gemini-2.5-pro
+parselabs --profile myname --model google/gemini-2.5-pro
 
 # Filter files
-python main.py --profile myname --pattern "2024-*.pdf"
+parselabs --profile myname --pattern "2024-*.pdf"
 ```
 
 ### Review Extracted Data
 
 ```bash
-python review.py --profile myname
+parselabs-viewer --profile myname
 ```
 
 The Gradio-based review UI provides:

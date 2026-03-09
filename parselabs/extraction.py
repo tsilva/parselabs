@@ -9,6 +9,8 @@ from pathlib import Path
 from openai import APIError, OpenAI
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from parselabs.paths import get_prompts_dir
+
 logger = logging.getLogger(__name__)
 
 
@@ -244,7 +246,7 @@ TOOLS = [
 # Extraction Prompts
 # ========================================
 
-_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+_PROMPTS_DIR = get_prompts_dir()
 EXTRACTION_SYSTEM_PROMPT = (_PROMPTS_DIR / "extraction_system.md").read_text(encoding="utf-8").strip()
 EXTRACTION_USER_PROMPT = (_PROMPTS_DIR / "extraction_user.md").read_text(encoding="utf-8").strip()
 TEXT_EXTRACTION_USER_PROMPT = (_PROMPTS_DIR / "text_extraction_user.md").read_text(encoding="utf-8").strip()

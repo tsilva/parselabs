@@ -39,6 +39,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from parselabs.paths import get_lab_specs_path, get_prompts_dir
+
 logger = logging.getLogger(__name__)
 
 load_dotenv(
@@ -46,9 +50,9 @@ load_dotenv(
     override=True,
 )
 
-LAB_SPECS_PATH = Path("config/lab_specs.json")
+LAB_SPECS_PATH = get_lab_specs_path()
 TEMP_PATH = Path("temp_lab_specs.json")
-_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+_PROMPTS_DIR = get_prompts_dir()
 
 
 def validate_env():
