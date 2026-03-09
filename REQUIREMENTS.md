@@ -68,13 +68,12 @@ Interactive web UI for browsing, plotting, and reviewing results:
 
 ## Configuration
 
-- **Profiles** (YAML/JSON): name, input path, output path, optional file pattern, worker count, and demographics (gender, DOB, height, weight).
-- **Environment variables**: AI model selection and API credentials (separate from profiles).
+- **Profiles** (YAML/JSON): name, input path, output path, OpenRouter API credentials, extract model ID, optional base URL, optional file pattern, worker count, and demographics (gender, DOB, height, weight).
 - **Lab specs** (`lab_specs.json`): canonical lab names, types, primary units, alternative units with conversion factors, healthy ranges (with age/gender variants), biological limits, max daily change rates, inter-lab relationships, and LOINC codes (required for every lab).
 
 ## CLI
 
-Supports running all or a specific profile, listing profiles, and overriding model, worker count, file pattern, and env file.
+Supports running all or a specific profile, listing profiles, and overriding model, worker count, and file pattern.
 
 ## Testing
 

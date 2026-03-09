@@ -3,74 +3,14 @@
 import json
 import logging
 import re
-import sys
 import unicodedata
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from dotenv import load_dotenv
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
-from parselabs.paths import get_user_config_dir
-
 logger = logging.getLogger(__name__)
-
-
-def load_dotenv_with_env() -> str | None:
-    """Load environment files from the user config dir and local cwd.
-
-    Parses --env from sys.argv before full argument parsing to allow
-    loading the correct environment before module-level initialization.
-
-    Load order is:
-    1. ~/.config/parselabs/.env
-    2. ./.env
-    3. ~/.config/parselabs/.env.{name}
-    4. ./.env.{name}
-
-    Later files override earlier ones.
-
-    Returns:
-        The environment name (defaults to "local").
-    """
-    # Extract --env value from sys.argv (default: "local")
-    env_name = "local"
-    for i, arg in enumerate(sys.argv):
-        # Match --env <value> form
-        if arg == "--env" and i + 1 < len(sys.argv):
-            env_name = sys.argv[i + 1]
-            break
-
-        # Match --env=<value> form
-        if arg.startswith("--env="):
-            env_name = arg.split("=", 1)[1]
-            break
-
-    loaded_files = []
-    config_dir = get_user_config_dir()
-    env_files = [
-        config_dir / ".env",
-        Path(".env"),
-        config_dir / f".env.{env_name}",
-        Path(f".env.{env_name}"),
-    ]
-
-    for env_file in env_files:
-        if env_file.exists():
-            load_dotenv(env_file, override=True)
-            loaded_files.append(str(env_file))
-
-    if loaded_files:
-        logger.info(f"Loaded environment files: {', '.join(loaded_files)}")
-    else:
-        logger.warning(
-            f"No environment files found. Checked: "
-            f"{config_dir / '.env'}, {Path('.env').resolve()}, "
-            f"{config_dir / f'.env.{env_name}'}, {Path(f'.env.{env_name}').resolve()}"
-        )
-
-    return env_name
 
 
 _PRIMARY_IMAGE_MAX_WIDTH = 1800

@@ -37,15 +37,16 @@ uv tool install . --editable
 # Create your profile directory
 mkdir -p ~/.config/parselabs/profiles
 
-# Create ~/.config/parselabs/profiles/myname.yaml with your input/output paths
+# Create ~/.config/parselabs/profiles/myname.yaml with your paths and runtime settings
 # Example:
 # name: "My Labs"
-# input_path: "/path/to/lab/pdfs"
-# output_path: "/path/to/output"
-
-# Configure environment (copy .env.example and edit)
-cp .env.example .env
-# Edit .env with your API key and model settings
+# paths:
+#   input_path: "/path/to/lab/pdfs"
+#   output_path: "/path/to/output"
+# openrouter:
+#   api_key: "your_key_here"
+# models:
+#   extract_model_id: "google/gemini-3-flash-preview"
 
 # Extract lab results
 parselabs --profile myname
@@ -78,33 +79,29 @@ If `parselabs` is not found after installation, add `~/.local/bin` to your `PATH
 brew install poppler
 ```
 
-### Environment Variables
-
-Create a `.env` file:
-
-```bash
-# Required
-OPENROUTER_API_KEY=your_key_here
-EXTRACT_MODEL_ID=google/gemini-3-flash-preview       # Vision model for extraction
-SELF_CONSISTENCY_MODEL_ID=google/gemini-3-flash-preview  # Model for self-consistency
-
-# Optional
-N_EXTRACTIONS=1    # Self-consistency extractions
-MAX_WORKERS=4      # Parallel workers
-```
-
 ## Configuration
 
 ### Profiles
 
-Profiles define input/output paths and optional settings. Store them under `~/.config/parselabs/profiles/`, one file per user or data source:
+Profiles define both paths and runtime settings. Store them under `~/.config/parselabs/profiles/`, one file per user or data source:
 
 ```yaml
 # ~/.config/parselabs/profiles/john.yaml
 name: "John Doe"
-input_path: "/path/to/lab/pdfs"
-output_path: "/path/to/output"
-input_file_regex: "*.pdf"  # Optional filter
+paths:
+  input_path: "/path/to/lab/pdfs"
+  output_path: "/path/to/output"
+  input_file_regex: "*.pdf"  # Optional filter
+
+openrouter:
+  api_key: "your_key_here"
+  base_url: "https://openrouter.ai/api/v1"  # Optional
+
+models:
+  extract_model_id: "google/gemini-3-flash-preview"
+
+processing:
+  workers: 4
 
 # Optional demographics for personalized ranges
 demographics:
@@ -159,10 +156,10 @@ The Gradio-based review UI provides:
 ### Validate Data Integrity
 
 ```bash
-uv run python test.py
+uv run python test.py --profile myname
 ```
 
-Checks for duplicate rows, missing dates, outliers, and naming conventions.
+Omit `--profile` to validate all configured profiles. The script checks for duplicate rows, missing dates, outliers, and naming conventions.
 
 ### Approved Document Regression
 
@@ -193,7 +190,7 @@ RUN_APPROVED_DOCS=1 uv run pytest -m approved_docs
 Notes:
 - The approval command copies the selected PDFs into `tests/fixtures/approved/` and rebuilds `expected.csv` for the full approved corpus.
 - The pytest command reruns the full approved corpus together, then compares each document's final CSV output against its approved `expected.csv`.
-- `OPENROUTER_API_KEY` and `EXTRACT_MODEL_ID` must be set before running either command.
+- Each approved case uses the runtime settings from its recorded profile file.
 - Approved fixtures live under `tests/fixtures/approved/` and remain uncommitted/private.
 - Each case directory contains `document.pdf`, `expected.csv`, and `case.json`.
 - The `approve` command rebuilds baselines for the full approved corpus, not just the newly selected files.

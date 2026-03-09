@@ -11,27 +11,31 @@ Usage:
 import argparse
 import json
 import logging
-import os
 import sys
 from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
-from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from parselabs.config import ProfileConfig
 from parselabs.paths import get_lab_specs_path
 
 logger = logging.getLogger(__name__)
 
-load_dotenv(Path(".env.local"), override=True)
-
-
-def load_data():
+def load_data(profile_name: str):
     """Load the main CSV file."""
 
-    output_path = Path(os.getenv("OUTPUT_PATH", "output"))
+    profile_path = ProfileConfig.find_path(profile_name)
+    if not profile_path:
+        raise FileNotFoundError(f"Profile not found: {profile_name}")
+
+    profile = ProfileConfig.from_file(profile_path)
+    if not profile.output_path:
+        raise FileNotFoundError(f"Profile '{profile_name}' has no output_path defined")
+
+    output_path = profile.output_path
     csv_path = output_path / "all.csv"
 
     # Bail out if CSV doesn't exist
@@ -333,6 +337,12 @@ Modes:
         """,
     )
     parser.add_argument(
+        "--profile",
+        "-p",
+        required=True,
+        help="Profile whose output/all.csv should be analyzed",
+    )
+    parser.add_argument(
         "--mode",
         "-m",
         choices=["search", "analyze", "categorize"],
@@ -344,7 +354,7 @@ Modes:
 
     # Load data, bail on missing file
     try:
-        df = load_data()
+        df = load_data(args.profile)
     except FileNotFoundError as e:
         logger.error(f"{e}")
         return 1

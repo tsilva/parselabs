@@ -7,21 +7,15 @@ Shows data table with interactive plots and review actions side-by-side.
 Usage:
   parselabs-viewer --profile tiago
   parselabs-viewer --list-profiles
-  parselabs-viewer --profile tiago --env local
 
 Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate
 """
 
 from __future__ import annotations
 
-from parselabs.utils import load_dotenv_with_env
-
-load_dotenv_with_env()
-
 import argparse  # noqa: E402
 import json  # noqa: E402
 import logging  # noqa: E402
-import os  # noqa: E402
 import sys  # noqa: E402
 from datetime import datetime  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -46,7 +40,7 @@ CUSTOM_CSS = (_STATIC_DIR / "viewer.css").read_text()
 # Configuration - Global State
 # =============================================================================
 
-# Global output path (set from profile or environment)
+# Global output path (set from profile)
 _configured_output_path: Path | None = None
 
 # Demographics for personalized healthy ranges (set from profile)
@@ -66,14 +60,14 @@ def set_output_path(path: Path) -> None:
 
 
 def get_output_path() -> Path:
-    """Get output path from configuration, profile, or environment."""
+    """Get output path from the selected profile."""
 
     global _configured_output_path
 
     # Return configured path if available
     if _configured_output_path:
         return _configured_output_path
-    return Path(os.getenv("OUTPUT_PATH", "./output"))
+    return Path("./output")
 
 
 def set_current_profile(name: str) -> None:
@@ -1870,7 +1864,6 @@ Examples:
   parselabs-viewer --profile tiago     # Start with specific profile
   parselabs-viewer                     # Uses first available profile
   parselabs-viewer --list-profiles     # List available profiles
-  parselabs-viewer --profile tiago --env local  # Use ~/.config/parselabs/.env.local
         """,
     )
     parser.add_argument(
@@ -1883,11 +1876,6 @@ Examples:
         "--list-profiles",
         action="store_true",
         help="List available profiles and exit",
-    )
-    parser.add_argument(
-        "--env",
-        type=str,
-        help="Environment name to load (loads .env plus .env.{name}, preferring ~/.config/parselabs first)",
     )
     return parser.parse_args()
 

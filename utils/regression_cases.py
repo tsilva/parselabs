@@ -24,13 +24,11 @@ from parselabs.regression import (  # noqa: E402
     ApprovedCase,
     discover_approved_cases,
     empty_export_dataframe,
-    get_required_regression_env,
+    get_required_regression_profile,
     split_final_output_by_stem,
     write_canonical_csv,
 )
-from parselabs.utils import load_dotenv_with_env, setup_logging  # noqa: E402
-
-load_dotenv_with_env()
+from parselabs.utils import setup_logging  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +37,6 @@ def parse_args() -> argparse.Namespace:
     """Parse CLI arguments."""
 
     parser = argparse.ArgumentParser(description="Manage approved document regression cases")
-    parser.add_argument("--env", type=str, help="Environment name to load (loads .env.{name} instead of .env)")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
     approve_parser = subparsers.add_parser("approve", help="Add/update approved document regression cases")
@@ -61,11 +58,11 @@ def parse_args() -> argparse.Namespace:
 def load_profile(profile_name: str) -> ProfileConfig:
     """Load a configured profile by name."""
 
-    profile_path = ProfileConfig.find_path(profile_name)
-    if not profile_path:
-        raise SystemExit(f"Profile '{profile_name}' not found. Use an existing file under {ProfileConfig.get_profiles_dir()}.")
+    try:
+        profile = get_required_regression_profile(profile_name)
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
 
-    profile = ProfileConfig.from_file(profile_path)
     if not profile.input_path:
         raise SystemExit(f"Profile '{profile_name}' has no input_path defined.")
     if not profile.input_path.exists():
@@ -116,7 +113,6 @@ def compute_file_hash(file_path: Path, hash_length: int = 8) -> str:
 def approve_cases(args: argparse.Namespace) -> None:
     """Create/update approved cases and rebuild all expected CSV baselines."""
 
-    env = get_required_regression_env()
     profile = load_profile(args.profile)
     selected_pdfs = resolve_selected_pdfs(profile, args)
     APPROVED_FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
@@ -152,7 +148,7 @@ def approve_cases(args: argparse.Namespace) -> None:
         )
 
     cases = discover_approved_cases()
-    actual_by_stem = rebuild_expected_outputs(cases, env)
+    actual_by_stem = rebuild_expected_outputs(cases)
     approved_at = datetime.now(timezone.utc).isoformat()
 
     for case in cases:
@@ -170,46 +166,59 @@ def approve_cases(args: argparse.Namespace) -> None:
             "file_hash": file_hash,
             "profile": profile_name,
             "approved_at": approved_at,
-            "model_id": env["EXTRACT_MODEL_ID"],
+            "model_id": get_required_regression_profile(profile_name).extract_model_id,
         }
         case.metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
     logger.info(f"Approved {len(selected_pdfs)} PDF(s); rebuilt baselines for {len(cases)} approved case(s).")
 
 
-def rebuild_expected_outputs(cases: list[ApprovedCase], env: dict[str, str]) -> dict[str, object]:
-    """Run the full approved corpus and return final output split by stem."""
+def rebuild_expected_outputs(cases: list[ApprovedCase]) -> dict[str, object]:
+    """Run approved cases grouped by profile and return final output split by stem."""
 
     try:
         from main import build_final_output_dataframe
     except ModuleNotFoundError as exc:
         raise SystemExit(f"Approval workflow requires the extraction runtime dependencies: {exc}") from exc
 
-    with tempfile.TemporaryDirectory(prefix="approved-docs-") as temp_dir_name:
-        temp_root = Path(temp_dir_name)
-        input_dir = temp_root / "input"
-        output_dir = temp_root / "output"
-        input_dir.mkdir(parents=True, exist_ok=True)
-        output_dir.mkdir(parents=True, exist_ok=True)
+    cases_by_profile: dict[str, list[ApprovedCase]] = {}
+    for case in cases:
+        profile_name = case.profile
+        if not profile_name:
+            raise SystemExit(f"Approved case '{case.case_id}' is missing its profile metadata.")
+        cases_by_profile.setdefault(profile_name, []).append(case)
 
-        pdf_files: list[Path] = []
-        for case in cases:
-            target_pdf = input_dir / f"{case.stem}.pdf"
-            shutil.copy2(case.document_path, target_pdf)
-            pdf_files.append(target_pdf)
+    actual_by_stem: dict[str, object] = {}
+    for profile_name, profile_cases in cases_by_profile.items():
+        profile = get_required_regression_profile(profile_name)
+        with tempfile.TemporaryDirectory(prefix=f"approved-docs-{profile_name}-") as temp_dir_name:
+            temp_root = Path(temp_dir_name)
+            input_dir = temp_root / "input"
+            output_dir = temp_root / "output"
+            input_dir.mkdir(parents=True, exist_ok=True)
+            output_dir.mkdir(parents=True, exist_ok=True)
 
-        setup_logging(output_dir / "logs", clear_logs=True)
-        lab_specs = LabSpecsConfig()
-        config = ExtractionConfig(
-            input_path=input_dir,
-            output_path=output_dir,
-            openrouter_api_key=env["OPENROUTER_API_KEY"],
-            extract_model_id=env["EXTRACT_MODEL_ID"],
-            input_file_regex="*.pdf",
-            max_workers=1,
-        )
-        final_df = build_final_output_dataframe(pdf_files, config, lab_specs)
-        return split_final_output_by_stem(final_df)
+            pdf_files: list[Path] = []
+            for case in profile_cases:
+                target_pdf = input_dir / f"{case.stem}.pdf"
+                shutil.copy2(case.document_path, target_pdf)
+                pdf_files.append(target_pdf)
+
+            setup_logging(output_dir / "logs", clear_logs=True)
+            lab_specs = LabSpecsConfig()
+            config = ExtractionConfig(
+                input_path=input_dir,
+                output_path=output_dir,
+                openrouter_api_key=profile.openrouter_api_key,
+                openrouter_base_url=profile.openrouter_base_url or "https://openrouter.ai/api/v1",
+                extract_model_id=profile.extract_model_id,
+                input_file_regex="*.pdf",
+                max_workers=1,
+            )
+            final_df = build_final_output_dataframe(pdf_files, config, lab_specs)
+            actual_by_stem.update(split_final_output_by_stem(final_df))
+
+    return actual_by_stem
 
 
 def main() -> None:

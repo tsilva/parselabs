@@ -29,52 +29,53 @@ import concurrent.futures
 import csv
 import json
 import logging
-import os
 import re
 import shutil
 import sys
 from collections import defaultdict
 from pathlib import Path
 
-from dotenv import load_dotenv
 from openai import OpenAI
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from parselabs.config import ProfileConfig
 from parselabs.paths import get_lab_specs_path, get_prompts_dir
 
 logger = logging.getLogger(__name__)
-
-load_dotenv(
-    Path(".env.local") if Path(".env.local").exists() else Path(".env"),
-    override=True,
-)
 
 LAB_SPECS_PATH = get_lab_specs_path()
 TEMP_PATH = Path("temp_lab_specs.json")
 _PROMPTS_DIR = get_prompts_dir()
 
 
-def validate_env():
-    """Validate required environment variables are set."""
+def load_profile(profile_name: str) -> ProfileConfig:
+    """Load a configured profile by name."""
 
-    # Require extraction model ID
-    if not os.getenv("EXTRACT_MODEL_ID"):
-        logger.error("EXTRACT_MODEL_ID environment variable not set")
+    profile_path = ProfileConfig.find_path(profile_name)
+    if not profile_path:
+        logger.error(f"Profile '{profile_name}' not found")
+        sys.exit(1)
+    return ProfileConfig.from_file(profile_path)
+
+
+def validate_profile_runtime(profile: ProfileConfig) -> None:
+    """Validate a profile has the LLM runtime settings required by this tool."""
+
+    if not profile.extract_model_id:
+        logger.error(f"Profile '{profile.name}' has no extract_model_id defined")
+        sys.exit(1)
+    if not profile.openrouter_api_key:
+        logger.error(f"Profile '{profile.name}' has no openrouter_api_key defined")
         sys.exit(1)
 
-    # Require API key
-    if not os.getenv("OPENROUTER_API_KEY"):
-        logger.error("OPENROUTER_API_KEY environment variable not set")
-        sys.exit(1)
 
-
-def get_openai_client():
-    """Get configured OpenAI client for OpenRouter."""
+def get_openai_client(profile: ProfileConfig):
+    """Get configured OpenAI client for the selected profile."""
 
     return OpenAI(
-        base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-        api_key=os.getenv("OPENROUTER_API_KEY"),
+        base_url=profile.openrouter_base_url or "https://openrouter.ai/api/v1",
+        api_key=profile.openrouter_api_key,
     )
 
 
@@ -125,7 +126,7 @@ def cmd_fix_encoding(args):
     logger.info(f"✓ Fixed encoding in {LAB_SPECS_PATH}")
 
 
-def get_conversion_factor(lab_name, from_unit, to_unit, client, temperature=0.0):
+def get_conversion_factor(lab_name, from_unit, to_unit, client, model_id, temperature=0.0):
     """Use LLM to get conversion factor from from_unit to to_unit."""
 
     system_prompt = (_PROMPTS_DIR / "conversion_factor_system.md").read_text(encoding="utf-8").strip()
@@ -141,7 +142,7 @@ def get_conversion_factor(lab_name, from_unit, to_unit, client, temperature=0.0)
     )
 
     completion = client.chat.completions.create(
-        model=os.getenv("EXTRACT_MODEL_ID"),
+        model=model_id,
         messages=[
             {"role": "system", "content": system_prompt},
             {
@@ -163,7 +164,7 @@ def get_conversion_factor(lab_name, from_unit, to_unit, client, temperature=0.0)
         return None
 
 
-def get_health_range(lab_name, primary_unit, user_stats, client, temperature=0.0):
+def get_health_range(lab_name, primary_unit, user_stats, client, model_id, temperature=0.0):
     """Use LLM to get healthy reference range for a lab test."""
 
     system_prompt = (_PROMPTS_DIR / "health_range_system.md").read_text(encoding="utf-8").strip()
@@ -179,7 +180,7 @@ def get_health_range(lab_name, primary_unit, user_stats, client, temperature=0.0
     )
 
     completion = client.chat.completions.create(
-        model=os.getenv("EXTRACT_MODEL_ID"),
+        model=model_id,
         messages=[
             {"role": "system", "content": system_prompt},
             {
@@ -230,10 +231,11 @@ def parse_range_string(range_str, primary_unit=None):
 def cmd_build_conversions(args):
     """Build conversion factors from extracted CSV data."""
 
-    validate_env()
-    client = get_openai_client()
+    profile = load_profile(args.profile)
+    validate_profile_runtime(profile)
+    client = get_openai_client(profile)
 
-    input_csv = args.input or "output/all.csv"
+    input_csv = args.input or str(profile.output_path / "all.csv")
     output_json = args.output or str(TEMP_PATH)
 
     lab_units = defaultdict(set)
@@ -268,7 +270,7 @@ def cmd_build_conversions(args):
     # Execute conversion tasks in parallel
     def task_fn(args):
         lab_name, unit, primary_unit = args
-        factor = get_conversion_factor(lab_name, unit, primary_unit, client)
+        factor = get_conversion_factor(lab_name, unit, primary_unit, client, profile.extract_model_id)
         logger.info(f"  {lab_name}: {unit} → {primary_unit} = {factor}")
         return (lab_name, unit, primary_unit, factor)
 
@@ -293,8 +295,9 @@ def cmd_build_conversions(args):
 def cmd_build_ranges(args):
     """Build healthy reference ranges using LLM."""
 
-    validate_env()
-    client = get_openai_client()
+    profile = load_profile(args.profile)
+    validate_profile_runtime(profile)
+    client = get_openai_client(profile)
 
     # Load existing specs and user stats
     with open(LAB_SPECS_PATH, "r", encoding="utf-8") as f:
@@ -309,7 +312,7 @@ def cmd_build_ranges(args):
 
     def task_fn(args):
         lab_name, primary_unit = args
-        health_range = get_health_range(lab_name, primary_unit, user_stats, client)
+        health_range = get_health_range(lab_name, primary_unit, user_stats, client, profile.extract_model_id)
         parsed = parse_range_string(health_range, primary_unit)
         logger.info(f"  {lab_name}: {health_range}")
         return (lab_name, parsed)
@@ -376,6 +379,7 @@ Examples:
 
     # build-conversions command
     conv_parser = subparsers.add_parser("build-conversions", help="Build conversion factors from CSV")
+    conv_parser.add_argument("--profile", "-p", required=True, help="Profile to use for model/API settings")
     conv_parser.add_argument("--input", "-i", help="Input CSV file (default: output/all.csv)")
     conv_parser.add_argument(
         "--output",
@@ -386,6 +390,7 @@ Examples:
 
     # build-ranges command
     range_parser = subparsers.add_parser("build-ranges", help="Build healthy ranges using LLM")
+    range_parser.add_argument("--profile", "-p", required=True, help="Profile to use for model/API settings")
     range_parser.add_argument("--user-stats", "-u", help="User stats JSON file")
     range_parser.add_argument("--output", "-o", help="Output JSON file")
     range_parser.add_argument("--workers", "-w", type=int, help="Number of parallel workers")

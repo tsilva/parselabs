@@ -25,7 +25,6 @@ from parselabs.standardization import (
 )
 from parselabs.utils import (
     ensure_columns,
-    load_dotenv_with_env,
     parse_llm_json_response,
     preprocess_page_image,
     setup_logging,
@@ -60,7 +59,6 @@ __all__ = [
     "deduplicate_results",
     "apply_dtype_conversions",
     # Utils
-    "load_dotenv_with_env",
     "preprocess_page_image",
     "setup_logging",
     "ensure_columns",

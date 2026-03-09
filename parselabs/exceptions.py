@@ -2,7 +2,7 @@
 
 
 class ConfigurationError(Exception):
-    """Raised when profile/environment configuration is invalid."""
+    """Raised when profile configuration is invalid."""
 
     pass
 
