@@ -1,6 +1,7 @@
 """Main entry point for lab results extraction and processing."""
 
 import argparse  # noqa: E402
+import fnmatch  # noqa: E402
 import hashlib  # noqa: E402
 import json  # noqa: E402
 import logging  # noqa: E402
@@ -887,8 +888,13 @@ def _deduplicate_pdf_files(pdf_files: list[Path]) -> tuple[list[Path], list[tupl
     seen_hashes: dict[str, Path] = {}
     unique_files: list[Path] = []
     duplicates: list[tuple[Path, Path]] = []
+    pdf_iterator = pdf_files
 
-    for pdf_path in pdf_files:
+    if len(pdf_files) > 1:
+        logger.info("Computing PDF hashes for deduplication...")
+        pdf_iterator = tqdm(pdf_files, desc="Hashing PDFs", unit="pdf")
+
+    for pdf_path in pdf_iterator:
         file_hash = _compute_file_hash(pdf_path)
         if file_hash in seen_hashes:
             duplicates.append((pdf_path, seen_hashes[file_hash]))
@@ -905,9 +911,14 @@ def _filter_pdfs_to_process(pdf_files: list[Path], output_path: Path) -> tuple[l
     # Initialize collections for tracking
     pdfs_to_process = []
     skipped_count = 0
+    pdf_iterator = pdf_files
+
+    if len(pdf_files) > 1:
+        logger.info("Checking for cached CSV outputs...")
+        pdf_iterator = tqdm(pdf_files, desc="Checking cached outputs", unit="pdf")
 
     # Check each PDF for existing valid CSV
-    for pdf_path in pdf_files:
+    for pdf_path in pdf_iterator:
         csv_path = _get_csv_path(pdf_path, output_path)
 
         if _is_csv_valid(csv_path):
@@ -1205,8 +1216,8 @@ def build_config(args) -> ExtractionConfig:
 # ========================================
 
 
-def _classify_server_error(error_msg: str, timeout: int) -> tuple[bool, str]:
-    """Classify a server connectivity error into a diagnostic result.
+def _classify_api_check_error(error_msg: str, timeout: int) -> tuple[bool, str]:
+    """Classify an API validation error into a diagnostic result.
 
     Returns tuple of (is_available, diagnostic_message).
     """
@@ -1215,39 +1226,55 @@ def _classify_server_error(error_msg: str, timeout: int) -> tuple[bool, str]:
     if "401" in error_msg or "Unauthorized" in error_msg:
         return False, f"Authentication failed - check the profile openrouter_api_key: {error_msg}"
 
+    # Authorization / permission failures
+    if "403" in error_msg or "Forbidden" in error_msg or "permission" in error_msg.lower():
+        return False, f"Authorization failed - key or account cannot use this model: {error_msg}"
+
     # Timeout errors (server slow or unreachable)
     if "timeout" in error_msg.lower():
         return False, f"Server timeout after {timeout}s - server may be unreachable"
 
-    # 404 errors - endpoint not implemented (common with local servers), server is still available
+    # Model / endpoint not found
     if "404" in error_msg:
-        return True, "Server is available (models endpoint not implemented)"
+        return False, f"Model or endpoint not found - check extract_model_id and base_url: {error_msg}"
+
+    # Invalid request / unsupported model configuration
+    if "400" in error_msg or "BadRequest" in error_msg or "invalid" in error_msg.lower():
+        return False, f"API validation request was rejected - check extract_model_id and profile settings: {error_msg}"
 
     # Connection failures (network issues, DNS problems, server down)
     if "Connection" in error_msg or "refused" in error_msg.lower() or "reset" in error_msg.lower() or "Name or service not known" in error_msg or "getaddrinfo" in error_msg:
         return False, f"Cannot connect to server: {error_msg}"
 
     # Unknown errors - assume unavailable to be safe
-    return False, f"Server check failed: {error_msg}"
+    return False, f"API validation failed: {error_msg}"
 
 
-def check_server_availability(client: OpenAI, timeout: int = 10) -> tuple[bool, str]:
-    """Check if OpenRouter API server is available and responsive.
+def validate_api_access(client: OpenAI, model_id: str, timeout: int = 10) -> tuple[bool, str]:
+    """Validate API access by running a minimal completion with the configured model.
 
     Args:
         client: OpenAI client configured for OpenRouter
+        model_id: Model used for extraction
         timeout: Timeout in seconds for the check
 
     Returns:
         Tuple of (is_available, message)
     """
     try:
-        # Check that the server is reachable with a lightweight request
-        client.models.list(timeout=timeout)
-        return True, "Server is available"
+        completion = client.chat.completions.create(
+            model=model_id,
+            messages=[{"role": "user", "content": "Reply with OK."}],
+            temperature=0,
+            max_tokens=5,
+            timeout=timeout,
+        )
+        if not completion or not getattr(completion, "choices", None):
+            return False, "API validation failed: empty completion response"
+        return True, "API key and model validation passed"
     except Exception as e:
         # Classify the error to provide helpful diagnostic messages
-        return _classify_server_error(str(e), timeout)
+        return _classify_api_check_error(str(e), timeout)
 
 
 def _build_and_validate_config(args, profile_name: str) -> ExtractionConfig:
@@ -1479,6 +1506,29 @@ def build_final_output_dataframe(
     return run_pipeline_for_pdf_files(pdf_files, config, lab_specs).final_df
 
 
+def _discover_pdf_files(input_path: Path, input_file_regex: str | None) -> list[Path]:
+    """Return top-level PDF files matching the configured pattern.
+
+    `Path.glob()` can silently return zero matches on some cloud-backed macOS
+    directories when directory enumeration is denied. Listing the directory
+    first makes those access failures explicit.
+    """
+
+    try:
+        entries = list(input_path.iterdir())
+    except FileNotFoundError as exc:
+        raise PipelineError(f"Input directory does not exist: {input_path}") from exc
+    except PermissionError as exc:
+        detail = exc.strerror or str(exc)
+        raise PipelineError(f"Cannot access input directory {input_path}: {detail}") from exc
+    except OSError as exc:
+        detail = exc.strerror or str(exc)
+        raise PipelineError(f"Cannot enumerate input directory {input_path}: {detail}") from exc
+
+    pattern = (input_file_regex or "*.pdf").lower()
+    return sorted(path for path in entries if path.is_file() and fnmatch.fnmatch(path.name.lower(), pattern))
+
+
 def run_for_profile(args, profile_name: str) -> None:
     """Run extraction pipeline for a single profile.
 
@@ -1489,17 +1539,17 @@ def run_for_profile(args, profile_name: str) -> None:
     # Setup environment: config, logging, lab specs (raises ConfigurationError on failure)
     config, lab_specs = _setup_profile_environment(args, profile_name)
 
-    logger.info("Checking OpenRouter server availability...")
-    is_available, message = check_server_availability(get_openai_client(config))
+    logger.info("Validating API access with a simple prompt...")
+    is_available, message = validate_api_access(get_openai_client(config), config.extract_model_id)
     if not is_available:
         raise ConfigurationError(f"Cannot start extraction for profile '{profile_name}' - {message}")
-    logger.info(f"Server check passed: {message}")
+    logger.info(f"API validation passed: {message}")
 
     # Get column configuration for export formatting
     _, hidden_cols, widths, _ = get_column_lists(COLUMN_SCHEMA)
 
     # Discover PDF files matching the input pattern
-    pdf_files = sorted(config.input_path.glob(config.input_file_regex))
+    pdf_files = _discover_pdf_files(config.input_path, config.input_file_regex)
     logger.info(f"Found {len(pdf_files)} PDF(s) matching '{config.input_file_regex}'")
 
     if not pdf_files:
@@ -1587,10 +1637,12 @@ def main():
         except (ConfigurationError, PipelineError) as e:
             logger.error(f"\nError in profile '{profile_name}':\n{e}")
             results[profile_name] = "failed"
+            sys.exit(1)
         # Catch-all for unexpected errors during profile processing
         except Exception as e:
             logger.error(f"\nUnexpected error in profile '{profile_name}': {e}")
             results[profile_name] = f"error: {e}"
+            sys.exit(1)
 
     # Print summary if multiple profiles were processed
     if len(profiles_to_run) > 1:

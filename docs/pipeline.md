@@ -2,22 +2,39 @@
 
 This document describes the data flow through the parselabs extraction pipeline, from PDF input to validated CSV/Excel output.
 
+Before any PDF discovery starts, the CLI validates the configured API key and `extract_model_id` by sending a minimal chat completion request. Runs fail fast if authentication, authorization, model access, or base URL configuration is invalid.
+
 ## Pipeline Overview
 
 ```
 PDF Files
   │
-  ├─ 1. PDF Processing & Hashing
-  ├─ 2. Extraction (per-page text/vision hybrid)
-  ├─ 3. Standardization (cache-based mapping)
-  ├─ 4. Per-PDF CSV Export
-  ├─ 5. Merge All CSVs
-  ├─ 6. Normalization (unit conversion, dedup)
-  ├─ 7. Validation (flag suspicious values)
-  └─ 8. Final Export (CSV + Excel)
+  ├─ 1. PDF Discovery
+  ├─ 2. PDF Processing & Hashing
+  ├─ 3. Extraction (per-page text/vision hybrid)
+  ├─ 4. Standardization (cache-based mapping)
+  ├─ 5. Per-PDF CSV Export
+  ├─ 6. Merge All CSVs
+  ├─ 7. Normalization (unit conversion, dedup)
+  ├─ 8. Validation (flag suspicious values)
+  └─ 9. Final Export (CSV + Excel)
 ```
 
-## Stage 1: PDF Processing & Hashing
+## Stage 1: PDF Discovery
+
+**Module:** `main.py` — `_discover_pdf_files()`, `run_for_profile()`
+
+Before processing starts, the runner enumerates the input directory and matches only top-level files against `input_file_regex`.
+
+1. Call `Path.iterdir()` on the configured input directory
+2. Surface missing-path and permission failures immediately
+3. Match filenames case-insensitively, so `*.pdf` also catches `.PDF`
+
+Immediately before this stage, `run_for_profile()` sends a tiny prompt through `chat.completions.create()` using the configured extraction model. This confirms the API key can perform the same class of request the extraction pipeline depends on.
+
+This avoids the misleading "0 PDFs found" result that `Path.glob()` can produce on some cloud-backed macOS folders when directory access is denied.
+
+## Stage 2: PDF Processing & Hashing
 
 **Module:** `main.py` — `_setup_pdf_processing()`, `_compute_file_hash()`
 
@@ -27,7 +44,7 @@ Each PDF is processed independently (parallelized via `multiprocessing.Pool`):
 2. Create output directory: `{pdf_stem}_{hash}/` — hash prevents collisions when different files share the same name
 3. Copy original PDF into the output directory for archival
 
-## Stage 2: Extraction
+## Stage 3: Extraction
 
 **Modules:** `main.py` — `process_single_pdf()`, `parselabs/extraction.py`
 
@@ -102,7 +119,7 @@ Each `LabResult` contains:
 | `raw_reference_range` | Full range text |
 | `raw_reference_min`, `raw_reference_max` | Parsed range bounds |
 
-## Stage 3: Standardization
+## Stage 4: Standardization
 
 **Modules:** `main.py` — `_apply_standardization()`, `parselabs/standardization.py`
 
@@ -125,7 +142,7 @@ config/cache/unit_standardization.json   # raw_unit|lab_name → standardized_un
 - **Cache miss:** return `$UNKNOWN$` + log warning
 - **Updating caches:** run `utils/update_standardization_caches.py` (batch LLM processing)
 
-## Stage 4: Per-PDF CSV Export
+## Stage 5: Per-PDF CSV Export
 
 **Module:** `main.py` — `_save_results_to_csv()`
 
@@ -133,19 +150,19 @@ Each PDF produces a CSV in its output directory: `{stem}_{hash}/{stem}_{hash}.cs
 
 Contains all LabResult fields mapped to the output column schema.
 
-## Stage 5: Merge
+## Stage 6: Merge
 
 **Module:** `main.py` — `merge_csv_files()`
 
 All per-PDF CSVs are concatenated into a single `all.csv` in the profile's output directory.
 
-## Stage 6: Normalization
+## Stage 7: Normalization
 
 **Module:** `parselabs/normalization.py`
 
 Transforms the merged DataFrame through several steps:
 
-### 6a. Numeric Preprocessing — `preprocess_numeric_value()`
+### 7a. Numeric Preprocessing — `preprocess_numeric_value()`
 
 Cleans raw value strings before numeric conversion:
 - Strip trailing `=` (e.g., `"0.9="` → `"0.9"`)
@@ -153,7 +170,7 @@ Cleans raw value strings before numeric conversion:
 - Remove space thousands separators (e.g., `"256 000"` → `"256000"`)
 - European decimal format (comma → period)
 
-### 6b. Comparison Operators — `extract_comparison_value()`
+### 7b. Comparison Operators — `extract_comparison_value()`
 
 Parses limit indicators and sets boolean flags:
 
@@ -164,7 +181,7 @@ Parses limit indicators and sets boolean flags:
 | `≤50` | 50 | True | False |
 | `≥30` | 30 | False | True |
 
-### 6c. Unit Conversion — `apply_normalizations()`
+### 7c. Unit Conversion — `apply_normalizations()`
 
 Converts values to primary units using factors from `lab_specs.json`:
 
@@ -175,17 +192,17 @@ raw_value=5.0, raw_unit="mmol/L", lab="Blood - Glucose"
   → value = 5.0 × 18.0 = 90.0 mg/dL
 ```
 
-### 6d. Deduplication — `deduplicate_results()`
+### 7d. Deduplication — `deduplicate_results()`
 
 - Groups by `(date, lab_name)`
 - Keeps row with latest `result_index` (most complete data)
 - Logs deduplication stats
 
-### 6e. Type Conversion — `apply_dtype_conversions()`
+### 7e. Type Conversion — `apply_dtype_conversions()`
 
 Forces proper column types: `date` → datetime, `value` → float64, booleans, etc.
 
-## Stage 7: Validation
+## Stage 8: Validation
 
 **Module:** `parselabs/validation.py` — `ValueValidator`
 
@@ -229,7 +246,7 @@ Inter-lab relationships use formulas from the `_relationships` key:
 }
 ```
 
-## Stage 8: Final Export
+## Stage 9: Final Export
 
 **Module:** `main.py` — `run_pipeline_for_pdf_files()`, `build_final_output_dataframe()`, `export_excel()`
 

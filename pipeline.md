@@ -9,8 +9,17 @@ INPUT_PATH/*.pdf
        │
        ▼
 ┌─────────────────────────────────────────────────────┐
+│ 0. API Validation                                    │
+│    simple chat completion with EXTRACT_MODEL_ID      │
+│    fail fast on invalid key/model/base_url           │
+└────────────────────┬────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────┐
 │ 1. PDF Discovery                                     │
-│    glob(INPUT_FILE_REGEX) → skip if CSV valid        │
+│    iterdir() + case-insensitive INPUT_FILE_REGEX     │
+│    explicit errors for missing/inaccessible paths    │
+│    → skip if CSV valid                               │
 │    prompt to reprocess empty extraction pages        │
 └────────────────────┬────────────────────────────────┘
                      │  one PDF at a time (multiprocessing Pool)
@@ -71,8 +80,14 @@ INPUT_PATH/*.pdf
 
 ## Step Details
 
+### 0. API Validation (`run_for_profile`)
+- Send a minimal `chat.completions.create()` request before any PDF work begins
+- Use the configured `extract_model_id`, so key permissions and model access are validated against the real extraction path
+- Fail fast on authentication, authorization, invalid model, timeout, or connectivity issues
+
 ### 1. PDF Discovery (`run_for_profile`)
-- Glob `INPUT_PATH` with `input_file_regex` (default `*.pdf`)
+- Enumerate `INPUT_PATH` first so missing-path and permission errors surface explicitly
+- Match top-level files against `input_file_regex` case-insensitively (default `*.pdf`)
 - Skip PDFs whose output CSV already has all `REQUIRED_CSV_COLS`
 - Prompt interactively to delete and reprocess pages with empty JSON extractions
 - Remaining PDFs dispatched via `multiprocessing.Pool` with `max_workers`
