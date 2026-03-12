@@ -1,4 +1,8 @@
-from parselabs.extraction import _fix_lab_results_format
+import warnings
+
+from pydantic.warnings import PydanticDeprecatedSince211
+
+from parselabs.extraction import HealthLabReport, LabResult, _fix_lab_results_format
 
 
 def test_fix_lab_results_format_recovers_stringified_json_items():
@@ -85,3 +89,29 @@ def test_fix_lab_results_format_cleans_partial_bbox_fields():
     assert fixed_payload["lab_results"][1]["bbox_top"] == 200.0
     assert fixed_payload["lab_results"][1]["bbox_right"] == 400.0
     assert fixed_payload["lab_results"][1]["bbox_bottom"] == 320.0
+
+
+def test_normalize_empty_optionals_clears_empty_strings_without_pydantic_deprecation():
+    report = HealthLabReport(
+        collection_date="2024-01-01",
+        source_file="report.pdf",
+        lab_results=[
+            LabResult(
+                raw_lab_name="Glucose",
+                raw_value="",
+                raw_lab_unit="",
+                raw_reference_range="",
+                raw_comments="",
+            )
+        ],
+    )
+
+    # Escalate the old instance-level field access warning so this regression stays fixed.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", PydanticDeprecatedSince211)
+        report.normalize_empty_optionals()
+
+    assert report.lab_results[0].raw_value is None
+    assert report.lab_results[0].raw_lab_unit is None
+    assert report.lab_results[0].raw_reference_range is None
+    assert report.lab_results[0].raw_comments is None

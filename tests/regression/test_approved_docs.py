@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import shutil
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -17,8 +20,53 @@ from parselabs.review_sync import build_document_expected_dataframe_from_reviewe
 from parselabs.utils import setup_logging
 
 
+def _close_root_logging_handlers() -> None:
+    """Close root handlers so temporary output trees can be deleted cleanly."""
+
+    root_logger = logging.getLogger()
+
+    # Detach and close every root handler because approved-doc runs log into temp directories.
+    for handler in list(root_logger.handlers):
+        root_logger.removeHandler(handler)
+        handler.close()
+
+    # Flush any remaining logging state held by the stdlib logging module.
+    logging.shutdown()
+
+
+def _cleanup_temp_root(temp_root: Path) -> None:
+    """Best-effort removal for regression temp trees before pytest teardown."""
+
+    # Guard: Nothing to delete when the temp tree is already gone.
+    if not temp_root.exists():
+        return
+
+    # Relax permissions first so macOS temp cleanup does not fail on nested outputs.
+    for child in sorted(temp_root.rglob("*"), reverse=True):
+        try:
+            # Directories need execute permission for recursive traversal and deletion.
+            if child.is_dir():
+                child.chmod(0o700)
+                continue
+
+            # Files only need read/write permission for explicit cleanup.
+            child.chmod(0o600)
+        except OSError:
+            # Best-effort cleanup should keep going even when a path disappeared mid-walk.
+            continue
+
+    # Ensure the root directory itself is traversable before removing it.
+    try:
+        temp_root.chmod(0o700)
+    except OSError:
+        pass
+
+    # Remove the temp tree eagerly so pytest does not need to clean it up later.
+    shutil.rmtree(temp_root, ignore_errors=True)
+
+
 @pytest.fixture(scope="module")
-def approved_regression_run(tmp_path_factory):
+def approved_regression_run():
     if os.getenv("RUN_APPROVED_DOCS") != "1":
         pytest.skip("Set RUN_APPROVED_DOCS=1 to run approved document regressions.")
 
@@ -45,7 +93,7 @@ def approved_regression_run(tmp_path_factory):
         except RuntimeError as exc:
             pytest.fail(str(exc))
 
-        temp_root = tmp_path_factory.mktemp(f"approved-docs-{profile_name}")
+        temp_root = Path(tempfile.mkdtemp(prefix=f"approved-docs-{profile_name}-"))
         input_dir = temp_root / "input"
         output_dir = temp_root / "output"
         input_dir.mkdir(parents=True, exist_ok=True)
@@ -68,18 +116,23 @@ def approved_regression_run(tmp_path_factory):
             input_file_regex="*.pdf",
             max_workers=1,
         )
-        run_pipeline_for_pdf_files(pdf_files, config, lab_specs)
+        try:
+            run_pipeline_for_pdf_files(pdf_files, config, lab_specs)
 
-        # Replay the approved review decisions onto the fresh extraction before rebuilding reviewed truth.
-        for case in profile_cases:
-            doc_dir = output_dir / case.case_id
+            # Replay the approved review decisions onto the fresh extraction before rebuilding reviewed truth.
+            for case in profile_cases:
+                doc_dir = output_dir / case.case_id
 
-            # Guard: Each rerun fixture should recreate its own processed document directory.
-            if not doc_dir.exists():
-                pytest.fail(f"Approved case '{case.case_id}' did not recreate processed output at {doc_dir}.")
+                # Guard: Each rerun fixture should recreate its own processed document directory.
+                if not doc_dir.exists():
+                    pytest.fail(f"Approved case '{case.case_id}' did not recreate processed output at {doc_dir}.")
 
-            _apply_review_state(case.review_state_path, doc_dir)
-            actual_by_stem[case.stem] = build_document_expected_dataframe_from_reviewed_json(doc_dir, lab_specs)
+                _apply_review_state(case.review_state_path, doc_dir)
+                actual_by_stem[case.stem] = build_document_expected_dataframe_from_reviewed_json(doc_dir, lab_specs)
+        finally:
+            # Release log files before removing the profile-specific temp tree.
+            _close_root_logging_handlers()
+            _cleanup_temp_root(temp_root)
 
     return cases, actual_by_stem
 

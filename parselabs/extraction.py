@@ -160,9 +160,13 @@ class HealthLabReport(BaseModel):
     def _clear_empty_strings(model: BaseModel):
         """Set empty string optional fields to None on a Pydantic model."""
 
-        for field_name in model.model_fields:
+        # Read field metadata from the model class to avoid Pydantic instance deprecation warnings.
+        model_fields = type(model).model_fields
+
+        # Inspect each declared field so optional empty strings can be normalized consistently.
+        for field_name in model_fields:
             value = getattr(model, field_name)
-            field_info = model.model_fields[field_name]
+            field_info = model_fields[field_name]
 
             # Replace empty strings with None for optional fields
             if value == "" and not field_info.is_required():
