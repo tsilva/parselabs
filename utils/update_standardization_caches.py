@@ -22,7 +22,7 @@ from openai import OpenAI  # noqa: E402
 
 from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig, ProfileConfig  # noqa: E402
 from parselabs.paths import get_prompts_dir  # noqa: E402
-from parselabs.standardization import load_cache, save_cache  # noqa: E402
+from parselabs.standardization import load_cache, normalize_unit_cache_key_component, save_cache  # noqa: E402
 from parselabs.utils import parse_llm_json_response  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -32,6 +32,33 @@ _PROMPTS_DIR = get_prompts_dir()
 
 def _load_prompt(name: str) -> str:
     return (_PROMPTS_DIR / f"{name}.md").read_text(encoding="utf-8")
+
+
+def _render_prompt_template(template: str, **replacements: str) -> str:
+    """Replace only known placeholder tokens in a prompt template."""
+
+    rendered = template
+
+    # Replace explicit placeholders so literal braces in examples remain untouched.
+    for key, value in replacements.items():
+        rendered = rendered.replace(f"{{{key}}}", str(value))
+
+    return rendered
+
+
+def _prune_unknown_cache_entries(cache: dict) -> tuple[dict, int]:
+    """Remove cached $UNKNOWN$ entries so unresolved mappings stay discoverable."""
+
+    pruned_cache = {}
+    for key, value in cache.items():
+        if value == UNKNOWN_VALUE:
+            continue
+        if "|" in str(key):
+            _, _, lab_name = str(key).partition("|")
+            if lab_name.strip() in {"", UNKNOWN_VALUE.lower()}:
+                continue
+        pruned_cache[key] = value
+    return pruned_cache, len(cache) - len(pruned_cache)
 
 
 def _standardize_names_with_llm(
@@ -44,7 +71,8 @@ def _standardize_names_with_llm(
 
     items = {name: name for name in uncached_names}
     system_prompt_template = _load_prompt("name_standardization")
-    system_prompt = system_prompt_template.format(
+    system_prompt = _render_prompt_template(
+        system_prompt_template,
         num_candidates=len(standardized_names),
         candidates=json.dumps(standardized_names, ensure_ascii=False, indent=2),
         unknown=UNKNOWN_VALUE,
@@ -73,13 +101,10 @@ Return a JSON object with the standardized values."""
     for key in items:
         if key in result:
             std = result[key]
-            if std == UNKNOWN_VALUE or std in standardized_names:
+            if std in standardized_names:
                 validated[key] = std
             else:
-                logger.warning(f"LLM returned invalid name: '{std}' for '{key}', using $UNKNOWN$")
-                validated[key] = UNKNOWN_VALUE
-        else:
-            validated[key] = UNKNOWN_VALUE
+                logger.warning(f"LLM returned invalid or unknown name: '{std}' for '{key}', leaving unresolved")
     return validated
 
 
@@ -91,6 +116,14 @@ def _standardize_units_with_llm(
     lab_specs: LabSpecsConfig,
 ) -> dict[str, str]:
     """Call LLM to standardize a batch of raw units. Returns dict keyed by cache key."""
+
+    uncached_pairs = [
+        (raw_unit, lab_name)
+        for raw_unit, lab_name in uncached_pairs
+        if lab_name and lab_name != UNKNOWN_VALUE
+    ]
+    if not uncached_pairs:
+        return {}
 
     items = [{"raw_unit": raw_unit, "lab_name": lab_name} for raw_unit, lab_name in uncached_pairs]
 
@@ -108,11 +141,13 @@ def _standardize_units_with_llm(
         mapping_content = "\n".join(primary_units_list)
         primary_units_context = f"\nPRIMARY UNITS MAPPING (use this for null/missing units):\n{{\n{mapping_content}\n}}\n"
 
-    system_prompt_template = _load_prompt("unit_standardization").replace("{primary_units_context}", primary_units_context)
-    system_prompt = system_prompt_template.format(
+    system_prompt_template = _load_prompt("unit_standardization")
+    system_prompt = _render_prompt_template(
+        system_prompt_template,
         num_candidates=len(standardized_units),
         candidates=json.dumps(standardized_units, ensure_ascii=False, indent=2),
         unknown=UNKNOWN_VALUE,
+        primary_units_context=primary_units_context,
     )
     user_prompt = f"""Map these items to standardized values:
 
@@ -140,11 +175,10 @@ Return a JSON array with the standardized values."""
             lab_name = item.get("lab_name")
             standardized = item.get("standardized_unit")
             if raw_unit is not None and lab_name is not None:
-                cache_key = f"{str(raw_unit).lower().strip()}|{str(lab_name).lower().strip()}"
-                if standardized and (standardized == UNKNOWN_VALUE or standardized in standardized_units):
+                normalized_unit = normalize_unit_cache_key_component(raw_unit)
+                cache_key = f"{normalized_unit}|{str(lab_name).lower().strip()}"
+                if standardized in standardized_units:
                     validated[cache_key] = standardized
-                else:
-                    validated[cache_key] = UNKNOWN_VALUE
     return validated
 
 
@@ -193,8 +227,11 @@ def main():
     raw_unit_col = "raw_unit" if "raw_unit" in df.columns else "raw_lab_unit" if "raw_lab_unit" in df.columns else None
     if raw_unit_col and "lab_name" in df.columns:
         for _, row in df[[raw_unit_col, "lab_name"]].dropna().drop_duplicates().iterrows():
+            if str(row["lab_name"]).strip() == UNKNOWN_VALUE:
+                continue
             raw_unit = str(row[raw_unit_col])
-            key = f"{raw_unit.lower().strip()}|{str(row['lab_name']).lower().strip()}"
+            normalized_unit = normalize_unit_cache_key_component(raw_unit)
+            key = f"{normalized_unit}|{str(row['lab_name']).lower().strip()}"
             if key not in unit_cache:
                 unit_pairs.append((raw_unit, str(row["lab_name"])))
 
@@ -231,6 +268,7 @@ def main():
     )
 
     # Update name cache
+    name_cache, removed_name_unknowns = _prune_unknown_cache_entries(name_cache)
     if uncached_names:
         logger.info(f"Standardizing {len(uncached_names)} names via LLM...")
         llm_results = _standardize_names_with_llm(uncached_names, lab_specs.standardized_names, client, model_id)
@@ -238,8 +276,12 @@ def main():
             name_cache[raw_name.lower().strip()] = std_name
         save_cache("name_standardization", name_cache)
         logger.info(f"Name cache updated with {len(llm_results)} entries")
+    elif removed_name_unknowns:
+        save_cache("name_standardization", name_cache)
+        logger.info(f"Removed {removed_name_unknowns} stale unknown name cache entr{'y' if removed_name_unknowns == 1 else 'ies'}")
 
     # Update unit cache
+    unit_cache, removed_unit_unknowns = _prune_unknown_cache_entries(unit_cache)
     if unit_pairs:
         logger.info(f"Standardizing {len(unit_pairs)} unit pairs via LLM...")
         llm_results = _standardize_units_with_llm(unit_pairs, lab_specs.standardized_units, client, model_id, lab_specs)
@@ -247,6 +289,9 @@ def main():
             unit_cache[cache_key] = std_unit
         save_cache("unit_standardization", unit_cache)
         logger.info(f"Unit cache updated with {len(llm_results)} entries")
+    elif removed_unit_unknowns:
+        save_cache("unit_standardization", unit_cache)
+        logger.info(f"Removed {removed_unit_unknowns} stale unknown unit cache entr{'y' if removed_unit_unknowns == 1 else 'ies'}")
 
     logger.info("Cache update complete.")
 

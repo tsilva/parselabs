@@ -10,6 +10,14 @@ from parselabs.utils import ensure_columns
 
 logger = logging.getLogger(__name__)
 
+QUALITATIVE_VARIANT_MAP = {
+    "Urine Type II - Bilirubin": "Urine Type II - Bilirubin, Qualitative",
+    "Urine Type II - Glucose": "Urine Type II - Glucose, Qualitative",
+    "Urine Type II - Ketones": "Urine Type II - Ketones, Qualitative",
+    "Urine Type II - Proteins": "Urine Type II - Proteins, Qualitative",
+    "Urine Type II - Urobilinogen": "Urine Type II - Urobilinogen, Qualitative",
+}
+
 
 def preprocess_numeric_value(value) -> str:
     """
@@ -203,7 +211,14 @@ def classify_qualitative_value(text: str) -> int | None:
     _POSITIVE_KEYWORDS = {
         "abundantes",
         "levemente turvo",
+        "trace",
+        "traces",
+        "traço",
+        "traços",
         "turvo",
+        "vestigio",
+        "vestígios",
+        "vestigios",
         "cultura polimicrobiana",
     }
 
@@ -240,6 +255,10 @@ def classify_qualitative_value(text: str) -> int | None:
         "amarela",
         "amarelo",
         "amarela clara",
+        "citrina",
+        "claro",
+        "clara",
+        "transparente",
     }
 
     # Check positive patterns
@@ -255,6 +274,8 @@ def classify_qualitative_value(text: str) -> int | None:
         return 1
     if "distendida, apresenta paredes finas" in normalized:
         return 0
+    if re.fullmatch(r"\++", normalized):
+        return 1
 
     # Check negative patterns
     if any(normalized.startswith(p) for p in _NEGATIVE_PREFIXES):
@@ -282,6 +303,69 @@ def _classify_qualitative_batch(values: list[str]) -> dict[str, int | None]:
         if v is not None:
             result[v] = classify_qualitative_value(v)
     return result
+
+
+def _remap_qualitative_variant_rows(
+    df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+) -> pd.DataFrame:
+    """Remap text-only urine strip analytes onto boolean qualitative variants."""
+
+    # Guard: Missing lab mappings or empty inputs leave nothing to remap.
+    if df.empty or "lab_name_standardized" not in df.columns:
+        return df
+
+    # Evaluate raw_value first, then raw_comments only when raw_value is absent.
+    for source_col, needs_raw_value_isna in [
+        ("raw_value", False),
+        ("raw_comments", True),
+    ]:
+        remap_indices: list[int] = []
+
+        # Inspect each row independently so only confidently qualitative rows are remapped.
+        for idx in df.index:
+            standardized_name = df.at[idx, "lab_name_standardized"]
+
+            # Skip labs that do not have a dedicated qualitative variant.
+            if standardized_name not in QUALITATIVE_VARIANT_MAP:
+                continue
+
+            # Skip rows that already parsed as numeric values.
+            if pd.notna(df.at[idx, "value_primary"]):
+                continue
+
+            source_value = df.at[idx, source_col]
+
+            # Skip rows without a qualitative source value to classify.
+            if pd.isna(source_value):
+                continue
+
+            # Only inspect comments when the raw_value itself is missing.
+            if needs_raw_value_isna and pd.notna(df.at[idx, "raw_value"]):
+                continue
+
+            # Skip text that the deterministic classifier cannot interpret.
+            if classify_qualitative_value(str(source_value)) is None:
+                continue
+
+            variant_name = QUALITATIVE_VARIANT_MAP[standardized_name]
+
+            # Skip variants missing from lab_specs so normalization stays internally consistent.
+            if variant_name not in lab_specs.specs:
+                continue
+
+            remap_indices.append(idx)
+
+        # Guard: No rows qualified for this source column.
+        if not remap_indices:
+            continue
+
+        # Remap the standardized lab and unit so downstream review/export logic sees boolean rows.
+        df.loc[remap_indices, "lab_name_standardized"] = df.loc[remap_indices, "lab_name_standardized"].map(QUALITATIVE_VARIANT_MAP)
+        df.loc[remap_indices, "lab_unit_standardized"] = "boolean"
+        logger.info(f"[normalization] Remapped {len(remap_indices)} qualitative rows from {source_col} to boolean urine variants")
+
+    return df
 
 
 def _convert_qualitative_values(
@@ -317,6 +401,7 @@ def _convert_qualitative_values(
 
             qual_map = _classify_qualitative_batch(df.loc[mask, source_col].tolist())
             df.loc[mask, "value_primary"] = df.loc[mask, source_col].map(lambda v: qual_map.get(v))
+            df.loc[mask, "lab_unit_standardized"] = "boolean"
             df.loc[mask, "lab_unit_primary"] = "boolean"
             logger.info(f"[normalization] Converted {mask.sum()} qualitative values from {source_col} (boolean labs)")
 
@@ -417,10 +502,13 @@ def apply_unit_conversions(
     # Phase 1: Extract comparison operators and preprocess values
     df = _preprocess_values(df)
 
-    # Phase 2: Convert qualitative text values to 0/1 for boolean-style labs
+    # Phase 2: Remap text-only urine strip analytes onto boolean qualitative variants.
+    df = _remap_qualitative_variant_rows(df, lab_specs)
+
+    # Phase 3: Convert qualitative text values to 0/1 for boolean-style labs.
     df = _convert_qualitative_values(df, lab_specs)
 
-    # Phase 3: Apply exact unit conversion factors for each lab type
+    # Phase 4: Apply exact unit conversion factors for each lab type.
     for lab_name_standardized in df["lab_name_standardized"].unique():
         # Skip unknown or missing lab names
         if pd.isna(lab_name_standardized) or lab_name_standardized == UNKNOWN_VALUE:

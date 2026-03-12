@@ -11,6 +11,7 @@ import main
 from parselabs.config import ExtractionConfig, LabSpecsConfig, ProfileConfig
 from parselabs.review_sync import (
     ReviewStateError,
+    apply_cached_standardization,
     build_document_expected_dataframe_from_reviewed_json,
     build_document_review_dataframe,
     build_review_corpus_report,
@@ -148,6 +149,26 @@ def test_save_review_status_updates_json_and_summary(tmp_path, monkeypatch):
     assert review_df.loc[0, "review_status"] == "accepted"
     assert summary.accepted == 1
     assert summary.pending == 1
+
+
+def test_save_review_status_can_clear_existing_decision(tmp_path, monkeypatch):
+    lab_specs = _make_lab_specs(tmp_path)
+    _stub_standardization(monkeypatch)
+    doc_dir = tmp_path / "processed" / "glucose_deadbeef"
+    _write_processed_document(doc_dir, ["accepted", None])
+
+    success, error = save_review_status(doc_dir, page_number=1, result_index=0, status=None)
+
+    assert success is True
+    assert error == ""
+
+    rebuild_document_csv(doc_dir, lab_specs)
+    review_df = build_document_review_dataframe(doc_dir, lab_specs)
+    summary = get_review_summary(review_df)
+
+    assert review_df["review_status"].fillna("").tolist() == ["", ""]
+    assert summary.accepted == 0
+    assert summary.pending == 2
 
 
 def test_save_missing_row_marker_preserves_current_row_status(tmp_path, monkeypatch):
@@ -294,6 +315,47 @@ def test_build_document_review_dataframe_flags_unknown_units_for_review(tmp_path
     assert "UNKNOWN_UNIT_MAPPING" in str(review_df.loc[0, "review_reason"])
 
 
+def test_apply_cached_standardization_infers_safe_missing_primary_units(tmp_path, monkeypatch):
+    config_path = tmp_path / "lab_specs.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "Urine Type II - pH": {
+                    "primary_unit": "pH",
+                    "lab_type": "urine",
+                    "loinc_code": "5803-2",
+                    "ranges": {"default": [5.0, 8.0]},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    lab_specs = LabSpecsConfig(config_path=config_path)
+
+    monkeypatch.setattr(
+        "parselabs.review_sync.standardize_lab_names",
+        lambda raw_names: {name: "Urine Type II - pH" for name in raw_names},
+    )
+    monkeypatch.setattr(
+        "parselabs.review_sync.standardize_lab_units",
+        lambda unit_contexts: {context: "$UNKNOWN$" for context in unit_contexts},
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "pH",
+                "raw_lab_unit": "",
+            }
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df.loc[0, "lab_name_standardized"] == "Urine Type II - pH"
+    assert standardized_df.loc[0, "lab_unit_standardized"] == "pH"
+
+
 def test_build_document_review_dataframe_keeps_extraction_failures_visible(tmp_path, monkeypatch):
     lab_specs = _make_lab_specs(tmp_path)
     _stub_standardization(monkeypatch)
@@ -372,17 +434,11 @@ def test_review_corpus_report_counts_rejections_missing_rows_and_unknowns(tmp_pa
 
     monkeypatch.setattr(
         "parselabs.review_sync.standardize_lab_names",
-        lambda raw_names: {
-            name: ("Blood - Glucose" if name == "Glucose" else "$UNKNOWN$")
-            for name in raw_names
-        },
+        lambda raw_names: {name: ("Blood - Glucose" if name == "Glucose" else "$UNKNOWN$") for name in raw_names},
     )
     monkeypatch.setattr(
         "parselabs.review_sync.standardize_lab_units",
-        lambda unit_contexts: {
-            context: ("mg/dL" if context[0] == "mg/dL" else "$UNKNOWN$")
-            for context in unit_contexts
-        },
+        lambda unit_contexts: {context: ("mg/dL" if context[0] == "mg/dL" else "$UNKNOWN$") for context in unit_contexts},
     )
 
     report = build_review_corpus_report(output_path, lab_specs)

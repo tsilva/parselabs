@@ -3,19 +3,21 @@
 from __future__ import annotations
 
 import argparse
+import html
 import logging
+from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote
 
 import gradio as gr
 import pandas as pd
 
 from parselabs.config import LabSpecsConfig, ProfileConfig
+from parselabs.paths import get_static_dir
 from parselabs.review_sync import (
     ProcessedDocument,
-    count_review_missing_rows,
     get_document_review_summary,
     get_page_image_path,
-    get_review_summary,
     iter_processed_documents,
     rebuild_document_csv,
     save_missing_row_marker,
@@ -24,45 +26,73 @@ from parselabs.review_sync import (
 
 logger = logging.getLogger(__name__)
 
+_STATIC_DIR = get_static_dir()
+
+KEYBOARD_SHORTCUTS_JS = (_STATIC_DIR / "review_documents.js").read_text()
+CUSTOM_CSS = (_STATIC_DIR / "review_documents.css").read_text()
+
 _output_path: Path | None = None
 _lab_specs: LabSpecsConfig | None = None
 
-KEYBOARD_SHORTCUTS_JS = """
-<script>
-(function() {
-    document.addEventListener('keydown', function(event) {
-        if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
-            return;
-        }
+QUEUE_STATE_COLUMNS = [
+    "actual_index",
+    "status_code",
+    "page_label",
+    "row_label",
+    "raw_lab_label",
+    "raw_value_label",
+    "mapped_lab_label",
+]
 
-        switch (event.key.toLowerCase()) {
-            case 'y':
-                document.querySelector('#review-accept-btn')?.click();
-                event.preventDefault();
-                break;
-            case 'n':
-                document.querySelector('#review-reject-btn')?.click();
-                event.preventDefault();
-                break;
-            case 'm':
-                document.querySelector('#review-missing-btn')?.click();
-                event.preventDefault();
-                break;
-            case 'arrowright':
-            case 'j':
-                document.querySelector('#review-next-btn')?.click();
-                event.preventDefault();
-                break;
-            case 'arrowleft':
-            case 'k':
-                document.querySelector('#review-prev-btn')?.click();
-                event.preventDefault();
-                break;
-        }
-    });
-})();
-</script>
-"""
+QUEUE_DISPLAY_COLUMNS = [
+    "Current",
+    "St",
+    "Pg",
+    "Row",
+    "Raw Lab",
+    "Raw Value",
+    "Mapped Lab",
+]
+
+
+@dataclass(frozen=True)
+class DropdownState:
+    """Resolved document-dropdown state after filter or refresh events."""
+
+    selected_id: str | None
+    choices: list[tuple[str, str]]
+    status_text: str
+
+    def as_update(self) -> dict:
+        """Return the Gradio update payload for the document dropdown."""
+
+        return gr.update(choices=self.choices, value=self.selected_id)
+
+
+@dataclass(frozen=True)
+class ReviewerView:
+    """All UI fragments needed to render the active reviewer state."""
+
+    current_index: int
+    page_context_html: str
+    image_value: str | None
+    inspector_html: str
+    queue_display: pd.DataFrame
+    queue_state: pd.DataFrame
+    progress_html: str
+
+    def as_outputs(self) -> tuple[int, str, str | None, str, pd.DataFrame, pd.DataFrame, str]:
+        """Return UI fragments in the order expected by Gradio callbacks."""
+
+        return (
+            self.current_index,
+            self.page_context_html,
+            self.image_value,
+            self.inspector_html,
+            self.queue_display,
+            self.queue_state,
+            self.progress_html,
+        )
 
 
 def set_output_path(path: Path) -> None:
@@ -119,6 +149,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--profile", help="Profile name used to locate the processed output directory")
     parser.add_argument("--list-profiles", action="store_true", help="List available profiles and exit")
     return parser.parse_args()
+
+
+def _empty_queue_state() -> pd.DataFrame:
+    """Return an empty queue-state dataframe with stable columns."""
+
+    return pd.DataFrame(columns=QUEUE_STATE_COLUMNS)
+
+
+def _empty_queue_display() -> pd.DataFrame:
+    """Return an empty queue display with stable headers."""
+
+    return pd.DataFrame(columns=QUEUE_DISPLAY_COLUMNS)
 
 
 def _get_documents() -> list[ProcessedDocument]:
@@ -183,6 +225,24 @@ def _build_allowed_paths() -> list[str]:
     return sorted(allowed_paths)
 
 
+def _get_review_frame(document: ProcessedDocument | None) -> pd.DataFrame:
+    """Load the current review dataframe for a processed document."""
+
+    # Guard: No selected document means no rows to render.
+    if document is None:
+        return pd.DataFrame()
+
+    # Rebuild from JSON when the CSV is missing so the UI can recover gracefully.
+    if not document.csv_path.exists():
+        rebuild_document_csv(document.doc_dir, get_lab_specs())
+
+    # Guard: Missing or empty CSVs still render a stable empty state.
+    if not document.csv_path.exists() or document.csv_path.stat().st_size == 0:
+        return pd.DataFrame()
+
+    return pd.read_csv(document.csv_path, keep_default_na=False)
+
+
 def _matches_document_filter(document: ProcessedDocument, filter_mode: str) -> bool:
     """Return whether a document should appear under the selected review filter."""
 
@@ -201,439 +261,815 @@ def _matches_document_filter(document: ProcessedDocument, filter_mode: str) -> b
     return summary.fixture_ready
 
 
-def _build_dropdown_choices(
-    documents: list[ProcessedDocument],
-    filter_mode: str,
-) -> list[tuple[str, str]]:
+def _normalize_status(status: object) -> str:
+    """Normalize reviewer status values into accepted, rejected, or pending."""
+
+    # Guard: Missing statuses stay pending.
+    if status is None:
+        return ""
+
+    normalized = str(status).strip().lower()
+
+    # Guard: Empty strings are treated as pending decisions.
+    if not normalized:
+        return ""
+
+    # Guard: Only the two persisted review outcomes are surfaced explicitly.
+    if normalized in {"accepted", "rejected"}:
+        return normalized
+
+    return ""
+
+
+def _format_text(value: object, empty: str = "-") -> str:
+    """Return a safe string for UI display, normalizing missing values."""
+
+    # Guard: Missing values render as a short placeholder.
+    if value is None or pd.isna(value):
+        return empty
+
+    text = str(value).strip()
+
+    # Guard: Blank strings also render as a short placeholder.
+    if not text:
+        return empty
+
+    return html.escape(text)
+
+
+def _format_raw_value(row: pd.Series) -> str:
+    """Format the raw value and raw unit into one compact queue cell."""
+
+    value_text = _format_text(row.get("raw_value"))
+    unit_text = _format_text(row.get("raw_lab_unit"), empty="")
+
+    # Omit the placeholder unit suffix when the unit is genuinely absent.
+    if unit_text:
+        return f"{value_text} {unit_text}".strip()
+
+    return value_text
+
+
+def _format_mapped_value(row: pd.Series) -> str:
+    """Format the normalized value and unit for inspector display."""
+
+    value_text = _format_text(row.get("value"))
+    unit_text = _format_text(row.get("lab_unit"), empty="")
+
+    # Omit the placeholder unit suffix when the unit is genuinely absent.
+    if unit_text:
+        return f"{value_text} {unit_text}".strip()
+
+    return value_text
+
+
+def _format_reference_text(row: pd.Series) -> str:
+    """Format the best available reference range for the inspector."""
+
+    raw_reference = _format_text(row.get("raw_reference_range"), empty="")
+
+    # Prefer the extracted range string when the model provided one.
+    if raw_reference:
+        return raw_reference
+
+    ref_min = _format_text(row.get("reference_min"), empty="")
+    ref_max = _format_text(row.get("reference_max"), empty="")
+
+    # Show a min-max pair when either side is present.
+    if ref_min or ref_max:
+        return f"{ref_min} - {ref_max}".strip(" -")
+
+    return "-"
+
+
+def _build_queue_state(review_df: pd.DataFrame, show_reviewed: bool) -> pd.DataFrame:
+    """Build the visible row queue for the active document."""
+
+    # Guard: Empty documents render an empty queue state.
+    if review_df.empty:
+        return _empty_queue_state()
+
+    queue_df = review_df.copy().reset_index().rename(columns={"index": "actual_index"})
+    queue_df["status_normalized"] = queue_df["review_status"].apply(_normalize_status)
+    queue_df["status_sort"] = queue_df["status_normalized"].apply(lambda status: 0 if not status else 1)
+
+    # Hide accepted and rejected rows unless the reviewer explicitly asks to see them.
+    if not show_reviewed:
+        queue_df = queue_df[queue_df["status_normalized"] == ""].copy()
+
+    # Guard: Fully reviewed documents have no visible queue when reviewed rows are hidden.
+    if queue_df.empty:
+        return _empty_queue_state()
+
+    # Keep pending rows at the top, then preserve source order within the document.
+    queue_df = queue_df.sort_values(["status_sort", "page_number", "result_index"], kind="mergesort").reset_index(drop=True)
+    queue_df["status_code"] = queue_df["status_normalized"].map({"accepted": "A", "rejected": "R", "": "P"}).fillna("P")
+    queue_df["page_label"] = queue_df["page_number"].apply(lambda value: str(int(value)) if str(value).strip() else "-")
+    queue_df["row_label"] = queue_df["result_index"].apply(lambda value: str(int(value)) if str(value).strip() else "-")
+    queue_df["raw_lab_label"] = queue_df["raw_lab_name"].apply(_format_text)
+    queue_df["raw_value_label"] = queue_df.apply(_format_raw_value, axis=1)
+    queue_df["mapped_lab_label"] = queue_df["lab_name"].apply(_format_text)
+    return queue_df[QUEUE_STATE_COLUMNS].copy()
+
+
+def _build_queue_display(queue_state: pd.DataFrame, current_index: int) -> pd.DataFrame:
+    """Build the queue dataframe shown in the left navigation pane."""
+
+    # Guard: Empty queue state renders stable table headers with no rows.
+    if queue_state.empty:
+        return _empty_queue_display()
+
+    display_df = pd.DataFrame(
+        {
+            "Current": "",
+            "St": queue_state["status_code"],
+            "Pg": queue_state["page_label"],
+            "Row": queue_state["row_label"],
+            "Raw Lab": queue_state["raw_lab_label"],
+            "Raw Value": queue_state["raw_value_label"],
+            "Mapped Lab": queue_state["mapped_lab_label"],
+        }
+    )
+
+    # Mark the active row so the queue remains navigable without relying on theme-specific selection styling.
+    if current_index in set(queue_state["actual_index"].tolist()):
+        selected_row = queue_state.index[queue_state["actual_index"] == current_index][0]
+        display_df.loc[selected_row, "Current"] = "->"
+
+    return display_df
+
+
+def _resolve_current_index(queue_state: pd.DataFrame, requested_index: int | None, prefer_first_visible: bool) -> int:
+    """Resolve the active row index from the visible queue."""
+
+    # Guard: Empty queue state means there is no visible row to select.
+    if queue_state.empty:
+        return -1
+
+    visible_indices = [int(value) for value in queue_state["actual_index"].tolist()]
+
+    # Document switches should jump straight to the first visible row.
+    if prefer_first_visible:
+        return visible_indices[0]
+
+    # Preserve the current row when it is still visible under the active queue filter.
+    if requested_index in set(visible_indices):
+        return int(requested_index)
+
+    return visible_indices[0]
+
+
+def _get_current_row(review_df: pd.DataFrame, current_index: int) -> pd.Series | None:
+    """Return the active row from the full review dataframe."""
+
+    # Guard: Empty documents or synthetic indexes have no active row.
+    if review_df.empty or current_index < 0 or current_index >= len(review_df):
+        return None
+
+    return review_df.iloc[current_index]
+
+
+def _build_reason_badges(review_reason: object) -> str:
+    """Render validation reason codes as compact badges."""
+
+    reason_text = _format_text(review_reason, empty="")
+
+    # Guard: Rows without validation flags do not need badge markup.
+    if not reason_text:
+        return '<span class="review-inline-muted">None</span>'
+
+    badges: list[str] = []
+
+    # Split semicolon-delimited reasons into individual badges for faster scanning.
+    for reason in [part.strip() for part in html.unescape(reason_text).split(";") if part.strip()]:
+        badges.append(f'<span class="review-reason-chip">{html.escape(reason)}</span>')
+
+    return "".join(badges)
+
+
+def _build_pdf_link(document: ProcessedDocument | None) -> str:
+    """Build a compact link to the source PDF for the active document."""
+
+    # Guard: No selected document means there is no PDF to open.
+    if document is None:
+        return '<span class="review-pdf-link disabled">PDF unavailable</span>'
+
+    pdf_href = f"/gradio_api/file={quote(str(document.pdf_path), safe='/:')}"
+    return f'<a class="review-pdf-link" href="{pdf_href}" target="_blank" rel="noopener noreferrer">Open PDF</a>'
+
+
+def _build_page_context_html(document: ProcessedDocument | None, review_df: pd.DataFrame, current_index: int) -> str:
+    """Build the compact header shown above the source page image."""
+
+    pdf_link = _build_pdf_link(document)
+
+    # Guard: No selected document gets a neutral placeholder header.
+    if document is None:
+        return f'<div class="review-pane-header"><div><div class="review-eyebrow">Source page</div><div class="review-title">No document selected</div></div>{pdf_link}</div>'
+
+    current_row = _get_current_row(review_df, current_index)
+
+    # Surface the current page when there is an active row selection.
+    if current_row is not None:
+        page_title = f"Page {int(current_row['page_number'])}"
+    else:
+        page_title = "No active row"
+
+    return f'<div class="review-pane-header"><div><div class="review-eyebrow">{html.escape(document.stem)}</div><div class="review-title">{page_title}</div></div>{pdf_link}</div>'
+
+
+def _build_progress_chip(label: str, value: str, tone: str = "neutral") -> str:
+    """Build one progress chip for the sticky toolbar."""
+
+    return f'<span class="review-progress-chip {tone}"><span class="label">{html.escape(label)}</span>{html.escape(value)}</span>'
+
+
+def _build_progress_html(
+    document: ProcessedDocument | None,
+    review_df: pd.DataFrame,
+    queue_state: pd.DataFrame,
+    current_index: int,
+    show_reviewed: bool,
+) -> str:
+    """Build the sticky toolbar summary for the active document."""
+
+    # Guard: No selected document gets a short neutral summary.
+    if document is None:
+        return '<div class="review-progress-card"><div class="review-progress-title">No processed documents found</div></div>'
+
+    summary = get_document_review_summary(document.doc_dir, review_df)
+    current_row = _get_current_row(review_df, current_index)
+
+    # Describe the current selection when one is visible.
+    if current_row is not None:
+        selection_text = f"Selected page {int(current_row['page_number'])}, row {int(current_row['result_index'])}."
+    elif review_df.empty:
+        selection_text = "This document has no extracted rows."
+    elif not show_reviewed and summary.pending == 0:
+        selection_text = "No pending rows. Enable Show reviewed to inspect accepted or rejected rows."
+    else:
+        selection_text = "No visible row selected."
+
+    queue_text = f"{len(queue_state)} shown"
+    chips = [
+        _build_progress_chip("Reviewed", f"{summary.reviewed}/{summary.total}", tone="neutral"),
+        _build_progress_chip("Pending", str(summary.pending), tone="warning"),
+        _build_progress_chip("Rejected", str(summary.rejected), tone="danger"),
+        _build_progress_chip("Missing", str(summary.missing_row_markers), tone="warning"),
+        _build_progress_chip("Fixture", "Ready" if summary.fixture_ready else "Blocked", tone="success" if summary.fixture_ready else "danger"),
+        _build_progress_chip("Queue", queue_text, tone="neutral"),
+    ]
+
+    return (
+        '<div class="review-progress-card">'
+        f'<div class="review-progress-title">{html.escape(document.stem)}</div>'
+        f'<div class="review-progress-subtitle">{html.escape(selection_text)}</div>'
+        f'<div class="review-progress-row">{"".join(chips)}</div>'
+        "</div>"
+    )
+
+
+def _build_inspector_html(document: ProcessedDocument | None, review_df: pd.DataFrame, current_index: int, show_reviewed: bool) -> str:
+    """Render the compact inspector for the active review row."""
+
+    # Guard: No selected document renders a short placeholder card.
+    if document is None:
+        return '<div class="review-card"><div class="review-empty-state">Select a processed document to start reviewing.</div></div>'
+
+    # Guard: Documents without extracted rows still need a stable inspector.
+    if review_df.empty:
+        return '<div class="review-card"><div class="review-empty-state">This document has no extracted rows.</div></div>'
+
+    current_row = _get_current_row(review_df, current_index)
+
+    # Guard: Hidden reviewed rows should explain how to reveal them again.
+    if current_row is None and not show_reviewed:
+        return '<div class="review-card"><div class="review-empty-state">No pending rows remain in this document.</div><div class="review-empty-hint">Enable Show reviewed to inspect accepted and rejected rows.</div></div>'
+
+    # Guard: Fallback placeholder for any other unselected state.
+    if current_row is None:
+        return '<div class="review-card"><div class="review-empty-state">No row selected.</div></div>'
+
+    status = _normalize_status(current_row.get("review_status")) or "pending"
+    status_label = status.capitalize()
+    reference_text = _format_reference_text(current_row)
+    comments_text = _format_text(current_row.get("raw_comments"), empty="")
+    comments_html = comments_text or '<span class="review-inline-muted">None</span>'
+
+    return (
+        '<div class="review-card">'
+        '<div class="review-card-header">'
+        "<div>"
+        '<div class="review-eyebrow">Verify this row</div>'
+        f'<div class="review-title">Page {int(current_row["page_number"])} Row {int(current_row["result_index"])}</div>'
+        "</div>"
+        f'<span class="review-status-chip {status}">{html.escape(status_label)}</span>'
+        "</div>"
+        '<div class="review-compare-grid">'
+        '<div class="review-compare-panel">'
+        '<div class="review-panel-title">Raw</div>'
+        f'<div class="review-field"><span>Lab</span><strong>{_format_text(current_row.get("raw_lab_name"))}</strong></div>'
+        f'<div class="review-field"><span>Value</span><strong>{_format_raw_value(current_row)}</strong></div>'
+        f'<div class="review-field"><span>Reference</span><strong>{reference_text}</strong></div>'
+        "</div>"
+        '<div class="review-compare-panel">'
+        '<div class="review-panel-title">Mapped</div>'
+        f'<div class="review-field"><span>Lab</span><strong>{_format_text(current_row.get("lab_name"))}</strong></div>'
+        f'<div class="review-field"><span>Value</span><strong>{_format_mapped_value(current_row)}</strong></div>'
+        f'<div class="review-field"><span>Unit</span><strong>{_format_text(current_row.get("lab_unit"))}</strong></div>'
+        "</div>"
+        "</div>"
+        '<div class="review-meta-list">'
+        '<div class="review-meta-row"><span>Validation</span>'
+        f'<div class="review-badge-row">{_build_reason_badges(current_row.get("review_reason"))}</div>'
+        "</div>"
+        '<div class="review-meta-row"><span>Comments</span>'
+        f"<strong>{comments_html}</strong>"
+        "</div>"
+        '<div class="review-meta-row"><span>Source file</span>'
+        f"<strong>{html.escape(document.stem)}</strong>"
+        "</div>"
+        "</div>"
+        '<details class="review-help-panel">'
+        "<summary>Missing row help</summary>"
+        "<p>Use Missing when the source page contains an omitted lab line. After fixing the page JSON, clear the page review_missing_rows marker.</p>"
+        "</details>"
+        "</div>"
+    )
+
+
+def _render_document(
+    document: ProcessedDocument | None,
+    requested_index: int | None,
+    show_reviewed: bool,
+    *,
+    prefer_first_visible: bool,
+) -> ReviewerView:
+    """Render all UI fragments for the active document and queue selection."""
+
+    review_df = _get_review_frame(document)
+    queue_state = _build_queue_state(review_df, show_reviewed)
+    current_index = _resolve_current_index(queue_state, requested_index, prefer_first_visible)
+    current_row = _get_current_row(review_df, current_index)
+    image_value = None
+
+    # Resolve the current page image only when there is an active row selection.
+    if document is not None and current_row is not None:
+        page_number = int(current_row["page_number"])
+        image_path = get_page_image_path(document.doc_dir, page_number)
+        image_value = str(image_path) if image_path is not None else None
+
+    return ReviewerView(
+        current_index=current_index,
+        page_context_html=_build_page_context_html(document, review_df, current_index),
+        image_value=image_value,
+        inspector_html=_build_inspector_html(document, review_df, current_index, show_reviewed),
+        queue_display=_build_queue_display(queue_state, current_index),
+        queue_state=queue_state,
+        progress_html=_build_progress_html(document, review_df, queue_state, current_index, show_reviewed),
+    )
+
+
+def _build_dropdown_choices(documents: list[ProcessedDocument], filter_mode: str) -> list[tuple[str, str]]:
     """Build labeled dropdown choices from processed document summaries."""
 
-    choices: list[tuple[str, str]] = []
+    ranked_documents: list[tuple[int, int, str, str, str]] = []
 
-    # Label each document with its review progress so users can triage quickly.
+    # Label each document with review progress so triage stays possible from the toolbar.
     for document in documents:
-        # Skip documents excluded by the current fixture-readiness filter.
+        # Skip documents excluded by the active fixture-readiness filter.
         if not _matches_document_filter(document, filter_mode):
             continue
 
         review_df = _get_review_frame(document)
         summary = get_document_review_summary(document.doc_dir, review_df)
-        label = (
-            f"{document.stem}"
-            f" (reviewed {summary.reviewed}/{summary.total},"
-            f" rejected {summary.rejected},"
-            f" pending {summary.pending},"
-            f" missing {summary.missing_row_markers})"
-        )
-        choices.append((label, document.doc_dir.name))
+        label = f"{document.stem} (pending {summary.pending}, rejected {summary.rejected}, missing {summary.missing_row_markers}, reviewed {summary.reviewed}/{summary.total})"
+        ranked_documents.append((1 if summary.fixture_ready else 0, -summary.pending, document.stem.lower(), label, document.doc_dir.name))
 
-    return choices
+    ranked_documents.sort()
+    return [(label, doc_id) for _, _, _, label, doc_id in ranked_documents]
 
 
-def _get_review_frame(document: ProcessedDocument | None) -> pd.DataFrame:
-    """Load the current review dataframe for a processed document."""
+def _build_dropdown_state(current_doc_id: str | None, filter_mode: str, *, rebuild_all: bool) -> DropdownState:
+    """Resolve dropdown choices and the selected document for the current toolbar filter."""
 
-    # Guard: No selected document means no rows to render.
-    if document is None:
-        return pd.DataFrame()
-
-    # Rebuild from JSON when the CSV is missing so the UI can recover gracefully.
-    if not document.csv_path.exists():
-        rebuild_document_csv(document.doc_dir, get_lab_specs())
-
-    if not document.csv_path.exists() or document.csv_path.stat().st_size == 0:
-        return pd.DataFrame()
-
-    return pd.read_csv(document.csv_path, keep_default_na=False)
-
-
-def _first_pending_row(review_df: pd.DataFrame) -> int:
-    """Return the first pending row index for a document."""
-
-    # Guard: Empty frames default to the first row index.
-    if review_df.empty:
-        return 0
-
-    statuses = review_df["review_status"].fillna("").astype(str).str.strip().str.lower()
-    pending_rows = review_df.index[statuses == ""].tolist()
-
-    # Prefer the first pending row so review resumes where work remains.
-    if pending_rows:
-        return int(pending_rows[0])
-
-    return 0
-
-
-def _clamp_row_index(review_df: pd.DataFrame, row_index: int | None) -> int:
-    """Clamp a requested row index into the valid bounds for a dataframe."""
-
-    # Guard: Empty frames always render the synthetic first row.
-    if review_df.empty:
-        return 0
-
-    # Guard: Missing row indexes should start from the first pending row.
-    if row_index is None:
-        return _first_pending_row(review_df)
-
-    return max(0, min(int(row_index), len(review_df) - 1))
-
-
-def _build_page_summary(doc_dir: Path, review_df: pd.DataFrame, page_number: int) -> str:
-    """Build a short per-page summary for the active review row."""
-
-    page_df = review_df[review_df["page_number"] == page_number].copy()
-    page_summary = get_review_summary(
-        page_df,
-        missing_row_markers=count_review_missing_rows(doc_dir, page_number=page_number),
-    )
-    return (
-        f"page {page_number}: reviewed {page_summary.reviewed}/{page_summary.total}"
-        f" | rejected {page_summary.rejected}"
-        f" | pending {page_summary.pending}"
-        f" | missing {page_summary.missing_row_markers}"
-    )
-
-
-def _build_progress_text(document: ProcessedDocument | None, review_df: pd.DataFrame, current_index: int) -> str:
-    """Build a short progress label for the active document."""
-
-    # Guard: No document means there is nothing to summarize.
-    if document is None:
-        return "No processed documents found."
-
-    summary = get_document_review_summary(document.doc_dir, review_df)
-
-    # Guard: Empty documents still need a stable label in the UI.
-    if review_df.empty:
-        return (
-            f"{document.stem}: no extracted rows"
-            f" | missing {summary.missing_row_markers}"
-            f" | fixture-ready {'yes' if summary.fixture_ready else 'no'}"
-        )
-
-    page_number = int(review_df.iloc[current_index]["page_number"])
-    document_line = (
-        f"{document.stem}: row {current_index + 1}/{len(review_df)}"
-        f" | reviewed {summary.reviewed}/{summary.total}"
-        f" | rejected {summary.rejected}"
-        f" | pending {summary.pending}"
-        f" | missing {summary.missing_row_markers}"
-        f" | fixture-ready {'yes' if summary.fixture_ready else 'no'}"
-    )
-    page_line = _build_page_summary(document.doc_dir, review_df, page_number)
-    return f"{document_line}\n\n{page_line}"
-
-
-def _build_table(review_df: pd.DataFrame, current_index: int) -> pd.DataFrame:
-    """Build a compact, read-only table for the current document."""
-
-    # Guard: Empty documents render an empty table with stable columns.
-    if review_df.empty:
-        return pd.DataFrame(columns=["current", "page", "row", "raw_lab_name", "raw_value", "lab_name", "value", "lab_unit", "review_status"])
-
-    table_df = review_df[
-        [
-            "page_number",
-            "result_index",
-            "raw_lab_name",
-            "raw_value",
-            "lab_name",
-            "value",
-            "lab_unit",
-            "review_status",
-        ]
-    ].copy()
-    table_df.insert(0, "current", "")
-    table_df.rename(columns={"page_number": "page", "result_index": "row"}, inplace=True)
-
-    # Mark the active row so keyboard-less navigation is still obvious.
-    if 0 <= current_index < len(table_df):
-        table_df.loc[current_index, "current"] = "->"
-
-    return table_df
-
-
-def _format_entry_html(review_df: pd.DataFrame, current_index: int) -> str:
-    """Render the current review row as a compact HTML card."""
-
-    # Guard: Empty documents need a simple placeholder message.
-    if review_df.empty:
-        return "<div><strong>No extracted rows</strong></div>"
-
-    row = review_df.iloc[current_index]
-    status = str(row.get("review_status", "") or "pending").strip() or "pending"
-    reason = str(row.get("review_reason", "") or "").strip()
-    comments = str(row.get("raw_comments", "") or "").strip()
-    mapped_lab = row.get("lab_name") or ""
-    normalized_value = row.get("value") if str(row.get("value", "")) != "nan" else ""
-    normalized_unit = row.get("lab_unit") or ""
-    reference_min = row.get("reference_min") if str(row.get("reference_min", "")) != "nan" else ""
-    reference_max = row.get("reference_max") if str(row.get("reference_max", "")) != "nan" else ""
-    reference_text = f"{reference_min} - {reference_max}".strip(" -")
-
-    parts = [
-        "<div>",
-        "<div><strong>Review these fields</strong></div>",
-        f"<div><strong>Mapped lab:</strong> <strong>{mapped_lab}</strong></div>",
-        f"<div><strong>Normalized value:</strong> <strong>{normalized_value} {normalized_unit}</strong></div>",
-        f"<div><strong>Reference:</strong> <strong>{reference_text}</strong></div>",
-        "<hr>",
-        f"<div><strong>Status:</strong> {status}</div>",
-        f"<div><strong>Page:</strong> {row.get('page_number')}</div>",
-        f"<div><strong>Row:</strong> {row.get('result_index')}</div>",
-        f"<div><strong>Raw lab:</strong> {row.get('raw_lab_name') or ''}</div>",
-        f"<div><strong>Raw value:</strong> {row.get('raw_value') or ''} {row.get('raw_lab_unit') or ''}</div>",
-    ]
-
-    # Surface validation flags only when they exist for the current row.
-    if reason:
-        parts.append(f"<div><strong>Validation:</strong> {reason}</div>")
-
-    # Surface extracted comments only when they exist.
-    if comments:
-        parts.append(f"<div><strong>Comments:</strong> {comments}</div>")
-
-    parts.append(
-        "<div><strong>Missing Row:</strong> "
-        "Use the Missing Row action when the source page has an omitted lab line. "
-        "After manual JSON repair, remove the page's review_missing_rows marker.</div>"
-    )
-    parts.append("</div>")
-
-    return "<div>" + "".join(parts) + "</div>"
-
-
-def _render_document(document: ProcessedDocument | None, requested_row_index: int | None) -> tuple[int, str | None, str | None, str, pd.DataFrame, str]:
-    """Render all UI fragments for the active document and row."""
-
-    review_df = _get_review_frame(document)
-    current_index = _clamp_row_index(review_df, requested_row_index)
-    pdf_value = str(document.pdf_path) if document is not None else None
-    image_value = None
-
-    # Resolve the current page image when there is an active document row.
-    if document is not None and not review_df.empty:
-        page_number = int(review_df.iloc[current_index]["page_number"])
-        image_path = get_page_image_path(document.doc_dir, page_number)
-        image_value = str(image_path) if image_path is not None else None
-
-    progress_text = _build_progress_text(document, review_df, current_index)
-    entry_html = _format_entry_html(review_df, current_index)
-    table_df = _build_table(review_df, current_index)
-    return current_index, pdf_value, image_value, entry_html, table_df, progress_text
-
-
-def _refresh_document_choices(current_doc_id: str | None, filter_mode: str) -> tuple[gr.Dropdown, str]:
-    """Refresh all document CSVs and rebuild the dropdown choices."""
-
-    documents = _rebuild_all_document_csvs()
+    documents = _rebuild_all_document_csvs() if rebuild_all else _get_documents()
     choices = _build_dropdown_choices(documents, filter_mode)
     available_ids = {value for _, value in choices}
 
-    # Keep the current document when it still exists after refresh.
+    # Preserve the current document when it still matches the active filter.
     if current_doc_id in available_ids:
         selected_id = current_doc_id
+
+    # Otherwise fall back to the highest-priority remaining document.
     elif choices:
         selected_id = choices[0][1]
+
+    # Guard: Empty choice sets clear the current document selection.
     else:
         selected_id = None
 
     status_text = f"{len(choices)} shown / {len(documents)} processed document(s)"
-    return gr.update(choices=choices, value=selected_id), status_text
+    return DropdownState(selected_id=selected_id, choices=choices, status_text=status_text)
 
 
-def _select_document(doc_id: str | None) -> tuple[int, str | None, str | None, str, pd.DataFrame, str]:
-    """Handle document selection changes."""
+def _build_toolbar_outputs(dropdown_state: DropdownState, view: ReviewerView) -> tuple:
+    """Compose the shared output tuple for toolbar-mutating callbacks."""
+
+    return (
+        dropdown_state.as_update(),
+        dropdown_state.status_text,
+        *view.as_outputs(),
+    )
+
+
+def _handle_document_list_refresh(
+    current_doc_id: str | None,
+    current_index: int,
+    filter_mode: str,
+    show_reviewed: bool,
+) -> tuple:
+    """Refresh the visible document list and rerender the active document."""
+
+    dropdown_state = _build_dropdown_state(current_doc_id, filter_mode, rebuild_all=True)
+    selected_document = _get_document_by_id(dropdown_state.selected_id)
+
+    # Preserve the current row only when the selected document did not change.
+    if dropdown_state.selected_id == current_doc_id:
+        view = _render_document(selected_document, current_index, show_reviewed, prefer_first_visible=False)
+    else:
+        view = _render_document(selected_document, None, show_reviewed, prefer_first_visible=True)
+
+    return _build_toolbar_outputs(dropdown_state, view)
+
+
+def _handle_document_change(doc_id: str | None, show_reviewed: bool) -> tuple[int, str, str | None, str, pd.DataFrame, pd.DataFrame, str]:
+    """Render a newly selected document, starting from its first visible queue row."""
+
+    document = _get_document_by_id(doc_id)
+    return _render_document(document, None, show_reviewed, prefer_first_visible=True).as_outputs()
+
+
+def _handle_show_reviewed_change(
+    doc_id: str | None,
+    current_index: int,
+    show_reviewed: bool,
+) -> tuple[int, str, str | None, str, pd.DataFrame, pd.DataFrame, str]:
+    """Toggle whether accepted and rejected rows stay visible in the queue."""
+
+    document = _get_document_by_id(doc_id)
+    return _render_document(document, current_index, show_reviewed, prefer_first_visible=False).as_outputs()
+
+
+def _handle_queue_select(
+    doc_id: str | None,
+    queue_state: pd.DataFrame,
+    show_reviewed: bool,
+    evt: gr.SelectData,
+) -> tuple[int, str, str | None, str, pd.DataFrame, pd.DataFrame, str]:
+    """Select a row directly from the left queue pane."""
 
     document = _get_document_by_id(doc_id)
 
-    # Default to the first pending row when the user switches documents.
+    # Guard: Ignore queue-selection events when there is no visible queue.
+    if evt is None or queue_state.empty:
+        return _render_document(document, None, show_reviewed, prefer_first_visible=False).as_outputs()
+
+    selected_index = evt.index[0] if isinstance(evt.index, (tuple, list)) else evt.index
+
+    # Guard: Ignore clicks that do not resolve to a visible queue row.
+    if selected_index is None or selected_index < 0 or selected_index >= len(queue_state):
+        return _render_document(document, None, show_reviewed, prefer_first_visible=False).as_outputs()
+
+    actual_index = int(queue_state.iloc[int(selected_index)]["actual_index"])
+    return _render_document(document, actual_index, show_reviewed, prefer_first_visible=False).as_outputs()
+
+
+def _move_row(
+    doc_id: str | None,
+    current_index: int,
+    delta: int,
+    show_reviewed: bool,
+) -> tuple[int, str, str | None, str, pd.DataFrame, pd.DataFrame, str]:
+    """Move to the previous or next visible queue row."""
+
+    document = _get_document_by_id(doc_id)
     review_df = _get_review_frame(document)
-    target_index = _first_pending_row(review_df)
-    return _render_document(document, target_index)
+    queue_state = _build_queue_state(review_df, show_reviewed)
+
+    # Guard: Empty queue state means there is nothing to navigate.
+    if queue_state.empty:
+        return _render_document(document, None, show_reviewed, prefer_first_visible=False).as_outputs()
+
+    visible_indices = [int(value) for value in queue_state["actual_index"].tolist()]
+
+    # Default to the first visible row when the current selection disappeared.
+    if current_index not in set(visible_indices):
+        return _render_document(document, visible_indices[0], show_reviewed, prefer_first_visible=False).as_outputs()
+
+    current_position = visible_indices.index(int(current_index))
+    next_position = max(0, min(current_position + delta, len(visible_indices) - 1))
+    return _render_document(document, visible_indices[next_position], show_reviewed, prefer_first_visible=False).as_outputs()
 
 
-def _move_row(doc_id: str | None, current_index: int, delta: int) -> tuple[int, str | None, str | None, str, pd.DataFrame, str]:
-    """Move to the previous or next row within the selected document."""
+def _choose_next_pending_index(review_df: pd.DataFrame, current_index: int) -> int:
+    """Choose the next pending row after an accept or reject action."""
 
-    document = _get_document_by_id(doc_id)
-    return _render_document(document, current_index + delta)
+    # Guard: Empty documents have no pending row to advance into.
+    if review_df.empty:
+        return -1
+
+    pending_indices = [idx for idx, status in enumerate(review_df["review_status"].tolist()) if _normalize_status(status) == ""]
+
+    # Guard: Fully reviewed documents have no pending row to select.
+    if not pending_indices:
+        return -1
+
+    current_row = _get_current_row(review_df, current_index)
+    current_page = int(current_row["page_number"]) if current_row is not None else None
+
+    # Stay on the same page first so the reviewer finishes local context before moving on.
+    if current_page is not None:
+        for idx in pending_indices:
+            if idx > current_index and int(review_df.iloc[idx]["page_number"]) == current_page:
+                return idx
+
+    # Otherwise advance forward through the document in source order.
+    for idx in pending_indices:
+        if idx > current_index:
+            return idx
+
+    return pending_indices[0]
 
 
-def _apply_review_action(doc_id: str | None, current_index: int, status: str) -> tuple[int, str | None, str | None, str, pd.DataFrame, str]:
-    """Persist a review action and refresh the active document view."""
+def _apply_review_action(
+    doc_id: str | None,
+    current_index: int,
+    filter_mode: str,
+    show_reviewed: bool,
+    status: str | None,
+) -> tuple:
+    """Persist an accept, reject, or undo action and rerender the reviewer."""
 
     document = _get_document_by_id(doc_id)
     review_df = _get_review_frame(document)
-    current_index = _clamp_row_index(review_df, current_index)
+    current_row = _get_current_row(review_df, current_index)
 
     # Guard: Ignore actions when there is no active row to mutate.
-    if document is None or review_df.empty:
-        return _render_document(document, current_index)
+    if document is None or current_row is None:
+        dropdown_state = _build_dropdown_state(doc_id, filter_mode, rebuild_all=False)
+        view = _render_document(_get_document_by_id(dropdown_state.selected_id), current_index, show_reviewed, prefer_first_visible=False)
+        return _build_toolbar_outputs(dropdown_state, view)
 
-    row = review_df.iloc[current_index]
     success, error = save_review_status(
         document.doc_dir,
-        int(row["page_number"]),
-        int(row["result_index"]),
+        int(current_row["page_number"]),
+        int(current_row["result_index"]),
         status,
     )
 
-    # Guard: Surface persistence errors without moving the current row.
+    # Guard: Surface persistence errors without advancing away from the current row.
     if not success:
         gr.Warning(error)
-        return _render_document(document, current_index)
+        dropdown_state = _build_dropdown_state(doc_id, filter_mode, rebuild_all=False)
+        view = _render_document(_get_document_by_id(dropdown_state.selected_id), current_index, show_reviewed, prefer_first_visible=False)
+        return _build_toolbar_outputs(dropdown_state, view)
 
-    # Rebuild the per-document CSV so the CSV immediately reflects the persisted JSON status.
+    # Rebuild the per-document CSV so the UI immediately reflects persisted JSON state.
     rebuild_document_csv(document.doc_dir, get_lab_specs())
+    dropdown_state = _build_dropdown_state(doc_id, filter_mode, rebuild_all=False)
+    selected_document = _get_document_by_id(dropdown_state.selected_id)
+
+    # Switching documents should restart from the new document's first visible row.
+    if dropdown_state.selected_id != doc_id:
+        view = _render_document(selected_document, None, show_reviewed, prefer_first_visible=True)
+        return _build_toolbar_outputs(dropdown_state, view)
+
     refreshed_df = _get_review_frame(document)
-    next_index = _clamp_row_index(refreshed_df, current_index + 1)
-    pending_index = _first_pending_row(refreshed_df)
 
-    # Prefer the next pending row when one still exists after the current position.
-    if not refreshed_df.empty:
-        pending_candidates = refreshed_df.index[
-            refreshed_df["review_status"].fillna("").astype(str).str.strip().eq("")
-        ].tolist()
-        future_candidates = [candidate for candidate in pending_candidates if candidate >= current_index]
-        if future_candidates:
-            next_index = int(future_candidates[0])
-        elif pending_index < len(refreshed_df):
-            next_index = pending_index
+    # Undo keeps the current row selected so the reviewer can immediately decide again.
+    if status is None:
+        next_index = current_index
 
-    return _render_document(document, next_index)
+    # Accept and reject auto-advance to the best remaining pending row.
+    else:
+        next_index = _choose_next_pending_index(refreshed_df, current_index)
+
+    view = _render_document(document, next_index, show_reviewed, prefer_first_visible=False)
+    return _build_toolbar_outputs(dropdown_state, view)
 
 
-def _mark_missing_row(doc_id: str | None, current_index: int) -> tuple[int, str | None, str | None, str, pd.DataFrame, str]:
-    """Persist a missing-row marker without changing the selected extracted row."""
+def _mark_missing_row(
+    doc_id: str | None,
+    current_index: int,
+    filter_mode: str,
+    show_reviewed: bool,
+) -> tuple:
+    """Persist a missing-row marker and rerender the active document."""
 
     document = _get_document_by_id(doc_id)
     review_df = _get_review_frame(document)
-    current_index = _clamp_row_index(review_df, current_index)
+    current_row = _get_current_row(review_df, current_index)
 
     # Guard: Ignore missing-row markers when there is no active row to anchor them to.
-    if document is None or review_df.empty:
-        return _render_document(document, current_index)
+    if document is None or current_row is None:
+        dropdown_state = _build_dropdown_state(doc_id, filter_mode, rebuild_all=False)
+        view = _render_document(_get_document_by_id(dropdown_state.selected_id), current_index, show_reviewed, prefer_first_visible=False)
+        return _build_toolbar_outputs(dropdown_state, view)
 
-    row = review_df.iloc[current_index]
     success, error = save_missing_row_marker(
         document.doc_dir,
-        int(row["page_number"]),
-        int(row["result_index"]),
+        int(current_row["page_number"]),
+        int(current_row["result_index"]),
     )
 
     # Guard: Surface persistence errors without moving the current row.
     if not success:
         gr.Warning(error)
-        return _render_document(document, current_index)
+        dropdown_state = _build_dropdown_state(doc_id, filter_mode, rebuild_all=False)
+        view = _render_document(_get_document_by_id(dropdown_state.selected_id), current_index, show_reviewed, prefer_first_visible=False)
+        return _build_toolbar_outputs(dropdown_state, view)
 
-    # Rebuild the per-document CSV so counters and warnings reflect the new missing-row marker.
+    # Rebuild the per-document CSV so counters and queue state reflect the new marker.
     rebuild_document_csv(document.doc_dir, get_lab_specs())
     gr.Info("Missing-row marker recorded. Resolve it by editing the page JSON and clearing review_missing_rows.")
-    return _render_document(document, current_index)
+
+    dropdown_state = _build_dropdown_state(doc_id, filter_mode, rebuild_all=False)
+    selected_document = _get_document_by_id(dropdown_state.selected_id)
+
+    # Switching documents should restart from the new document's first visible row.
+    if dropdown_state.selected_id != doc_id:
+        view = _render_document(selected_document, None, show_reviewed, prefer_first_visible=True)
+        return _build_toolbar_outputs(dropdown_state, view)
+
+    view = _render_document(document, current_index, show_reviewed, prefer_first_visible=False)
+    return _build_toolbar_outputs(dropdown_state, view)
 
 
 def build_app() -> gr.Blocks:
     """Build the Gradio document-reviewer app."""
 
-    documents = _rebuild_all_document_csvs()
     initial_filter = "All"
-    dropdown_choices = _build_dropdown_choices(documents, initial_filter)
-    initial_doc_id = dropdown_choices[0][1] if dropdown_choices else None
-    initial_row_index, initial_pdf, initial_image, initial_html, initial_table, initial_progress = _select_document(initial_doc_id)
+    initial_show_reviewed = False
+    dropdown_state = _build_dropdown_state(None, initial_filter, rebuild_all=True)
+    initial_view = _render_document(
+        _get_document_by_id(dropdown_state.selected_id),
+        None,
+        initial_show_reviewed,
+        prefer_first_visible=True,
+    )
 
     with gr.Blocks(title="Processed Document Reviewer") as demo:
         gr.Markdown("# Processed Document Reviewer")
-        gr.Markdown(
-            "Review each extracted row against its source page, persist decisions back to JSON, "
-            "and record missing-row markers for omissions you will fix manually later."
-        )
+        gr.Markdown("Review each extracted row against its source page with a large source image, side-by-side review card, and a bottom table for bulk spotting.")
 
-        with gr.Row():
-            document_filter = gr.Dropdown(
-                choices=["All", "Not Fixture Ready", "Fixture Ready"],
-                value=initial_filter,
-                label="Document Filter",
+        current_row_index = gr.State(initial_view.current_index)
+        queue_state = gr.State(initial_view.queue_state)
+
+        with gr.Column(elem_id="review-toolbar"):
+            with gr.Row():
+                document_filter = gr.Dropdown(
+                    choices=["All", "Not Fixture Ready", "Fixture Ready"],
+                    value=initial_filter,
+                    label="Document Filter",
+                    scale=1,
+                )
+                document_dropdown = gr.Dropdown(
+                    choices=dropdown_state.choices,
+                    value=dropdown_state.selected_id,
+                    label="Document",
+                    scale=3,
+                )
+                show_reviewed = gr.Checkbox(
+                    label="Show reviewed",
+                    value=initial_show_reviewed,
+                    scale=1,
+                    min_width=140,
+                )
+                refresh_btn = gr.Button("Refresh", scale=0, min_width=110)
+
+            toolbar_status = gr.Markdown(dropdown_state.status_text, elem_id="review-toolbar-status")
+            progress_html = gr.HTML(initial_view.progress_html)
+
+        with gr.Row(elem_id="review-main-pane"):
+            with gr.Column(scale=6, min_width=520, elem_id="review-image-pane"):
+                page_context = gr.HTML(initial_view.page_context_html)
+                page_image = gr.Image(
+                    value=initial_view.image_value,
+                    type="filepath",
+                    show_label=False,
+                    height=640,
+                    elem_id="review-page-image",
+                )
+
+            with gr.Column(scale=5, min_width=380, elem_id="review-inspector-pane"):
+                inspector_html = gr.HTML(initial_view.inspector_html, elem_id="review-inspector")
+
+                with gr.Column(elem_id="review-action-bar"):
+                    with gr.Row():
+                        prev_btn = gr.Button("Previous [k]", elem_id="review-prev-btn")
+                        next_btn = gr.Button("Next [j]", elem_id="review-next-btn")
+                        undo_btn = gr.Button("Undo [u]", elem_id="review-undo-btn")
+
+                    with gr.Row():
+                        accept_btn = gr.Button("Accept [y]", variant="primary", elem_id="review-accept-btn")
+                        reject_btn = gr.Button("Reject [n]", variant="stop", elem_id="review-reject-btn")
+                        missing_btn = gr.Button("Missing [m]", elem_id="review-missing-btn")
+
+        with gr.Column(elem_id="review-table-pane"):
+            gr.Markdown("### Document Table")
+            gr.Markdown("*Use the table to scan the document in bulk. Click a row to jump.*")
+            queue_table = gr.Dataframe(
+                value=initial_view.queue_display,
+                interactive=False,
+                show_label=False,
+                wrap=True,
+                max_height=300,
+                elem_id="review-queue",
             )
-            document_dropdown = gr.Dropdown(choices=dropdown_choices, value=initial_doc_id, label="Document")
-            refresh_btn = gr.Button("Refresh")
-            refresh_status = gr.Markdown(f"{len(dropdown_choices)} shown / {len(documents)} processed document(s)")
 
-        current_row_index = gr.State(initial_row_index)
+        gr.Markdown("*Keyboard: Y=Accept, N=Reject, M=Missing, U=Undo, Arrow keys or J/K=Navigate*")
 
-        with gr.Row():
-            with gr.Column(scale=1):
-                pdf_file = gr.File(value=initial_pdf, label="Document PDF")
-                page_image = gr.Image(value=initial_image, label="Current Page", type="filepath")
-            with gr.Column(scale=1):
-                progress_markdown = gr.Markdown(initial_progress)
-                entry_html = gr.HTML(initial_html)
+        view_outputs = [
+            current_row_index,
+            page_context,
+            page_image,
+            inspector_html,
+            queue_table,
+            queue_state,
+            progress_html,
+        ]
 
-                with gr.Row():
-                    prev_btn = gr.Button("Previous", elem_id="review-prev-btn")
-                    next_btn = gr.Button("Next", elem_id="review-next-btn")
-
-                with gr.Row():
-                    accept_btn = gr.Button("Approve [y]", variant="primary", elem_id="review-accept-btn")
-                    reject_btn = gr.Button("Reject [n]", variant="stop", elem_id="review-reject-btn")
-                    missing_btn = gr.Button("Missing Row [m]", elem_id="review-missing-btn")
-
-        document_table = gr.Dataframe(value=initial_table, interactive=False, label="Document CSV Rows")
-        gr.Markdown("*Keyboard: Y=Approve, N=Reject, M=Missing Row, Arrow keys/J/K=Navigate*")
+        toolbar_outputs = [
+            document_dropdown,
+            toolbar_status,
+            *view_outputs,
+        ]
 
         document_dropdown.change(
-            fn=_select_document,
-            inputs=[document_dropdown],
-            outputs=[current_row_index, pdf_file, page_image, entry_html, document_table, progress_markdown],
+            fn=_handle_document_change,
+            inputs=[document_dropdown, show_reviewed],
+            outputs=view_outputs,
         )
 
         document_filter.change(
-            fn=_refresh_document_choices,
-            inputs=[document_dropdown, document_filter],
-            outputs=[document_dropdown, refresh_status],
-        ).then(
-            fn=_select_document,
-            inputs=[document_dropdown],
-            outputs=[current_row_index, pdf_file, page_image, entry_html, document_table, progress_markdown],
+            fn=_handle_document_list_refresh,
+            inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
+            outputs=toolbar_outputs,
+        )
+
+        refresh_btn.click(
+            fn=_handle_document_list_refresh,
+            inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
+            outputs=toolbar_outputs,
+        )
+
+        show_reviewed.change(
+            fn=_handle_show_reviewed_change,
+            inputs=[document_dropdown, current_row_index, show_reviewed],
+            outputs=view_outputs,
+        )
+
+        queue_table.select(
+            fn=_handle_queue_select,
+            inputs=[document_dropdown, queue_state, show_reviewed],
+            outputs=view_outputs,
         )
 
         prev_btn.click(
-            fn=lambda doc_id, idx: _move_row(doc_id, idx, -1),
-            inputs=[document_dropdown, current_row_index],
-            outputs=[current_row_index, pdf_file, page_image, entry_html, document_table, progress_markdown],
+            fn=lambda doc_id, idx, visible: _move_row(doc_id, idx, -1, visible),
+            inputs=[document_dropdown, current_row_index, show_reviewed],
+            outputs=view_outputs,
         )
 
         next_btn.click(
-            fn=lambda doc_id, idx: _move_row(doc_id, idx, 1),
-            inputs=[document_dropdown, current_row_index],
-            outputs=[current_row_index, pdf_file, page_image, entry_html, document_table, progress_markdown],
+            fn=lambda doc_id, idx, visible: _move_row(doc_id, idx, 1, visible),
+            inputs=[document_dropdown, current_row_index, show_reviewed],
+            outputs=view_outputs,
         )
 
         accept_btn.click(
-            fn=lambda doc_id, idx: _apply_review_action(doc_id, idx, "accepted"),
-            inputs=[document_dropdown, current_row_index],
-            outputs=[current_row_index, pdf_file, page_image, entry_html, document_table, progress_markdown],
+            fn=lambda doc_id, idx, filter_mode, visible: _apply_review_action(doc_id, idx, filter_mode, visible, "accepted"),
+            inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
+            outputs=toolbar_outputs,
         )
 
         reject_btn.click(
-            fn=lambda doc_id, idx: _apply_review_action(doc_id, idx, "rejected"),
-            inputs=[document_dropdown, current_row_index],
-            outputs=[current_row_index, pdf_file, page_image, entry_html, document_table, progress_markdown],
+            fn=lambda doc_id, idx, filter_mode, visible: _apply_review_action(doc_id, idx, filter_mode, visible, "rejected"),
+            inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
+            outputs=toolbar_outputs,
         )
 
         missing_btn.click(
             fn=_mark_missing_row,
-            inputs=[document_dropdown, current_row_index],
-            outputs=[current_row_index, pdf_file, page_image, entry_html, document_table, progress_markdown],
+            inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
+            outputs=toolbar_outputs,
         )
 
-        refresh_btn.click(
-            fn=_refresh_document_choices,
-            inputs=[document_dropdown, document_filter],
-            outputs=[document_dropdown, refresh_status],
-        ).then(
-            fn=_select_document,
-            inputs=[document_dropdown],
-            outputs=[current_row_index, pdf_file, page_image, entry_html, document_table, progress_markdown],
+        undo_btn.click(
+            fn=lambda doc_id, idx, filter_mode, visible: _apply_review_action(doc_id, idx, filter_mode, visible, None),
+            inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
+            outputs=toolbar_outputs,
         )
 
     return demo
@@ -653,8 +1089,12 @@ def main() -> None:
     # Load the selected profile when one was provided.
     if args.profile:
         profile = load_profile(args.profile)
+
+        # Guard: Unknown profiles cannot start the reviewer.
         if profile is None:
             raise SystemExit(f"Profile '{args.profile}' was not found.")
+
+        # Guard: The reviewer needs a processed output directory.
         if profile.output_path is None:
             raise SystemExit(f"Profile '{args.profile}' has no output_path configured.")
 
@@ -668,6 +1108,7 @@ def main() -> None:
         show_error=True,
         inbrowser=False,
         allowed_paths=allowed_paths,
+        css=CUSTOM_CSS,
         head=KEYBOARD_SHORTCUTS_JS,
     )
 

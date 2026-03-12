@@ -140,6 +140,7 @@ Per-document review CSVs are rebuilt from canonical page JSON, not treated as pe
 For each extracted review row:
   → standardize_lab_names(): cache lookup raw_name → standardized_name
   → standardize_lab_units(): cache lookup (raw_unit, lab_name) → standardized_unit
+  → when raw_unit is blank, fall back to the spec primary unit only for safe implied-unit labs (`pH`, `unitless`, `boolean`)
   → apply deterministic normalization only
   → attach reviewer-facing ambiguity reasons
   → keep every extracted row visible before deduplication
@@ -178,7 +179,15 @@ Parses limit indicators and sets boolean flags:
 | `≤50` | 50 | True | False |
 | `≥30` | 30 | False | True |
 
-### 5c. Exact Unit Conversion
+### 5c. Qualitative Boolean Remap
+
+Text-only urine strip analytes that initially map to numeric labs are remapped onto dedicated qualitative boolean variants before unit conversion.
+
+- numeric urine rows stay on their original `mg/dL` standardized lab
+- text urine rows normalize to `0/1` on qualitative boolean variants
+- this avoids mixing numeric and boolean units under the same standardized lab name
+
+### 5d. Exact Unit Conversion
 
 Converts values to primary units only when the standardized lab and unit are explicit and a conversion factor exists:
 
@@ -189,9 +198,9 @@ raw_value=5.0, raw_unit="mmol/L", lab="Blood - Glucose"
   → value = 5.0 × 18.0 = 90.0 mg/dL
 ```
 
-The runtime no longer auto-corrects ambiguous rows by inferring missing units, swapping percentage-vs-absolute variants, or nullifying suspicious reference ranges. Those cases are flagged for human review instead.
+The runtime still avoids ambiguous auto-corrections such as swapping percentage-vs-absolute variants or nullifying suspicious reference ranges. The only missing-unit fallback is the narrow implied-unit case for labs whose spec primary unit is intrinsically safe to infer (`pH`, `unitless`, `boolean`).
 
-### 5d. Review Reasons
+### 5e. Review Reasons
 
 Review rows now surface ambiguity directly in `review_reason`, including:
 

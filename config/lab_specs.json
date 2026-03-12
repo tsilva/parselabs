@@ -4401,6 +4401,18 @@
     },
     "loinc_code": "1977-8"
   },
+  "Urine Type II - Bilirubin, Qualitative": {
+    "lab_type": "urine",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    },
+    "loinc_code": "1977-8-qual"
+  },
   "Urine Type II - Blood": {
     "lab_type": "urine",
     "primary_unit": "boolean",
@@ -4415,12 +4427,12 @@
   },
   "Urine Type II - Color": {
     "lab_type": "urine",
-    "primary_unit": "unitless",
+    "primary_unit": "boolean",
     "alternatives": [],
     "ranges": {
       "default": [
-        1,
-        1
+        0,
+        0
       ]
     },
     "loinc_code": "5778-1"
@@ -4442,6 +4454,18 @@
     },
     "loinc_code": "2350-7"
   },
+  "Urine Type II - Glucose, Qualitative": {
+    "lab_type": "urine",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    },
+    "loinc_code": "2350-7-qual"
+  },
   "Urine Type II - Ketones": {
     "lab_type": "urine",
     "primary_unit": "mg/dL",
@@ -4458,6 +4482,18 @@
       ]
     },
     "loinc_code": "2514-8"
+  },
+  "Urine Type II - Ketones, Qualitative": {
+    "lab_type": "urine",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    },
+    "loinc_code": "2514-8-qual"
   },
   "Urine Type II - Leukocytes": {
     "lab_type": "urine",
@@ -4499,6 +4535,18 @@
       ]
     },
     "loinc_code": "2888-6"
+  },
+  "Urine Type II - Proteins, Qualitative": {
+    "lab_type": "urine",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    },
+    "loinc_code": "2888-6-qual"
   },
   "Urine Type II - Sediment - Casts": {
     "lab_type": "urine",
@@ -4683,6 +4731,18 @@
       ]
     },
     "loinc_code": "20405-7"
+  },
+  "Urine Type II - Urobilinogen, Qualitative": {
+    "lab_type": "urine",
+    "primary_unit": "boolean",
+    "alternatives": [],
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    },
+    "loinc_code": "20405-7-qual"
   },
   "Urine Type II - pH": {
     "lab_type": "urine",
