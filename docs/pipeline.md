@@ -171,6 +171,7 @@ The always-on normalization path now does only mechanically justified transforms
 - Extract first number from concatenation artifacts (e.g., `"52.6=1946"` → `"52.6"`)
 - Remove space thousands separators (e.g., `"256 000"` → `"256000"`)
 - European decimal format (comma → period)
+- Derive interval midpoints for range-style result values (e.g., `"1 a 2/campo"` → `1.5`) while preserving the original `raw_value` text for auditability
 
 ### 5b. Comparison Operators
 

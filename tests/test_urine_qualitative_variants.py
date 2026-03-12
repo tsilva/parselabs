@@ -32,6 +32,13 @@ def _make_lab_specs(tmp_path):
                     "ranges": {"default": [0, 0]},
                     "loinc_code": "5778-1",
                 },
+                "Urine Type II - Sediment - Epithelial Cells": {
+                    "lab_type": "urine",
+                    "primary_unit": "/field",
+                    "alternatives": [{"unit": "/campo", "factor": 1.0}],
+                    "ranges": {"default": [0, 5]},
+                    "loinc_code": "5787-2",
+                },
             }
         ),
         encoding="utf-8",
@@ -111,3 +118,79 @@ def test_apply_normalizations_classifies_urine_color_as_boolean(tmp_path):
     assert normalized_df.loc[0, "lab_unit_standardized"] == "boolean"
     assert normalized_df.loc[0, "lab_unit_primary"] == "boolean"
     assert normalized_df.loc[0, "value_primary"] == 0
+
+
+def test_apply_normalizations_uses_midpoint_for_interval_style_microscopy_values(tmp_path):
+    lab_specs = _make_lab_specs(tmp_path)
+    df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Células epiteliais",
+                "raw_value": "1 a 2/campo",
+                "raw_comments": None,
+                "raw_lab_unit": "/campo",
+                "raw_reference_min": 0,
+                "raw_reference_max": 5,
+                "lab_name_standardized": "Urine Type II - Sediment - Epithelial Cells",
+                "lab_unit_standardized": "/campo",
+            }
+        ]
+    )
+
+    normalized_df = apply_normalizations(df, lab_specs)
+
+    assert normalized_df.loc[0, "raw_value"] == "1 a 2/campo"
+    assert normalized_df.loc[0, "value_primary"] == 1.5
+    assert normalized_df.loc[0, "lab_unit_primary"] == "/field"
+
+
+def test_apply_normalizations_uses_midpoint_for_plain_interval_values(tmp_path):
+    lab_specs = _make_lab_specs(tmp_path)
+    df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Células epiteliais",
+                "raw_value": "0 - 2",
+                "raw_comments": None,
+                "raw_lab_unit": "/campo",
+                "raw_reference_min": 0,
+                "raw_reference_max": 5,
+                "lab_name_standardized": "Urine Type II - Sediment - Epithelial Cells",
+                "lab_unit_standardized": "/campo",
+            }
+        ]
+    )
+
+    normalized_df = apply_normalizations(df, lab_specs)
+
+    assert normalized_df.loc[0, "value_primary"] == 1.0
+
+
+def test_apply_normalizations_handles_interval_values_in_string_dtype_columns(tmp_path):
+    lab_specs = _make_lab_specs(tmp_path)
+    df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Células epiteliais",
+                "raw_value": "1 a 2/campo",
+                "raw_comments": None,
+                "raw_lab_unit": "/campo",
+                "raw_reference_min": 0,
+                "raw_reference_max": 5,
+                "lab_name_standardized": "Urine Type II - Sediment - Epithelial Cells",
+                "lab_unit_standardized": "/campo",
+            }
+        ]
+    ).astype(
+        {
+            "raw_lab_name": "string",
+            "raw_value": "string",
+            "raw_lab_unit": "string",
+            "lab_name_standardized": "string",
+            "lab_unit_standardized": "string",
+        }
+    )
+
+    normalized_df = apply_normalizations(df, lab_specs)
+
+    assert normalized_df.loc[0, "value_primary"] == 1.5

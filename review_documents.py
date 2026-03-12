@@ -7,7 +7,6 @@ import html
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import quote
 
 import gradio as gr
 import pandas as pd
@@ -77,19 +76,17 @@ class ReviewerView:
     """All UI fragments needed to render the active reviewer state."""
 
     current_index: int
-    page_context_html: str
     image_value: tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None
     inspector_html: str
     queue_display: pd.DataFrame
     queue_state: pd.DataFrame
     progress_html: str
 
-    def as_outputs(self) -> tuple[int, str, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame, str]:
+    def as_outputs(self) -> tuple[int, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame, str]:
         """Return UI fragments in the order expected by Gradio callbacks."""
 
         return (
             self.current_index,
-            self.page_context_html,
             self.image_value,
             self.inspector_html,
             self.queue_display,
@@ -326,6 +323,30 @@ def _format_mapped_value(row: pd.Series) -> str:
     return value_text
 
 
+def _format_reference_bounds(ref_min: object, ref_max: object, *, unit: object = None) -> str:
+    """Format min/max reference bounds, including one-sided ranges."""
+
+    min_text = _format_text(ref_min, empty="")
+    max_text = _format_text(ref_max, empty="")
+    unit_text = _format_text(unit, empty="")
+
+    # Full ranges render as "min - max" with an optional unit suffix.
+    if min_text and max_text:
+        range_text = f"{min_text} - {max_text}"
+    elif min_text:
+        range_text = f">{min_text}"
+    elif max_text:
+        range_text = f"<{max_text}"
+    else:
+        return "-"
+
+    # Omit the unit suffix when the unit is genuinely absent.
+    if unit_text:
+        return f"{range_text} {unit_text}".strip()
+
+    return range_text
+
+
 def _format_reference_text(row: pd.Series) -> str:
     """Format the best available reference range for the inspector."""
 
@@ -335,14 +356,27 @@ def _format_reference_text(row: pd.Series) -> str:
     if raw_reference:
         return raw_reference
 
-    ref_min = _format_text(row.get("reference_min"), empty="")
-    ref_max = _format_text(row.get("reference_max"), empty="")
+    return _format_reference_bounds(row.get("reference_min"), row.get("reference_max"))
 
-    # Show a min-max pair when either side is present.
-    if ref_min or ref_max:
-        return f"{ref_min} - {ref_max}".strip(" -")
 
-    return "-"
+def _format_mapped_reference_text(row: pd.Series) -> str:
+    """Format the normalized reference range in the standardized unit."""
+
+    return _format_reference_bounds(
+        row.get("reference_min"),
+        row.get("reference_max"),
+        unit=row.get("lab_unit"),
+    )
+
+
+def _format_queue_status_icon(status_code: object) -> str:
+    """Render the document-table status column as compact symbols."""
+
+    if status_code == "A":
+        return "✅"
+    if status_code == "R":
+        return "❌"
+    return ""
 
 
 def _get_bbox_coordinates(row: pd.Series) -> tuple[float, float, float, float] | None:
@@ -520,7 +554,7 @@ def _build_queue_display(queue_state: pd.DataFrame, current_index: int) -> pd.Da
     display_df = pd.DataFrame(
         {
             "Current": "",
-            "St": queue_state["status_code"],
+            "St": queue_state["status_code"].apply(_format_queue_status_icon),
             "Pg": queue_state["page_label"],
             "Row": queue_state["row_label"],
             "Raw Lab": queue_state["raw_lab_label"],
@@ -583,42 +617,6 @@ def _build_reason_badges(review_reason: object) -> str:
         badges.append(f'<span class="review-reason-chip">{html.escape(reason)}</span>')
 
     return "".join(badges)
-
-
-def _build_pdf_link(document: ProcessedDocument | None) -> str:
-    """Build a compact link to the source PDF for the active document."""
-
-    # Guard: No selected document means there is no PDF to open.
-    if document is None:
-        return '<span class="review-pdf-link disabled">PDF unavailable</span>'
-
-    pdf_href = f"/gradio_api/file={quote(str(document.pdf_path), safe='/:')}"
-    return f'<a class="review-pdf-link" href="{pdf_href}" target="_blank" rel="noopener noreferrer">Open PDF</a>'
-
-
-def _build_page_context_html(document: ProcessedDocument | None, review_df: pd.DataFrame, current_index: int) -> str:
-    """Build the compact single-line header shown above the source page image."""
-
-    pdf_link = _build_pdf_link(document)
-
-    # Guard: No selected document gets a neutral placeholder header.
-    if document is None:
-        return f'<div class="review-pane-header compact"><div class="review-pane-meta">No document selected</div>{pdf_link}</div>'
-
-    current_row = _get_current_row(review_df, current_index)
-
-    # Surface the current page when there is an active row selection.
-    if current_row is not None:
-        page_title = f"Page {int(current_row['page_number'])}"
-    else:
-        page_title = "No active row"
-
-    return (
-        '<div class="review-pane-header compact">'
-        f'<div class="review-pane-meta">{html.escape(document.stem)}<span class="review-pane-separator">•</span>{html.escape(page_title)}</div>'
-        f"{pdf_link}"
-        "</div>"
-    )
 
 
 def _build_progress_chip(label: str, value: str, tone: str = "neutral") -> str:
@@ -695,6 +693,7 @@ def _build_inspector_html(document: ProcessedDocument | None, review_df: pd.Data
     status = _normalize_status(current_row.get("review_status")) or "pending"
     status_label = status.capitalize()
     reference_text = _format_reference_text(current_row)
+    mapped_reference_text = _format_mapped_reference_text(current_row)
     comments_text = _format_text(current_row.get("raw_comments"), empty="")
     reason_badges_html = _build_reason_badges(current_row.get("review_reason"))
 
@@ -725,16 +724,16 @@ def _build_inspector_html(document: ProcessedDocument | None, review_df: pd.Data
         "</div>"
         '<div class="review-compare-grid">'
         '<div class="review-compare-panel">'
+        '<div class="review-panel-title">Mapped</div>'
+        f'<div class="review-field"><span>Lab</span><strong>{_format_text(current_row.get("lab_name"))}</strong></div>'
+        f'<div class="review-field"><span>Value</span><strong>{_format_mapped_value(current_row)}</strong></div>'
+        f'<div class="review-field"><span>Reference</span><strong>{mapped_reference_text}</strong></div>'
+        "</div>"
+        '<div class="review-compare-panel">'
         '<div class="review-panel-title">Raw</div>'
         f'<div class="review-field"><span>Lab</span><strong>{_format_text(current_row.get("raw_lab_name"))}</strong></div>'
         f'<div class="review-field"><span>Value</span><strong>{_format_raw_value(current_row)}</strong></div>'
         f'<div class="review-field"><span>Reference</span><strong>{reference_text}</strong></div>'
-        "</div>"
-        '<div class="review-compare-panel">'
-        '<div class="review-panel-title">Mapped</div>'
-        f'<div class="review-field"><span>Lab</span><strong>{_format_text(current_row.get("lab_name"))}</strong></div>'
-        f'<div class="review-field"><span>Value</span><strong>{_format_mapped_value(current_row)}</strong></div>'
-        f'<div class="review-field"><span>Unit</span><strong>{_format_text(current_row.get("lab_unit"))}</strong></div>'
         "</div>"
         "</div>"
         f"{meta_html}"
@@ -760,7 +759,6 @@ def _render_document(
 
     return ReviewerView(
         current_index=current_index,
-        page_context_html=_build_page_context_html(document, review_df, current_index),
         image_value=image_value,
         inspector_html=_build_inspector_html(document, review_df, current_index, show_reviewed),
         queue_display=_build_queue_display(queue_state, current_index),
@@ -842,7 +840,10 @@ def _handle_document_list_refresh(
     return _build_toolbar_outputs(dropdown_state, view)
 
 
-def _handle_document_change(doc_id: str | None, show_reviewed: bool) -> tuple[int, str, str | None, str, pd.DataFrame, pd.DataFrame, str]:
+def _handle_document_change(
+    doc_id: str | None,
+    show_reviewed: bool,
+) -> tuple[int, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame, str]:
     """Render a newly selected document, starting from its first visible queue row."""
 
     document = _get_document_by_id(doc_id)
@@ -853,7 +854,7 @@ def _handle_show_reviewed_change(
     doc_id: str | None,
     current_index: int,
     show_reviewed: bool,
-) -> tuple[int, str, str | None, str, pd.DataFrame, pd.DataFrame, str]:
+) -> tuple[int, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame, str]:
     """Toggle whether accepted and rejected rows stay visible in the queue."""
 
     document = _get_document_by_id(doc_id)
@@ -865,7 +866,7 @@ def _handle_queue_select(
     queue_state: pd.DataFrame,
     show_reviewed: bool,
     evt: gr.SelectData,
-) -> tuple[int, str, str | None, str, pd.DataFrame, pd.DataFrame, str]:
+) -> tuple[int, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame, str]:
     """Select a row directly from the left queue pane."""
 
     document = _get_document_by_id(doc_id)
@@ -889,7 +890,7 @@ def _move_row(
     current_index: int,
     delta: int,
     show_reviewed: bool,
-) -> tuple[int, str, str | None, str, pd.DataFrame, pd.DataFrame, str]:
+) -> tuple[int, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame, str]:
     """Move to the previous or next visible queue row."""
 
     document = _get_document_by_id(doc_id)
@@ -1091,7 +1092,6 @@ def build_app() -> gr.Blocks:
 
         with gr.Row(elem_id="review-main-pane"):
             with gr.Column(scale=6, min_width=520, elem_id="review-image-pane"):
-                page_context = gr.HTML(initial_view.page_context_html)
                 page_image = gr.AnnotatedImage(
                     value=initial_view.image_value,
                     color_map={SOURCE_BBOX_LABEL: "#dc2626"},
@@ -1131,7 +1131,6 @@ def build_app() -> gr.Blocks:
 
         view_outputs = [
             current_row_index,
-            page_context,
             page_image,
             inspector_html,
             queue_table,
