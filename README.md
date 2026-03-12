@@ -203,7 +203,7 @@ Notes:
 - The pytest command reruns the full approved corpus together, then compares each document's final CSV output against its approved `expected.csv`.
 - Each approved case uses the runtime settings from its recorded profile file.
 - Approved fixtures live under `tests/fixtures/approved/` and remain uncommitted/private.
-- Each case directory contains `document.pdf`, `expected.csv`, and `case.json`.
+- Each case directory contains `document.pdf`, `expected.csv`, `review_state.json`, and `case.json`.
 - `sync-reviewed` also removes stale fixture cases from the same profile when the processed document is no longer fixture-ready.
 - `uv run python utils/regression_cases.py report --profile myname` prints rejected-row, missing-row, unknown-mapping, and validation-reason counts for the reviewed corpus.
 

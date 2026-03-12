@@ -22,6 +22,7 @@ if str(REPO_ROOT) not in sys.path:
 from parselabs.config import LabSpecsConfig, ProfileConfig  # noqa: E402
 from parselabs.regression import (  # noqa: E402
     APPROVED_FIXTURES_DIR,
+    REVIEW_STATE_JSON_NAME,
     discover_approved_cases,
     write_canonical_csv,
 )
@@ -31,6 +32,7 @@ from parselabs.review_sync import (  # noqa: E402
     build_review_corpus_report,
     get_document_review_summary,
     iter_processed_documents,
+    load_document_review_rows,
     rebuild_document_csv,
 )
 
@@ -161,8 +163,14 @@ def _write_valid_cases(
 
         case_dir = APPROVED_FIXTURES_DIR / case_id
         case_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(pdf_path, case_dir / "document.pdf")
+        fixture_pdf_path = case_dir / "document.pdf"
+        if fixture_pdf_path.exists():
+            _prepare_fixture_pdf_for_replacement(fixture_pdf_path)
+            fixture_pdf_path.unlink()
+        fixture_pdf_path.write_bytes(pdf_path.read_bytes())
+        fixture_pdf_path.chmod(0o644)
         write_canonical_csv(expected_df, case_dir / "expected.csv")
+        _write_review_state_snapshot(doc_dir=valid_documents_by_stem[stem][0], case_dir=case_dir)
 
         metadata = {
             "case_id": case_id,
@@ -177,6 +185,46 @@ def _write_valid_cases(
         synced_count += 1
 
     return synced_count
+
+
+def _write_review_state_snapshot(doc_dir: Path, case_dir: Path) -> None:
+    """Persist reviewed row decisions so approved regressions can replay them."""
+
+    review_rows = load_document_review_rows(doc_dir, include_statuses={"accepted", "rejected"})
+    snapshot_rows: list[dict[str, int | str]] = []
+
+    # Keep only the stable row identity plus the reviewed decision for regression replay.
+    for row in review_rows.to_dict("records"):
+        snapshot_rows.append(
+            {
+                "page_number": int(row["page_number"]),
+                "result_index": int(row["result_index"]),
+                "review_status": str(row["review_status"]),
+            }
+        )
+
+    snapshot_payload = {"rows": snapshot_rows}
+    snapshot_path = case_dir / REVIEW_STATE_JSON_NAME
+    snapshot_path.write_text(json.dumps(snapshot_payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+
+
+def _prepare_fixture_pdf_for_replacement(fixture_pdf_path: Path) -> None:
+    """Clear restrictive flags and modes so an existing fixture PDF can be replaced."""
+
+    # Clear macOS file flags such as uchg when the runtime exposes chflags.
+    if hasattr(os, "chflags"):
+        try:
+            os.chflags(fixture_pdf_path, 0)
+        except OSError:
+            # Ignore flag-clearing failures and fall through to the normal unlink attempt.
+            pass
+
+    # Make the file owner-writable before replacement when the filesystem allows it.
+    try:
+        fixture_pdf_path.chmod(0o644)
+    except OSError:
+        # Ignore chmod failures and let the later unlink surface a real error if needed.
+        pass
 
 
 def report_review_corpus(args: argparse.Namespace) -> None:

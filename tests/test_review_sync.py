@@ -655,6 +655,13 @@ def test_regression_case_sync_copies_fixture_ready_documents_with_rejections(tmp
     expected_case_id = f"valid_{regression_cases.compute_file_hash(output_path / 'valid_deadbeef' / 'valid.pdf')}"
     assert case_dirs == [expected_case_id]
     assert (approved_dir / expected_case_id / "expected.csv").exists()
+    review_state_path = approved_dir / expected_case_id / "review_state.json"
+    assert review_state_path.exists()
+    review_state = json.loads(review_state_path.read_text(encoding="utf-8"))
+    assert review_state["rows"] == [
+        {"page_number": 1, "result_index": 0, "review_status": "accepted"},
+        {"page_number": 1, "result_index": 1, "review_status": "rejected"},
+    ]
     assert not any("pending" in case_dir for case_dir in case_dirs)
     assert not any("missing" in case_dir for case_dir in case_dirs)
 
