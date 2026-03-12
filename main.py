@@ -29,7 +29,6 @@ from parselabs.config import (  # noqa: E402
 from parselabs.exceptions import ConfigurationError, PipelineError  # noqa: E402
 from parselabs.export_schema import COLUMN_SCHEMA, get_column_lists  # noqa: E402
 from parselabs.extraction import (  # noqa: E402
-    LabResult,
     extract_labs_from_page_image,
     extract_labs_from_text,
 )
@@ -40,6 +39,15 @@ from parselabs.normalization import (  # noqa: E402
     flag_duplicate_entries,
 )
 from parselabs.paths import get_profiles_dir  # noqa: E402
+from parselabs.review_sync import (  # noqa: E402
+    DOCUMENT_REVIEW_COLUMNS,
+    apply_cached_standardization,
+    build_document_review_dataframe,
+    get_document_review_summary,
+    iter_processed_documents,
+    load_document_review_rows,
+    rebuild_document_csv,
+)
 from parselabs.standardization import (  # noqa: E402
     standardize_lab_names,
     standardize_lab_units,
@@ -653,20 +661,19 @@ def _save_results_to_csv(
 ) -> None:
     """Create DataFrame and save to CSV."""
 
-    # Convert results to DataFrame for structured export
+    # Convert results to DataFrame for structured export.
     df = pd.DataFrame(all_results)
 
-    # Add document date to all rows
+    # Add document date to all rows so review tooling does not need to recover it later.
     df["date"] = doc_date
 
-    # Ensure all required LabResult fields are present (fill missing with None)
-    core_cols = list(LabResult.model_fields.keys()) + ["date"]
-    ensure_columns(df, core_cols, default=None)
+    # Keep a stable review-oriented schema that preserves row identity and cached mappings.
+    ensure_columns(df, DOCUMENT_REVIEW_COLUMNS, default=None)
 
-    # Select only core columns that exist in the DataFrame
-    df = df[[col for col in core_cols if col in df.columns]]
+    # Write columns in a stable order so later review and cache validation can rely on them.
+    df = df[DOCUMENT_REVIEW_COLUMNS].copy()
 
-    # Export to CSV without index
+    # Export to CSV without index.
     df.to_csv(csv_path, index=False, encoding="utf-8")
 
 
@@ -1392,6 +1399,16 @@ Examples:
         type=str,
         help="Glob pattern for input files (overrides profile, default: *.pdf)",
     )
+    parser.add_argument(
+        "--rebuild-from-json",
+        action="store_true",
+        help="Rebuild per-document CSVs and final outputs from reviewed page JSON files",
+    )
+    parser.add_argument(
+        "--allow-pending",
+        action="store_true",
+        help="Allow rebuild-from-json to proceed when pending rows or missing-row markers remain",
+    )
 
     return parser.parse_args()
 
@@ -1476,6 +1493,50 @@ def build_config(args) -> ExtractionConfig:
 
     logger.info(f"Using profile: {profile.name}")
     return config
+
+
+def _load_profile_for_rebuild(profile_name: str) -> ProfileConfig:
+    """Load the minimal profile state required for a reviewed-JSON rebuild."""
+
+    profile_path = ProfileConfig.find_path(profile_name)
+
+    # Guard: The requested profile must exist before rebuild can start.
+    if not profile_path:
+        raise ConfigurationError(f"Profile '{profile_name}' not found. Use --list-profiles to see available profiles.")
+
+    profile = ProfileConfig.from_file(profile_path)
+
+    # Guard: Reviewed rebuilds operate only on processed outputs, so output_path is required.
+    if not profile.output_path:
+        raise ConfigurationError(f"Profile '{profile_name}' has no output_path defined.")
+
+    # Guard: The processed output directory must already exist.
+    if not profile.output_path.exists():
+        raise ConfigurationError(f"Output path does not exist: {profile.output_path}")
+
+    return profile
+
+
+def _setup_rebuild_environment(profile_name: str) -> tuple[ProfileConfig, LabSpecsConfig]:
+    """Setup logging and lab specs for a reviewed-JSON rebuild."""
+
+    profile = _load_profile_for_rebuild(profile_name)
+
+    global logger
+    log_dir = profile.output_path / "logs"
+    logger = setup_logging(log_dir, clear_logs=False)
+    logger.info(f"Using profile: {profile.name}")
+    logger.info(f"Output: {profile.output_path}")
+
+    lab_specs = LabSpecsConfig()
+
+    # Copy lab specs to the output folder so rebuild artifacts stay reproducible.
+    if lab_specs.exists:
+        lab_specs_dest = profile.output_path / "lab_specs.json"
+        shutil.copy2(lab_specs.config_path, lab_specs_dest)
+        logger.info(f"Copied lab specs to output: {lab_specs_dest}")
+
+    return profile, lab_specs
 
 
 # ========================================
@@ -1838,6 +1899,104 @@ def build_final_output_dataframe(
     return run_pipeline_for_pdf_files(pdf_files, config, lab_specs).final_df
 
 
+def build_final_output_dataframe_from_reviewed_json(
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
+    allow_pending: bool = False,
+) -> tuple[pd.DataFrame, list[Path]]:
+    """Return the final post-validation export dataframe from reviewed page JSON files."""
+
+    export_cols, _, _, dtypes = get_column_lists(COLUMN_SCHEMA)
+    documents = iter_processed_documents(output_path)
+
+    # Guard: Reviewed rebuilds require at least one processed document directory.
+    if not documents:
+        raise PipelineError(f"No processed documents found in {output_path}")
+
+    csv_paths: list[Path] = []
+    review_rows: list[pd.DataFrame] = []
+    review_issues: list[str] = []
+
+    # Rebuild each per-document review CSV and collect accepted rows for the final export.
+    for document in documents:
+        csv_paths.append(rebuild_document_csv(document.doc_dir, lab_specs))
+        review_df = build_document_review_dataframe(document.doc_dir, lab_specs)
+        summary = get_document_review_summary(document.doc_dir, review_df)
+
+        # Record fixture-readiness blockers before deciding whether strict mode may continue.
+        if not allow_pending and not summary.fixture_ready:
+            issue_parts: list[str] = []
+
+            # Include pending-row counts so the user knows what still lacks review decisions.
+            if summary.pending > 0:
+                issue_parts.append(f"{summary.pending} pending row(s)")
+
+            # Include unresolved omission markers because they block promotion into reviewed truth.
+            if summary.missing_row_markers > 0:
+                issue_parts.append(f"{summary.missing_row_markers} unresolved missing-row marker(s)")
+
+            issue_text = ", ".join(issue_parts) if issue_parts else "document review incomplete"
+            review_issues.append(f"{document.stem}: {issue_text}")
+
+        accepted_rows = load_document_review_rows(document.doc_dir, include_statuses={"accepted"})
+
+        # Skip documents with no accepted rows because they contribute no final export rows.
+        if accepted_rows.empty:
+            continue
+
+        review_rows.append(accepted_rows)
+
+    # Guard: Strict rebuilds must stop before writing final outputs when reviewed truth is incomplete.
+    if review_issues:
+        issue_text = "\n".join(f"- {issue}" for issue in review_issues)
+        raise PipelineError(
+            "Reviewed JSON rebuild blocked because some documents are not fixture-ready:\n"
+            f"{issue_text}"
+        )
+
+    # Guard: Empty accepted corpora still produce a stable empty export schema.
+    if not review_rows:
+        return pd.DataFrame(columns=export_cols), csv_paths
+
+    merged_df = pd.concat(review_rows, ignore_index=True)
+    merged_df = apply_cached_standardization(merged_df, lab_specs)
+    merged_df = _process_and_transform_data(
+        merged_df,
+        lab_specs,
+        export_cols,
+    )
+
+    # Guard: Propagate transformation failures with the same contract as the normal pipeline.
+    if merged_df is None:
+        raise PipelineError("Reviewed JSON rebuild failed during normalization or validation.")
+
+    final_df = _prepare_final_export_dataframe(merged_df, export_cols, dtypes)
+    return final_df, csv_paths
+
+
+def _run_reviewed_json_rebuild(profile_name: str, allow_pending: bool) -> None:
+    """Rebuild per-document CSVs and final outputs from reviewed page JSON files."""
+
+    profile, lab_specs = _setup_rebuild_environment(profile_name)
+    _, hidden_cols, widths, _ = get_column_lists(COLUMN_SCHEMA)
+
+    logger.info("Rebuilding outputs from reviewed page JSON files...")
+    final_df, csv_paths = build_final_output_dataframe_from_reviewed_json(
+        profile.output_path,
+        lab_specs,
+        allow_pending=allow_pending,
+    )
+
+    _export_final_results(
+        final_df,
+        hidden_cols,
+        widths,
+        profile.output_path,
+        [],
+        csv_paths,
+    )
+
+
 def _discover_pdf_files(input_path: Path, input_file_regex: str | None) -> list[Path]:
     """Return top-level PDF files matching the configured pattern.
 
@@ -1957,6 +2116,8 @@ def main():
 
     # Initialize results tracking for each profile
     results = {}
+    rebuild_from_json = bool(getattr(args, "rebuild_from_json", False))
+    allow_pending = bool(getattr(args, "allow_pending", False))
 
     # Run extraction pipeline for each profile
     for profile_name in profiles_to_run:
@@ -1964,7 +2125,11 @@ def main():
         logger.info(f"Processing profile: {profile_name}")
         logger.info(f"{'=' * 60}")
         try:
-            run_for_profile(args, profile_name)
+            # Route reviewed-JSON rebuilds through the JSON-only path instead of the extraction pipeline.
+            if rebuild_from_json:
+                _run_reviewed_json_rebuild(profile_name, allow_pending=allow_pending)
+            else:
+                run_for_profile(args, profile_name)
             results[profile_name] = "success"
         except (ConfigurationError, PipelineError) as e:
             logger.error(f"\nError in profile '{profile_name}':\n{e}")
