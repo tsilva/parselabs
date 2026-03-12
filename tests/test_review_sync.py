@@ -30,7 +30,10 @@ def _write_processed_document(
     statuses: list[str | None],
     stem: str = "glucose",
     raw_names: list[str] | None = None,
+    raw_values: list[str] | None = None,
     raw_units: list[str] | None = None,
+    raw_reference_mins: list[float | None] | None = None,
+    raw_reference_maxs: list[float | None] | None = None,
     bboxes: list[dict[str, float] | None] | None = None,
     missing_markers: list[dict] | None = None,
 ) -> None:
@@ -43,10 +46,10 @@ def _write_processed_document(
     for idx, status in enumerate(statuses):
         result = {
             "raw_lab_name": raw_names[idx] if raw_names is not None else "Glucose",
-            "raw_value": str(90 + idx),
+            "raw_value": raw_values[idx] if raw_values is not None else str(90 + idx),
             "raw_lab_unit": raw_units[idx] if raw_units is not None else "mg/dL",
-            "raw_reference_min": 70,
-            "raw_reference_max": 100,
+            "raw_reference_min": raw_reference_mins[idx] if raw_reference_mins is not None else 70,
+            "raw_reference_max": raw_reference_maxs[idx] if raw_reference_maxs is not None else 100,
         }
 
         # Persist bbox metadata when the test needs review-image highlighting.
@@ -93,6 +96,62 @@ def _make_lab_specs(tmp_path: Path) -> LabSpecsConfig:
     return LabSpecsConfig(config_path=config_path)
 
 
+def _make_percentage_variant_lab_specs(tmp_path: Path) -> LabSpecsConfig:
+    """Create lab specs that include percentage-vs-absolute sibling analytes."""
+
+    config_path = tmp_path / "lab_specs_percentage.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "Blood - Monocytes": {
+                    "primary_unit": "10⁹/L",
+                    "lab_type": "blood",
+                    "loinc_code": "742-7",
+                    "ranges": {"default": [0.1, 0.8]},
+                },
+                "Blood - Monocytes (%)": {
+                    "primary_unit": "%",
+                    "lab_type": "blood",
+                    "loinc_code": "5905-5",
+                    "ranges": {"default": [2.0, 10.0]},
+                },
+                "Blood - Lymphocytes": {
+                    "primary_unit": "10⁹/L",
+                    "lab_type": "blood",
+                    "loinc_code": "731-0",
+                    "ranges": {"default": [1.0, 4.2]},
+                },
+                "Blood - Lymphocytes (%)": {
+                    "primary_unit": "%",
+                    "lab_type": "blood",
+                    "loinc_code": "736-9",
+                    "ranges": {"default": [19.0, 48.0]},
+                },
+                "Blood - Neutrophils": {
+                    "primary_unit": "10⁹/L",
+                    "lab_type": "blood",
+                    "loinc_code": "751-8",
+                    "ranges": {"default": [2.1, 7.6]},
+                },
+                "Blood - Neutrophils (%)": {
+                    "primary_unit": "%",
+                    "lab_type": "blood",
+                    "loinc_code": "770-8",
+                    "ranges": {"default": [40.0, 75.0]},
+                },
+                "Blood - Mystery Cells": {
+                    "primary_unit": "10⁹/L",
+                    "lab_type": "blood",
+                    "loinc_code": "753-4",
+                    "ranges": {"default": [0.0, 1.0]},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return LabSpecsConfig(config_path=config_path)
+
+
 def _stub_standardization(monkeypatch) -> None:
     """Stub cache-backed standardization so tests stay self-contained."""
 
@@ -116,6 +175,24 @@ def _stub_unknown_unit_standardization(monkeypatch) -> None:
     monkeypatch.setattr(
         "parselabs.review_sync.standardize_lab_units",
         lambda unit_contexts: {context: "$UNKNOWN$" for context in unit_contexts},
+    )
+
+
+def _stub_standardization_maps(
+    monkeypatch,
+    *,
+    name_map: dict[str, str],
+    unit_map: dict[tuple[str, str], str],
+) -> None:
+    """Stub cache-backed standardization with explicit row-level mappings."""
+
+    monkeypatch.setattr(
+        "parselabs.review_sync.standardize_lab_names",
+        lambda raw_names: {name: name_map.get(name, "$UNKNOWN$") for name in raw_names},
+    )
+    monkeypatch.setattr(
+        "parselabs.review_sync.standardize_lab_units",
+        lambda unit_contexts: {context: unit_map.get(context, "$UNKNOWN$") for context in unit_contexts},
     )
 
 
@@ -384,6 +461,139 @@ def test_apply_cached_standardization_infers_safe_missing_primary_units(tmp_path
 
     assert standardized_df.loc[0, "lab_name_standardized"] == "Urine Type II - pH"
     assert standardized_df.loc[0, "lab_unit_standardized"] == "pH"
+
+
+def test_apply_cached_standardization_remaps_percent_units_to_percentage_variants(tmp_path, monkeypatch):
+    lab_specs = _make_percentage_variant_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            "Monocitos": "Blood - Monocytes",
+            "Linfocitos": "Blood - Lymphocytes",
+            "Neutrofilos": "Blood - Neutrophils",
+        },
+        unit_map={
+            ("%", "Blood - Monocytes"): "%",
+            ("%", "Blood - Lymphocytes"): "%",
+            ("%", "Blood - Neutrophils"): "%",
+        },
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {"raw_lab_name": "Monocitos", "raw_lab_unit": "%"},
+            {"raw_lab_name": "Linfocitos", "raw_lab_unit": "%"},
+            {"raw_lab_name": "Neutrofilos", "raw_lab_unit": "%"},
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df["lab_name_standardized"].tolist() == [
+        "Blood - Monocytes (%)",
+        "Blood - Lymphocytes (%)",
+        "Blood - Neutrophils (%)",
+    ]
+    assert standardized_df["lab_unit_standardized"].tolist() == ["%", "%", "%"]
+
+
+def test_apply_cached_standardization_remaps_absolute_units_to_non_percentage_variants(tmp_path, monkeypatch):
+    lab_specs = _make_percentage_variant_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            "Monocitos (%)": "Blood - Monocytes (%)",
+            "Linfocitos (%)": "Blood - Lymphocytes (%)",
+        },
+        unit_map={
+            ("10^9/L", "Blood - Monocytes (%)"): "10⁹/L",
+            ("/mm3", "Blood - Lymphocytes (%)"): "/mm3",
+        },
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {"raw_lab_name": "Monocitos (%)", "raw_lab_unit": "10^9/L"},
+            {"raw_lab_name": "Linfocitos (%)", "raw_lab_unit": "/mm3"},
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df["lab_name_standardized"].tolist() == [
+        "Blood - Monocytes",
+        "Blood - Lymphocytes",
+    ]
+    assert standardized_df["lab_unit_standardized"].tolist() == ["10⁹/L", "/mm3"]
+
+
+def test_apply_cached_standardization_leaves_correct_unknown_and_orphan_rows_unchanged(tmp_path, monkeypatch):
+    lab_specs = _make_percentage_variant_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            "Monocitos (%)": "Blood - Monocytes (%)",
+            "Monocitos": "Blood - Monocytes",
+            "Mystery Cells": "Blood - Mystery Cells",
+        },
+        unit_map={
+            ("%", "Blood - Monocytes (%)"): "%",
+            ("", "Blood - Monocytes"): "$UNKNOWN$",
+            ("%", "Blood - Mystery Cells"): "%",
+        },
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {"raw_lab_name": "Monocitos (%)", "raw_lab_unit": "%"},
+            {"raw_lab_name": "Monocitos", "raw_lab_unit": ""},
+            {"raw_lab_name": "Mystery Cells", "raw_lab_unit": "%"},
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df["lab_name_standardized"].tolist() == [
+        "Blood - Monocytes (%)",
+        "Blood - Monocytes",
+        "Blood - Mystery Cells",
+    ]
+    assert standardized_df["lab_unit_standardized"].tolist() == ["%", "$UNKNOWN$", "%"]
+
+
+def test_build_document_review_dataframe_separates_percentage_and_absolute_variants(tmp_path, monkeypatch):
+    lab_specs = _make_percentage_variant_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={"Monocitos": "Blood - Monocytes"},
+        unit_map={
+            ("%", "Blood - Monocytes"): "%",
+            ("10^9/L", "Blood - Monocytes"): "10⁹/L",
+        },
+    )
+    doc_dir = tmp_path / "processed" / "monocytes_deadbeef"
+    _write_processed_document(
+        doc_dir,
+        [None, None],
+        stem="monocytes",
+        raw_names=["Monocitos", "Monocitos"],
+        raw_values=["6.0", "0.354"],
+        raw_units=["%", "10^9/L"],
+        raw_reference_mins=[2.0, 0.1],
+        raw_reference_maxs=[10.0, 0.8],
+    )
+
+    review_df = build_document_review_dataframe(doc_dir, lab_specs)
+
+    assert review_df["lab_name_standardized"].tolist() == [
+        "Blood - Monocytes (%)",
+        "Blood - Monocytes",
+    ]
+    assert review_df["lab_name"].tolist() == [
+        "Blood - Monocytes (%)",
+        "Blood - Monocytes",
+    ]
+    assert review_df["review_reason"].fillna("").tolist() == ["", ""]
 
 
 def test_build_document_review_dataframe_keeps_extraction_failures_visible(tmp_path, monkeypatch):

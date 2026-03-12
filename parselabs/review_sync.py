@@ -777,6 +777,73 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
         standardized_units.append(standardized_unit)
 
     review_df["lab_unit_standardized"] = standardized_units
+    review_df = _remap_percentage_variant_lab_names(review_df, lab_specs)
+    return review_df
+
+
+def _remap_percentage_variant_lab_names(
+    review_df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+) -> pd.DataFrame:
+    """Canonicalize percentage-vs-absolute sibling lab names from standardized units."""
+
+    # Guard: Remapping requires both standardized columns and loaded lab specs.
+    if (
+        review_df.empty
+        or not lab_specs.exists
+        or "lab_name_standardized" not in review_df.columns
+        or "lab_unit_standardized" not in review_df.columns
+    ):
+        return review_df
+
+    remapped_names: list[object] = []
+    remap_count = 0
+
+    for idx in review_df.index:
+        standardized_name = review_df.at[idx, "lab_name_standardized"]
+        standardized_unit = review_df.at[idx, "lab_unit_standardized"]
+
+        # Keep rows without a usable standardized lab name unchanged.
+        if pd.isna(standardized_name) or standardized_name == UNKNOWN_VALUE or not str(standardized_name).strip():
+            remapped_names.append(standardized_name)
+            continue
+
+        standardized_name = str(standardized_name)
+
+        # Keep rows without an explicit standardized unit unchanged.
+        if pd.isna(standardized_unit) or standardized_unit in {"", UNKNOWN_VALUE}:
+            remapped_names.append(standardized_name)
+            continue
+
+        # Percentage units belong on the configured (%) sibling when one exists.
+        if standardized_unit == "%":
+            percentage_variant = lab_specs.get_percentage_variant(standardized_name)
+            if percentage_variant is None:
+                remapped_names.append(standardized_name)
+                continue
+
+            remapped_names.append(percentage_variant)
+            remap_count += int(percentage_variant != standardized_name)
+            continue
+
+        # Non-percentage units belong on the configured absolute sibling when one exists.
+        non_percentage_variant = lab_specs.get_non_percentage_variant(standardized_name)
+        if non_percentage_variant is None:
+            remapped_names.append(standardized_name)
+            continue
+
+        remapped_names.append(non_percentage_variant)
+        remap_count += int(non_percentage_variant != standardized_name)
+
+    review_df["lab_name_standardized"] = remapped_names
+
+    # Log only real name changes so rebuild output stays readable.
+    if remap_count > 0:
+        logger.info(
+            "[review_sync] Remapped %s percentage-variant lab name(s) from standardized units",
+            remap_count,
+        )
+
     return review_df
 
 
@@ -848,7 +915,7 @@ def _flag_percentage_variant_ambiguity(
     review_df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
 ) -> pd.DataFrame:
-    """Flag rows where explicit units disagree with percentage-vs-absolute lab variants."""
+    """Flag rows whose percentage-vs-absolute interpretation still cannot be resolved."""
 
     # Guard: Variant checks require lab specs and standardized lab names.
     if not lab_specs.exists or review_df.empty:
@@ -864,18 +931,21 @@ def _flag_percentage_variant_ambiguity(
         if pd.isna(std_name) or std_name == UNKNOWN_VALUE or not str(std_name).strip():
             continue
 
-        # Skip rows without an explicit usable standardized unit.
+        # Missing units stay ambiguous when the lab has a sibling percentage variant.
         if pd.isna(std_unit) or std_unit in {"", UNKNOWN_VALUE}:
-            continue
-
-        # Percentage units paired with non-percentage names are ambiguous when a percentage variant exists.
-        if std_unit == "%" and not std_name.endswith("(%)"):
-            potential_pct_name = f"{std_name} (%)"
-            if potential_pct_name in lab_specs._specs:
+            if (
+                lab_specs.get_percentage_variant(str(std_name)) is not None
+                or lab_specs.get_non_percentage_variant(str(std_name)) is not None
+            ):
                 ambiguous_indices.append(idx)
             continue
 
-        # Non-percentage units paired with percentage names are also ambiguous.
+        # Percentage units paired with non-percentage names remain ambiguous only when no sibling can fix them.
+        if std_unit == "%" and not std_name.endswith("(%)"):
+            ambiguous_indices.append(idx)
+            continue
+
+        # Non-percentage units paired with percentage names are also ambiguous when remapping could not resolve them.
         if std_unit != "%" and std_name.endswith("(%)"):
             ambiguous_indices.append(idx)
 
