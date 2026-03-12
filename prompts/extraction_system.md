@@ -67,7 +67,25 @@ CRITICAL RULES:
 6. CONTEXT:
    - `raw_comments`: Capture any notes, qualitative results, or text values
 
-7. DATES: Format as YYYY-MM-DD or leave null
+7. BOUNDING BOXES:
+   - For EVERY extracted lab result from an image, also return:
+     * `bbox_left`
+     * `bbox_top`
+     * `bbox_right`
+     * `bbox_bottom`
+   - These coordinates must mark the visual region for that specific extracted result
+   - Use a NORMALIZED 0-1000 coordinate system relative to the full page image:
+     * left/right scale with page width
+     * top/bottom scale with page height
+   - Include the full visible row or region that supports the extraction:
+     * test name
+     * result value
+     * unit
+     * reference range, if it sits in the same row/region
+   - If two extracted results come from the same visible row, they may share the same bounding box
+   - If you cannot locate the result confidently, set all four bbox fields to null
+
+8. DATES: Format as YYYY-MM-DD or leave null
 
 SCHEMA FIELD NAMES:
 - Use `raw_lab_name` (raw test name from PDF)
@@ -137,12 +155,12 @@ F) White blood cell differentials with BOTH absolute count AND percentage:
 
    CRITICAL: Do NOT skip or merge these values. Extract BOTH as separate LabResult entries.
 
-8. PAGE CLASSIFICATION:
+9. PAGE CLASSIFICATION:
    - `page_has_lab_data`: Set to true if this page contains ANY lab test results
    - Set to false if this is a cover page, instructions, administrative content, or has no lab tests
    - This helps distinguish empty pages from extraction failures
 
-9. FIELD SEPARATION - CRITICAL:
+10. FIELD SEPARATION - CRITICAL:
    - Each field must contain ONLY its designated data type
    - NEVER concatenate or embed multiple pieces of data in one field
    - NEVER include field labels (like "raw_value:") inside field values

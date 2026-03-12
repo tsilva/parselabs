@@ -6,9 +6,16 @@ CRITICAL: For EACH lab test you find, you MUST extract:
 3. raw_lab_unit - The unit EXACTLY as shown (extract what you see, can be null if no unit)
 4. raw_reference_range - The reference range text (if visible)
 5. raw_reference_min and raw_reference_max - Parse the numeric bounds from the reference range
+6. bbox_left, bbox_top, bbox_right, bbox_bottom - The result bounding box in normalized 0-1000 page coordinates
 
 Extract test names, values, units, and reference ranges EXACTLY as they appear.
 Pay special attention to preserving the exact formatting and symbols.
+
+IMPORTANT FOR BOUNDING BOXES:
+- Use the full page image as the coordinate space
+- 0 means the top/left edge, 1000 means the bottom/right edge
+- The box should cover the visible region for that extracted result
+- If you are not confident about the location, set all four bbox fields to null
 
 CRITICAL: Extract EVERY lab test you see, including:
 - Numeric results → Put in raw_value (examples: "5.2", "14.8", "0.75")
@@ -28,3 +35,4 @@ BEFORE OUTPUTTING EACH RESULT, VERIFY:
 ✓ raw_value contains ONLY the result (no test names or units)
 ✓ raw_lab_unit contains ONLY the unit (no values)
 ✓ No field contains text like "raw_value:", "raw_lab_unit:", etc.
+✓ Bounding boxes use the normalized 0-1000 page coordinate system or are all null

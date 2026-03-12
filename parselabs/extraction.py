@@ -14,6 +14,13 @@ from parselabs.paths import get_prompts_dir
 
 logger = logging.getLogger(__name__)
 
+BBOX_FIELDS = [
+    "bbox_left",
+    "bbox_top",
+    "bbox_right",
+    "bbox_bottom",
+]
+
 
 # ========================================
 # Pydantic Models
@@ -50,6 +57,22 @@ class LabResult(BaseModel):
     raw_comments: str | None = Field(
         default=None,
         description="Additional notes or remarks about the test (NOT the test result itself). Only use for extra information like methodology notes or special conditions.",
+    )
+    bbox_left: float | None = Field(
+        default=None,
+        description="Optional normalized left edge of the result bounding box on the page. Use the 0-1000 scale relative to full page width.",
+    )
+    bbox_top: float | None = Field(
+        default=None,
+        description="Optional normalized top edge of the result bounding box on the page. Use the 0-1000 scale relative to full page height.",
+    )
+    bbox_right: float | None = Field(
+        default=None,
+        description="Optional normalized right edge of the result bounding box on the page. Use the 0-1000 scale relative to full page width.",
+    )
+    bbox_bottom: float | None = Field(
+        default=None,
+        description="Optional normalized bottom edge of the result bounding box on the page. Use the 0-1000 scale relative to full page height.",
     )
     # Internal fields (added by pipeline, not by LLM) — excluded from JSON serialization
     lab_name_standardized: str | None = Field(default=None, exclude=True)
@@ -192,6 +215,22 @@ class LabResultExtraction(BaseModel):
     raw_comments: str | None = Field(
         default=None,
         description="Additional notes or remarks about the test (NOT the test result itself).",
+    )
+    bbox_left: float | None = Field(
+        default=None,
+        description="Optional normalized left edge of the result bounding box on the page. Use the 0-1000 scale relative to full page width.",
+    )
+    bbox_top: float | None = Field(
+        default=None,
+        description="Optional normalized top edge of the result bounding box on the page. Use the 0-1000 scale relative to full page height.",
+    )
+    bbox_right: float | None = Field(
+        default=None,
+        description="Optional normalized right edge of the result bounding box on the page. Use the 0-1000 scale relative to full page width.",
+    )
+    bbox_bottom: float | None = Field(
+        default=None,
+        description="Optional normalized bottom edge of the result bounding box on the page. Use the 0-1000 scale relative to full page height.",
     )
 
 
@@ -750,6 +789,9 @@ def _fix_lab_results_format(tool_result_dict: dict) -> dict:
     # Clean numeric reference fields (strip embedded metadata like ", comments: ...")
     _clean_numeric_reference_fields(tool_result_dict)
 
+    # Clean bounding-box coordinates so malformed boxes degrade to null instead of breaking the row.
+    _clean_bbox_fields(tool_result_dict)
+
     # Filter out any items that still could not be normalized into row dicts.
     original_count = len(tool_result_dict["lab_results"])
     tool_result_dict["lab_results"] = [r for r in tool_result_dict["lab_results"] if isinstance(r, dict)]
@@ -908,7 +950,7 @@ def _parse_labeled_lab_result(raw_value: str) -> dict | None:
     """Parse strings that inline field labels inside one lab-result item."""
 
     field_pattern = re.compile(
-        r"(?P<field>raw_lab_name|raw_value|raw_lab_unit|raw_reference_range|raw_reference_min|raw_reference_max|raw_comments)\s*[:=]\s*",
+        r"(?P<field>raw_lab_name|raw_value|raw_lab_unit|raw_reference_range|raw_reference_min|raw_reference_max|raw_comments|bbox_left|bbox_top|bbox_right|bbox_bottom)\s*[:=]\s*",
         flags=re.IGNORECASE,
     )
     matches = list(field_pattern.finditer(raw_value))
@@ -943,6 +985,10 @@ def _normalize_lab_result_keys(row_dict: dict) -> dict:
         "reference_range": "raw_reference_range",
         "reference_min": "raw_reference_min",
         "reference_max": "raw_reference_max",
+        "left": "bbox_left",
+        "top": "bbox_top",
+        "right": "bbox_right",
+        "bottom": "bbox_bottom",
     }
     normalized_dict: dict = {}
 
@@ -963,6 +1009,42 @@ def _clean_numeric_reference_fields(tool_result_dict: dict) -> None:
                 item["raw_reference_min"] = _clean_numeric_field(item["raw_reference_min"])
             if "raw_reference_max" in item:
                 item["raw_reference_max"] = _clean_numeric_field(item["raw_reference_max"])
+
+
+def _clean_bbox_fields(tool_result_dict: dict) -> None:
+    """Normalize bounding-box coordinates or drop malformed boxes entirely."""
+
+    for item in tool_result_dict["lab_results"]:
+        # Guard: Skip non-dict items because other cleanup passes already handle them.
+        if not isinstance(item, dict):
+            continue
+
+        # Guard: Rows without any bbox data do not need normalization.
+        if not any(field in item for field in BBOX_FIELDS):
+            continue
+
+        cleaned_values = {field: _clean_numeric_field(item.get(field)) for field in BBOX_FIELDS}
+
+        # Guard: Partial boxes are not review-safe, so clear the whole box.
+        if any(value is None for value in cleaned_values.values()):
+            for field in BBOX_FIELDS:
+                item[field] = None
+            continue
+
+        left = cleaned_values["bbox_left"]
+        top = cleaned_values["bbox_top"]
+        right = cleaned_values["bbox_right"]
+        bottom = cleaned_values["bbox_bottom"]
+
+        # Guard: Non-positive boxes are not usable in the viewer.
+        if left < 0 or top < 0 or right <= left or bottom <= top:
+            for field in BBOX_FIELDS:
+                item[field] = None
+            continue
+
+        # Persist canonical numeric coordinates when the box is internally consistent.
+        for field, value in cleaned_values.items():
+            item[field] = value
 
 
 def _salvage_lab_results(tool_result_dict: dict) -> dict:
