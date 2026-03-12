@@ -163,7 +163,19 @@ config/cache/unit_standardization.json   # raw_unit|lab_name → standardized_un
 
 Each PDF produces a CSV in its output directory: `{stem}_{hash}/{stem}.csv`
 
-Contains all LabResult fields mapped to the output column schema.
+Contains one row per extracted result with:
+
+- document/date metadata
+- page and result indexes for round-tripping review actions
+- raw extracted fields
+- cached standardized name/unit mappings
+- review status columns (initially empty until reviewed)
+
+Each page JSON remains the authoritative editable source of truth for review:
+
+- per-result `review_status`
+- per-result `review_completed_at`
+- root-level `review_missing_rows` markers for omitted source rows the reviewer will repair manually
 
 ## Stage 7: Merge
 
@@ -269,6 +281,7 @@ Inter-lab relationships use formulas from the `_relationships` key:
 
 | File | Description |
 |------|-------------|
+| `{stem}_{hash}/{stem}.csv` | Per-document review CSV rebuilt from processed page JSON state |
 | `all.csv` | Merged, normalized, deduplicated, validated results |
 | `all.xlsx` | Excel with formatted columns, frozen header, hidden internal columns |
 | `lab_specs.json` | Copy of lab specifications used (for reproducibility) |
@@ -394,7 +407,7 @@ tests/fixtures/approved/
 - `file_hash`
 - `profile`
 - `approved_at`
-- `model_id`
+- `reviewed_at`
 
 ### Canonical CSV Comparison
 
@@ -412,13 +425,36 @@ The comparison remains exact after canonicalization; there is no numeric toleran
 
 ### Approval Workflow
 
-Use the helper to add or refresh cases from a real profile:
+Review processed outputs first:
 
 ```bash
-uv run python utils/regression_cases.py approve --profile myname --pattern "2024-*.pdf"
+parselabs-review-docs --profile myname
 ```
 
-The helper copies selected PDFs into the private fixture area, enforces unique document stems, reruns the entire approved corpus in a temporary workspace, and rewrites `expected.csv` for every approved case.
+Then rebuild reviewed outputs and sync fixture-ready documents into the private fixture corpus:
+
+```bash
+parselabs --profile myname --rebuild-from-json
+uv run python utils/regression_cases.py sync-reviewed --profile myname
+```
+
+The sync helper:
+
+- scans the profile `output_path`
+- rebuilds each document CSV from page JSON review state
+- blocks final rebuilds by default when pending rows or `review_missing_rows` markers remain
+- exports only rows with `review_status == accepted`
+- copies only fixture-ready documents: every extracted row reviewed, no unresolved missing-row markers
+- rewrites each valid case `expected.csv` from reviewed JSON truth instead of a fresh extraction run
+- removes stale fixture cases for the same profile when a document is no longer fixture-ready
+
+For corpus-level quality analysis:
+
+```bash
+uv run python utils/regression_cases.py report --profile myname
+```
+
+This prints counts for rejected rows, unresolved missing-row markers, unknown mappings, validation reasons, and the top raw names/units involved in rejected rows.
 
 ### Running the Suite
 

@@ -6,7 +6,7 @@
   [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
   [![Python](https://img.shields.io/badge/Python-≥3.8-3776ab.svg)](https://python.org)
 
-  **🔬 Extract lab results from medical PDFs using AI vision with self-consistency 📊**
+  **🔬 Extract lab results from medical PDFs with hybrid text/vision extraction and reviewed JSON fixtures 📊**
 
   [Documentation](docs/pipeline.md) · [Issues](https://github.com/tsilva/parselabs/issues)
 </div>
@@ -53,6 +53,10 @@ parselabs --profile myname
 
 # Review results
 parselabs-viewer --profile myname
+parselabs-review-docs --profile myname
+
+# Rebuild final outputs from reviewed JSON only
+parselabs --profile myname --rebuild-from-json
 ```
 
 ## Installation
@@ -149,9 +153,9 @@ parselabs-viewer --profile myname
 
 The Gradio-based review UI provides:
 - **Side-by-side view** — Source document image alongside extracted data
-- **Keyboard shortcuts** — Y=Accept, N=Reject, S=Skip, Arrow keys=Navigate
-- **Smart filters** — Unreviewed, Low Confidence, Needs Review, Accepted, Rejected
-- **Progress tracking** — Review counts and completion status
+- **Keyboard shortcuts** — Y=Approve, N=Reject, M=Missing Row, Arrow keys/J/K=Navigate
+- **Fixture-readiness filter** — Focus on documents that still have pending rows or unresolved missing-row markers
+- **Progress tracking** — Document/page counters for reviewed, rejected, pending, and missing rows
 
 ### Validate Data Integrity
 
@@ -167,33 +171,40 @@ Use the private approved-document suite to rerun real PDFs and compare the final
 
 Workflow:
 
-1. Approve or refresh one or more real PDFs from an existing profile.
-
-By pattern:
+1. Review processed documents line by line until every extracted row you want to keep is marked `accepted`:
 
 ```bash
-uv run python utils/regression_cases.py approve --profile myname --pattern "2024-*.pdf"
+parselabs-review-docs --profile myname
 ```
 
-By explicit filenames:
+2. Manually repair any rejected or missing rows directly in the page JSON files, then rebuild the final outputs from reviewed JSON:
 
 ```bash
-uv run python utils/regression_cases.py approve --profile myname --files "2024-01-15 analises.pdf" "2024-03-20 analises.pdf"
+parselabs --profile myname --rebuild-from-json
 ```
 
-2. Run the approved-document regression suite:
+3. Sync all fixture-ready processed documents into the private approved fixture corpus:
+
+```bash
+uv run python utils/regression_cases.py sync-reviewed --profile myname
+```
+4. Run the approved-document regression suite:
 
 ```bash
 RUN_APPROVED_DOCS=1 uv run pytest -m approved_docs
 ```
 
 Notes:
-- The approval command copies the selected PDFs into `tests/fixtures/approved/` and rebuilds `expected.csv` for the full approved corpus.
+- `parselabs --rebuild-from-json` reads page JSON files only, includes only `review_status == accepted` rows, excludes rejected rows, and blocks by default when pending rows or `review_missing_rows` markers remain.
+- Use `--allow-pending` only for debugging partial rebuilds; it still exports accepted rows only.
+- The sync command scans the profile `output_path` and copies only fixture-ready documents: every extracted row reviewed and no unresolved `review_missing_rows` markers.
+- Expected fixture CSVs are rebuilt from reviewed JSON truth, not from a fresh extraction run.
 - The pytest command reruns the full approved corpus together, then compares each document's final CSV output against its approved `expected.csv`.
 - Each approved case uses the runtime settings from its recorded profile file.
 - Approved fixtures live under `tests/fixtures/approved/` and remain uncommitted/private.
 - Each case directory contains `document.pdf`, `expected.csv`, and `case.json`.
-- The `approve` command rebuilds baselines for the full approved corpus, not just the newly selected files.
+- `sync-reviewed` also removes stale fixture cases from the same profile when the processed document is no longer fixture-ready.
+- `uv run python utils/regression_cases.py report --profile myname` prints rejected-row, missing-row, unknown-mapping, and validation-reason counts for the reviewed corpus.
 
 ## Output
 
@@ -202,9 +213,10 @@ For each PDF, the tool generates:
 | File | Description |
 |------|-------------|
 | `{doc}/` | Directory with page images and JSON extractions |
-| `{doc}.csv` | Combined results for the document |
+| `{doc}.csv` | Per-document review CSV with page/result ids, mapped values, validation flags, and review status |
 | `all.csv` | Merged results from all documents |
 | `all.xlsx` | Excel workbook with formatted data |
+| `{stem}.{page}.json` | Page-level extraction JSON plus review fields (`review_status`, `review_completed_at`, `review_missing_rows`) |
 
 ### Output Schema
 

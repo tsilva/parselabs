@@ -15,3 +15,11 @@ def viewer() -> None:
     from viewer import main as _main
 
     _main()
+
+
+def review_documents() -> None:
+    """Run the processed document reviewer CLI."""
+
+    from review_documents import main as _main
+
+    _main()
