@@ -152,8 +152,9 @@ parselabs-viewer --profile myname
 ```
 
 The Gradio-based review UI provides:
-- **Side-by-side view** — Source document image alongside extracted data
-- **Keyboard shortcuts** — Y=Approve, N=Reject, M=Missing Row, Arrow keys/J/K=Navigate
+- **3-pane review workspace** — Pending-row queue, large source page, and compact row inspector
+- **Keyboard shortcuts** — Y=Approve, N=Reject, M=Missing Row, U=Undo, Arrow keys/J/K=Navigate
+- **Show reviewed toggle** — Hide reviewed rows by default and reveal them only when needed
 - **Fixture-readiness filter** — Focus on documents that still have pending rows or unresolved missing-row markers
 - **Progress tracking** — Document/page counters for reviewed, rejected, pending, and missing rows
 

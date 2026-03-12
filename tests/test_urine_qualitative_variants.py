@@ -1,0 +1,113 @@
+import json
+
+import pandas as pd
+
+from parselabs.config import LabSpecsConfig
+from parselabs.normalization import apply_normalizations
+
+
+def _make_lab_specs(tmp_path):
+    config_path = tmp_path / "lab_specs.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "Urine Type II - Proteins": {
+                    "lab_type": "urine",
+                    "primary_unit": "mg/dL",
+                    "alternatives": [{"unit": "mg/dl", "factor": 1.0}],
+                    "ranges": {"default": [0, 15]},
+                    "loinc_code": "2888-6",
+                },
+                "Urine Type II - Proteins, Qualitative": {
+                    "lab_type": "urine",
+                    "primary_unit": "boolean",
+                    "alternatives": [],
+                    "ranges": {"default": [0, 0]},
+                    "loinc_code": "2888-6-qual",
+                },
+                "Urine Type II - Color": {
+                    "lab_type": "urine",
+                    "primary_unit": "boolean",
+                    "alternatives": [],
+                    "ranges": {"default": [0, 0]},
+                    "loinc_code": "5778-1",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return LabSpecsConfig(config_path=config_path)
+
+
+def test_apply_normalizations_remaps_text_urine_result_to_boolean_variant(tmp_path):
+    lab_specs = _make_lab_specs(tmp_path)
+    df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Proteinas",
+                "raw_value": "NEGATIVO",
+                "raw_comments": None,
+                "raw_lab_unit": "",
+                "raw_reference_min": None,
+                "raw_reference_max": None,
+                "lab_name_standardized": "Urine Type II - Proteins",
+                "lab_unit_standardized": None,
+            }
+        ]
+    )
+
+    normalized_df = apply_normalizations(df, lab_specs)
+
+    assert normalized_df.loc[0, "lab_name_standardized"] == "Urine Type II - Proteins, Qualitative"
+    assert normalized_df.loc[0, "lab_unit_standardized"] == "boolean"
+    assert normalized_df.loc[0, "lab_unit_primary"] == "boolean"
+    assert normalized_df.loc[0, "value_primary"] == 0
+
+
+def test_apply_normalizations_keeps_numeric_urine_result_on_numeric_lab(tmp_path):
+    lab_specs = _make_lab_specs(tmp_path)
+    df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Proteinas",
+                "raw_value": "30",
+                "raw_comments": None,
+                "raw_lab_unit": "mg/dl",
+                "raw_reference_min": 0,
+                "raw_reference_max": 15,
+                "lab_name_standardized": "Urine Type II - Proteins",
+                "lab_unit_standardized": "mg/dl",
+            }
+        ]
+    )
+
+    normalized_df = apply_normalizations(df, lab_specs)
+
+    assert normalized_df.loc[0, "lab_name_standardized"] == "Urine Type II - Proteins"
+    assert normalized_df.loc[0, "lab_unit_primary"] == "mg/dL"
+    assert normalized_df.loc[0, "value_primary"] == 30
+
+
+def test_apply_normalizations_classifies_urine_color_as_boolean(tmp_path):
+    lab_specs = _make_lab_specs(tmp_path)
+    df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Cor",
+                "raw_value": "AMARELA",
+                "raw_comments": None,
+                "raw_lab_unit": "",
+                "raw_reference_min": None,
+                "raw_reference_max": None,
+                "lab_name_standardized": "Urine Type II - Color",
+                "lab_unit_standardized": None,
+            }
+        ]
+    )
+
+    normalized_df = apply_normalizations(df, lab_specs)
+
+    assert normalized_df.loc[0, "lab_name_standardized"] == "Urine Type II - Color"
+    assert normalized_df.loc[0, "lab_unit_standardized"] == "boolean"
+    assert normalized_df.loc[0, "lab_unit_primary"] == "boolean"
+    assert normalized_df.loc[0, "value_primary"] == 0

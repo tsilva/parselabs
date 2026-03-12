@@ -12,6 +12,40 @@ logger = logging.getLogger(__name__)
 CACHE_DIR = get_cache_dir()
 
 
+def normalize_unit_cache_key_component(raw_unit) -> str:
+    """Normalize missing and textual raw-unit values to a stable cache key token."""
+
+    normalized = str(raw_unit).lower().strip()
+
+    # Collapse all blank-like unit tokens onto one cache key so runtime and updater agree.
+    if normalized in {"", "nan", "none", "null"}:
+        return "null"
+
+    return normalized
+
+
+def _drop_unknown_standardization_entries(name: str, cache: dict) -> dict:
+    """Treat cached $UNKNOWN$ values as unresolved for standardization caches."""
+
+    # Only the name/unit standardization caches should enforce this invariant.
+    if name not in {"name_standardization", "unit_standardization"}:
+        return cache
+
+    pruned_cache = {key: value for key, value in cache.items() if value != UNKNOWN_VALUE}
+
+    # Unit mappings without a resolved standardized lab name are not valid cache entries.
+    if name == "unit_standardization":
+        invalid_keys = []
+        for key in pruned_cache:
+            _, _, lab_name = key.partition("|")
+            if lab_name.strip() in {"", UNKNOWN_VALUE.lower()}:
+                invalid_keys.append(key)
+        for key in invalid_keys:
+            pruned_cache.pop(key, None)
+
+    return pruned_cache
+
+
 def load_cache(name: str) -> dict:
     """Load JSON cache file. User-editable for overriding decisions."""
 
@@ -21,7 +55,8 @@ def load_cache(name: str) -> dict:
     if path.exists():
         try:
             with open(path, encoding="utf-8") as f:
-                return json.load(f)
+                cache = json.load(f)
+                return _drop_unknown_standardization_entries(name, cache)
         # Cache file is corrupted or unreadable
         except (json.JSONDecodeError, IOError) as e:
             logger.warning(f"Failed to load cache {name}: {e}")
@@ -105,7 +140,8 @@ def standardize_lab_units(
     cache = load_cache("unit_standardization")
 
     def cache_key(raw_unit, lab_name):
-        return f"{str(raw_unit).lower().strip()}|{str(lab_name).lower().strip()}"
+        normalized_unit = normalize_unit_cache_key_component(raw_unit)
+        return f"{normalized_unit}|{str(lab_name).lower().strip()}"
 
     # Get unique (raw_unit, lab_name) pairs
     unique_pairs = list(set(unit_contexts))

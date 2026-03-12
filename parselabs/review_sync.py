@@ -283,13 +283,13 @@ def transform_rows_to_final_export(
     return final_df, validation_stats
 
 
-def save_review_status(doc_dir: Path, page_number: int, result_index: int, status: str) -> tuple[bool, str]:
+def save_review_status(doc_dir: Path, page_number: int, result_index: int, status: str | None) -> tuple[bool, str]:
     """Persist a review decision to the page JSON backing a CSV row."""
 
     normalized_status = _normalize_review_status(status)
 
-    # Guard: Persist only the supported review decision values.
-    if normalized_status not in {"accepted", "rejected"}:
+    # Guard: Persist only supported review decisions or an explicit reset to pending.
+    if normalized_status not in {"accepted", "rejected", None}:
         return False, f"Unsupported review status: {status}"
 
     # Resolve the JSON file for the selected page before attempting any mutation.
@@ -314,9 +314,15 @@ def save_review_status(doc_dir: Path, page_number: int, result_index: int, statu
     if result_index < 0 or result_index >= len(results):
         return False, f"result_index {result_index} out of range."
 
-    # Persist the explicit review decision plus a timestamp for auditability.
-    results[result_index]["review_status"] = normalized_status
-    results[result_index]["review_completed_at"] = pd.Timestamp.now(tz="UTC").isoformat()
+    # Persist explicit review decisions plus a timestamp for auditability.
+    if normalized_status in {"accepted", "rejected"}:
+        results[result_index]["review_status"] = normalized_status
+        results[result_index]["review_completed_at"] = pd.Timestamp.now(tz="UTC").isoformat()
+
+    # Clearing a decision should restore the row to the canonical pending state.
+    if normalized_status is None:
+        results[result_index].pop("review_status", None)
+        results[result_index].pop("review_completed_at", None)
 
     try:
         # Rewrite the JSON atomically enough for local desktop usage.
@@ -742,13 +748,25 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
     mapped_units = standardize_lab_units([context for context in unit_contexts if context != ("", "")])
 
     standardized_units: list[str | None] = []
-    for context in unit_contexts:
+    safe_missing_unit_primary_units = {"boolean", "pH", "unitless"}
+
+    for raw_unit, standardized_name in unit_contexts:
         # Leave units empty when the lab name did not map.
-        if context == ("", ""):
+        if (raw_unit, standardized_name) == ("", ""):
             standardized_units.append(None)
             continue
 
-        standardized_units.append(mapped_units.get(context))
+        standardized_unit = mapped_units.get((raw_unit, standardized_name))
+
+        # Some labs are intrinsically unitless or use a conventional implied unit.
+        # When extraction omits the printed unit entirely, prefer the primary unit
+        # from lab_specs instead of forcing a cache entry for blank input.
+        if standardized_unit == UNKNOWN_VALUE and raw_unit.strip() == "":
+            primary_unit = lab_specs.get_primary_unit(standardized_name)
+            if primary_unit in safe_missing_unit_primary_units:
+                standardized_unit = primary_unit
+
+        standardized_units.append(standardized_unit)
 
     review_df["lab_unit_standardized"] = standardized_units
     return review_df
@@ -799,9 +817,7 @@ def _append_review_reason_code(
 
     review_df.loc[mask, "review_needed"] = True
     current_reasons = review_df.loc[mask, "review_reason"].fillna("").astype(str)
-    review_df.loc[mask, "review_reason"] = current_reasons.apply(
-        lambda value: f"{value}{reason_code}; " if reason_code not in value else value
-    )
+    review_df.loc[mask, "review_reason"] = current_reasons.apply(lambda value: f"{value}{reason_code}; " if reason_code not in value else value)
     return review_df
 
 
@@ -948,6 +964,7 @@ def _filter_exportable_rows(review_df: pd.DataFrame) -> pd.DataFrame:
         return review_df
 
     return review_df[~unresolved_mask].reset_index(drop=True)
+
 
 def _prepare_rows_for_review(
     review_df: pd.DataFrame,
