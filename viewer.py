@@ -27,6 +27,7 @@ from plotly.subplots import make_subplots  # noqa: E402
 
 from parselabs.config import Demographics, LabSpecsConfig, ProfileConfig  # noqa: E402
 from parselabs.paths import get_profiles_dir, get_static_dir  # noqa: E402
+from parselabs.review_sync import build_document_review_dataframe, iter_processed_documents  # noqa: E402
 
 # Initialize module logger
 logger = logging.getLogger(__name__)
@@ -431,22 +432,35 @@ def _check_out_of_healthy_range(row) -> bool | None:
 
 
 def load_data(output_path: Path) -> pd.DataFrame:
-    """Load lab results from all.csv and sync review status from JSON files."""
+    """Load review data from canonical page JSON, falling back to all.csv when needed."""
 
-    csv_path = output_path / "all.csv"
+    documents = iter_processed_documents(output_path)
+    review_frames: list[pd.DataFrame] = []
 
-    # Guard: no data file
-    if not csv_path.exists():
-        return pd.DataFrame()
+    # Build the reviewer dataset directly from canonical page JSON when processed documents exist.
+    if documents:
+        lab_specs = get_lab_specs()
+        for document in documents:
+            review_frames.append(build_document_review_dataframe(document.doc_dir, lab_specs))
 
-    df = pd.read_csv(csv_path)
+    if review_frames:
+        df = pd.concat(review_frames, ignore_index=True)
+    else:
+        csv_path = output_path / "all.csv"
+
+        # Guard: no fallback data file
+        if not csv_path.exists():
+            return pd.DataFrame()
+
+        df = pd.read_csv(csv_path)
 
     # Convert date column to datetime
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
-    # Sync review status from JSON source files
-    df["review_status"] = _sync_review_statuses(df, output_path)
+    # Sync review status only for legacy all.csv fallbacks that did not originate from review JSON.
+    if "review_status" not in df.columns:
+        df["review_status"] = _sync_review_statuses(df, output_path)
 
     # Compute reference_range display string
     if "reference_min" in df.columns and "reference_max" in df.columns:
@@ -557,6 +571,11 @@ def build_summary_cards(df: pd.DataFrame) -> str:
 
 # Human-readable descriptions for validation reason codes
 REASON_DESCRIPTIONS = {
+    "EXTRACTION_FAILED": "Extraction failed on this page",
+    "UNKNOWN_LAB_MAPPING": "Lab name did not map to a known standardized test",
+    "UNKNOWN_UNIT_MAPPING": "Unit did not map to a publishable standardized unit",
+    "AMBIGUOUS_PERCENTAGE_VARIANT": "Unit and standardized test variant disagree (% vs absolute)",
+    "SUSPICIOUS_REFERENCE_RANGE": "Reference range looks incompatible with the standardized lab",
     "IMPOSSIBLE_VALUE": "Biologically impossible value detected",
     "RELATIONSHIP_MISMATCH": "Calculated value doesn't match related labs",
     "TEMPORAL_ANOMALY": "Implausible change between consecutive tests",
@@ -565,6 +584,7 @@ REASON_DESCRIPTIONS = {
     "PERCENTAGE_BOUNDS": "Percentage value outside 0-100%",
     "NEGATIVE_VALUE": "Unexpected negative value",
     "EXTREME_DEVIATION": "Value extremely far outside reference range",
+    "DUPLICATE_ENTRY": "Possible duplicate result for the same date and lab",
 }
 
 

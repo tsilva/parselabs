@@ -126,10 +126,9 @@ def test_process_single_pdf_uses_precomputed_hash(tmp_path, monkeypatch):
     pdf_path.write_bytes(b"worker")
 
     monkeypatch.setattr(main, "_compute_file_hash", lambda path: (_ for _ in ()).throw(AssertionError("hash not expected")))
-    monkeypatch.setattr(main, "_copy_pdf_to_output", lambda pdf, doc_out_dir: pdf)
+    monkeypatch.setattr(main, "_copy_pdf_to_output", lambda pdf, doc_out_dir: doc_out_dir / pdf.name)
     monkeypatch.setattr(main, "_extract_data_from_pdf", lambda *args: ([{"raw_lab_name": "Lab A"}], "2024-01-01"))
-    monkeypatch.setattr(main, "_apply_standardization", lambda *args: None)
-    monkeypatch.setattr(main, "_save_results_to_csv", lambda *args: None)
+    monkeypatch.setattr(main, "rebuild_document_csv", lambda doc_out_dir, lab_specs: doc_out_dir / "worker.csv")
 
     csv_path, failed_pages = main.process_single_pdf(pdf_path, "knownhash", config.output_path, config, object())
 

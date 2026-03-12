@@ -26,6 +26,11 @@ from parselabs.validation import ValueValidator
 logger = logging.getLogger(__name__)
 
 REVIEW_MISSING_ROWS_KEY = "review_missing_rows"
+EXTRACTION_FAILED_REASON = "EXTRACTION_FAILED"
+UNKNOWN_LAB_MAPPING_REASON = "UNKNOWN_LAB_MAPPING"
+UNKNOWN_UNIT_MAPPING_REASON = "UNKNOWN_UNIT_MAPPING"
+AMBIGUOUS_PERCENTAGE_VARIANT_REASON = "AMBIGUOUS_PERCENTAGE_VARIANT"
+SUSPICIOUS_REFERENCE_RANGE_REASON = "SUSPICIOUS_REFERENCE_RANGE"
 
 DOCUMENT_REVIEW_COLUMNS = [
     "date",
@@ -661,6 +666,8 @@ def load_document_review_rows(
         if not isinstance(results, list):
             continue
 
+        page_failed = bool(page_payload.get("_extraction_failed"))
+
         # Flatten each extracted row while preserving its original page-local index.
         for result_index, result in enumerate(results):
             # Skip malformed result payloads so one bad item does not poison the file.
@@ -668,6 +675,14 @@ def load_document_review_rows(
                 continue
 
             status = _normalize_review_status(result.get("review_status"))
+            review_needed = bool(result.get("review_needed")) or page_failed
+            review_reason = str(result.get("review_reason") or "").strip()
+
+            # Failed extractions should stay visible to the reviewer even when salvage produced rows.
+            if page_failed and EXTRACTION_FAILED_REASON not in review_reason:
+                if review_reason and not review_reason.endswith(";"):
+                    review_reason = f"{review_reason}; "
+                review_reason = f"{review_reason}{EXTRACTION_FAILED_REASON}; " if review_reason else f"{EXTRACTION_FAILED_REASON}; "
 
             # Skip rows outside the requested review-status subset.
             if include_statuses is not None and status not in include_statuses:
@@ -686,6 +701,8 @@ def load_document_review_rows(
                     "raw_reference_min": result.get("raw_reference_min"),
                     "raw_reference_max": result.get("raw_reference_max"),
                     "raw_comments": result.get("raw_comments"),
+                    "review_needed": review_needed,
+                    "review_reason": review_reason,
                     "review_status": status,
                     "review_completed_at": result.get("review_completed_at"),
                 }
@@ -769,20 +786,174 @@ def _add_export_column_aliases(review_df: pd.DataFrame) -> pd.DataFrame:
     return review_df
 
 
-def _filter_unknown_labs(review_df: pd.DataFrame) -> pd.DataFrame:
-    """Remove rows that never mapped to a known lab specification."""
+def _append_review_reason_code(
+    review_df: pd.DataFrame,
+    mask: pd.Series,
+    reason_code: str,
+) -> pd.DataFrame:
+    """Append a review reason code without duplicating existing reason text."""
 
-    # Guard: Frames without the standardized-name column cannot be filtered.
-    if "lab_name_standardized" not in review_df.columns:
+    # Guard: No matching rows means there is nothing to update.
+    if review_df.empty or not mask.any():
         return review_df
 
-    unknown_mask = review_df["lab_name_standardized"] == UNKNOWN_VALUE
+    # Ensure review columns exist before appending reason codes.
+    if "review_needed" not in review_df.columns:
+        review_df["review_needed"] = False
+    if "review_reason" not in review_df.columns:
+        review_df["review_reason"] = ""
 
-    # Guard: Fast-path when every row mapped successfully.
-    if not unknown_mask.any():
+    review_df.loc[mask, "review_needed"] = True
+    current_reasons = review_df.loc[mask, "review_reason"].fillna("").astype(str)
+    review_df.loc[mask, "review_reason"] = current_reasons.apply(
+        lambda value: f"{value}{reason_code}; " if reason_code not in value else value
+    )
+    return review_df
+
+
+def _flag_unknown_mappings(review_df: pd.DataFrame) -> pd.DataFrame:
+    """Mark unresolved name and unit mappings for explicit reviewer attention."""
+
+    # Unknown standardized lab names cannot be trusted for export.
+    unknown_lab_mask = review_df["lab_name_standardized"].fillna("") == UNKNOWN_VALUE
+    review_df = _append_review_reason_code(review_df, unknown_lab_mask, UNKNOWN_LAB_MAPPING_REASON)
+
+    # Known labs with unknown or missing units stay reviewable but cannot publish yet.
+    unit_values = review_df["lab_unit_standardized"].fillna("")
+    known_lab_mask = review_df["lab_name_standardized"].fillna("") != UNKNOWN_VALUE
+    unknown_unit_mask = known_lab_mask & unit_values.isin(["", UNKNOWN_VALUE])
+    review_df = _append_review_reason_code(review_df, unknown_unit_mask, UNKNOWN_UNIT_MAPPING_REASON)
+    return review_df
+
+
+def _flag_percentage_variant_ambiguity(
+    review_df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+) -> pd.DataFrame:
+    """Flag rows where explicit units disagree with percentage-vs-absolute lab variants."""
+
+    # Guard: Variant checks require lab specs and standardized lab names.
+    if not lab_specs.exists or review_df.empty:
         return review_df
 
-    return review_df[~unknown_mask].reset_index(drop=True)
+    ambiguous_indices: list[int] = []
+
+    for idx in review_df.index:
+        std_name = review_df.at[idx, "lab_name_standardized"]
+        std_unit = review_df.at[idx, "lab_unit_standardized"]
+
+        # Skip rows without a usable standardized lab name.
+        if pd.isna(std_name) or std_name == UNKNOWN_VALUE or not str(std_name).strip():
+            continue
+
+        # Skip rows without an explicit usable standardized unit.
+        if pd.isna(std_unit) or std_unit in {"", UNKNOWN_VALUE}:
+            continue
+
+        # Percentage units paired with non-percentage names are ambiguous when a percentage variant exists.
+        if std_unit == "%" and not std_name.endswith("(%)"):
+            potential_pct_name = f"{std_name} (%)"
+            if potential_pct_name in lab_specs._specs:
+                ambiguous_indices.append(idx)
+            continue
+
+        # Non-percentage units paired with percentage names are also ambiguous.
+        if std_unit != "%" and std_name.endswith("(%)"):
+            ambiguous_indices.append(idx)
+
+    return _append_review_reason_code(
+        review_df,
+        review_df.index.isin(ambiguous_indices),
+        AMBIGUOUS_PERCENTAGE_VARIANT_REASON,
+    )
+
+
+def _flag_suspicious_reference_ranges(
+    review_df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+) -> pd.DataFrame:
+    """Flag reference ranges that look incompatible with the standardized lab definition."""
+
+    # Guard: Range checks require lab specs and normalized reference columns.
+    if not lab_specs.exists or review_df.empty:
+        return review_df
+
+    suspicious_indices: list[int] = []
+
+    for idx in review_df.index:
+        std_name = review_df.at[idx, "lab_name_standardized"]
+        ref_min = review_df.at[idx, "reference_min_primary"]
+        ref_max = review_df.at[idx, "reference_max_primary"]
+        unit = review_df.at[idx, "lab_unit_primary"]
+
+        # Skip rows without a known lab mapping or a full reference range.
+        if pd.isna(std_name) or std_name == UNKNOWN_VALUE:
+            continue
+        if pd.isna(ref_min) or pd.isna(ref_max):
+            continue
+
+        # Inverted ranges are always suspicious.
+        if ref_min > ref_max:
+            suspicious_indices.append(idx)
+            continue
+
+        # Percentage ranges above 100 are likely mixed-unit artifacts.
+        if unit == "%" and ref_max > 100:
+            suspicious_indices.append(idx)
+            continue
+
+        expected_range = lab_specs._specs.get(std_name, {}).get("ranges", {}).get("default", [])
+
+        # Skip labs without expected ranges to compare against.
+        if len(expected_range) < 2:
+            continue
+
+        expected_min, expected_max = expected_range[0], expected_range[1]
+
+        # Skip comparisons that would divide by zero or use missing expectations.
+        if not expected_min or not expected_max:
+            continue
+
+        ratio_min = abs(ref_min / expected_min)
+        ratio_max = abs(ref_max / expected_max)
+        if (ratio_min > 10 or ratio_min < 0.1) and (ratio_max > 10 or ratio_max < 0.1):
+            suspicious_indices.append(idx)
+
+    return _append_review_reason_code(
+        review_df,
+        review_df.index.isin(suspicious_indices),
+        SUSPICIOUS_REFERENCE_RANGE_REASON,
+    )
+
+
+def _flag_review_ambiguities(
+    review_df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+) -> pd.DataFrame:
+    """Attach reviewer-facing ambiguity reasons without mutating the extracted values."""
+
+    review_df = _flag_unknown_mappings(review_df)
+    review_df = _flag_percentage_variant_ambiguity(review_df, lab_specs)
+    review_df = _flag_suspicious_reference_ranges(review_df, lab_specs)
+    return review_df
+
+
+def _filter_exportable_rows(review_df: pd.DataFrame) -> pd.DataFrame:
+    """Remove unresolved rows that cannot safely participate in final publish outputs."""
+
+    # Guard: Frames without normalized name/unit columns cannot be filtered safely.
+    if "lab_name_standardized" not in review_df.columns or "lab_unit_primary" not in review_df.columns:
+        return review_df
+
+    unresolved_lab_mask = review_df["lab_name_standardized"].fillna("") == UNKNOWN_VALUE
+    unresolved_unit_mask = review_df["lab_unit_primary"].fillna("").isin(["", UNKNOWN_VALUE])
+    unresolved_mask = unresolved_lab_mask | unresolved_unit_mask
+
+    # Guard: Fast-path when every row has a resolved lab and publishable unit.
+    if not unresolved_mask.any():
+        return review_df
+
+    return review_df[~unresolved_mask].reset_index(drop=True)
 
 def _prepare_rows_for_review(
     review_df: pd.DataFrame,
@@ -795,6 +966,9 @@ def _prepare_rows_for_review(
 
     # Apply normalization logic without deduplication so every extracted row remains reviewable.
     review_df = apply_normalizations(review_df, lab_specs)
+
+    # Surface unresolved mappings and ambiguous interpretations before any validation flags are added.
+    review_df = _flag_review_ambiguities(review_df, lab_specs)
 
     # Add duplicate-review flags before export-name aliases are added.
     review_df = flag_duplicate_entries(review_df)
@@ -818,9 +992,10 @@ def _prepare_rows_for_export(
         rows_df = apply_cached_standardization(rows_df, lab_specs)
 
     rows_df = apply_normalizations(rows_df, lab_specs)
-    rows_df = _filter_unknown_labs(rows_df)
+    rows_df = _flag_review_ambiguities(rows_df, lab_specs)
+    rows_df = _filter_exportable_rows(rows_df)
 
-    # Guard: Rows that all map to unknown labs cannot contribute to the final export.
+    # Guard: Rows that still lack publishable mappings cannot contribute to the final export.
     if rows_df.empty:
         return rows_df, {"total_rows": 0, "rows_flagged": 0, "flags_by_reason": {}}
 

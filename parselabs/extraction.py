@@ -249,6 +249,15 @@ def _empty_report() -> dict:
     return HealthLabReport(lab_results=[]).model_dump(mode="json")
 
 
+def _failed_report(reason: str) -> dict:
+    """Return an empty report annotated with extraction failure metadata."""
+
+    result = _empty_report()
+    result["_extraction_failed"] = True
+    result["_failure_reason"] = reason
+    return result
+
+
 # ========================================
 # Extraction Function
 # ========================================
@@ -259,7 +268,7 @@ def extract_labs_from_page_image(
     model_id: str,
     client: OpenAI,
     temperature: float = 0.0,
-    max_retries: int = 3,
+    max_retries: int = 1,
     temperature_step: float = 0.2,
 ) -> dict:
     """
@@ -275,7 +284,7 @@ def extract_labs_from_page_image(
         model_id: Vision model to use for extraction
         client: OpenAI client instance
         temperature: Initial temperature for sampling (default: 0.0)
-        max_retries: Maximum retry attempts with escalating temperature (default: 3)
+        max_retries: Maximum retry attempts with escalating temperature (default: 1)
         temperature_step: Temperature increment per retry (default: 0.2)
 
     Returns:
@@ -335,7 +344,7 @@ def _attempt_extraction_with_retries(
 
         # Guard: Extraction failed at API level
         if tool_result_dict is None:
-            return _empty_report()
+            return _failed_report("Invalid extraction response from model")
 
         # Pre-process: Fix common LLM issues before Pydantic validation
         tool_result_dict = _fix_lab_results_format(tool_result_dict)
@@ -364,9 +373,7 @@ def _attempt_extraction_with_retries(
 
     # All retries exhausted - return failure marker
     logger.error(f"[{image_path.name}] Extraction failed after {max_retries + 1} attempts. Last error: {last_error[:200] if last_error else 'unknown'}")
-    result = _empty_report()
-    result["_extraction_failed"] = True
-    result["_failure_reason"] = f"Malformed output after {max_retries + 1} attempts"
+    result = _failed_report(f"Malformed output after {max_retries + 1} attempts")
     result["_retry_count"] = max_retries + 1
     return result
 
@@ -543,7 +550,7 @@ def extract_labs_from_text(
 
     # Guard: Extraction failed at API level
     if extraction_result is None:
-        return HealthLabReport(lab_results=[]).model_dump(mode="json")
+        return _failed_report("Invalid text extraction response from model")
 
     tool_result_dict = extraction_result
 

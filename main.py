@@ -56,6 +56,7 @@ from parselabs.utils import (  # noqa: E402
 logger = logging.getLogger(__name__)
 PROFILES_DIR = get_profiles_dir()
 _client_cache: dict[tuple[str, str], OpenAI] = {}
+EXTRACTION_FAILURE_RAW_NAME = "[EXTRACTION FAILED]"
 
 
 def get_openai_client(config: ExtractionConfig) -> OpenAI:
@@ -231,50 +232,49 @@ def _prepare_page_images(page_image, page_name: str, doc_out_dir: Path) -> dict[
     return image_paths
 
 
-def _page_extraction_quality(page_data: dict) -> int:
-    """Heuristic score for choosing between page extraction attempts."""
+def _page_requires_image_fallback(page_data: dict) -> bool:
+    """Return whether a page result is too weak to keep without another pass."""
+
+    # Missing or malformed payloads cannot be trusted.
+    if not isinstance(page_data, dict):
+        return True
+
+    # Explicit extraction failures should trigger the next fallback.
+    if page_data.get("_extraction_failed"):
+        return True
 
     results = [result for result in page_data.get("lab_results", []) if isinstance(result, dict)]
-    if not results:
-        return 25 if page_data.get("page_has_lab_data") is False else -25
 
-    score = len(results) * 12
-    null_value_count = sum(1 for result in results if not result.get("raw_value"))
-    empty_name_count = sum(1 for result in results if not str(result.get("raw_lab_name", "")).strip())
-    unique_name_count = len({str(result.get("raw_lab_name", "")).strip() for result in results if str(result.get("raw_lab_name", "")).strip()})
-
-    score -= null_value_count * 4
-    score -= empty_name_count * 8
-    score += unique_name_count
-
-    if null_value_count and (null_value_count / len(results)) > 0.5:
-        score -= 20
-
-    return score
-
-
-def _page_extraction_needs_reread(page_data: dict) -> bool:
-    """Detect weak page extractions that should trigger another pass."""
-
-    results = [result for result in page_data.get("lab_results", []) if isinstance(result, dict)]
+    # Pages explicitly marked as non-lab content do not need another read.
     if page_data.get("page_has_lab_data") is False:
         return False
+
+    # Empty likely-lab pages need another pass.
     if not results:
         return True
 
-    null_value_count = sum(1 for result in results if not result.get("raw_value"))
-    if (null_value_count / len(results)) > 0.5:
-        return True
-
-    empty_name_count = sum(1 for result in results if not str(result.get("raw_lab_name", "")).strip())
-    return empty_name_count > 0
+    return False
 
 
-def _finalize_page_candidate(page_data: dict, method: str) -> dict:
-    """Annotate a page candidate with internal selection metadata."""
+def _ensure_extraction_failure_placeholder(page_data: dict) -> dict:
+    """Insert a synthetic review row for failed pages that returned no results."""
 
-    page_data["_extraction_method"] = method
-    page_data["_extraction_quality"] = _page_extraction_quality(page_data)
+    # Successful pages or pages with extracted rows already have reviewable content.
+    if not page_data.get("_extraction_failed") or page_data.get("lab_results"):
+        return page_data
+
+    failure_reason = page_data.get("_failure_reason", "Unknown extraction failure")
+    page_data["lab_results"] = [
+        {
+            "raw_lab_name": EXTRACTION_FAILURE_RAW_NAME,
+            "raw_value": None,
+            "raw_lab_unit": None,
+            "raw_reference_range": None,
+            "raw_reference_min": None,
+            "raw_reference_max": None,
+            "raw_comments": failure_reason,
+        }
+    ]
     return page_data
 
 
@@ -282,8 +282,7 @@ def _extract_page_data_from_text(page_text: str, config: ExtractionConfig, page_
     """Extract a single page from pdftotext output."""
 
     logger.info(f"[{page_name}] Attempting TEXT extraction")
-    page_data = extract_labs_from_text(page_text, config.extract_model_id, get_openai_client(config))
-    return _finalize_page_candidate(page_data, "text")
+    return extract_labs_from_text(page_text, config.extract_model_id, get_openai_client(config))
 
 
 def _extract_page_data_from_image(
@@ -295,31 +294,11 @@ def _extract_page_data_from_image(
     """Extract a single page from an image variant."""
 
     logger.info(f"[{page_name}] Attempting VISION extraction ({variant_name})")
-    page_data = extract_labs_from_page_image(
+    return extract_labs_from_page_image(
         image_path,
         config.extract_model_id,
         get_openai_client(config),
     )
-    return _finalize_page_candidate(page_data, f"vision:{variant_name}")
-
-
-def _select_best_page_candidate(page_name: str, candidates: list[dict]) -> dict:
-    """Choose the strongest extraction candidate for a page."""
-
-    best_candidate = max(
-        candidates,
-        key=lambda candidate: (
-            candidate.get("_extraction_quality", float("-inf")),
-            len(candidate.get("lab_results", [])),
-            candidate.get("_extraction_method") == "text",
-        ),
-    )
-    logger.info(
-        f"[{page_name}] Selected {best_candidate.get('_extraction_method')} "
-        f"(score={best_candidate.get('_extraction_quality')}, "
-        f"results={len(best_candidate.get('lab_results', []))})"
-    )
-    return best_candidate
 
 
 def _extract_or_load_page_data(
@@ -339,25 +318,24 @@ def _extract_or_load_page_data(
         logger.info(f"[{page_name}] Loading cached extraction data")
         page_data = json.loads(json_path.read_text(encoding="utf-8"))
         page_data["source_file"] = page_name
+        page_data = _ensure_extraction_failure_placeholder(page_data)
         _check_and_record_failure(page_data, pdf_stem, page_idx, failed_pages)
         return page_data
 
-    candidates = []
-
+    # Prefer text extraction when the page has enough embedded text.
     if _text_has_enough_content(page_text, min_chars=_MIN_PAGE_TEXT_CHARS):
         text_candidate = _extract_page_data_from_text(page_text, config, page_name)
-        candidates.append(text_candidate)
-        if not _page_extraction_needs_reread(text_candidate):
-            page_data = _select_best_page_candidate(page_name, candidates)
+        if not _page_requires_image_fallback(text_candidate):
+            page_data = text_candidate
         else:
             logger.warning(
-                f"[{page_name}] TEXT extraction looked weak "
-                f"(score={text_candidate.get('_extraction_quality')}); trying VISION"
+                f"[{page_name}] TEXT extraction needs fallback; trying VISION primary"
             )
             page_data = None
     else:
         page_data = None
 
+    # Fall back to the primary image only when text was unavailable or unusable.
     if page_data is None:
         primary_candidate = _extract_page_data_from_image(
             image_paths["primary"],
@@ -365,29 +343,31 @@ def _extract_or_load_page_data(
             page_name,
             "primary",
         )
-        candidates.append(primary_candidate)
 
-        if _page_extraction_needs_reread(primary_candidate):
-            fallback_candidate = _extract_page_data_from_image(
+        # Retry once on the alternate image only when the primary image still failed.
+        if _page_requires_image_fallback(primary_candidate):
+            logger.warning(f"[{page_name}] Primary vision extraction needs fallback; trying alternate image")
+            page_data = _extract_page_data_from_image(
                 image_paths["fallback"],
                 config,
                 page_name,
                 "fallback",
             )
-            candidates.append(fallback_candidate)
-
-        page_data = _select_best_page_candidate(page_name, candidates)
+        else:
+            page_data = primary_candidate
 
     # Set source_file programmatically (LLM can't know the filename)
     page_data["source_file"] = page_name
+    page_data = _ensure_extraction_failure_placeholder(page_data)
 
     # Record any extraction failures for reporting
     _check_and_record_failure(page_data, pdf_stem, page_idx, failed_pages, page_name)
 
-    # Only cache extractions with meaningful results
+    # Cache all reviewable outcomes, including explicit failures and confirmed blank pages.
     has_results = bool(page_data.get("lab_results"))
     confirmed_no_lab_data = page_data.get("page_has_lab_data") is False
-    if has_results or confirmed_no_lab_data:
+    extraction_failed = bool(page_data.get("_extraction_failed"))
+    if has_results or confirmed_no_lab_data or extraction_failed:
         json_path.write_text(
             json.dumps(page_data, indent=2, ensure_ascii=False),
             encoding="utf-8",
@@ -698,7 +678,7 @@ def process_single_pdf(
     config: ExtractionConfig,
     lab_specs: LabSpecsConfig,
 ) -> tuple[Path | None, list[dict]]:
-    """Process a single PDF file: extract, standardize, and save results.
+    """Process a single PDF file: extract page JSON and rebuild the review CSV.
 
     Returns:
         Tuple of (csv_path, failed_pages) where:
@@ -716,8 +696,8 @@ def process_single_pdf(
         # Copy source PDF to output directory for archival
         copied_pdf = _copy_pdf_to_output(pdf_path, doc_out_dir)
 
-        # Extract lab data using text-first strategy with vision fallback
-        all_results, doc_date = _extract_data_from_pdf(
+        # Extract page JSON using the simplified text-first strategy with one image fallback.
+        all_results, _ = _extract_data_from_pdf(
             copied_pdf,
             config,
             doc_out_dir,
@@ -725,21 +705,18 @@ def process_single_pdf(
             failed_pages,
         )
 
-        # Guard: Check if any results were successfully extracted
+        # Log documents that produced no review rows beyond explicit blank-page confirmations.
         if not all_results:
-            return _handle_empty_results(csv_path, pdf_stem)[0], failed_pages
+            logger.warning(f"[{pdf_stem}] No lab rows extracted; review CSV will contain only derived page state")
 
-        # Apply standardization via cache-based mapping
-        _apply_standardization(all_results, lab_specs, pdf_stem)
-
-        # Export final results to CSV format
-        _save_results_to_csv(all_results, doc_date, csv_path, pdf_stem)
+        # Rebuild the review CSV from page JSON so the persisted CSV is always derived state.
+        csv_path = rebuild_document_csv(doc_out_dir, lab_specs)
 
         logger.info(f"[{pdf_stem}] Completed successfully")
         return csv_path, failed_pages
 
     except Exception as e:
-        # Catch-all for errors during processing (extraction, standardization, export)
+        # Catch-all for errors during extraction or review CSV rebuild.
         logger.error(f"[{pdf_stem}] Processing failed: {e}", exc_info=True)
         return None, failed_pages
 
@@ -1686,6 +1663,70 @@ def _export_final_results(
     _report_extraction_failures(all_failed_pages, csv_path, csv_paths)
 
 
+def _build_final_export_from_document_dirs(
+    doc_dirs: list[Path],
+    lab_specs: LabSpecsConfig,
+    allow_pending: bool,
+) -> tuple[pd.DataFrame, list[Path]]:
+    """Rebuild review CSVs and publish only accepted reviewed rows for the target documents."""
+
+    csv_paths: list[Path] = []
+    review_rows: list[pd.DataFrame] = []
+    review_issues: list[str] = []
+
+    # Rebuild every document CSV from canonical page JSON before collecting accepted rows.
+    for doc_dir in doc_dirs:
+        csv_paths.append(rebuild_document_csv(doc_dir, lab_specs))
+        review_df = build_document_review_dataframe(doc_dir, lab_specs)
+        summary = get_document_review_summary(doc_dir, review_df)
+
+        # Strict publish mode blocks on pending review state unless explicitly allowed.
+        if not allow_pending and not summary.fixture_ready:
+            issue_parts: list[str] = []
+
+            # Include pending rows so the reviewer knows what still lacks a decision.
+            if summary.pending > 0:
+                issue_parts.append(f"{summary.pending} pending row(s)")
+
+            # Include unresolved omission markers because they also block reviewed truth.
+            if summary.missing_row_markers > 0:
+                issue_parts.append(f"{summary.missing_row_markers} unresolved missing-row marker(s)")
+
+            issue_text = ", ".join(issue_parts) if issue_parts else "document review incomplete"
+            review_issues.append(f"{doc_dir.name}: {issue_text}")
+
+        accepted_rows = load_document_review_rows(doc_dir, include_statuses={"accepted"})
+
+        # Skip documents that have not produced any accepted reviewed rows yet.
+        if accepted_rows.empty:
+            continue
+
+        review_rows.append(accepted_rows)
+
+    # Guard: Strict publish mode must stop before writing outputs when review is incomplete.
+    if review_issues:
+        issue_text = "\n".join(f"- {issue}" for issue in review_issues)
+        raise PipelineError(
+            "Reviewed JSON rebuild blocked because some documents are not fixture-ready:\n"
+            f"{issue_text}"
+        )
+
+    # Guard: Empty accepted corpora still produce a stable empty export schema.
+    if not review_rows:
+        export_cols, _, _, _ = get_column_lists(COLUMN_SCHEMA)
+        return pd.DataFrame(columns=export_cols), csv_paths
+
+    merged_df = pd.concat(review_rows, ignore_index=True)
+    logger.info("Applying shared export pipeline to accepted reviewed rows...")
+    final_df, validation_stats = transform_rows_to_final_export(
+        merged_df,
+        lab_specs,
+        apply_standardization=True,
+    )
+    _log_validation_stats(validation_stats)
+    return final_df, csv_paths
+
+
 def run_pipeline_for_pdf_files(
     pdf_files: list[Path],
     config: ExtractionConfig,
@@ -1729,22 +1770,13 @@ def run_pipeline_for_pdf_files(
     if not csv_paths:
         raise PipelineError("No PDFs successfully processed.")
 
-    logger.info(f"Successfully processed {len(csv_paths)} PDFs")
-    logger.info("Merging CSV files...")
-    merged_df = merge_csv_files(csv_paths)
-    rows_after_merge = len(merged_df)
-    logger.info(f"Merged data: {rows_after_merge} rows")
-
-    if merged_df.empty:
-        raise PipelineError("No data after merging CSV files.")
-
-    logger.info("Applying shared export pipeline...")
-    final_df, validation_stats = transform_rows_to_final_export(
-        merged_df,
+    logger.info(f"Successfully processed {len(csv_paths)} document review snapshots")
+    doc_dirs = [csv_path.parent for csv_path in csv_paths]
+    final_df, csv_paths = _build_final_export_from_document_dirs(
+        doc_dirs,
         lab_specs,
-        apply_standardization=False,
+        allow_pending=True,
     )
-    _log_validation_stats(validation_stats)
 
     return PipelineRunResult(
         final_df=final_df,
@@ -1776,62 +1808,11 @@ def build_final_output_dataframe_from_reviewed_json(
     if not documents:
         raise PipelineError(f"No processed documents found in {output_path}")
 
-    csv_paths: list[Path] = []
-    review_rows: list[pd.DataFrame] = []
-    review_issues: list[str] = []
-
-    # Rebuild each per-document review CSV and collect accepted rows for the final export.
-    for document in documents:
-        csv_paths.append(rebuild_document_csv(document.doc_dir, lab_specs))
-        review_df = build_document_review_dataframe(document.doc_dir, lab_specs)
-        summary = get_document_review_summary(document.doc_dir, review_df)
-
-        # Record fixture-readiness blockers before deciding whether strict mode may continue.
-        if not allow_pending and not summary.fixture_ready:
-            issue_parts: list[str] = []
-
-            # Include pending-row counts so the user knows what still lacks review decisions.
-            if summary.pending > 0:
-                issue_parts.append(f"{summary.pending} pending row(s)")
-
-            # Include unresolved omission markers because they block promotion into reviewed truth.
-            if summary.missing_row_markers > 0:
-                issue_parts.append(f"{summary.missing_row_markers} unresolved missing-row marker(s)")
-
-            issue_text = ", ".join(issue_parts) if issue_parts else "document review incomplete"
-            review_issues.append(f"{document.stem}: {issue_text}")
-
-        accepted_rows = load_document_review_rows(document.doc_dir, include_statuses={"accepted"})
-
-        # Skip documents with no accepted rows because they contribute no final export rows.
-        if accepted_rows.empty:
-            continue
-
-        review_rows.append(accepted_rows)
-
-    # Guard: Strict rebuilds must stop before writing final outputs when reviewed truth is incomplete.
-    if review_issues:
-        issue_text = "\n".join(f"- {issue}" for issue in review_issues)
-        raise PipelineError(
-            "Reviewed JSON rebuild blocked because some documents are not fixture-ready:\n"
-            f"{issue_text}"
-        )
-
-    # Guard: Empty accepted corpora still produce a stable empty export schema.
-    if not review_rows:
-        export_cols, _, _, _ = get_column_lists(COLUMN_SCHEMA)
-        return pd.DataFrame(columns=export_cols), csv_paths
-
-    merged_df = pd.concat(review_rows, ignore_index=True)
-    logger.info("Applying shared export pipeline...")
-    final_df, validation_stats = transform_rows_to_final_export(
-        merged_df,
+    return _build_final_export_from_document_dirs(
+        [document.doc_dir for document in documents],
         lab_specs,
-        apply_standardization=True,
+        allow_pending=allow_pending,
     )
-    _log_validation_stats(validation_stats)
-
-    return final_df, csv_paths
 
 
 def _run_reviewed_json_rebuild(profile_name: str, allow_pending: bool) -> None:
