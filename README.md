@@ -195,8 +195,8 @@ RUN_APPROVED_DOCS=1 uv run pytest -m approved_docs
 ```
 
 Notes:
-- `parselabs --rebuild-from-json` reads page JSON files only, includes only `review_status == accepted` rows, excludes rejected rows, and blocks by default when pending rows or `review_missing_rows` markers remain.
-- Use `--allow-pending` only for debugging partial rebuilds; it still exports accepted rows only.
+- `parselabs --rebuild-from-json` rebuilds each per-document review CSV from page JSON, then rewrites the merged `all.csv` / `all.xlsx` snapshot from those document CSVs.
+- The accepted-only reviewed export is still available through the internal reviewed-JSON helpers used by fixture sync and approved-document regression tests.
 - The sync command scans the profile `output_path` and copies only fixture-ready documents: every extracted row reviewed and no unresolved `review_missing_rows` markers.
 - Expected fixture CSVs are rebuilt from reviewed JSON truth, not from a fresh extraction run.
 - The pytest command reruns the full approved corpus together, then compares each document's final CSV output against its approved `expected.csv`.
@@ -214,20 +214,13 @@ For each PDF, the tool generates:
 |------|-------------|
 | `{doc}/` | Directory with page images and JSON extractions |
 | `{doc}.csv` | Per-document review CSV with page/result ids, mapped values, validation flags, and review status |
-| `all.csv` | Merged results from all documents |
-| `all.xlsx` | Excel workbook with formatted data |
+| `all.csv` | Merge of all per-document review CSVs, including pending/rejected rows |
+| `all.xlsx` | Excel workbook for the merged review dataset |
 | `{stem}.{page}.json` | Page-level extraction JSON plus review fields (`review_status`, `review_completed_at`, `review_missing_rows`) |
 
 ### Output Schema
 
-| Column | Description |
-|--------|-------------|
-| `date` | Report/collection date |
-| `lab_name` | Standardized name (e.g., "Blood - Glucose") |
-| `value` | Numeric value in primary unit |
-| `unit` | Primary unit (e.g., "mg/dL") |
-| `reference_min/max` | Reference range from report |
-| `raw_lab_name`, `raw_value`, `raw_unit` | Original values for audit |
+`all.csv` uses the same review-oriented schema as each per-document `{doc}.csv`, including mapped values, validation flags, and review status columns such as `review_status` and `review_completed_at`.
 | `review_needed` | Boolean flag for items needing review |
 | `review_reason` | Validation reason codes |
 

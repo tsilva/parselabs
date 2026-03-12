@@ -33,6 +33,7 @@ from parselabs.extraction import (  # noqa: E402
 )
 from parselabs.paths import get_profiles_dir  # noqa: E402
 from parselabs.review_sync import (  # noqa: E402
+    DOCUMENT_REVIEW_COLUMNS,
     build_document_review_dataframe,
     get_document_review_summary,
     iter_processed_documents,
@@ -978,14 +979,66 @@ def _is_csv_valid(csv_path: Path, required_cols: list[str] = REQUIRED_CSV_COLS) 
         return False
 
     try:
-        # Read only header row to check column names
-        df = pd.read_csv(csv_path, nrows=0)
+        # Read the header first so malformed files fail fast without loading the full CSV.
+        header_df = pd.read_csv(csv_path, nrows=0)
 
-        # Verify all required columns are present
-        return all(col in df.columns for col in required_cols)
+        # Guard: Missing required columns means the cached output cannot be trusted.
+        if not all(col in header_df.columns for col in required_cols):
+            return False
+
+        # Empty review CSVs need deeper inspection because extraction failures also produce headers only.
+        data_df = pd.read_csv(csv_path)
+
+        # Guard: Non-empty CSVs are valid once the schema is confirmed.
+        if not data_df.empty:
+            return True
+
+        return _is_empty_document_cache_valid(csv_path)
     except Exception:
         # Any error (corrupt file, permissions, etc.) means invalid
         return False
+
+
+def _is_empty_document_cache_valid(csv_path: Path) -> bool:
+    """Return whether a zero-row document CSV reflects an intentional blank document."""
+
+    doc_dir = csv_path.parent
+    json_paths = sorted(doc_dir.glob("*.json"))
+
+    # Guard: Missing page JSON means the empty CSV has no evidence backing it.
+    if not json_paths:
+        return False
+
+    saw_confirmed_blank_page = False
+
+    # Inspect each page payload so extraction failures do not enter the warm cache.
+    for json_path in json_paths:
+        try:
+            page_data = json.loads(json_path.read_text(encoding="utf-8"))
+        except Exception:
+            return False
+
+        lab_results = page_data.get("lab_results")
+        page_has_lab_data = page_data.get("page_has_lab_data")
+
+        # Guard: Explicit extraction failures must be retried on the next run.
+        if page_data.get("_extraction_failed"):
+            return False
+
+        # Confirm pages the model explicitly classified as having no lab data.
+        if page_has_lab_data is False:
+            saw_confirmed_blank_page = True
+            continue
+
+        # Guard: Any page with extracted rows should have produced non-empty CSV data.
+        if isinstance(lab_results, list) and lab_results:
+            return False
+
+        # Guard: Ambiguous empty pages are treated as failed extraction attempts.
+        return False
+
+    # Accept only documents where every page was explicitly confirmed as blank/non-lab.
+    return saw_confirmed_blank_page
 
 
 def _log_validation_stats(validation_stats: dict) -> None:
@@ -1120,12 +1173,12 @@ Examples:
     parser.add_argument(
         "--rebuild-from-json",
         action="store_true",
-        help="Rebuild per-document CSVs and final outputs from reviewed page JSON files",
+        help="Rebuild per-document CSVs and merged outputs from reviewed page JSON files",
     )
     parser.add_argument(
         "--allow-pending",
         action="store_true",
-        help="Allow rebuild-from-json to proceed when pending rows or missing-row markers remain",
+        help="Compatibility flag for reviewed-truth helpers; merged all.csv exports are unaffected",
     )
 
     return parser.parse_args()
@@ -1484,6 +1537,22 @@ def _export_final_results(
     _report_extraction_failures(all_failed_pages, csv_path, csv_paths)
 
 
+def _build_merged_review_dataframe_from_csv_paths(csv_paths: list[Path]) -> pd.DataFrame:
+    """Return the merged review-dataframe snapshot for the processed documents."""
+
+    review_frames: list[pd.DataFrame] = []
+
+    # Load each per-document CSV exactly as persisted so all.csv mirrors document CSV state.
+    for csv_path in csv_paths:
+        review_frames.append(pd.read_csv(csv_path))
+
+    # Guard: No document CSVs means the merged review dataset must keep a stable schema.
+    if not review_frames:
+        return pd.DataFrame(columns=DOCUMENT_REVIEW_COLUMNS)
+
+    return pd.concat(review_frames, ignore_index=True, sort=False)
+
+
 def _build_final_export_from_document_dirs(
     doc_dirs: list[Path],
     lab_specs: LabSpecsConfig,
@@ -1637,20 +1706,28 @@ def build_final_output_dataframe_from_reviewed_json(
 
 
 def _run_reviewed_json_rebuild(profile_name: str, allow_pending: bool) -> None:
-    """Rebuild per-document CSVs and final outputs from reviewed page JSON files."""
+    """Rebuild per-document CSVs and merged outputs from reviewed page JSON files."""
 
     profile, lab_specs = _setup_rebuild_environment(profile_name)
     _, hidden_cols, widths, _ = get_column_lists(COLUMN_SCHEMA)
 
-    logger.info("Rebuilding outputs from reviewed page JSON files...")
-    final_df, csv_paths = build_final_output_dataframe_from_reviewed_json(
-        profile.output_path,
-        lab_specs,
-        allow_pending=allow_pending,
-    )
+    logger.info("Rebuilding document CSVs and merged outputs from reviewed page JSON files...")
+    documents = iter_processed_documents(profile.output_path)
+
+    # Guard: Reviewed rebuilds require at least one processed document directory.
+    if not documents:
+        raise PipelineError(f"No processed documents found in {profile.output_path}")
+
+    csv_paths: list[Path] = []
+
+    # Rebuild every document CSV so the merged export reflects the current JSON state.
+    for document in documents:
+        csv_paths.append(rebuild_document_csv(document.doc_dir, lab_specs))
+
+    merged_review_df = _build_merged_review_dataframe_from_csv_paths(csv_paths)
 
     _export_final_results(
-        final_df,
+        merged_review_df,
         hidden_cols,
         widths,
         profile.output_path,
@@ -1709,10 +1786,11 @@ def run_for_profile(args, profile_name: str) -> None:
         raise PipelineError(f"No PDF files found matching '{config.input_file_regex}' in {config.input_path}")
 
     pipeline_result = run_pipeline_for_pdf_files(pdf_files, config, lab_specs)
+    merged_review_df = _build_merged_review_dataframe_from_csv_paths(pipeline_result.csv_paths)
 
-    # Export final results to CSV and Excel
+    # Export the merged review corpus so all.csv mirrors the per-document review CSVs.
     _export_final_results(
-        pipeline_result.final_df,
+        merged_review_df,
         hidden_cols,
         widths,
         config.output_path,

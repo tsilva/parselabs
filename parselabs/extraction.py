@@ -1,5 +1,6 @@
 """Lab result extraction from images using vision models."""
 
+import ast
 import base64
 import json
 import logging
@@ -736,13 +737,20 @@ def _fix_lab_results_format(tool_result_dict: dict) -> dict:
             tool_result_dict[date_field] = _normalize_date_format(tool_result_dict[date_field])
 
     # Guard: No lab_results to process
-    if "lab_results" not in tool_result_dict or not isinstance(tool_result_dict["lab_results"], list):
+    if "lab_results" not in tool_result_dict:
+        return tool_result_dict
+
+    # Normalize stringified and sequence-style lab_results payloads into dict rows.
+    tool_result_dict["lab_results"] = _normalize_lab_results_payload(tool_result_dict["lab_results"])
+
+    # Guard: Unsupported lab_results payloads cannot be cleaned further.
+    if not isinstance(tool_result_dict["lab_results"], list):
         return tool_result_dict
 
     # Clean numeric reference fields (strip embedded metadata like ", comments: ...")
     _clean_numeric_reference_fields(tool_result_dict)
 
-    # Filter out any non-dict items (string results from malformed output)
+    # Filter out any items that still could not be normalized into row dicts.
     original_count = len(tool_result_dict["lab_results"])
     tool_result_dict["lab_results"] = [r for r in tool_result_dict["lab_results"] if isinstance(r, dict)]
     filtered_count = original_count - len(tool_result_dict["lab_results"])
@@ -750,6 +758,200 @@ def _fix_lab_results_format(tool_result_dict: dict) -> dict:
         logger.warning(f"Filtered {filtered_count} non-dict lab_results items")
 
     return tool_result_dict
+
+
+def _normalize_lab_results_payload(lab_results) -> list[dict] | object:
+    """Normalize malformed lab_results payloads into a list of dict rows."""
+
+    # Expand stringified top-level arrays or dicts before item-level normalization.
+    expanded = _expand_lab_results_container(lab_results)
+
+    # Guard: Only list payloads can be normalized row by row.
+    if not isinstance(expanded, list):
+        return expanded
+
+    normalized_results: list[dict] = []
+
+    # Normalize each row independently so one malformed item does not poison the page.
+    for item in expanded:
+        normalized_results.extend(_normalize_lab_result_item(item))
+
+    return normalized_results
+
+
+def _expand_lab_results_container(lab_results):
+    """Expand top-level lab_results wrappers produced by malformed tool output."""
+
+    # The happy path already provides a list of lab-result items.
+    if isinstance(lab_results, list):
+        return lab_results
+
+    # A single dict means the model emitted one row without wrapping it in a list.
+    if isinstance(lab_results, dict):
+        return [lab_results]
+
+    # Strings sometimes contain a JSON array or dict payload for the whole field.
+    if isinstance(lab_results, str):
+        parsed_value = _parse_serialized_value(lab_results)
+
+        # Guard: Give up when the string is not structured data.
+        if parsed_value is None:
+            return lab_results
+
+        return _expand_lab_results_container(parsed_value)
+
+    # Unsupported container types must be handled by the caller's existing guards.
+    return lab_results
+
+
+def _normalize_lab_result_item(item) -> list[dict]:
+    """Normalize one malformed lab_result item into zero or more dict rows."""
+
+    # Existing well-formed rows pass through unchanged.
+    if isinstance(item, dict):
+        return [_normalize_lab_result_keys(item)]
+
+    # Sequence payloads can encode key/value pairs or nested rows.
+    if isinstance(item, (list, tuple)):
+        return _normalize_sequence_item(item)
+
+    # Strings may hold serialized dicts or label-packed field text.
+    if isinstance(item, str):
+        return _normalize_string_item(item)
+
+    # Unknown payload shapes cannot be salvaged safely.
+    return []
+
+
+def _normalize_sequence_item(item: list | tuple) -> list[dict]:
+    """Normalize list/tuple-based lab_result payloads."""
+
+    # Key/value pair sequences can be turned into a single row dict.
+    sequence_dict = _dict_from_sequence(item)
+    if sequence_dict is not None:
+        return [_normalize_lab_result_keys(sequence_dict)]
+
+    normalized_results: list[dict] = []
+
+    # Nested sequences may contain multiple encoded rows.
+    for nested_item in item:
+        normalized_results.extend(_normalize_lab_result_item(nested_item))
+
+    return normalized_results
+
+
+def _normalize_string_item(item: str) -> list[dict]:
+    """Normalize string-based lab_result payloads."""
+
+    stripped_item = item.strip()
+
+    # Guard: Ignore blank string items.
+    if not stripped_item:
+        return []
+
+    # Serialized JSON/Python literals are the most common malformed payload shape.
+    parsed_value = _parse_serialized_value(stripped_item)
+    if parsed_value is not None:
+        return _normalize_lab_result_item(parsed_value)
+
+    # Label-packed strings are the fallback shape produced by some tool-call failures.
+    labeled_dict = _parse_labeled_lab_result(stripped_item)
+    if labeled_dict is not None:
+        return [_normalize_lab_result_keys(labeled_dict)]
+
+    return []
+
+
+def _parse_serialized_value(raw_value: str):
+    """Parse JSON or Python-literal strings emitted inside tool arguments."""
+
+    # JSON is the primary serialization format for tool-call payloads.
+    try:
+        return json.loads(raw_value)
+    except json.JSONDecodeError:
+        pass
+
+    # Python literal syntax is a common Gemini fallback when JSON discipline slips.
+    try:
+        return ast.literal_eval(raw_value)
+    except (SyntaxError, ValueError):
+        return None
+
+
+def _dict_from_sequence(item: list | tuple) -> dict | None:
+    """Convert key/value sequences into a dict row when possible."""
+
+    normalized_dict: dict = {}
+
+    # Handle explicit [("field", value), ...] or [["field", value], ...] payloads.
+    if item and all(isinstance(part, (list, tuple)) and len(part) == 2 for part in item):
+        for key, value in item:
+            # Guard: Non-string keys are not usable as field names.
+            if not isinstance(key, str):
+                return None
+
+            normalized_dict[key] = value
+
+        return normalized_dict
+
+    # Handle alternating ["field", value, "field2", value2] payloads.
+    if len(item) % 2 == 0 and item and all(isinstance(item[index], str) for index in range(0, len(item), 2)):
+        for index in range(0, len(item), 2):
+            normalized_dict[item[index]] = item[index + 1]
+
+        return normalized_dict
+
+    return None
+
+
+def _parse_labeled_lab_result(raw_value: str) -> dict | None:
+    """Parse strings that inline field labels inside one lab-result item."""
+
+    field_pattern = re.compile(
+        r"(?P<field>raw_lab_name|raw_value|raw_lab_unit|raw_reference_range|raw_reference_min|raw_reference_max|raw_comments)\s*[:=]\s*",
+        flags=re.IGNORECASE,
+    )
+    matches = list(field_pattern.finditer(raw_value))
+
+    # Guard: Without explicit field labels there is nothing deterministic to recover.
+    if not matches:
+        return None
+
+    parsed_dict: dict[str, str] = {}
+
+    # Slice the string between successive field markers to preserve embedded punctuation.
+    for index, match in enumerate(matches):
+        field_name = match.group("field").lower()
+        value_start = match.end()
+        value_end = matches[index + 1].start() if index + 1 < len(matches) else len(raw_value)
+        field_value = raw_value[value_start:value_end].strip(" \t\r\n,;|")
+        parsed_dict[field_name] = field_value
+
+    # Guard: A recovered row without a lab name is not usable downstream.
+    if not parsed_dict.get("raw_lab_name"):
+        return None
+
+    return parsed_dict
+
+
+def _normalize_lab_result_keys(row_dict: dict) -> dict:
+    """Map known legacy field aliases onto the canonical extraction schema."""
+
+    alias_map = {
+        "raw_unit": "raw_lab_unit",
+        "lab_unit_raw": "raw_lab_unit",
+        "reference_range": "raw_reference_range",
+        "reference_min": "raw_reference_min",
+        "reference_max": "raw_reference_max",
+    }
+    normalized_dict: dict = {}
+
+    # Copy fields into canonical keys so downstream validation sees one stable schema.
+    for key, value in row_dict.items():
+        normalized_key = alias_map.get(key, key)
+        normalized_dict[normalized_key] = value
+
+    return normalized_dict
 
 
 def _clean_numeric_reference_fields(tool_result_dict: dict) -> None:
