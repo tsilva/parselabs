@@ -18,6 +18,7 @@ APPROVED_FIXTURES_DIR = Path("tests/fixtures/approved")
 CASE_JSON_NAME = "case.json"
 EXPECTED_CSV_NAME = "expected.csv"
 DOCUMENT_PDF_NAME = "document.pdf"
+REVIEW_STATE_JSON_NAME = "review_state.json"
 CANONICAL_SORT_COLUMNS = [
     "date",
     "lab_name",
@@ -38,6 +39,7 @@ class ApprovedCase:
     document_path: Path
     expected_csv_path: Path
     metadata_path: Path
+    review_state_path: Path | None
     stem: str
     file_hash: str
     original_filename: str
@@ -86,6 +88,7 @@ def discover_approved_cases(fixtures_dir: Path = APPROVED_FIXTURES_DIR) -> list[
         metadata_path = case_dir / CASE_JSON_NAME
         document_path = case_dir / DOCUMENT_PDF_NAME
         expected_csv_path = case_dir / EXPECTED_CSV_NAME
+        review_state_path = case_dir / REVIEW_STATE_JSON_NAME
 
         missing = [path.name for path in (metadata_path, document_path, expected_csv_path) if not path.exists()]
         if missing:
@@ -115,6 +118,7 @@ def discover_approved_cases(fixtures_dir: Path = APPROVED_FIXTURES_DIR) -> list[
                 document_path=document_path,
                 expected_csv_path=expected_csv_path,
                 metadata_path=metadata_path,
+                review_state_path=review_state_path if review_state_path.exists() else None,
                 stem=stem,
                 file_hash=file_hash,
                 original_filename=original_filename,

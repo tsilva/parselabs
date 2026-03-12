@@ -402,6 +402,7 @@ tests/fixtures/approved/
   <stem>_<hash>/
     document.pdf
     expected.csv
+    review_state.json
     case.json
 ```
 
@@ -452,6 +453,7 @@ The sync helper:
 - exports only rows with `review_status == accepted`
 - copies only fixture-ready documents: every extracted row reviewed, no unresolved missing-row markers
 - rewrites each valid case `expected.csv` from reviewed JSON truth instead of a fresh extraction run
+- persists `review_state.json` so approved regressions can replay accepted/rejected decisions onto fresh extraction output
 - removes stale fixture cases for the same profile when a document is no longer fixture-ready
 
 For corpus-level quality analysis:
