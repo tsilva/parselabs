@@ -10,14 +10,15 @@ Before any PDF discovery starts, the CLI validates the configured API key and `e
 PDF Files
   │
   ├─ 1. PDF Discovery
-  ├─ 2. PDF Processing & Hashing
-  ├─ 3. Extraction (per-page text/vision hybrid)
-  ├─ 4. Standardization (cache-based mapping)
-  ├─ 5. Per-PDF CSV Export
-  ├─ 6. Merge All CSVs
-  ├─ 7. Normalization (unit conversion, dedup)
-  ├─ 8. Validation (flag suspicious values)
-  └─ 9. Final Export (CSV + Excel)
+  ├─ 2. Preflight Cache Check & Hashing
+  ├─ 3. PDF Processing
+  ├─ 4. Extraction (per-page text/vision hybrid)
+  ├─ 5. Standardization (cache-based mapping)
+  ├─ 6. Per-PDF CSV Export
+  ├─ 7. Merge All CSVs
+  ├─ 8. Normalization (unit conversion, dedup)
+  ├─ 9. Validation (flag suspicious values)
+  └─ 10. Final Export (CSV + Excel)
 ```
 
 ## Stage 1: PDF Discovery
@@ -34,17 +35,31 @@ Immediately before this stage, `run_for_profile()` sends a tiny prompt through `
 
 This avoids the misleading "0 PDFs found" result that `Path.glob()` can produce on some cloud-backed macOS folders when directory access is denied.
 
-## Stage 2: PDF Processing & Hashing
+## Stage 2: Preflight Cache Check & Hashing
 
-**Module:** `main.py` — `_setup_pdf_processing()`, `_compute_file_hash()`
+**Module:** `main.py` — `_prepare_pdf_run()`, `_load_pdf_inventory()`, `_compute_file_hash()`
 
-Each PDF is processed independently (parallelized via `multiprocessing.Pool`):
+Explicit runs perform a stat-first preflight before any extraction workers start:
 
-1. Compute SHA-256 hash of the file (first 8 hex chars)
+1. Collect `resolved path`, `size`, and `mtime_ns` for each input PDF
+2. Load `output/logs/pdf_inventory.json` if it exists
+3. Treat manifest matches with valid per-PDF CSVs as warm-cache hits
+4. Hash only the remaining PDFs with SHA-256 (first 8 hex chars)
+5. Deduplicate exact-content matches across both cached and newly-hashed PDFs
+
+The manifest is only a warm-cache shortcut. Exact identity still comes from SHA-256, and files are re-hashed whenever size or modification time changes.
+
+## Stage 3: PDF Processing
+
+**Module:** `main.py` — `_setup_pdf_processing()`, `process_single_pdf()`
+
+Each unique PDF that survives preflight is processed independently (parallelized via `multiprocessing.Pool`):
+
+1. Reuse the precomputed SHA-256 hash from preflight
 2. Create output directory: `{pdf_stem}_{hash}/` — hash prevents collisions when different files share the same name
 3. Copy original PDF into the output directory for archival
 
-## Stage 3: Extraction
+## Stage 4: Extraction
 
 **Modules:** `main.py` — `process_single_pdf()`, `parselabs/extraction.py`
 
@@ -119,7 +134,7 @@ Each `LabResult` contains:
 | `raw_reference_range` | Full range text |
 | `raw_reference_min`, `raw_reference_max` | Parsed range bounds |
 
-## Stage 4: Standardization
+## Stage 5: Standardization
 
 **Modules:** `main.py` — `_apply_standardization()`, `parselabs/standardization.py`
 
@@ -142,27 +157,27 @@ config/cache/unit_standardization.json   # raw_unit|lab_name → standardized_un
 - **Cache miss:** return `$UNKNOWN$` + log warning
 - **Updating caches:** run `utils/update_standardization_caches.py` (batch LLM processing)
 
-## Stage 5: Per-PDF CSV Export
+## Stage 6: Per-PDF CSV Export
 
 **Module:** `main.py` — `_save_results_to_csv()`
 
-Each PDF produces a CSV in its output directory: `{stem}_{hash}/{stem}_{hash}.csv`
+Each PDF produces a CSV in its output directory: `{stem}_{hash}/{stem}.csv`
 
 Contains all LabResult fields mapped to the output column schema.
 
-## Stage 6: Merge
+## Stage 7: Merge
 
 **Module:** `main.py` — `merge_csv_files()`
 
 All per-PDF CSVs are concatenated into a single `all.csv` in the profile's output directory.
 
-## Stage 7: Normalization
+## Stage 8: Normalization
 
 **Module:** `parselabs/normalization.py`
 
 Transforms the merged DataFrame through several steps:
 
-### 7a. Numeric Preprocessing — `preprocess_numeric_value()`
+### 8a. Numeric Preprocessing — `preprocess_numeric_value()`
 
 Cleans raw value strings before numeric conversion:
 - Strip trailing `=` (e.g., `"0.9="` → `"0.9"`)
@@ -170,7 +185,7 @@ Cleans raw value strings before numeric conversion:
 - Remove space thousands separators (e.g., `"256 000"` → `"256000"`)
 - European decimal format (comma → period)
 
-### 7b. Comparison Operators — `extract_comparison_value()`
+### 8b. Comparison Operators — `extract_comparison_value()`
 
 Parses limit indicators and sets boolean flags:
 
@@ -181,7 +196,7 @@ Parses limit indicators and sets boolean flags:
 | `≤50` | 50 | True | False |
 | `≥30` | 30 | False | True |
 
-### 7c. Unit Conversion — `apply_normalizations()`
+### 8c. Unit Conversion — `apply_normalizations()`
 
 Converts values to primary units using factors from `lab_specs.json`:
 
@@ -192,17 +207,17 @@ raw_value=5.0, raw_unit="mmol/L", lab="Blood - Glucose"
   → value = 5.0 × 18.0 = 90.0 mg/dL
 ```
 
-### 7d. Deduplication — `deduplicate_results()`
+### 8d. Deduplication — `deduplicate_results()`
 
 - Groups by `(date, lab_name)`
 - Keeps row with latest `result_index` (most complete data)
 - Logs deduplication stats
 
-### 7e. Type Conversion — `apply_dtype_conversions()`
+### 8e. Type Conversion — `apply_dtype_conversions()`
 
 Forces proper column types: `date` → datetime, `value` → float64, booleans, etc.
 
-## Stage 8: Validation
+## Stage 9: Validation
 
 **Module:** `parselabs/validation.py` — `ValueValidator`
 
@@ -246,7 +261,7 @@ Inter-lab relationships use formulas from the `_relationships` key:
 }
 ```
 
-## Stage 9: Final Export
+## Stage 10: Final Export
 
 **Module:** `main.py` — `run_pipeline_for_pdf_files()`, `build_final_output_dataframe()`, `export_excel()`
 
@@ -286,31 +301,39 @@ result_index      # Index within page (hidden in Excel)
 INPUT: PDF files (per profile)
     │
     ▼
-[process_single_pdf] ──── parallelized via multiprocessing.Pool
+[run_pipeline_for_pdf_files]
     │
-    ├── _compute_file_hash() ── SHA-256, first 8 hex chars
-    ├── _setup_pdf_processing() ── create {stem}_{hash}/ directory
-    ├── _copy_pdf_to_output()
+    ├── _prepare_pdf_run()
+    │   ├── _load_pdf_inventory()
+    │   ├── stat each PDF (path, size, mtime_ns)
+    │   ├── warm-cache check against valid per-PDF CSVs
+    │   └── _compute_file_hash() only for uncached/changed PDFs
     │
-    ├── TEXT PATH:
-    │   ├── extract_text_from_pdf() ── pdftotext -layout
-    │   ├── _text_has_enough_content() ── ≥200 chars?
-    │   └── extract_labs_from_text() ── LLM function calling
+    └── [process_single_pdf] ─ parallelized via multiprocessing.Pool
     │
-    ├── VISION PATH (fallback):
-    │   ├── _convert_pdf_to_images() ── pdf2image
-    │   └── per page:
-    │       ├── preprocess_page_image() ── grayscale, resize, contrast
-    │       ├── extract_labs_from_page_image() ── LLM vision + retry
-    │       └── cache JPG + JSON
-    │
-    ├── _apply_standardization()
-    │   ├── standardize_lab_names() ── cache lookup
-    │   └── standardize_lab_units() ── cache lookup
-    │
-    └── _save_results_to_csv() ── per-PDF CSV
-         │
-         ▼
+        │
+        ├── _setup_pdf_processing() ── create {stem}_{hash}/ directory
+        ├── _copy_pdf_to_output()
+        │
+        ├── TEXT PATH:
+        │   ├── extract_text_from_pdf() ── pdftotext -layout
+        │   ├── _text_has_enough_content() ── ≥200 chars?
+        │   └── extract_labs_from_text() ── LLM function calling
+        │
+        ├── VISION PATH (fallback):
+        │   ├── _convert_pdf_to_images() ── pdf2image
+        │   └── per page:
+        │       ├── preprocess_page_image() ── grayscale, resize, contrast
+        │       ├── extract_labs_from_page_image() ── LLM vision + retry
+        │       └── cache JPG + JSON
+        │
+        ├── _apply_standardization()
+        │   ├── standardize_lab_names() ── cache lookup
+        │   └── standardize_lab_units() ── cache lookup
+        │
+        └── _save_results_to_csv() ── per-PDF CSV
+             │
+             ▼
 [merge_csv_files] ── concatenate all per-PDF CSVs
          │
          ▼
