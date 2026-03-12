@@ -10,6 +10,11 @@ from parselabs.utils import ensure_columns
 
 logger = logging.getLogger(__name__)
 
+INTERVAL_VALUE_PATTERN = re.compile(
+    r"^\s*(?P<min>\d+(?:\.\d+)?)\s*(?:-|a)\s*(?P<max>\d+(?:\.\d+)?)(?:\s*/.*)?\s*$",
+    re.IGNORECASE,
+)
+
 QUALITATIVE_VARIANT_MAP = {
     "Urine Type II - Bilirubin": "Urine Type II - Bilirubin, Qualitative",
     "Urine Type II - Glucose": "Urine Type II - Glucose, Qualitative",
@@ -92,6 +97,36 @@ def extract_comparison_value(value) -> tuple[str, bool, bool]:
     return s, False, False
 
 
+def parse_interval_midpoint(value) -> float | None:
+    """
+    Parse interval-style result text and return its midpoint.
+
+    Supports deterministic numeric ranges such as ``1 a 2/campo`` or ``0 - 5``.
+    Returns ``None`` when the value is not a simple ascending interval.
+    """
+
+    # Guard: Missing values cannot encode an interval midpoint.
+    if pd.isna(value):
+        return None
+
+    text = str(value).strip()
+    match = INTERVAL_VALUE_PATTERN.match(text)
+
+    # Guard: Non-interval values should fall back to the regular numeric parser.
+    if match is None:
+        return None
+
+    lower_bound = float(match.group("min"))
+    upper_bound = float(match.group("max"))
+
+    # Guard: Descending intervals are more likely malformed OCR than valid ranges.
+    if upper_bound < lower_bound:
+        return None
+
+    # Use the deterministic midpoint while preserving the original raw interval text.
+    return (lower_bound + upper_bound) / 2
+
+
 def apply_normalizations(
     df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
@@ -161,6 +196,14 @@ def _preprocess_values(df: pd.DataFrame) -> pd.DataFrame:
 
     # Apply additional preprocessing (spaces, trailing =, embedded metadata, comma→period)
     df["_preprocessed_value"] = df["_preprocessed_value"].apply(preprocess_numeric_value)
+
+    # Derive midpoint values for interval-style observations before numeric coercion.
+    interval_midpoints = df["_preprocessed_value"].apply(parse_interval_midpoint)
+    interval_mask = interval_midpoints.notna()
+
+    # Replace only recognized interval rows so scalar values keep their original parsing path.
+    if interval_mask.any():
+        df.loc[interval_mask, "_preprocessed_value"] = interval_midpoints.loc[interval_mask].map(str)
 
     # Convert preprocessed values to numeric
     df["value_primary"] = pd.to_numeric(df["_preprocessed_value"], errors="coerce")

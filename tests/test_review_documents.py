@@ -143,3 +143,67 @@ def test_build_page_image_value_adds_overlay_for_current_row(tmp_path):
     image_path, annotations = image_value
     assert image_path.endswith("glucose.001.jpg")
     assert annotations == [((20, 20, 120, 80), review_documents.SOURCE_BBOX_LABEL)]
+
+
+def test_build_inspector_html_shows_raw_and_mapped_reference_ranges():
+    review_df = pd.DataFrame(
+        [
+            {
+                "page_number": 1,
+                "result_index": 0,
+                "raw_lab_name": "Glucose",
+                "raw_value": "5.0",
+                "raw_lab_unit": "mmol/L",
+                "lab_name": "Blood - Glucose",
+                "value": 90.0,
+                "lab_unit": "mg/dL",
+                "review_status": "",
+                "review_reason": "",
+                "raw_comments": "",
+                "raw_reference_range": "3.9 - 5.5 mmol/L",
+                "reference_min": 70.2,
+                "reference_max": 99.0,
+            }
+        ]
+    )
+
+    html_output = review_documents._build_inspector_html(document=object(), review_df=review_df, current_index=0, show_reviewed=True)
+
+    assert "3.9 - 5.5 mmol/L" in html_output
+    assert "70.2 - 99.0 mg/dL" in html_output
+    assert html_output.index("Mapped</div>") < html_output.index("Raw</div>")
+
+
+def test_reference_formatters_render_one_sided_ranges_as_inequalities():
+    min_only_row = pd.Series(
+        {
+            "reference_min": 4.5,
+            "reference_max": None,
+            "lab_unit": "10¹²/L",
+        }
+    )
+    max_only_row = pd.Series(
+        {
+            "reference_min": None,
+            "reference_max": 5.9,
+            "lab_unit": "10¹²/L",
+        }
+    )
+
+    assert review_documents._format_reference_text(min_only_row) == ">4.5"
+    assert review_documents._format_reference_text(max_only_row) == "<5.9"
+    assert review_documents._format_mapped_reference_text(min_only_row) == ">4.5 10¹²/L"
+    assert review_documents._format_mapped_reference_text(max_only_row) == "<5.9 10¹²/L"
+
+
+def test_build_queue_display_shows_reviewed_status_as_icons():
+    review_df = _make_review_df(
+        statuses=["accepted", "", "rejected"],
+        pages=[1, 1, 1],
+        rows=[0, 1, 2],
+    )
+
+    queue_state = review_documents._build_queue_state(review_df, show_reviewed=True)
+    display_df = review_documents._build_queue_display(queue_state, current_index=1)
+
+    assert display_df["St"].tolist() == ["", "✅", "❌"]
