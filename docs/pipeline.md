@@ -14,14 +14,18 @@ PDF Files
   ├─ 1. PDF Discovery
   ├─ 2. Preflight Cache Check & Hashing
   ├─ 3. PDF Processing
-  ├─ 4. Extraction (per-page text/vision hybrid)
-  ├─ 5. Standardization (cache-based mapping)
-  ├─ 6. Per-PDF CSV Export
-  ├─ 7. Merge All CSVs
-  ├─ 8. Normalization (unit conversion, dedup)
-  ├─ 9. Validation (flag suspicious values)
-  └─ 10. Final Export (CSV + Excel)
+  ├─ 4. Extraction To Canonical Page JSON
+  ├─ 5. Review Dataset Build
+  ├─ 6. Human Review
+  ├─ 7. Accepted-Only Publish Transform
+  └─ 8. Final Export (CSV + Excel)
 ```
+
+The pipeline is intentionally review-first:
+
+`page extraction JSON -> review dataframe/view -> accepted reviewed rows -> final export`
+
+Per-page JSON is the only canonical persisted intermediate state. Per-document CSVs and final `all.csv` / `all.xlsx` outputs are always derived from that JSON state.
 
 ## Stage 1: PDF Discovery
 
@@ -61,26 +65,26 @@ Each unique PDF that survives preflight is processed independently (parallelized
 2. Create output directory: `{pdf_stem}_{hash}/` — hash prevents collisions when different files share the same name
 3. Copy original PDF into the output directory for archival
 
-## Stage 4: Extraction
+## Stage 4: Extraction To Canonical Page JSON
 
 **Modules:** `main.py` — `process_single_pdf()`, `parselabs/extraction.py`
 
-The pipeline uses a **per-page hybrid strategy** to improve recall on mixed-quality PDFs.
+The pipeline uses a **deterministic per-page routing strategy**:
 
-### Path A: Page Text Extraction (Preferred When Strong)
+### Path A: Text First When Embedded Text Is Strong
 
 ```
 PDF → pdftotext (layout mode) → split into per-page text
   → Check each page for sufficient text content
   → extract_labs_from_text() per page → LLM function calling
-  → Keep text result if page-level quality looks strong
+  → Keep the text result unless it hard-fails or returns an empty likely-lab page
 ```
 
 - Uses `pdftotext` (poppler) with `-layout` flag
 - Threshold: 80 non-whitespace characters minimum per page
-- Text extraction is accepted only when the page result looks complete enough (non-empty rows, reasonable value coverage)
+- Text extraction is preferred because it is cheaper and more reproducible on digitally-generated PDFs
 
-### Path B: Vision Extraction (Fallback + Re-read)
+### Path B: Vision Fallback
 
 ```
 PDF → pdf2image (page-by-page)
@@ -88,14 +92,13 @@ PDF → pdf2image (page-by-page)
       → primary: color, autocontrast, sharpen, resize ≤1800px
       → fallback: grayscale, autocontrast, sharpen, contrast boost, resize ≤1800px
   → extract_labs_from_page_image() on primary image
-  → If page output looks weak: retry on fallback image
-  → Keep the strongest page candidate
+  → If the primary image hard-fails or returns an empty likely-lab page: retry once on fallback image
 ```
 
 - Each page converted to JPG independently
 - Primary image preserves color/table structure; fallback image exaggerates contrast for hard-to-read scans
-- Weak pages trigger a second pass on the alternate image variant instead of trusting the first pass
-- Results cached as `{stem}.{page}.json` — skips re-extraction on rerun
+- The runtime does not score or compare multiple candidates; it follows a single deterministic fallback chain
+- Results are cached as `{stem}.{page}.json` and reused on rerun
 
 ### LLM Extraction Details
 
@@ -104,25 +107,14 @@ Both paths use OpenRouter API with **function calling** (structured output):
 - **LLM-facing schema** (`LabResultExtraction`): Smaller, token-efficient — only raw extraction fields (excludes internal fields like `review_*`, `page_number`, `source_file`, `result_index`, `lab_name_standardized`, `lab_unit_standardized`)
 - **Internal schema** (`HealthLabReport` / `LabResult`): Full schema with all metadata
 
-**Retry logic** with temperature escalation on malformed output:
+**Retry logic** with limited temperature escalation on malformed output:
 - Attempt 1: temperature = 0.0 (deterministic)
 - Attempt 2: temperature = 0.2
-- Attempt 3: temperature = 0.4
-- Attempt 4: temperature = 0.6
-- After all retries fail: returns empty report with `_extraction_failed=True`
+- After retries fail: returns a failure-marked page JSON payload with `_extraction_failed=True`
 
 **Prompt templates** (loaded from `prompts/`):
 - `extraction_system.md` + `extraction_user.md` — vision extraction
 - `text_extraction_user.md` — text-based extraction (template: `{text}`)
-
-### Page-Level Candidate Selection
-
-For each page, the pipeline chooses the strongest available candidate:
-
-1. Try text extraction if the page has enough embedded text
-2. If the text result is weak, run vision on the primary image
-3. If the primary vision result is weak, run vision again on the fallback image
-4. Score candidates heuristically (result count, null-value rate, empty names) and keep the best one
 
 ### Extraction Output
 
@@ -136,16 +128,21 @@ Each `LabResult` contains:
 | `raw_reference_range` | Full range text |
 | `raw_reference_min`, `raw_reference_max` | Parsed range bounds |
 
-## Stage 5: Standardization
+Failed pages are also persisted in page JSON with `_extraction_failed` metadata so review tooling can surface extraction failures directly.
 
-**Modules:** `main.py` — `_apply_standardization()`, `parselabs/standardization.py`
+## Stage 5: Review Dataset Build
 
-Maps raw lab names and units to standardized enum values using **persistent JSON caches**. No LLM calls at runtime. This is the sole standardization path — the LLM extracts only raw data.
+**Modules:** `parselabs/review_sync.py`, `parselabs/standardization.py`, `parselabs/normalization.py`
+
+Per-document review CSVs are rebuilt from canonical page JSON, not treated as persisted truth.
 
 ```
-For each LabResult:
+For each extracted review row:
   → standardize_lab_names(): cache lookup raw_name → standardized_name
   → standardize_lab_units(): cache lookup (raw_unit, lab_name) → standardized_unit
+  → apply deterministic normalization only
+  → attach reviewer-facing ambiguity reasons
+  → keep every extracted row visible before deduplication
 ```
 
 ### Cache Files
@@ -159,49 +156,18 @@ config/cache/unit_standardization.json   # raw_unit|lab_name → standardized_un
 - **Cache miss:** return `$UNKNOWN$` + log warning
 - **Updating caches:** run `utils/update_standardization_caches.py` (batch LLM processing)
 
-## Stage 6: Per-PDF CSV Export
+### Deterministic Normalization Only
 
-**Module:** `main.py` — `_save_results_to_csv()`
+The always-on normalization path now does only mechanically justified transforms:
 
-Each PDF produces a CSV in its output directory: `{stem}_{hash}/{stem}.csv`
+### 5a. Numeric Preprocessing
 
-Contains one row per extracted result with:
-
-- document/date metadata
-- page and result indexes for round-tripping review actions
-- raw extracted fields
-- cached standardized name/unit mappings
-- review status columns (initially empty until reviewed)
-
-Each page JSON remains the authoritative editable source of truth for review:
-
-- per-result `review_status`
-- per-result `review_completed_at`
-- root-level `review_missing_rows` markers for omitted source rows the reviewer will repair manually
-
-## Stage 7: Merge
-
-**Module:** `main.py` — `merge_csv_files()`
-
-All per-PDF CSVs are concatenated into a single `all.csv` in the profile's output directory.
-
-The reviewed-JSON rebuild path reuses the same downstream export transform from this point forward. The only difference is the input row source: accepted page-JSON rows instead of merged per-PDF CSV rows.
-
-## Stage 8: Normalization
-
-**Module:** `parselabs/normalization.py`
-
-Transforms the merged DataFrame through several steps:
-
-### 8a. Numeric Preprocessing — `preprocess_numeric_value()`
-
-Cleans raw value strings before numeric conversion:
 - Strip trailing `=` (e.g., `"0.9="` → `"0.9"`)
 - Extract first number from concatenation artifacts (e.g., `"52.6=1946"` → `"52.6"`)
 - Remove space thousands separators (e.g., `"256 000"` → `"256000"`)
 - European decimal format (comma → period)
 
-### 8b. Comparison Operators — `extract_comparison_value()`
+### 5b. Comparison Operators
 
 Parses limit indicators and sets boolean flags:
 
@@ -212,9 +178,9 @@ Parses limit indicators and sets boolean flags:
 | `≤50` | 50 | True | False |
 | `≥30` | 30 | False | True |
 
-### 8c. Unit Conversion — `apply_normalizations()`
+### 5c. Exact Unit Conversion
 
-Converts values to primary units using factors from `lab_specs.json`:
+Converts values to primary units only when the standardized lab and unit are explicit and a conversion factor exists:
 
 ```
 raw_value=5.0, raw_unit="mmol/L", lab="Blood - Glucose"
@@ -223,21 +189,43 @@ raw_value=5.0, raw_unit="mmol/L", lab="Blood - Glucose"
   → value = 5.0 × 18.0 = 90.0 mg/dL
 ```
 
-### 8d. Deduplication — `deduplicate_results()`
+The runtime no longer auto-corrects ambiguous rows by inferring missing units, swapping percentage-vs-absolute variants, or nullifying suspicious reference ranges. Those cases are flagged for human review instead.
 
-- Groups by `(date, lab_name)`
-- Keeps row with latest `result_index` (most complete data)
-- Logs deduplication stats
+### 5d. Review Reasons
 
-### 8e. Type Conversion — `apply_dtype_conversions()`
+Review rows now surface ambiguity directly in `review_reason`, including:
 
-Forces proper column types: `date` → datetime, `value` → float64, booleans, etc.
+- `EXTRACTION_FAILED`
+- `UNKNOWN_LAB_MAPPING`
+- `UNKNOWN_UNIT_MAPPING`
+- `AMBIGUOUS_PERCENTAGE_VARIANT`
+- `SUSPICIOUS_REFERENCE_RANGE`
+- `DUPLICATE_ENTRY`
 
-## Stage 9: Validation
+## Stage 6: Human Review
 
-**Module:** `parselabs/validation.py` — `ValueValidator`
+**Modules:** `viewer.py`, `review_documents.py`
 
-Detects extraction errors by analyzing the data itself (no source image re-check). Sets `review_needed=True` and appends reason codes to `review_reason`.
+The viewer reads derived review rows from canonical page JSON and lets the reviewer:
+
+- inspect every extracted row before deduplication
+- accept or reject rows directly in the backing page JSON
+- see validation and ambiguity reasons together
+- rebuild publish outputs later from accepted reviewed rows only
+
+## Stage 7: Accepted-Only Publish Transform
+
+**Modules:** `main.py`, `parselabs/review_sync.py`, `parselabs/validation.py`
+
+The publish path starts from rows with `review_status == accepted` only. It then:
+
+- reapplies the shared deterministic normalization path
+- drops rows that still have unresolved lab or unit mappings
+- flags duplicates
+- deduplicates only among accepted rows
+- runs validation as a QA layer, not a self-healing layer
+
+Validation still appends reason codes to `review_reason`:
 
 | Category | Reason Codes | Description |
 |----------|--------------|-------------|
@@ -277,7 +265,7 @@ Inter-lab relationships use formulas from the `_relationships` key:
 }
 ```
 
-## Stage 10: Final Export
+## Stage 8: Final Export
 
 **Module:** `main.py` — `run_pipeline_for_pdf_files()`, `build_final_output_dataframe()`, `export_excel()`
 
@@ -286,8 +274,8 @@ Inter-lab relationships use formulas from the `_relationships` key:
 | File | Description |
 |------|-------------|
 | `{stem}_{hash}/{stem}.csv` | Per-document review CSV rebuilt from processed page JSON state |
-| `all.csv` | Merged, normalized, deduplicated, validated results |
-| `all.xlsx` | Excel with formatted columns, frozen header, hidden internal columns |
+| `all.csv` | Accepted-only publish dataset derived from reviewed page JSON |
+| `all.xlsx` | Accepted-only publish dataset in Excel format |
 | `lab_specs.json` | Copy of lab specifications used (for reproducibility) |
 
 ### Output Schema (17 columns)
@@ -340,28 +328,34 @@ INPUT: PDF files (per profile)
         ├── VISION PATH (fallback):
         │   ├── _convert_pdf_to_images() ── pdf2image
         │   └── per page:
-        │       ├── preprocess_page_image() ── grayscale, resize, contrast
-        │       ├── extract_labs_from_page_image() ── LLM vision + retry
-        │       └── cache JPG + JSON
+        │       ├── create_page_image_variants()
+        │       ├── extract_labs_from_page_image() ── primary image
+        │       ├── extract_labs_from_page_image() ── fallback image only if needed
+        │       └── cache canonical page JSON
         │
-        ├── _apply_standardization()
-        │   ├── standardize_lab_names() ── cache lookup
-        │   └── standardize_lab_units() ── cache lookup
-        │
-        └── _save_results_to_csv() ── per-PDF CSV
+        └── rebuild_document_csv() ── derived review CSV from page JSON
              │
              ▼
-[merge_csv_files] ── concatenate all per-PDF CSVs
+[build_document_review_dataframe]
+         │
+         ▼
+[human review in viewer]
+         │
+         ▼
+[accepted reviewed rows only]
          │
          ▼
 [apply_normalizations]
-    ├── preprocess_numeric_value() ── clean raw strings
-    ├── extract_comparison_value() ── parse <, >, ≤, ≥
-    ├── unit conversion ── value × factor → primary unit
-    └── date parsing
+    ├── preprocess_numeric_value()
+    ├── extract_comparison_value()
+    ├── qualitative boolean conversion
+    └── exact unit conversion only
          │
          ▼
-[deduplicate_results] ── group by (date, lab_name), keep latest
+[drop unresolved mappings]
+         │
+         ▼
+[deduplicate_results] ── accepted rows only
          │
          ▼
 [apply_dtype_conversions] ── force column types
@@ -375,7 +369,7 @@ INPUT: PDF files (per profile)
     └── reference range checks
          │
          ▼
-OUTPUT: all.csv + all.xlsx + lab_specs.json
+OUTPUT: accepted-only all.csv + all.xlsx + lab_specs.json
 ```
 
 ## Approved Document Regression
@@ -386,7 +380,7 @@ Approved-document regressions rerun a private PDF corpus and compare the final C
 
 `main.py` now exposes:
 
-- `run_pipeline_for_pdf_files(pdf_files, config, lab_specs)` — runs the same extraction, merge, normalization, deduplication, validation, and export-shaping flow used by the CLI, and returns the final DataFrame plus run metadata.
+- `run_pipeline_for_pdf_files(pdf_files, config, lab_specs)` — runs the same extraction, review-CSV rebuild, accepted-row publish transform, validation, and export-shaping flow used by the CLI, and returns the final DataFrame plus run metadata.
 - `build_final_output_dataframe(pdf_files, config, lab_specs)` — convenience wrapper that returns only the final `all.csv`-shape DataFrame.
 
 These are used by both the CLI profile flow and the regression tooling so there is only one implementation of the pipeline logic.

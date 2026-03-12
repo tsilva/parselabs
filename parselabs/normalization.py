@@ -688,16 +688,6 @@ def apply_normalizations(
         default=None,
     )
 
-    # Correct percentage lab names based on unit
-    # unit=% → name must end with (%), unit≠% → strip (%) from name
-    if lab_specs.exists and "lab_name_standardized" in df.columns and "lab_unit_standardized" in df.columns:
-        df = _correct_percentage_names_in_df(df, lab_specs)
-
-    # Fix misassigned percentage units BEFORE other normalizations
-    # This catches cases like Albumin 61.5 "g/dL" that should be 61.5 "%"
-    if lab_specs.exists:
-        df = fix_misassigned_percentage_units(df, lab_specs)
-
     # Look up lab_type from config (vectorized)
     if lab_specs.exists:
         df["lab_type"] = df["lab_name_standardized"].apply(lambda name: lab_specs.get_lab_type(name) if pd.notna(name) and name != UNKNOWN_VALUE else "blood")
@@ -1114,27 +1104,15 @@ def apply_unit_conversions(
     # Phase 1: Extract comparison operators and preprocess values
     df = _preprocess_values(df)
 
-    # Phase 2: Infer missing units from context
-    df = _infer_missing_units(df, lab_specs)
-
-    # Phase 3: Convert qualitative text values to 0/1
+    # Phase 2: Convert qualitative text values to 0/1 for boolean-style labs
     df = _convert_qualitative_values(df, lab_specs)
 
-    # Phase 4: Apply unit conversion factors for each lab type
+    # Phase 3: Apply exact unit conversion factors for each lab type
     for lab_name_standardized in df["lab_name_standardized"].unique():
         # Skip unknown or missing lab names
         if pd.isna(lab_name_standardized) or lab_name_standardized == UNKNOWN_VALUE:
             continue
         _apply_unit_conversions_for_lab(df, lab_name_standardized, lab_specs)
-
-    # Phase 5: Fix specific gravity values missing decimal point
-    df = _fix_specific_gravity(df)
-
-    # Phase 6: Validate reference ranges against lab_specs
-    df = _validate_reference_ranges(df, lab_specs)
-
-    # Phase 7: Sanitize percentage reference ranges
-    df = sanitize_percentage_reference_ranges(df)
 
     return df
 
@@ -1223,8 +1201,11 @@ def flag_duplicate_entries(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df["review_reason"] = df["review_reason"].fillna("").astype(str)
 
-    # Find all rows that are part of a duplicate group
-    dup_mask = df.duplicated(subset=["date", "lab_name_standardized"], keep=False)
+    # Consider only rows with usable standardized lab names for duplicate detection.
+    candidate_mask = df["lab_name_standardized"].notna() & (df["lab_name_standardized"] != UNKNOWN_VALUE)
+
+    # Find all rows that are part of a duplicate group among known standardized labs.
+    dup_mask = candidate_mask & df.duplicated(subset=["date", "lab_name_standardized"], keep=False)
 
     if not dup_mask.any():
         return df

@@ -25,6 +25,11 @@ class ValueValidator:
 
     # Valid reason codes for flagging suspicious values
     REASON_CODES = {
+        "EXTRACTION_FAILED",
+        "UNKNOWN_LAB_MAPPING",
+        "UNKNOWN_UNIT_MAPPING",
+        "AMBIGUOUS_PERCENTAGE_VARIANT",
+        "SUSPICIOUS_REFERENCE_RANGE",
         "IMPOSSIBLE_VALUE",
         "RELATIONSHIP_MISMATCH",
         "COMPONENT_EXCEEDS_TOTAL",

@@ -100,6 +100,19 @@ def _stub_standardization(monkeypatch) -> None:
     )
 
 
+def _stub_unknown_unit_standardization(monkeypatch) -> None:
+    """Stub standardization with known lab names but unresolved units."""
+
+    monkeypatch.setattr(
+        "parselabs.review_sync.standardize_lab_names",
+        lambda raw_names: {name: "Blood - Glucose" for name in raw_names},
+    )
+    monkeypatch.setattr(
+        "parselabs.review_sync.standardize_lab_units",
+        lambda unit_contexts: {context: "$UNKNOWN$" for context in unit_contexts},
+    )
+
+
 def test_rebuild_document_csv_preserves_row_identity_and_review_status(tmp_path, monkeypatch):
     lab_specs = _make_lab_specs(tmp_path)
     _stub_standardization(monkeypatch)
@@ -232,6 +245,82 @@ def test_run_pipeline_and_reviewed_rebuild_produce_matching_exports(tmp_path, mo
     reviewed_df, _ = main.build_final_output_dataframe_from_reviewed_json(output_path, lab_specs)
 
     pd.testing.assert_frame_equal(pipeline_result.final_df, reviewed_df)
+
+
+def test_run_pipeline_with_only_pending_rows_publishes_empty_final_export(tmp_path, monkeypatch):
+    lab_specs = _make_lab_specs(tmp_path)
+    _stub_standardization(monkeypatch)
+    output_path = tmp_path / "processed"
+    doc_dir = output_path / "glucose_deadbeef"
+    _write_processed_document(doc_dir, [None, None])
+    csv_path = rebuild_document_csv(doc_dir, lab_specs)
+
+    pdf_path = tmp_path / "input" / "glucose.pdf"
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    pdf_path.write_bytes(b"%PDF-1.4")
+
+    config = ExtractionConfig(
+        input_path=pdf_path.parent,
+        output_path=output_path,
+        openrouter_api_key="test-key",
+        extract_model_id="test-model",
+        max_workers=1,
+    )
+    preflight = main.PdfPreflightResult(
+        cached_csv_paths=[csv_path],
+        pdfs_to_process=[],
+        duplicates=[],
+        skipped_count=1,
+        inventory={},
+        inventory_candidates={},
+    )
+    monkeypatch.setattr(main, "_prepare_pdf_run", lambda pdf_files, _: preflight)
+
+    pipeline_result = main.run_pipeline_for_pdf_files([pdf_path], config, lab_specs)
+
+    assert pipeline_result.csv_paths == [csv_path]
+    assert pipeline_result.final_df.empty
+
+
+def test_build_document_review_dataframe_flags_unknown_units_for_review(tmp_path, monkeypatch):
+    lab_specs = _make_lab_specs(tmp_path)
+    _stub_unknown_unit_standardization(monkeypatch)
+    doc_dir = tmp_path / "processed" / "glucose_deadbeef"
+    _write_processed_document(doc_dir, [None], raw_units=["odd-unit"])
+
+    review_df = build_document_review_dataframe(doc_dir, lab_specs)
+
+    assert bool(review_df.loc[0, "review_needed"]) is True
+    assert "UNKNOWN_UNIT_MAPPING" in str(review_df.loc[0, "review_reason"])
+
+
+def test_build_document_review_dataframe_keeps_extraction_failures_visible(tmp_path, monkeypatch):
+    lab_specs = _make_lab_specs(tmp_path)
+    _stub_standardization(monkeypatch)
+    doc_dir = tmp_path / "processed" / "glucose_deadbeef"
+    doc_dir.mkdir(parents=True)
+    (doc_dir / "glucose.pdf").write_bytes(b"%PDF-1.4")
+    payload = {
+        "collection_date": "2024-01-05",
+        "_extraction_failed": True,
+        "_failure_reason": "Malformed output after 2 attempts",
+        "lab_results": [
+            {
+                "raw_lab_name": "[EXTRACTION FAILED]",
+                "raw_value": None,
+                "raw_lab_unit": None,
+                "raw_reference_min": None,
+                "raw_reference_max": None,
+                "raw_comments": "Malformed output after 2 attempts",
+            }
+        ],
+    }
+    (doc_dir / "glucose.001.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    review_df = build_document_review_dataframe(doc_dir, lab_specs)
+
+    assert bool(review_df.loc[0, "review_needed"]) is True
+    assert "EXTRACTION_FAILED" in str(review_df.loc[0, "review_reason"])
 
 
 def test_regression_case_sync_copies_fixture_ready_documents_with_rejections(tmp_path, monkeypatch):
