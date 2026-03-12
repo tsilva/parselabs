@@ -2,8 +2,8 @@
     position: sticky;
     top: 0;
     z-index: 20;
-    padding-bottom: 12px;
-    margin-bottom: 12px;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
     background: var(--body-background-fill, #0f172a);
     border-bottom: 1px solid var(--border-color-primary, rgba(148, 163, 184, 0.25));
 }
@@ -40,6 +40,38 @@
     padding: 6px 8px !important;
 }
 
+#review-queue th:nth-child(1),
+#review-queue td:nth-child(1) {
+    width: 38px;
+    min-width: 38px;
+    max-width: 38px;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+    text-align: center;
+}
+
+#review-queue th:nth-child(2),
+#review-queue td:nth-child(2) {
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+    text-align: center;
+}
+
+#review-queue th:nth-child(3),
+#review-queue td:nth-child(3),
+#review-queue th:nth-child(4),
+#review-queue td:nth-child(4) {
+    width: 52px;
+    min-width: 52px;
+    max-width: 52px;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+    text-align: right;
+}
+
 #review-page-image {
     border: 1px solid var(--border-color-primary, rgba(148, 163, 184, 0.25));
     border-radius: 14px;
@@ -66,9 +98,27 @@
 .review-pane-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     gap: 12px;
     margin-bottom: 10px;
+}
+
+.review-pane-header.compact {
+    margin-bottom: 8px;
+}
+
+.review-pane-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 24px;
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--body-text-color-subdued, #64748b);
+}
+
+.review-pane-separator {
+    opacity: 0.65;
 }
 
 .review-progress-card,
@@ -82,6 +132,10 @@
     padding: 14px 16px;
 }
 
+.review-progress-card.compact {
+    padding: 10px 14px;
+}
+
 .review-card {
     padding: 16px;
 }
@@ -92,16 +146,11 @@
     font-weight: 700;
 }
 
-.review-progress-subtitle {
-    margin-top: 4px;
-    color: var(--body-text-color-subdued, #64748b);
-}
-
 .review-progress-row {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-top: 12px;
+    margin-top: 8px;
 }
 
 .review-progress-chip {

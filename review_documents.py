@@ -459,13 +459,13 @@ def _build_pdf_link(document: ProcessedDocument | None) -> str:
 
 
 def _build_page_context_html(document: ProcessedDocument | None, review_df: pd.DataFrame, current_index: int) -> str:
-    """Build the compact header shown above the source page image."""
+    """Build the compact single-line header shown above the source page image."""
 
     pdf_link = _build_pdf_link(document)
 
     # Guard: No selected document gets a neutral placeholder header.
     if document is None:
-        return f'<div class="review-pane-header"><div><div class="review-eyebrow">Source page</div><div class="review-title">No document selected</div></div>{pdf_link}</div>'
+        return f'<div class="review-pane-header compact"><div class="review-pane-meta">No document selected</div>{pdf_link}</div>'
 
     current_row = _get_current_row(review_df, current_index)
 
@@ -475,7 +475,12 @@ def _build_page_context_html(document: ProcessedDocument | None, review_df: pd.D
     else:
         page_title = "No active row"
 
-    return f'<div class="review-pane-header"><div><div class="review-eyebrow">{html.escape(document.stem)}</div><div class="review-title">{page_title}</div></div>{pdf_link}</div>'
+    return (
+        '<div class="review-pane-header compact">'
+        f'<div class="review-pane-meta">{html.escape(document.stem)}<span class="review-pane-separator">•</span>{html.escape(page_title)}</div>'
+        f"{pdf_link}"
+        "</div>"
+    )
 
 
 def _build_progress_chip(label: str, value: str, tone: str = "neutral") -> str:
@@ -491,7 +496,7 @@ def _build_progress_html(
     current_index: int,
     show_reviewed: bool,
 ) -> str:
-    """Build the sticky toolbar summary for the active document."""
+    """Build the slim sticky toolbar summary for the active document."""
 
     # Guard: No selected document gets a short neutral summary.
     if document is None:
@@ -500,30 +505,29 @@ def _build_progress_html(
     summary = get_document_review_summary(document.doc_dir, review_df)
     current_row = _get_current_row(review_df, current_index)
 
-    # Describe the current selection when one is visible.
     if current_row is not None:
-        selection_text = f"Selected page {int(current_row['page_number'])}, row {int(current_row['result_index'])}."
+        selection_chip = _build_progress_chip("At", f"P{int(current_row['page_number'])} R{int(current_row['result_index'])}", tone="neutral")
     elif review_df.empty:
-        selection_text = "This document has no extracted rows."
+        selection_chip = _build_progress_chip("State", "No rows", tone="neutral")
     elif not show_reviewed and summary.pending == 0:
-        selection_text = "No pending rows. Enable Show reviewed to inspect accepted or rejected rows."
+        selection_chip = _build_progress_chip("State", "No pending rows", tone="neutral")
     else:
-        selection_text = "No visible row selected."
+        selection_chip = _build_progress_chip("State", "No visible row", tone="neutral")
 
-    queue_text = f"{len(queue_state)} shown"
     chips = [
+        selection_chip,
         _build_progress_chip("Reviewed", f"{summary.reviewed}/{summary.total}", tone="neutral"),
         _build_progress_chip("Pending", str(summary.pending), tone="warning"),
-        _build_progress_chip("Rejected", str(summary.rejected), tone="danger"),
-        _build_progress_chip("Missing", str(summary.missing_row_markers), tone="warning"),
-        _build_progress_chip("Fixture", "Ready" if summary.fixture_ready else "Blocked", tone="success" if summary.fixture_ready else "danger"),
-        _build_progress_chip("Queue", queue_text, tone="neutral"),
     ]
+    if summary.rejected > 0:
+        chips.append(_build_progress_chip("Rejected", str(summary.rejected), tone="danger"))
+    if summary.missing_row_markers > 0:
+        chips.append(_build_progress_chip("Missing", str(summary.missing_row_markers), tone="warning"))
+    chips.append(_build_progress_chip("Fixture", "Ready" if summary.fixture_ready else "Blocked", tone="success" if summary.fixture_ready else "danger"))
 
     return (
-        '<div class="review-progress-card">'
+        '<div class="review-progress-card compact">'
         f'<div class="review-progress-title">{html.escape(document.stem)}</div>'
-        f'<div class="review-progress-subtitle">{html.escape(selection_text)}</div>'
         f'<div class="review-progress-row">{"".join(chips)}</div>'
         "</div>"
     )
@@ -554,7 +558,23 @@ def _build_inspector_html(document: ProcessedDocument | None, review_df: pd.Data
     status_label = status.capitalize()
     reference_text = _format_reference_text(current_row)
     comments_text = _format_text(current_row.get("raw_comments"), empty="")
-    comments_html = comments_text or '<span class="review-inline-muted">None</span>'
+    reason_badges_html = _build_reason_badges(current_row.get("review_reason"))
+
+    meta_rows: list[str] = []
+    if reason_badges_html != '<span class="review-inline-muted">None</span>':
+        meta_rows.append(
+            '<div class="review-meta-row"><span>Validation</span>'
+            f'<div class="review-badge-row">{reason_badges_html}</div>'
+            "</div>"
+        )
+    if comments_text:
+        meta_rows.append(
+            '<div class="review-meta-row"><span>Comments</span>'
+            f"<strong>{comments_text}</strong>"
+            "</div>"
+        )
+
+    meta_html = f'<div class="review-meta-list">{"".join(meta_rows)}</div>' if meta_rows else ""
 
     return (
         '<div class="review-card">'
@@ -579,21 +599,7 @@ def _build_inspector_html(document: ProcessedDocument | None, review_df: pd.Data
         f'<div class="review-field"><span>Unit</span><strong>{_format_text(current_row.get("lab_unit"))}</strong></div>'
         "</div>"
         "</div>"
-        '<div class="review-meta-list">'
-        '<div class="review-meta-row"><span>Validation</span>'
-        f'<div class="review-badge-row">{_build_reason_badges(current_row.get("review_reason"))}</div>'
-        "</div>"
-        '<div class="review-meta-row"><span>Comments</span>'
-        f"<strong>{comments_html}</strong>"
-        "</div>"
-        '<div class="review-meta-row"><span>Source file</span>'
-        f"<strong>{html.escape(document.stem)}</strong>"
-        "</div>"
-        "</div>"
-        '<details class="review-help-panel">'
-        "<summary>Missing row help</summary>"
-        "<p>Use Missing when the source page contains an omitted lab line. After fixing the page JSON, clear the page review_missing_rows marker.</p>"
-        "</details>"
+        f"{meta_html}"
         "</div>"
     )
 
@@ -921,7 +927,6 @@ def build_app() -> gr.Blocks:
 
     with gr.Blocks(title="Processed Document Reviewer") as demo:
         gr.Markdown("# Processed Document Reviewer")
-        gr.Markdown("Review each extracted row against its source page with a large source image, side-by-side review card, and a bottom table for bulk spotting.")
 
         current_row_index = gr.State(initial_view.current_index)
         queue_state = gr.State(initial_view.queue_state)
