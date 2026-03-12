@@ -178,7 +178,7 @@ _doc_dir_cache: dict[tuple[str, str], Path | None] = {}
 
 
 def _resolve_doc_dir(stem: str, output_path: Path) -> Path | None:
-    """Resolve document directory, supporting both {stem}_{hash} and legacy {stem} layouts.
+    """Resolve a processed document directory in canonical {stem}_{hash} layout.
 
     Results are cached to avoid repeated glob calls.
     """
@@ -192,12 +192,6 @@ def _resolve_doc_dir(stem: str, output_path: Path) -> Path | None:
     if matches:
         _doc_dir_cache[cache_key] = matches[0]
         return matches[0]
-
-    # Fallback to legacy: {stem}
-    legacy = output_path / stem
-    if legacy.exists() and legacy.is_dir():
-        _doc_dir_cache[cache_key] = legacy
-        return legacy
 
     _doc_dir_cache[cache_key] = None
     return None
@@ -230,7 +224,7 @@ def _resolve_page_path(entry: dict, output_path: Path, suffix: str) -> Path:
         # Default to first page
         page_str = "001"
 
-    # Resolve document directory (supports hash-suffixed and legacy layouts)
+    # Resolve document directory using the canonical hash-suffixed layout.
     doc_dir = _resolve_doc_dir(stem, output_path)
     if doc_dir is None:
         return Path()

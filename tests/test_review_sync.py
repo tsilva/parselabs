@@ -4,17 +4,19 @@ import argparse
 import json
 from pathlib import Path
 
+import main
 import pandas as pd
 import pytest
 
-from parselabs.config import LabSpecsConfig, ProfileConfig
+from parselabs.config import ExtractionConfig, LabSpecsConfig, ProfileConfig
 from parselabs.review_sync import (
     ReviewStateError,
     build_document_expected_dataframe_from_reviewed_json,
-    build_review_corpus_report,
     build_document_review_dataframe,
+    build_review_corpus_report,
     get_document_review_summary,
     get_review_summary,
+    iter_processed_documents,
     rebuild_document_csv,
     save_missing_row_marker,
     save_review_status,
@@ -90,11 +92,11 @@ def _stub_standardization(monkeypatch) -> None:
 
     monkeypatch.setattr(
         "parselabs.review_sync.standardize_lab_names",
-        lambda raw_names, _: {name: "Blood - Glucose" for name in raw_names},
+        lambda raw_names: {name: "Blood - Glucose" for name in raw_names},
     )
     monkeypatch.setattr(
         "parselabs.review_sync.standardize_lab_units",
-        lambda unit_contexts, *_: {context: "mg/dL" for context in unit_contexts},
+        lambda unit_contexts: {context: "mg/dL" for context in unit_contexts},
     )
 
 
@@ -187,6 +189,51 @@ def test_build_document_expected_dataframe_blocks_unresolved_missing_markers(tmp
         build_document_expected_dataframe_from_reviewed_json(doc_dir, lab_specs)
 
 
+def test_iter_processed_documents_skips_legacy_output_dirs(tmp_path):
+    output_path = tmp_path / "processed"
+    _write_processed_document(output_path / "legacy", ["accepted"], stem="legacy")
+    _write_processed_document(output_path / "hashed_deadbeef", ["accepted"], stem="hashed")
+
+    documents = iter_processed_documents(output_path)
+
+    assert [document.doc_dir.name for document in documents] == ["hashed_deadbeef"]
+
+
+def test_run_pipeline_and_reviewed_rebuild_produce_matching_exports(tmp_path, monkeypatch):
+    lab_specs = _make_lab_specs(tmp_path)
+    _stub_standardization(monkeypatch)
+    output_path = tmp_path / "processed"
+    doc_dir = output_path / "glucose_deadbeef"
+    _write_processed_document(doc_dir, ["accepted", "accepted"])
+    csv_path = rebuild_document_csv(doc_dir, lab_specs)
+
+    pdf_path = tmp_path / "input" / "glucose.pdf"
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    pdf_path.write_bytes(b"%PDF-1.4")
+
+    config = ExtractionConfig(
+        input_path=pdf_path.parent,
+        output_path=output_path,
+        openrouter_api_key="test-key",
+        extract_model_id="test-model",
+        max_workers=1,
+    )
+    preflight = main.PdfPreflightResult(
+        cached_csv_paths=[csv_path],
+        pdfs_to_process=[],
+        duplicates=[],
+        skipped_count=1,
+        inventory={},
+        inventory_candidates={},
+    )
+    monkeypatch.setattr(main, "_prepare_pdf_run", lambda pdf_files, _: preflight)
+
+    pipeline_result = main.run_pipeline_for_pdf_files([pdf_path], config, lab_specs)
+    reviewed_df, _ = main.build_final_output_dataframe_from_reviewed_json(output_path, lab_specs)
+
+    pd.testing.assert_frame_equal(pipeline_result.final_df, reviewed_df)
+
+
 def test_regression_case_sync_copies_fixture_ready_documents_with_rejections(tmp_path, monkeypatch):
     lab_specs = _make_lab_specs(tmp_path)
     _stub_standardization(monkeypatch)
@@ -236,14 +283,14 @@ def test_review_corpus_report_counts_rejections_missing_rows_and_unknowns(tmp_pa
 
     monkeypatch.setattr(
         "parselabs.review_sync.standardize_lab_names",
-        lambda raw_names, _: {
+        lambda raw_names: {
             name: ("Blood - Glucose" if name == "Glucose" else "$UNKNOWN$")
             for name in raw_names
         },
     )
     monkeypatch.setattr(
         "parselabs.review_sync.standardize_lab_units",
-        lambda unit_contexts, *_: {
+        lambda unit_contexts: {
             context: ("mg/dL" if context[0] == "mg/dL" else "$UNKNOWN$")
             for context in unit_contexts
         },

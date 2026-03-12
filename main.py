@@ -32,21 +32,15 @@ from parselabs.extraction import (  # noqa: E402
     extract_labs_from_page_image,
     extract_labs_from_text,
 )
-from parselabs.normalization import (  # noqa: E402
-    apply_dtype_conversions,
-    apply_normalizations,
-    deduplicate_results,
-    flag_duplicate_entries,
-)
 from parselabs.paths import get_profiles_dir  # noqa: E402
 from parselabs.review_sync import (  # noqa: E402
     DOCUMENT_REVIEW_COLUMNS,
-    apply_cached_standardization,
     build_document_review_dataframe,
     get_document_review_summary,
     iter_processed_documents,
     load_document_review_rows,
     rebuild_document_csv,
+    transform_rows_to_final_export,
 )
 from parselabs.standardization import (  # noqa: E402
     standardize_lab_names,
@@ -57,7 +51,6 @@ from parselabs.utils import (  # noqa: E402
     ensure_columns,
     setup_logging,
 )
-from parselabs.validation import ValueValidator  # noqa: E402
 
 # Module-level logger (file handlers added after config is loaded)
 logger = logging.getLogger(__name__)
@@ -184,12 +177,6 @@ def _setup_pdf_processing(pdf_path: Path, output_dir: Path, file_hash: str) -> t
     pdf_stem = pdf_path.stem  # Extract filename without extension for directory naming
     dir_name = f"{pdf_stem}_{file_hash}"  # Include file hash for uniqueness
     doc_out_dir = output_dir / dir_name  # Create document-specific output directory
-
-    # Backwards-compat migration: rename legacy directory if it exists
-    legacy_dir = output_dir / pdf_stem
-    if legacy_dir.exists() and not doc_out_dir.exists() and legacy_dir.is_dir():
-        legacy_dir.rename(doc_out_dir)
-        logger.info(f"Migrated legacy directory: {pdf_stem} -> {dir_name}")
 
     doc_out_dir.mkdir(exist_ok=True, parents=True)  # Ensure directory exists, create parents if needed
     csv_path = doc_out_dir / f"{pdf_stem}.csv"  # Define CSV output path within document directory
@@ -556,10 +543,7 @@ def _apply_name_standardization(
         return 0
 
     # Look up standardization mappings from cache
-    name_mappings = standardize_lab_names(
-        names_to_standardize,
-        lab_specs.standardized_names,
-    )
+    name_mappings = standardize_lab_names(names_to_standardize)
 
     # Apply mappings to results and count updates
     fallback_count = 0
@@ -604,11 +588,7 @@ def _apply_unit_standardization(
         return 0
 
     # Look up unit standardization mappings from cache
-    unit_mappings = standardize_lab_units(
-        unit_contexts,
-        lab_specs.standardized_units,
-        lab_specs,
-    )
+    unit_mappings = standardize_lab_units(unit_contexts)
 
     # Apply mappings to results and count updates
     unit_count = 0
@@ -857,25 +837,6 @@ def _build_hashed_csv_path(pdf_path: Path, output_path: Path, file_hash: str) ->
     """Return the hash-suffixed CSV path for a PDF."""
 
     return output_path / f"{pdf_path.stem}_{file_hash}" / f"{pdf_path.stem}.csv"
-
-
-def _get_csv_path(pdf_path: Path, output_path: Path, file_hash: str | None = None) -> Path:
-    """Get the output CSV path for a given PDF file."""
-
-    # Resolve the current hash only when the caller did not already compute it.
-    resolved_hash = file_hash or _compute_file_hash(pdf_path)
-    new_path = _build_hashed_csv_path(pdf_path, output_path, resolved_hash)
-
-    # Check new path first, then fall back to legacy path for pre-migration output.
-    if new_path.exists():
-        return new_path
-
-    legacy_path = output_path / pdf_path.stem / f"{pdf_path.stem}.csv"
-    if legacy_path.exists():
-        return legacy_path
-
-    # Neither exists — return new-style path for creation.
-    return new_path
 
 
 REQUIRED_CSV_COLS = ["result_index", "page_number", "source_file"]
@@ -1227,47 +1188,6 @@ def _is_csv_valid(csv_path: Path, required_cols: list[str] = REQUIRED_CSV_COLS) 
     except Exception:
         # Any error (corrupt file, permissions, etc.) means invalid
         return False
-
-
-def _filter_unknown_labs(merged_df: pd.DataFrame) -> pd.DataFrame:
-    """Filter out rows that couldn't be mapped to known lab tests."""
-
-    # Identify rows with unknown lab names
-    unknown_mask = merged_df["lab_name_standardized"] == UNKNOWN_VALUE
-
-    # Log and remove unknown lab rows
-    if unknown_mask.any():
-        unknown_count = unknown_mask.sum()
-        logger.error(f"Filtering {unknown_count} rows with unknown lab names")
-        merged_df = merged_df[~unknown_mask].reset_index(drop=True)
-
-    return merged_df
-
-
-def _rename_columns_for_export(merged_df: pd.DataFrame) -> pd.DataFrame:
-    """Rename columns from internal names to simplified export schema."""
-
-    # Define mapping from internal to export column names
-    column_renames = {
-        "lab_name_standardized": "lab_name",
-        "value_primary": "value",
-        "lab_unit_primary": "lab_unit",
-        "raw_lab_unit": "raw_unit",
-        "reference_min_primary": "reference_min",
-        "reference_max_primary": "reference_max",
-    }
-
-    return merged_df.rename(columns=column_renames)
-
-
-def _run_value_validation(merged_df: pd.DataFrame, lab_specs: LabSpecsConfig) -> tuple[pd.DataFrame, dict]:
-    """Run value-based validation and return validated DataFrame with stats."""
-
-    # Initialize validator and run validation checks
-    validator = ValueValidator(lab_specs)
-    merged_df = validator.validate(merged_df)
-
-    return merged_df, validator.validation_stats
 
 
 def _log_validation_stats(validation_stats: dict) -> None:
@@ -1741,43 +1661,6 @@ def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfi
     return config, lab_specs
 
 
-def _process_and_transform_data(
-    merged_df: pd.DataFrame,
-    lab_specs: LabSpecsConfig,
-    export_cols: list,
-) -> pd.DataFrame | None:
-    """Apply all transformations to merged data: normalize, filter, dedupe, validate.
-
-    Returns transformed DataFrame or None if processing fails.
-    """
-
-    # Apply value normalizations and unit conversions
-    logger.info("Applying normalizations...")
-    merged_df = apply_normalizations(merged_df, lab_specs)
-
-    # Filter out rows that couldn't be mapped to known lab tests
-    merged_df = _filter_unknown_labs(merged_df)
-
-    # Flag duplicate (date, lab_name) entries before deduplication so reviewers can verify
-    merged_df = flag_duplicate_entries(merged_df)
-
-    # Remove duplicate results from same date/lab combinations (requires lab specs for priority rules)
-    if lab_specs.exists:
-        logger.info("Deduplicating results...")
-        merged_df = deduplicate_results(merged_df, lab_specs)
-        logger.info(f"After deduplication: {len(merged_df)} rows")
-
-    # Rename columns from internal names to simplified export schema
-    merged_df = _rename_columns_for_export(merged_df)
-
-    # Run value-based validation to flag suspicious values
-    logger.info("Running value-based validation...")
-    merged_df, validation_stats = _run_value_validation(merged_df, lab_specs)
-    _log_validation_stats(validation_stats)
-
-    return merged_df
-
-
 def _export_final_results(
     final_df: pd.DataFrame,
     hidden_cols: list,
@@ -1803,28 +1686,12 @@ def _export_final_results(
     _report_extraction_failures(all_failed_pages, csv_path, csv_paths)
 
 
-def _prepare_final_export_dataframe(
-    merged_df: pd.DataFrame,
-    export_cols: list[str],
-    dtypes: dict[str, str],
-) -> pd.DataFrame:
-    """Finalize transformed rows into the export schema used by all.csv."""
-
-    final_cols = [col for col in export_cols if col in merged_df.columns]
-    final_df = merged_df[final_cols].copy()
-
-    logger.info("Applying data type conversions...")
-    return apply_dtype_conversions(final_df, dtypes)
-
-
 def run_pipeline_for_pdf_files(
     pdf_files: list[Path],
     config: ExtractionConfig,
     lab_specs: LabSpecsConfig,
 ) -> PipelineRunResult:
     """Process explicit PDF files and return the final export DataFrame plus metadata."""
-
-    export_cols, _, _, dtypes = get_column_lists(COLUMN_SCHEMA)
 
     pdf_files = sorted(pdf_files)
     logger.info(f"Found {len(pdf_files)} PDF(s) for explicit pipeline run")
@@ -1871,16 +1738,14 @@ def run_pipeline_for_pdf_files(
     if merged_df.empty:
         raise PipelineError("No data after merging CSV files.")
 
-    merged_df = _process_and_transform_data(
+    logger.info("Applying shared export pipeline...")
+    final_df, validation_stats = transform_rows_to_final_export(
         merged_df,
         lab_specs,
-        export_cols,
+        apply_standardization=False,
     )
+    _log_validation_stats(validation_stats)
 
-    if merged_df is None:
-        raise PipelineError("Data processing failed.")
-
-    final_df = _prepare_final_export_dataframe(merged_df, export_cols, dtypes)
     return PipelineRunResult(
         final_df=final_df,
         csv_paths=csv_paths,
@@ -1905,8 +1770,6 @@ def build_final_output_dataframe_from_reviewed_json(
     allow_pending: bool = False,
 ) -> tuple[pd.DataFrame, list[Path]]:
     """Return the final post-validation export dataframe from reviewed page JSON files."""
-
-    export_cols, _, _, dtypes = get_column_lists(COLUMN_SCHEMA)
     documents = iter_processed_documents(output_path)
 
     # Guard: Reviewed rebuilds require at least one processed document directory.
@@ -1956,21 +1819,18 @@ def build_final_output_dataframe_from_reviewed_json(
 
     # Guard: Empty accepted corpora still produce a stable empty export schema.
     if not review_rows:
+        export_cols, _, _, _ = get_column_lists(COLUMN_SCHEMA)
         return pd.DataFrame(columns=export_cols), csv_paths
 
     merged_df = pd.concat(review_rows, ignore_index=True)
-    merged_df = apply_cached_standardization(merged_df, lab_specs)
-    merged_df = _process_and_transform_data(
+    logger.info("Applying shared export pipeline...")
+    final_df, validation_stats = transform_rows_to_final_export(
         merged_df,
         lab_specs,
-        export_cols,
+        apply_standardization=True,
     )
+    _log_validation_stats(validation_stats)
 
-    # Guard: Propagate transformation failures with the same contract as the normal pipeline.
-    if merged_df is None:
-        raise PipelineError("Reviewed JSON rebuild failed during normalization or validation.")
-
-    final_df = _prepare_final_export_dataframe(merged_df, export_cols, dtypes)
     return final_df, csv_paths
 
 

@@ -43,7 +43,6 @@ def save_cache(name: str, cache: dict):
 
 def standardize_lab_names(
     raw_test_names: list[str],
-    standardized_names: list[str],
 ) -> dict[str, str]:
     """
     Map raw test names to standardized lab names using cache-only lookup.
@@ -53,8 +52,6 @@ def standardize_lab_names(
 
     Args:
         raw_test_names: List of raw test names from extraction
-        standardized_names: List of valid standardized lab names (unused, kept for API compat)
-
     Returns:
         Dictionary mapping raw_test_name -> standardized_name
     """
@@ -87,8 +84,6 @@ def standardize_lab_names(
 
 def standardize_lab_units(
     unit_contexts: list[tuple[str, str]],
-    standardized_units: list[str],
-    lab_specs_config=None,
 ) -> dict[tuple[str, str], str]:
     """
     Map raw lab units to standardized units using cache-only lookup.
@@ -98,9 +93,6 @@ def standardize_lab_units(
 
     Args:
         unit_contexts: List of (raw_unit, standardized_lab_name) tuples for context
-        standardized_units: List of valid standardized units (unused, kept for API compat)
-        lab_specs_config: LabSpecsConfig instance (unused, kept for API compat)
-
     Returns:
         Dictionary mapping (raw_unit, lab_name) -> standardized_unit
     """
