@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+from PIL import Image
 
 import review_documents
 from parselabs.review_sync import ProcessedDocument
@@ -113,3 +114,32 @@ def test_build_dropdown_choices_prioritizes_incomplete_documents(monkeypatch):
         gamma.doc_dir.name,
         beta.doc_dir.name,
     ]
+
+
+def test_build_page_image_value_adds_overlay_for_current_row(tmp_path):
+    doc_dir = tmp_path / "glucose_deadbeef"
+    doc_dir.mkdir(parents=True)
+    Image.new("RGB", (200, 100), "white").save(doc_dir / "glucose.001.jpg")
+
+    document = ProcessedDocument(
+        doc_dir=doc_dir,
+        stem="glucose",
+        pdf_path=doc_dir / "glucose.pdf",
+        csv_path=doc_dir / "glucose.csv",
+    )
+    row = pd.Series(
+        {
+            "page_number": 1,
+            "bbox_left": 100,
+            "bbox_top": 200,
+            "bbox_right": 600,
+            "bbox_bottom": 800,
+        }
+    )
+
+    image_value = review_documents._build_page_image_value(document, row)
+
+    assert image_value is not None
+    image_path, annotations = image_value
+    assert image_path.endswith("glucose.001.jpg")
+    assert annotations == [((20, 20, 120, 80), review_documents.SOURCE_BBOX_LABEL)]

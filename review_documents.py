@@ -11,6 +11,7 @@ from urllib.parse import quote
 
 import gradio as gr
 import pandas as pd
+from PIL import Image
 
 from parselabs.config import LabSpecsConfig, ProfileConfig
 from parselabs.paths import get_static_dir
@@ -27,6 +28,8 @@ from parselabs.review_sync import (
 logger = logging.getLogger(__name__)
 
 _STATIC_DIR = get_static_dir()
+SOURCE_BBOX_LABEL = "Selected result"
+_page_image_size_cache: dict[str, tuple[int, int]] = {}
 
 KEYBOARD_SHORTCUTS_JS = (_STATIC_DIR / "review_documents.js").read_text()
 CUSTOM_CSS = (_STATIC_DIR / "review_documents.css").read_text()
@@ -75,13 +78,13 @@ class ReviewerView:
 
     current_index: int
     page_context_html: str
-    image_value: str | None
+    image_value: tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None
     inspector_html: str
     queue_display: pd.DataFrame
     queue_state: pd.DataFrame
     progress_html: str
 
-    def as_outputs(self) -> tuple[int, str, str | None, str, pd.DataFrame, pd.DataFrame, str]:
+    def as_outputs(self) -> tuple[int, str, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame, str]:
         """Return UI fragments in the order expected by Gradio callbacks."""
 
         return (
@@ -340,6 +343,141 @@ def _format_reference_text(row: pd.Series) -> str:
         return f"{ref_min} - {ref_max}".strip(" -")
 
     return "-"
+
+
+def _get_bbox_coordinates(row: pd.Series) -> tuple[float, float, float, float] | None:
+    """Return viewer-usable bbox coordinates from the active review row."""
+
+    bbox_keys = ["bbox_left", "bbox_top", "bbox_right", "bbox_bottom"]
+    coords: list[float] = []
+
+    # Parse each coordinate independently so missing values fail cleanly.
+    for key in bbox_keys:
+        value = row.get(key)
+
+        # Guard: Missing coordinates mean there is no review overlay to draw.
+        if value is None or pd.isna(value) or str(value).strip() == "":
+            return None
+
+        try:
+            coords.append(float(value))
+        except (TypeError, ValueError):
+            return None
+
+    left, top, right, bottom = coords
+
+    # Guard: Ignore degenerate or inverted boxes.
+    if right <= left or bottom <= top:
+        return None
+
+    return left, top, right, bottom
+
+
+def _get_image_size(image_path: str) -> tuple[int, int] | None:
+    """Return page-image dimensions with a small in-memory cache."""
+
+    # Guard: Reuse prior file reads when the reviewer stays on the same page.
+    if image_path in _page_image_size_cache:
+        return _page_image_size_cache[image_path]
+
+    try:
+        with Image.open(image_path) as image:
+            size = image.size
+    except (FileNotFoundError, OSError) as exc:
+        logger.warning(f"Failed to read review page image size from {image_path}: {exc}")
+        return None
+
+    _page_image_size_cache[image_path] = size
+    return size
+
+
+def _scale_bbox_to_pixels(
+    bbox: tuple[float, float, float, float],
+    image_size: tuple[int, int],
+) -> tuple[int, int, int, int] | None:
+    """Scale normalized or absolute bbox coordinates into image pixels."""
+
+    width, height = image_size
+    left, top, right, bottom = bbox
+    max_coord = max(left, top, right, bottom)
+
+    # Support occasional 0-1 normalized output even though prompts request 0-1000.
+    if max_coord <= 1:
+        scaled = (
+            int(round(left * width)),
+            int(round(top * height)),
+            int(round(right * width)),
+            int(round(bottom * height)),
+        )
+    # Use the canonical 0-1000 scale requested from extraction.
+    elif max_coord <= 1000:
+        scaled = (
+            int(round(left * width / 1000)),
+            int(round(top * height / 1000)),
+            int(round(right * width / 1000)),
+            int(round(bottom * height / 1000)),
+        )
+    # Fall back to absolute pixel coordinates when the payload is already image-sized.
+    else:
+        scaled = (
+            int(round(left)),
+            int(round(top)),
+            int(round(right)),
+            int(round(bottom)),
+        )
+
+    left_px, top_px, right_px, bottom_px = scaled
+    left_px = max(0, min(left_px, width - 1))
+    top_px = max(0, min(top_px, height - 1))
+    right_px = max(0, min(right_px, width))
+    bottom_px = max(0, min(bottom_px, height))
+
+    # Guard: Clamping may collapse the box on malformed inputs.
+    if right_px <= left_px or bottom_px <= top_px:
+        return None
+
+    return left_px, top_px, right_px, bottom_px
+
+
+def _build_page_image_value(
+    document: ProcessedDocument | None,
+    current_row: pd.Series | None,
+) -> tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None:
+    """Build the annotated-image payload for the active review row."""
+
+    # Guard: No selected document or row means there is no page image to render.
+    if document is None or current_row is None:
+        return None
+
+    page_number = int(current_row["page_number"])
+    image_path = get_page_image_path(document.doc_dir, page_number)
+
+    # Guard: Missing page images should keep the review pane empty.
+    if image_path is None:
+        return None
+
+    image_path_str = str(image_path)
+    annotations: list[tuple[tuple[int, int, int, int], str]] = []
+    bbox = _get_bbox_coordinates(current_row)
+
+    # Guard: Rows without bbox data still show the raw page image.
+    if bbox is None:
+        return image_path_str, annotations
+
+    image_size = _get_image_size(image_path_str)
+
+    # Guard: If the image cannot be opened, degrade gracefully to the raw page image.
+    if image_size is None:
+        return image_path_str, annotations
+
+    scaled_bbox = _scale_bbox_to_pixels(bbox, image_size)
+
+    # Guard: Unusable boxes should not block page rendering.
+    if scaled_bbox is None:
+        return image_path_str, annotations
+
+    annotations.append((scaled_bbox, SOURCE_BBOX_LABEL))
+    return image_path_str, annotations
 
 
 def _build_queue_state(review_df: pd.DataFrame, show_reviewed: bool) -> pd.DataFrame:
@@ -617,13 +755,8 @@ def _render_document(
     queue_state = _build_queue_state(review_df, show_reviewed)
     current_index = _resolve_current_index(queue_state, requested_index, prefer_first_visible)
     current_row = _get_current_row(review_df, current_index)
-    image_value = None
-
-    # Resolve the current page image only when there is an active row selection.
-    if document is not None and current_row is not None:
-        page_number = int(current_row["page_number"])
-        image_path = get_page_image_path(document.doc_dir, page_number)
-        image_value = str(image_path) if image_path is not None else None
+    # Resolve the current page image and overlay only when there is an active row selection.
+    image_value = _build_page_image_value(document, current_row)
 
     return ReviewerView(
         current_index=current_index,
@@ -959,9 +1092,10 @@ def build_app() -> gr.Blocks:
         with gr.Row(elem_id="review-main-pane"):
             with gr.Column(scale=6, min_width=520, elem_id="review-image-pane"):
                 page_context = gr.HTML(initial_view.page_context_html)
-                page_image = gr.Image(
+                page_image = gr.AnnotatedImage(
                     value=initial_view.image_value,
-                    type="filepath",
+                    color_map={SOURCE_BBOX_LABEL: "#dc2626"},
+                    show_legend=False,
                     show_label=False,
                     height=640,
                     elem_id="review-page-image",
