@@ -50,3 +50,38 @@ def test_fix_lab_results_format_recovers_stringified_top_level_lab_results():
     assert fixed_payload["lab_results"] == [
         {"raw_lab_name": "Trigliceridos", "raw_value": "120", "raw_lab_unit": "mg/dL"}
     ]
+
+
+def test_fix_lab_results_format_cleans_partial_bbox_fields():
+    payload = {
+        "lab_results": [
+            {
+                "raw_lab_name": "Glucose",
+                "raw_value": "92",
+                "raw_lab_unit": "mg/dL",
+                "bbox_left": "120",
+                "bbox_top": "240",
+                "bbox_right": "480",
+            },
+            {
+                "raw_lab_name": "Hemoglobin",
+                "raw_value": "14.2",
+                "raw_lab_unit": "g/dL",
+                "bbox_left": "100",
+                "bbox_top": "200",
+                "bbox_right": "400",
+                "bbox_bottom": "320",
+            },
+        ]
+    }
+
+    fixed_payload = _fix_lab_results_format(payload)
+
+    assert fixed_payload["lab_results"][0]["bbox_left"] is None
+    assert fixed_payload["lab_results"][0]["bbox_top"] is None
+    assert fixed_payload["lab_results"][0]["bbox_right"] is None
+    assert fixed_payload["lab_results"][0]["bbox_bottom"] is None
+    assert fixed_payload["lab_results"][1]["bbox_left"] == 100.0
+    assert fixed_payload["lab_results"][1]["bbox_top"] == 200.0
+    assert fixed_payload["lab_results"][1]["bbox_right"] == 400.0
+    assert fixed_payload["lab_results"][1]["bbox_bottom"] == 320.0

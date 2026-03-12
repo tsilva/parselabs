@@ -31,6 +31,7 @@ def _write_processed_document(
     stem: str = "glucose",
     raw_names: list[str] | None = None,
     raw_units: list[str] | None = None,
+    bboxes: list[dict[str, float] | None] | None = None,
     missing_markers: list[dict] | None = None,
 ) -> None:
     """Create a minimal processed-document directory for review tests."""
@@ -47,6 +48,10 @@ def _write_processed_document(
             "raw_reference_min": 70,
             "raw_reference_max": 100,
         }
+
+        # Persist bbox metadata when the test needs review-image highlighting.
+        if bboxes is not None and bboxes[idx] is not None:
+            result.update(bboxes[idx])
 
         # Persist explicit review status only when the test requests it.
         if status is not None:
@@ -129,6 +134,31 @@ def test_rebuild_document_csv_preserves_row_identity_and_review_status(tmp_path,
     assert review_df["review_status"].tolist() == ["", "accepted"]
     assert review_df["lab_name_standardized"].tolist() == ["Blood - Glucose", "Blood - Glucose"]
     assert review_df["lab_name"].tolist() == ["Blood - Glucose", "Blood - Glucose"]
+
+
+def test_build_document_review_dataframe_preserves_bbox_fields(tmp_path, monkeypatch):
+    lab_specs = _make_lab_specs(tmp_path)
+    _stub_standardization(monkeypatch)
+    doc_dir = tmp_path / "processed" / "glucose_deadbeef"
+    _write_processed_document(
+        doc_dir,
+        [None],
+        bboxes=[
+            {
+                "bbox_left": 100.0,
+                "bbox_top": 200.0,
+                "bbox_right": 450.0,
+                "bbox_bottom": 320.0,
+            }
+        ],
+    )
+
+    review_df = build_document_review_dataframe(doc_dir, lab_specs)
+
+    assert review_df.loc[0, "bbox_left"] == 100.0
+    assert review_df.loc[0, "bbox_top"] == 200.0
+    assert review_df.loc[0, "bbox_right"] == 450.0
+    assert review_df.loc[0, "bbox_bottom"] == 320.0
 
 
 def test_save_review_status_updates_json_and_summary(tmp_path, monkeypatch):

@@ -127,6 +127,9 @@ Each `LabResult` contains:
 | `raw_lab_unit` | Unit symbol |
 | `raw_reference_range` | Full range text |
 | `raw_reference_min`, `raw_reference_max` | Parsed range bounds |
+| `bbox_left`, `bbox_top`, `bbox_right`, `bbox_bottom` | Optional per-result bounding box, normalized to a 0-1000 page coordinate system |
+
+Bounding boxes are requested in the same vision extraction call as the lab values, so the reviewer can highlight the selected result on the source page without a second OCR/layout pass. Text-only extraction keeps these fields null because plain text does not preserve page geometry.
 
 Failed pages are also persisted in page JSON with `_extraction_failed` metadata so review tooling can surface extraction failures directly.
 
@@ -219,6 +222,7 @@ The viewer reads derived review rows from canonical page JSON and lets the revie
 
 - inspect every extracted row before deduplication
 - accept or reject rows directly in the backing page JSON
+- highlight the selected row on the source page when bounding boxes are available
 - see validation and ambiguity reasons together
 - rebuild merged outputs later from the current reviewed JSON state
 

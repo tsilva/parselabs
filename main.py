@@ -267,6 +267,10 @@ def _ensure_extraction_failure_placeholder(page_data: dict) -> dict:
             "raw_reference_min": None,
             "raw_reference_max": None,
             "raw_comments": failure_reason,
+            "bbox_left": None,
+            "bbox_top": None,
+            "bbox_right": None,
+            "bbox_bottom": None,
         }
     ]
     return page_data

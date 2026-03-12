@@ -23,6 +23,7 @@ from pathlib import Path  # noqa: E402
 import gradio as gr  # noqa: E402
 import pandas as pd  # noqa: E402
 import plotly.graph_objects as go  # noqa: E402
+from PIL import Image  # noqa: E402
 from plotly.subplots import make_subplots  # noqa: E402
 
 from parselabs.config import Demographics, LabSpecsConfig, ProfileConfig  # noqa: E402
@@ -176,6 +177,8 @@ COLUMN_LABELS = {
 # =============================================================================
 
 _doc_dir_cache: dict[tuple[str, str], Path | None] = {}
+_page_image_size_cache: dict[str, tuple[int, int]] = {}
+SOURCE_BBOX_LABEL = "Selected result"
 
 
 def _resolve_doc_dir(stem: str, output_path: Path) -> Path | None:
@@ -248,6 +251,135 @@ def get_image_path(entry: dict, output_path: Path) -> str | None:
 def get_json_path(entry: dict, output_path: Path) -> Path:
     """Get the JSON file path for an entry."""
     return _resolve_page_path(entry, output_path, ".json")
+
+
+def _get_bbox_coordinates(entry: dict) -> tuple[float, float, float, float] | None:
+    """Return viewer-usable bounding-box coordinates from an entry."""
+
+    bbox_keys = ["bbox_left", "bbox_top", "bbox_right", "bbox_bottom"]
+    coords: list[float] = []
+
+    # Parse each coordinate independently so missing values fail cleanly.
+    for key in bbox_keys:
+        value = entry.get(key)
+
+        # Guard: Missing coordinates mean there is no highlightable box.
+        if value is None or pd.isna(value):
+            return None
+
+        try:
+            coords.append(float(value))
+        except (TypeError, ValueError):
+            return None
+
+    left, top, right, bottom = coords
+
+    # Guard: Ignore degenerate or inverted boxes.
+    if right <= left or bottom <= top:
+        return None
+
+    return left, top, right, bottom
+
+
+def _get_image_size(image_path: str) -> tuple[int, int] | None:
+    """Return image dimensions with a simple in-memory cache."""
+
+    # Guard: Reuse prior file reads when the same page stays selected.
+    if image_path in _page_image_size_cache:
+        return _page_image_size_cache[image_path]
+
+    try:
+        with Image.open(image_path) as image:
+            size = image.size
+    except (FileNotFoundError, OSError) as exc:
+        logger.warning(f"Failed to read source image size from {image_path}: {exc}")
+        return None
+
+    _page_image_size_cache[image_path] = size
+    return size
+
+
+def _scale_bbox_to_pixels(
+    bbox: tuple[float, float, float, float],
+    image_size: tuple[int, int],
+) -> tuple[int, int, int, int] | None:
+    """Scale normalized or absolute bbox coordinates into image pixels."""
+
+    width, height = image_size
+    left, top, right, bottom = bbox
+    max_coord = max(left, top, right, bottom)
+
+    # Support occasional 0-1 normalized output even though prompts request 0-1000.
+    if max_coord <= 1:
+        scaled = (
+            int(round(left * width)),
+            int(round(top * height)),
+            int(round(right * width)),
+            int(round(bottom * height)),
+        )
+    # Use the canonical 0-1000 scale requested from the model.
+    elif max_coord <= 1000:
+        scaled = (
+            int(round(left * width / 1000)),
+            int(round(top * height / 1000)),
+            int(round(right * width / 1000)),
+            int(round(bottom * height / 1000)),
+        )
+    # Fall back to absolute pixel coordinates when the payload is already image-sized.
+    else:
+        scaled = (
+            int(round(left)),
+            int(round(top)),
+            int(round(right)),
+            int(round(bottom)),
+        )
+
+    left_px, top_px, right_px, bottom_px = scaled
+    left_px = max(0, min(left_px, width - 1))
+    top_px = max(0, min(top_px, height - 1))
+    right_px = max(0, min(right_px, width))
+    bottom_px = max(0, min(bottom_px, height))
+
+    # Guard: Clamping may collapse the box on tiny or malformed inputs.
+    if right_px <= left_px or bottom_px <= top_px:
+        return None
+
+    return left_px, top_px, right_px, bottom_px
+
+
+def build_source_image_value(
+    entry: dict,
+    output_path: Path,
+) -> tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None:
+    """Build the annotated-image payload for the Source tab."""
+
+    image_path = get_image_path(entry, output_path)
+
+    # Guard: Missing page images should keep the Source tab empty.
+    if not image_path:
+        return None
+
+    annotations: list[tuple[tuple[int, int, int, int], str]] = []
+    bbox = _get_bbox_coordinates(entry)
+
+    # Guard: Rows without bbox data still show the underlying page image.
+    if bbox is None:
+        return image_path, annotations
+
+    image_size = _get_image_size(image_path)
+
+    # Guard: If the image cannot be opened, degrade gracefully to the raw page image.
+    if image_size is None:
+        return image_path, annotations
+
+    scaled_bbox = _scale_bbox_to_pixels(bbox, image_size)
+
+    # Guard: Unusable boxes should not break source-page rendering.
+    if scaled_bbox is None:
+        return image_path, annotations
+
+    annotations.append((scaled_bbox, SOURCE_BBOX_LABEL))
+    return image_path, annotations
 
 
 # =============================================================================
@@ -1165,6 +1297,17 @@ def build_details_html(entry: dict) -> str:
 
     html += "</tbody></table>"
 
+    bbox = _get_bbox_coordinates(entry)
+
+    # Surface bbox metadata so reviewers can verify the stored highlight geometry.
+    if bbox is not None:
+        left, top, right, bottom = bbox
+        html += (
+            '<div style="margin-top:12px; color:#555; font-size:0.9em;">'
+            f"<strong>Bounding Box:</strong> left={left:g}, top={top:g}, right={right:g}, bottom={bottom:g}"
+            " (normalized page coordinates)</div>"
+        )
+
     # Add review info if present
     review_needed = entry.get("review_needed")
     review_reason = entry.get("review_reason")
@@ -1241,12 +1384,12 @@ def _build_row_context(
     """Build common row context for navigation/selection handlers.
 
     Returns:
-        Tuple of (plot, row_idx, position_text, image_path, details_html, status_update, banner_html)
+        Tuple of (plot, row_idx, position_text, source_image_value, details_html, status_update, banner_html)
     """
 
     row = filtered_df.iloc[row_idx]
     position_text = f"**Row {row_idx + 1} of {len(filtered_df)}**"
-    image_path = get_image_path(row.to_dict(), get_output_path())
+    source_image_value = build_source_image_value(row.to_dict(), get_output_path())
     details_html = build_details_html(row.to_dict())
     status_value = get_review_status_label(row.to_dict())
     banner_html = build_review_reason_banner(row.to_dict())
@@ -1268,7 +1411,7 @@ def _build_row_context(
         plot,
         row_idx,
         position_text,
-        image_path,
+        source_image_value,
         details_html,
         build_review_status_html(status_value),
         banner_html,
@@ -1293,7 +1436,7 @@ def handle_filter_change(
             plot,
             current_idx,
             position_text,
-            image_path,
+            source_image_value,
             details_html,
             status_update,
             banner_html,
@@ -1302,7 +1445,7 @@ def handle_filter_change(
         # Empty result set
         current_idx = 0
         position_text = "No results"
-        image_path = None
+        source_image_value = None
         details_html = "<p>No entry selected</p>"
         status_update = build_review_status_html("Pending")
         banner_html = ""
@@ -1315,7 +1458,7 @@ def handle_filter_change(
         filtered_df,
         current_idx,
         position_text,
-        image_path,
+        source_image_value,
         details_html,
         status_update,
         banner_html,
@@ -1463,7 +1606,7 @@ def handle_review_action(
         plot,
         current_idx,
         position_text,
-        image_path,
+        source_image_value,
         details_html,
         status_update,
         banner_html,
@@ -1476,7 +1619,7 @@ def handle_review_action(
         plot,
         current_idx,
         position_text,
-        image_path,
+        source_image_value,
         details_html,
         status_update,
         summary,
@@ -1568,7 +1711,7 @@ def handle_profile_change(profile_name: str):
     summary = build_summary_cards(full_df)
 
     position_text = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
-    image_path = get_image_path(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
+    source_image_value = build_source_image_value(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
     details_html = build_details_html(full_df.iloc[0].to_dict()) if not full_df.empty else "<p>No entry selected</p>"
     status_label = get_review_status_label(full_df.iloc[0].to_dict()) if not full_df.empty else "Pending"
     banner_html = build_review_reason_banner(full_df.iloc[0].to_dict()) if not full_df.empty else ""
@@ -1590,7 +1733,7 @@ def handle_profile_change(profile_name: str):
         full_df,
         0,
         position_text,
-        image_path,
+        source_image_value,
         gr.update(choices=lab_name_choices, value=None),
         details_html,
         build_review_status_html(status_label),
@@ -1610,7 +1753,7 @@ def create_app():
     full_df, lab_name_choices = _load_output_data(output_path)
 
     initial_position = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
-    initial_image = get_image_path(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
+    initial_image = build_source_image_value(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
     initial_details = build_details_html(full_df.iloc[0].to_dict()) if not full_df.empty else "<p>No entry selected</p>"
     initial_status_html = build_review_status_html(get_review_status_label(full_df.iloc[0].to_dict()) if not full_df.empty else "Pending")
 
@@ -1717,10 +1860,11 @@ def create_app():
                             label="",
                         )
                     with gr.TabItem("Source"):
-                        source_image = gr.Image(
+                        source_image = gr.AnnotatedImage(
                             value=initial_image,
                             label="Source Document Page",
-                            type="filepath",
+                            color_map={SOURCE_BBOX_LABEL: "#dc2626"},
+                            show_legend=False,
                             show_label=False,
                             height=400,
                         )

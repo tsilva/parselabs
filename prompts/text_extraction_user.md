@@ -6,6 +6,7 @@ CRITICAL: For EACH lab test you find, you MUST extract:
 3. raw_lab_unit - The unit EXACTLY as shown (extract what you see, can be null if no unit)
 4. raw_reference_range - The reference range text (if visible)
 5. raw_reference_min and raw_reference_max - Parse the numeric bounds from the reference range
+6. bbox_left, bbox_top, bbox_right, bbox_bottom - For text-only extraction, set all four to null because no page coordinates are available
 
 Extract test names, values, units, and reference ranges EXACTLY as they appear.
 Pay special attention to preserving the exact formatting and symbols.
@@ -30,6 +31,7 @@ FIELD SEPARATION RULES:
 - raw_lab_name must contain only the test name
 - raw_value must contain only the result
 - raw_lab_unit must contain only the unit
+- bbox_left/bbox_top/bbox_right/bbox_bottom must all be null in this text-only mode
 - Never embed field labels or multiple fields inside one field
 
 COMMON COMPLEX SCENARIOS:
