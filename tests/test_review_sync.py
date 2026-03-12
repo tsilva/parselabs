@@ -4,10 +4,10 @@ import argparse
 import json
 from pathlib import Path
 
-import main
 import pandas as pd
 import pytest
 
+import main
 from parselabs.config import ExtractionConfig, LabSpecsConfig, ProfileConfig
 from parselabs.review_sync import (
     ReviewStateError,

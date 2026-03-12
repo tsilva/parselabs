@@ -13,8 +13,8 @@ from parselabs.config import LabSpecsConfig, ProfileConfig
 from parselabs.review_sync import (
     ProcessedDocument,
     count_review_missing_rows,
-    get_page_image_path,
     get_document_review_summary,
+    get_page_image_path,
     get_review_summary,
     iter_processed_documents,
     rebuild_document_csv,
