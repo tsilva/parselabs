@@ -93,12 +93,6 @@ class ReviewSummary:
 
         return self.pending == 0 and self.missing_row_markers == 0
 
-    @property
-    def fully_valid(self) -> bool:
-        """Return whether the document is ready for fixture sync."""
-
-        return self.fixture_ready
-
 
 @dataclass(frozen=True)
 class ReviewCorpusReport:

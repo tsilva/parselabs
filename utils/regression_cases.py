@@ -26,9 +26,9 @@ from parselabs.regression import (  # noqa: E402
     write_canonical_csv,
 )
 from parselabs.review_sync import (  # noqa: E402
-    build_review_corpus_report,
     build_document_expected_dataframe,
     build_document_review_dataframe,
+    build_review_corpus_report,
     get_document_review_summary,
     iter_processed_documents,
     rebuild_document_csv,

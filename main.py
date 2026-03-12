@@ -21,7 +21,6 @@ from tqdm import tqdm  # noqa: E402
 
 # Local imports
 from parselabs.config import (  # noqa: E402
-    UNKNOWN_VALUE,
     ExtractionConfig,
     LabSpecsConfig,
     ProfileConfig,
@@ -34,7 +33,6 @@ from parselabs.extraction import (  # noqa: E402
 )
 from parselabs.paths import get_profiles_dir  # noqa: E402
 from parselabs.review_sync import (  # noqa: E402
-    DOCUMENT_REVIEW_COLUMNS,
     build_document_review_dataframe,
     get_document_review_summary,
     iter_processed_documents,
@@ -42,13 +40,8 @@ from parselabs.review_sync import (  # noqa: E402
     rebuild_document_csv,
     transform_rows_to_final_export,
 )
-from parselabs.standardization import (  # noqa: E402
-    standardize_lab_names,
-    standardize_lab_units,
-)
 from parselabs.utils import (  # noqa: E402
     create_page_image_variants,
-    ensure_columns,
     setup_logging,
 )
 
@@ -508,148 +501,6 @@ def _extract_via_pages(
     return all_results, doc_date
 
 
-def _apply_name_standardization(
-    all_results: list,
-    lab_specs: LabSpecsConfig,
-    pdf_stem: str,
-) -> int:
-    """Apply name standardization fallback. Returns count of updated results."""
-
-    # Collect raw names that need standardization (not already standardized or marked as unknown)
-    names_to_standardize = [result.get("raw_lab_name", "") for result in all_results if not result.get("lab_name_standardized") or result.get("lab_name_standardized") == UNKNOWN_VALUE]
-
-    # Guard: Skip if no names need standardization
-    if not names_to_standardize:
-        return 0
-
-    # Look up standardization mappings from cache
-    name_mappings = standardize_lab_names(names_to_standardize)
-
-    # Apply mappings to results and count updates
-    fallback_count = 0
-    for result in all_results:
-        # Skip already standardized results
-        std_name = result.get("lab_name_standardized")
-        if std_name and std_name != UNKNOWN_VALUE:
-            continue
-
-        # Apply mapping if available
-        raw_name = result.get("raw_lab_name", "")
-        mapped = name_mappings.get(raw_name)
-        if mapped:
-            result["lab_name_standardized"] = mapped
-            fallback_count += 1
-
-    # Log summary if any mappings were applied
-    if fallback_count > 0:
-        logger.info(f"[{pdf_stem}] Name standardization applied to {fallback_count} results")
-    return fallback_count
-
-
-def _apply_unit_standardization(
-    all_results: list,
-    lab_specs: LabSpecsConfig,
-    pdf_stem: str,
-) -> int:
-    """Apply unit standardization fallback. Returns count of updated results."""
-
-    # Collect unit contexts that need standardization (with standardized names)
-    unit_contexts = [
-        (
-            result.get("raw_lab_unit", ""),
-            result.get("lab_name_standardized", ""),
-        )
-        for result in all_results
-        if not result.get("lab_unit_standardized") and result.get("lab_name_standardized") and result.get("lab_name_standardized") != UNKNOWN_VALUE
-    ]
-
-    # Guard: Skip if no units need standardization
-    if not unit_contexts:
-        return 0
-
-    # Look up unit standardization mappings from cache
-    unit_mappings = standardize_lab_units(unit_contexts)
-
-    # Apply mappings to results and count updates
-    unit_count = 0
-    for result in all_results:
-        # Skip already standardized units
-        if result.get("lab_unit_standardized"):
-            continue
-
-        # Skip results without valid standardized names
-        std_name = result.get("lab_name_standardized", "")
-        if not std_name or std_name == UNKNOWN_VALUE:
-            continue
-
-        # Apply mapping if available
-        pair = (result.get("raw_lab_unit", ""), std_name)
-        mapped = unit_mappings.get(pair)
-        if mapped:
-            result["lab_unit_standardized"] = mapped
-            unit_count += 1
-
-    # Log summary if any mappings were applied
-    if unit_count > 0:
-        logger.info(f"[{pdf_stem}] Unit standardization applied to {unit_count} results")
-    return unit_count
-
-
-def _apply_standardization(
-    all_results: list,
-    lab_specs: LabSpecsConfig,
-    pdf_stem: str,
-) -> None:
-    """Apply name and unit standardization via cache-based mapping."""
-
-    # Guard: Skip standardization if lab specs not available
-    if not lab_specs.exists:
-        return
-
-    # Apply name standardization to unmapped results
-    _apply_name_standardization(all_results, lab_specs, pdf_stem)
-
-    # Apply unit standardization to unmapped results
-    _apply_unit_standardization(all_results, lab_specs, pdf_stem)
-
-
-def _save_results_to_csv(
-    all_results: list,
-    doc_date: str | None,
-    csv_path: Path,
-    pdf_stem: str,
-) -> None:
-    """Create DataFrame and save to CSV."""
-
-    # Convert results to DataFrame for structured export.
-    df = pd.DataFrame(all_results)
-
-    # Add document date to all rows so review tooling does not need to recover it later.
-    df["date"] = doc_date
-
-    # Keep a stable review-oriented schema that preserves row identity and cached mappings.
-    ensure_columns(df, DOCUMENT_REVIEW_COLUMNS, default=None)
-
-    # Write columns in a stable order so later review and cache validation can rely on them.
-    df = df[DOCUMENT_REVIEW_COLUMNS].copy()
-
-    # Export to CSV without index.
-    df.to_csv(csv_path, index=False, encoding="utf-8")
-
-
-def _handle_empty_results(csv_path: Path, pdf_stem: str) -> tuple[Path, list]:
-    """Handle case when no results were extracted."""
-
-    # Log warning for debugging
-    logger.warning(f"[{pdf_stem}] No results extracted")
-
-    # Create empty CSV file as placeholder
-    pd.DataFrame().to_csv(csv_path, index=False)
-
-    # Return empty result indicators
-    return csv_path, []
-
-
 def _extract_data_from_pdf(
     copied_pdf: Path,
     config: ExtractionConfig,
@@ -719,36 +570,6 @@ def process_single_pdf(
         # Catch-all for errors during extraction or review CSV rebuild.
         logger.error(f"[{pdf_stem}] Processing failed: {e}", exc_info=True)
         return None, failed_pages
-
-
-# ========================================
-# Data Merging & Export
-# ========================================
-
-
-def merge_csv_files(csv_paths: list[Path]) -> pd.DataFrame:
-    """Merge multiple CSV files into a single DataFrame."""
-
-    # Initialize collection for valid dataframes
-    dataframes = []
-
-    # Read each CSV and append to collection
-    for csv_path in csv_paths:
-        # Skip empty or non-existent files
-        if not csv_path.exists() or csv_path.stat().st_size == 0:
-            continue
-
-        # Read CSV and add source metadata
-        df = pd.read_csv(csv_path, encoding="utf-8")
-        df["source_file"] = csv_path.name
-        dataframes.append(df)
-
-    # Return empty DataFrame if no valid files found
-    if not dataframes:
-        return pd.DataFrame()
-
-    # Concatenate all dataframes into single result
-    return pd.concat(dataframes, ignore_index=True)
 
 
 def export_excel(
