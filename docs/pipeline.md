@@ -17,13 +17,13 @@ PDF Files
   ├─ 4. Extraction To Canonical Page JSON
   ├─ 5. Review Dataset Build
   ├─ 6. Human Review
-  ├─ 7. Accepted-Only Publish Transform
+  ├─ 7. Reviewed-Truth Transform
   └─ 8. Final Export (CSV + Excel)
 ```
 
 The pipeline is intentionally review-first:
 
-`page extraction JSON -> review dataframe/view -> accepted reviewed rows -> final export`
+`page extraction JSON -> review dataframe/view -> document review CSVs -> merged all.csv/all.xlsx`
 
 Per-page JSON is the only canonical persisted intermediate state. Per-document CSVs and final `all.csv` / `all.xlsx` outputs are always derived from that JSON state.
 
@@ -211,13 +211,13 @@ The viewer reads derived review rows from canonical page JSON and lets the revie
 - inspect every extracted row before deduplication
 - accept or reject rows directly in the backing page JSON
 - see validation and ambiguity reasons together
-- rebuild publish outputs later from accepted reviewed rows only
+- rebuild merged outputs later from the current reviewed JSON state
 
-## Stage 7: Accepted-Only Publish Transform
+## Stage 7: Reviewed-Truth Transform
 
 **Modules:** `main.py`, `parselabs/review_sync.py`, `parselabs/validation.py`
 
-The publish path starts from rows with `review_status == accepted` only. It then:
+The reviewed-truth helpers used by fixture sync and approved-document regression start from rows with `review_status == accepted` only. They then:
 
 - reapplies the shared deterministic normalization path
 - drops rows that still have unresolved lab or unit mappings
@@ -274,31 +274,13 @@ Inter-lab relationships use formulas from the `_relationships` key:
 | File | Description |
 |------|-------------|
 | `{stem}_{hash}/{stem}.csv` | Per-document review CSV rebuilt from processed page JSON state |
-| `all.csv` | Accepted-only publish dataset derived from reviewed page JSON |
-| `all.xlsx` | Accepted-only publish dataset in Excel format |
+| `all.csv` | Merge of all per-document review CSVs, including pending and rejected rows |
+| `all.xlsx` | Excel export of the merged review dataset |
 | `lab_specs.json` | Copy of lab specifications used (for reproducibility) |
 
-### Output Schema (17 columns)
+### Output Schema
 
-```
-date              # Collection/report date
-source_file       # Original PDF filename
-page_number       # Page number in PDF
-lab_name          # Standardized name (e.g., "Blood - Glucose")
-value             # Numeric value in primary unit
-lab_unit          # Primary unit (e.g., "mg/dL")
-reference_min     # Min reference from report
-reference_max     # Max reference from report
-raw_lab_name      # Original name from PDF
-raw_value         # Original value (before conversion)
-raw_unit          # Original unit
-review_needed     # Boolean: needs human review?
-review_reason     # Reason codes (e.g., "FORMAT_ARTIFACT; EXTREME_DEVIATION;")
-is_below_limit    # Value was reported as below limit (e.g., "<0.05")
-is_above_limit    # Value was reported as above limit (e.g., ">738")
-lab_type          # blood/urine/feces (hidden in Excel)
-result_index      # Index within page (hidden in Excel)
-```
+`all.csv` uses the same review-oriented schema as each per-document review CSV, including extracted raw fields, mapped lab/unit/value fields, validation flags, and review status columns such as `review_status` and `review_completed_at`.
 
 ## Full Data Flow Diagram
 
@@ -369,7 +351,7 @@ INPUT: PDF files (per profile)
     └── reference range checks
          │
          ▼
-OUTPUT: accepted-only all.csv + all.xlsx + lab_specs.json
+OUTPUT: merged-review all.csv + all.xlsx + lab_specs.json
 ```
 
 ## Approved Document Regression
@@ -380,8 +362,8 @@ Approved-document regressions rerun a private PDF corpus and compare the final C
 
 `main.py` now exposes:
 
-- `run_pipeline_for_pdf_files(pdf_files, config, lab_specs)` — runs the same extraction, review-CSV rebuild, accepted-row publish transform, validation, and export-shaping flow used by the CLI, and returns the final DataFrame plus run metadata.
-- `build_final_output_dataframe(pdf_files, config, lab_specs)` — convenience wrapper that returns only the final `all.csv`-shape DataFrame.
+- `run_pipeline_for_pdf_files(pdf_files, config, lab_specs)` — runs extraction, rebuilds the per-document review CSVs, computes the accepted-row reviewed-truth DataFrame for regression helpers, and returns that final DataFrame plus run metadata.
+- `build_final_output_dataframe(pdf_files, config, lab_specs)` — convenience wrapper that returns the accepted-row reviewed-truth DataFrame used by the regression tooling.
 
 These are used by both the CLI profile flow and the regression tooling so there is only one implementation of the pipeline logic.
 

@@ -190,11 +190,13 @@ def main():
     # Find uncached units
     unit_cache = load_cache("unit_standardization")
     unit_pairs = []
-    if "raw_unit" in df.columns and "lab_name" in df.columns:
-        for _, row in df[["raw_unit", "lab_name"]].dropna().drop_duplicates().iterrows():
-            key = f"{str(row['raw_unit']).lower().strip()}|{str(row['lab_name']).lower().strip()}"
+    raw_unit_col = "raw_unit" if "raw_unit" in df.columns else "raw_lab_unit" if "raw_lab_unit" in df.columns else None
+    if raw_unit_col and "lab_name" in df.columns:
+        for _, row in df[[raw_unit_col, "lab_name"]].dropna().drop_duplicates().iterrows():
+            raw_unit = str(row[raw_unit_col])
+            key = f"{raw_unit.lower().strip()}|{str(row['lab_name']).lower().strip()}"
             if key not in unit_cache:
-                unit_pairs.append((str(row["raw_unit"]), str(row["lab_name"])))
+                unit_pairs.append((raw_unit, str(row["lab_name"])))
 
     logger.info(f"Uncached names: {len(uncached_names)}")
     logger.info(f"Uncached unit pairs: {len(unit_pairs)}")
