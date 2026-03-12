@@ -53,15 +53,6 @@ class ValueValidator:
         ),
     ]
 
-    # Column name mappings: (preferred_name, fallback_name)
-    COLUMN_MAPPINGS = {
-        "value": ("value", "value_primary"),
-        "lab_name": ("lab_name", "lab_name_standardized"),
-        "unit": ("lab_unit", "lab_unit_primary"),
-        "ref_min": ("reference_min", "reference_min_primary"),
-        "ref_max": ("reference_max", "reference_max_primary"),
-    }
-
     def __init__(self, lab_specs: LabSpecsConfig):
         """Initialize validator with lab specifications.
 
@@ -75,7 +66,7 @@ class ValueValidator:
             "rows_flagged": 0,
             "flags_by_reason": {},
         }
-        # Column name mappings (resolved once per validate() call)
+        # Canonical column names used by the export and review pipelines.
         self._value_col: str = ""
         self._lab_name_col: str = ""
         self._unit_col: str = ""
@@ -83,20 +74,6 @@ class ValueValidator:
         self._ref_min_col: str = ""
         self._ref_max_col: str = ""
         self._value_raw_col: str = "raw_value"
-
-    def _resolve_column(self, df: pd.DataFrame, key: str) -> str:
-        """Resolve column name using preferred or fallback naming convention.
-
-        Args:
-            df: DataFrame to check columns against
-            key: Key from COLUMN_MAPPINGS
-
-        Returns:
-            Actual column name to use (preferred if exists, else fallback)
-        """
-
-        preferred, fallback = self.COLUMN_MAPPINGS[key]
-        return preferred if preferred in df.columns else fallback
 
     @property
     def validation_stats(self) -> dict:
@@ -126,12 +103,12 @@ class ValueValidator:
             df["review_needed"] = False
         if "review_reason" not in df.columns:
             df["review_reason"] = ""
-        # Resolve column names once (supports both naming conventions)
-        self._value_col = self._resolve_column(df, "value")
-        self._lab_name_col = self._resolve_column(df, "lab_name")
-        self._unit_col = self._resolve_column(df, "unit")
-        self._ref_min_col = self._resolve_column(df, "ref_min")
-        self._ref_max_col = self._resolve_column(df, "ref_max")
+        # Use the canonical export/review column names for every validation pass.
+        self._value_col = "value"
+        self._lab_name_col = "lab_name"
+        self._unit_col = "lab_unit"
+        self._ref_min_col = "reference_min"
+        self._ref_max_col = "reference_max"
 
         # Reset stats
         self._validation_stats = {

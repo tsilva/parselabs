@@ -4,6 +4,8 @@ This document describes the data flow through the parselabs extraction pipeline,
 
 Before any PDF discovery starts, the CLI validates the configured API key and `extract_model_id` by sending a minimal chat completion request. Runs fail fast if authentication, authorization, model access, or base URL configuration is invalid.
 
+Processed document directories now use the canonical `{stem}_{hash}/` layout only, and stored extraction rows use the current `raw_*` field names only. Migrate older outputs with `utils/migrate_output_dirs.py` and `utils/migrate_raw_columns.py` before running the current runtime against historical data.
+
 ## Pipeline Overview
 
 ```
@@ -182,6 +184,8 @@ Each page JSON remains the authoritative editable source of truth for review:
 **Module:** `main.py` — `merge_csv_files()`
 
 All per-PDF CSVs are concatenated into a single `all.csv` in the profile's output directory.
+
+The reviewed-JSON rebuild path reuses the same downstream export transform from this point forward. The only difference is the input row source: accepted page-JSON rows instead of merged per-PDF CSV rows.
 
 ## Stage 8: Normalization
 

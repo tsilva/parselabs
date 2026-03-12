@@ -1292,6 +1292,9 @@ def apply_dtype_conversions(df: pd.DataFrame, dtype_map: dict) -> pd.DataFrame:
             # Convert datetime columns
             if target_dtype == "datetime64[ns]":
                 df[col] = pd.to_datetime(df[col], errors="coerce")
+            # Convert string columns
+            elif target_dtype == "str":
+                df[col] = df[col].astype("string")
             # Convert boolean columns
             elif target_dtype == "boolean":
                 df[col] = df[col].astype("boolean")

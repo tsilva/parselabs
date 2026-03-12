@@ -129,6 +129,10 @@ def iter_processed_documents(output_path: Path) -> list[ProcessedDocument]:
         if doc_dir.name == "logs":
             continue
 
+        # Skip directories that do not use the canonical hash-suffixed layout.
+        if not _is_hashed_document_dir(doc_dir):
+            continue
+
         # Skip directories that do not contain a copied source PDF.
         pdf_path = _find_document_pdf(doc_dir)
         if pdf_path is None:
@@ -192,21 +196,8 @@ def build_document_review_dataframe(doc_dir: Path, lab_specs: LabSpecsConfig) ->
         empty_df = pd.DataFrame(columns=DOCUMENT_REVIEW_COLUMNS)
         return empty_df
 
-    # Apply cached standardization so the reviewer sees the mapped interpretation.
-    review_df = apply_cached_standardization(review_df, lab_specs)
-
-    # Apply normalization logic without deduplication so every extracted row remains reviewable.
-    review_df = apply_normalizations(review_df, lab_specs)
-
-    # Add duplicate-review flags before export-style column renames.
-    review_df = flag_duplicate_entries(review_df)
-
-    # Rename normalized columns into the public export names used elsewhere in the app.
-    review_df = _rename_columns_for_review(review_df)
-
-    # Run value validation so the review tool can surface the same warnings as the pipeline.
-    validator = ValueValidator(lab_specs)
-    review_df = validator.validate(review_df)
+    # Normalize extracted rows into the review dataframe shape without dropping reviewable rows.
+    review_df = _prepare_rows_for_review(review_df, lab_specs)
 
     # Ensure the review CSV keeps a stable column order even when some fields are absent.
     ensure_columns(review_df, DOCUMENT_REVIEW_COLUMNS, default=None)
@@ -251,37 +242,46 @@ def build_document_expected_dataframe_from_reviewed_json(
     if final_df.empty:
         return pd.DataFrame(columns=COLUMN_ORDER)
 
-    # Apply the same standardization and normalization logic used during normal extraction.
-    final_df = apply_cached_standardization(final_df, lab_specs)
-    final_df = apply_normalizations(final_df, lab_specs)
-
-    # Remove unknown mappings because the pipeline never exports them.
-    final_df = _filter_unknown_labs(final_df)
-
-    # Guard: Documents whose rows all map to unknown labs export as empty.
-    if final_df.empty:
-        return pd.DataFrame(columns=COLUMN_ORDER)
-
-    # Flag duplicates before deduplication so review signals remain aligned with the main pipeline.
-    final_df = flag_duplicate_entries(final_df)
-
-    # Deduplicate repeated date/lab rows because the approved regression compares final exports.
-    if lab_specs.exists:
-        final_df = deduplicate_results(final_df, lab_specs)
-
-    # Rename normalized columns into the public export schema.
-    final_df = _rename_columns_for_review(final_df)
-
-    # Run validation after export-column renames to match the main pipeline ordering.
-    validator = ValueValidator(lab_specs)
-    final_df = validator.validate(final_df)
-
-    # Select and type-convert only the canonical export columns expected by regression fixtures.
-    export_cols, _, _, dtypes = get_column_lists(COLUMN_SCHEMA)
-    ensure_columns(final_df, export_cols, default=None)
-    final_df = final_df[export_cols].copy()
-    final_df = apply_dtype_conversions(final_df, dtypes)
+    # Transform accepted review rows into the canonical export schema used by all.csv.
+    final_df, _ = transform_rows_to_final_export(
+        final_df,
+        lab_specs,
+        apply_standardization=True,
+    )
     return final_df
+
+
+def transform_rows_to_final_export(
+    rows_df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+    apply_standardization: bool,
+) -> tuple[pd.DataFrame, dict[str, int | dict[str, int]]]:
+    """Transform extracted rows into the canonical final export dataframe."""
+
+    export_cols, _, _, dtypes = get_column_lists(COLUMN_SCHEMA)
+
+    # Guard: Empty inputs still return a stable export schema and empty validation stats.
+    if rows_df.empty:
+        return (
+            pd.DataFrame(columns=export_cols),
+            {"total_rows": 0, "rows_flagged": 0, "flags_by_reason": {}},
+        )
+
+    prepared_df, validation_stats = _prepare_rows_for_export(
+        rows_df,
+        lab_specs,
+        apply_standardization=apply_standardization,
+    )
+
+    # Guard: Rows that all map to unknown labs still export a stable empty schema.
+    if prepared_df.empty:
+        return pd.DataFrame(columns=export_cols), validation_stats
+
+    # Select and type-convert only the canonical export columns expected by final outputs.
+    ensure_columns(prepared_df, export_cols, default=None)
+    final_df = prepared_df[export_cols].copy()
+    final_df = apply_dtype_conversions(final_df, dtypes)
+    return final_df, validation_stats
 
 
 def save_review_status(doc_dir: Path, page_number: int, result_index: int, status: str) -> tuple[bool, str]:
@@ -715,7 +715,7 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
 
     # Standardize lab names in one pass so repeated raw labels share the same cached mapping.
     raw_names = review_df["raw_lab_name"].fillna("").astype(str).tolist()
-    name_map = standardize_lab_names(raw_names, lab_specs.standardized_names)
+    name_map = standardize_lab_names(raw_names)
     review_df["lab_name_standardized"] = [name_map.get(name, UNKNOWN_VALUE) for name in raw_names]
 
     # Standardize units only for rows whose lab names mapped successfully.
@@ -728,11 +728,7 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
 
         unit_contexts.append((raw_unit, standardized_name))
 
-    mapped_units = standardize_lab_units(
-        [context for context in unit_contexts if context != ("", "")],
-        lab_specs.standardized_units,
-        lab_specs,
-    )
+    mapped_units = standardize_lab_units([context for context in unit_contexts if context != ("", "")])
 
     standardized_units: list[str | None] = []
     for context in unit_contexts:
@@ -747,8 +743,8 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
     return review_df
 
 
-def _rename_columns_for_review(review_df: pd.DataFrame) -> pd.DataFrame:
-    """Add public export-name aliases without losing review-oriented source columns."""
+def _add_export_column_aliases(review_df: pd.DataFrame) -> pd.DataFrame:
+    """Add public export-name aliases without losing internal normalized columns."""
 
     review_df = review_df.copy()
 
@@ -788,7 +784,58 @@ def _filter_unknown_labs(review_df: pd.DataFrame) -> pd.DataFrame:
 
     return review_df[~unknown_mask].reset_index(drop=True)
 
+def _prepare_rows_for_review(
+    review_df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+) -> pd.DataFrame:
+    """Normalize extracted rows into the review dataframe shape."""
 
-# Backward-compatible aliases for earlier internal helper names.
-_apply_cached_standardization = apply_cached_standardization
-_load_review_rows_from_json = load_document_review_rows
+    # Apply cached standardization so the reviewer sees the mapped interpretation.
+    review_df = apply_cached_standardization(review_df, lab_specs)
+
+    # Apply normalization logic without deduplication so every extracted row remains reviewable.
+    review_df = apply_normalizations(review_df, lab_specs)
+
+    # Add duplicate-review flags before export-name aliases are added.
+    review_df = flag_duplicate_entries(review_df)
+
+    # Add the public export-name aliases used throughout the viewer and rebuild path.
+    review_df = _add_export_column_aliases(review_df)
+
+    # Run value validation so the review tool surfaces the same warnings as final export.
+    validator = ValueValidator(lab_specs)
+    return validator.validate(review_df)
+
+
+def _prepare_rows_for_export(
+    rows_df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+    apply_standardization: bool,
+) -> tuple[pd.DataFrame, dict[str, int | dict[str, int]]]:
+    """Normalize, deduplicate, and validate extracted rows for final export."""
+
+    if apply_standardization:
+        rows_df = apply_cached_standardization(rows_df, lab_specs)
+
+    rows_df = apply_normalizations(rows_df, lab_specs)
+    rows_df = _filter_unknown_labs(rows_df)
+
+    # Guard: Rows that all map to unknown labs cannot contribute to the final export.
+    if rows_df.empty:
+        return rows_df, {"total_rows": 0, "rows_flagged": 0, "flags_by_reason": {}}
+
+    rows_df = flag_duplicate_entries(rows_df)
+
+    if lab_specs.exists:
+        rows_df = deduplicate_results(rows_df, lab_specs)
+
+    rows_df = _add_export_column_aliases(rows_df)
+    validator = ValueValidator(lab_specs)
+    rows_df = validator.validate(rows_df)
+    return rows_df, validator.validation_stats
+
+
+def _is_hashed_document_dir(doc_dir: Path) -> bool:
+    """Return whether a processed document directory uses the canonical hash suffix."""
+
+    return re.match(r"^.+_[0-9a-fA-F]{8}$", doc_dir.name) is not None

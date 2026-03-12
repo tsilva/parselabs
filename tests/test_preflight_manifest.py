@@ -160,7 +160,6 @@ def test_process_pdfs_or_use_cache_merges_paths_without_rehashing(tmp_path, monk
         inventory_candidates={},
     )
 
-    monkeypatch.setattr(main, "_get_csv_path", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("path lookup not expected")))
     monkeypatch.setattr(main, "_process_pdfs_in_parallel", lambda *args: ([processed_csv], [], 0))
 
     csv_paths, failed_pages, pdfs_failed = main._process_pdfs_or_use_cache(

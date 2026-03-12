@@ -155,6 +155,34 @@ def _rebuild_all_document_csvs() -> list[ProcessedDocument]:
     return documents
 
 
+def _build_allowed_paths() -> list[str]:
+    """Return filesystem roots Gradio may serve for the document reviewer."""
+
+    allowed_paths: set[str] = set()
+
+    # Read profile configs directly so the reviewer can switch across output roots safely.
+    for profile_name in ProfileConfig.list_profiles():
+        profile_path = ProfileConfig.find_path(profile_name)
+
+        # Skip profiles that disappeared between discovery and load.
+        if not profile_path:
+            continue
+
+        profile = ProfileConfig.from_file(profile_path)
+
+        # Skip profiles without an output path because they cannot serve processed files.
+        if not profile.output_path:
+            continue
+
+        allowed_paths.add(str(profile.output_path))
+
+        # Allow the parent directory too because Gradio checks ancestor roots.
+        if profile.output_path.parent != profile.output_path:
+            allowed_paths.add(str(profile.output_path.parent))
+
+    return sorted(allowed_paths)
+
+
 def _matches_document_filter(document: ProcessedDocument, filter_mode: str) -> bool:
     """Return whether a document should appear under the selected review filter."""
 
@@ -335,16 +363,25 @@ def _format_entry_html(review_df: pd.DataFrame, current_index: int) -> str:
     status = str(row.get("review_status", "") or "pending").strip() or "pending"
     reason = str(row.get("review_reason", "") or "").strip()
     comments = str(row.get("raw_comments", "") or "").strip()
+    mapped_lab = row.get("lab_name") or ""
+    normalized_value = row.get("value") if str(row.get("value", "")) != "nan" else ""
+    normalized_unit = row.get("lab_unit") or ""
+    reference_min = row.get("reference_min") if str(row.get("reference_min", "")) != "nan" else ""
+    reference_max = row.get("reference_max") if str(row.get("reference_max", "")) != "nan" else ""
+    reference_text = f"{reference_min} - {reference_max}".strip(" -")
 
     parts = [
+        "<div>",
+        "<div><strong>Review these fields</strong></div>",
+        f"<div><strong>Mapped lab:</strong> <strong>{mapped_lab}</strong></div>",
+        f"<div><strong>Normalized value:</strong> <strong>{normalized_value} {normalized_unit}</strong></div>",
+        f"<div><strong>Reference:</strong> <strong>{reference_text}</strong></div>",
+        "<hr>",
         f"<div><strong>Status:</strong> {status}</div>",
         f"<div><strong>Page:</strong> {row.get('page_number')}</div>",
         f"<div><strong>Row:</strong> {row.get('result_index')}</div>",
         f"<div><strong>Raw lab:</strong> {row.get('raw_lab_name') or ''}</div>",
         f"<div><strong>Raw value:</strong> {row.get('raw_value') or ''} {row.get('raw_lab_unit') or ''}</div>",
-        f"<div><strong>Mapped lab:</strong> {row.get('lab_name') or ''}</div>",
-        f"<div><strong>Normalized value:</strong> {row.get('value') if str(row.get('value', '')) != 'nan' else ''} {row.get('lab_unit') or ''}</div>",
-        f"<div><strong>Reference:</strong> {row.get('reference_min') if str(row.get('reference_min', '')) != 'nan' else ''} - {row.get('reference_max') if str(row.get('reference_max', '')) != 'nan' else ''}</div>",
     ]
 
     # Surface validation flags only when they exist for the current row.
@@ -360,6 +397,7 @@ def _format_entry_html(review_df: pd.DataFrame, current_index: int) -> str:
         "Use the Missing Row action when the source page has an omitted lab line. "
         "After manual JSON repair, remove the page's review_missing_rows marker.</div>"
     )
+    parts.append("</div>")
 
     return "<div>" + "".join(parts) + "</div>"
 
@@ -509,7 +547,6 @@ def build_app() -> gr.Blocks:
             "Review each extracted row against its source page, persist decisions back to JSON, "
             "and record missing-row markers for omissions you will fix manually later."
         )
-        gr.HTML(KEYBOARD_SHORTCUTS_JS)
 
         with gr.Row():
             document_filter = gr.Dropdown(
@@ -623,8 +660,16 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     demo = build_app()
+    allowed_paths = _build_allowed_paths()
     logger.info("Starting Processed Document Reviewer on http://localhost:7863")
-    demo.launch(server_name="127.0.0.1", server_port=7863, show_error=True, inbrowser=False)
+    demo.launch(
+        server_name="127.0.0.1",
+        server_port=7863,
+        show_error=True,
+        inbrowser=False,
+        allowed_paths=allowed_paths,
+        head=KEYBOARD_SHORTCUTS_JS,
+    )
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from openai import APIError, OpenAI
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from parselabs.paths import get_prompts_dir
 
@@ -22,41 +22,32 @@ logger = logging.getLogger(__name__)
 class LabResult(BaseModel):
     """Single lab test result - optimized for extraction accuracy."""
 
-    model_config = ConfigDict(populate_by_name=True)
-
     # Raw extraction (exactly as shown in PDF)
     raw_lab_name: str = Field(
-        alias="lab_name_raw",
         description="Test name ONLY as written in the PDF. Must contain ONLY the test name - DO NOT include values, units, reference ranges, or field labels. WRONG: 'Glucose, raw_value: 100' CORRECT: 'Glucose'",
     )
     raw_value: str | None = Field(
         default=None,
-        alias="value_raw",
         description="Result value ONLY. Must contain ONLY the numeric or text result - DO NOT include test names, units, or field labels. Examples: '5.2', '14.8', 'NEGATIVO', 'POSITIVO'",
     )
     raw_lab_unit: str | None = Field(
         default=None,
-        alias="lab_unit_raw",
         description="Unit ONLY as written in PDF. Must contain ONLY the unit symbol - DO NOT include values or test names. Examples: 'mg/dL', '%', 'U/L'",
     )
     raw_reference_range: str | None = Field(
         default=None,
-        alias="reference_range",
         description="Complete reference range text EXACTLY as shown.",
     )
     raw_reference_min: float | None = Field(
         default=None,
-        alias="reference_min_raw",
         description="Minimum reference value as a PLAIN NUMBER ONLY. Parse from reference_range. Examples: '< 40' → null, '150 - 400' → 150, '26.5-32.6' → 26.5",
     )
     raw_reference_max: float | None = Field(
         default=None,
-        alias="reference_max_raw",
         description="Maximum reference value as a PLAIN NUMBER ONLY. Parse from reference_range. Examples: '< 40' → 40, '150 - 400' → 400, '26.5-32.6' → 32.6",
     )
     raw_comments: str | None = Field(
         default=None,
-        alias="comments",
         description="Additional notes or remarks about the test (NOT the test result itself). Only use for extra information like methodology notes or special conditions.",
     )
     # Internal fields (added by pipeline, not by LLM) — excluded from JSON serialization
@@ -729,29 +720,6 @@ def _clean_numeric_field(value) -> float | None:
     return None
 
 
-# Backward compatibility: mapping from old _raw suffix field names to new raw_ prefix names
-_RAW_FIELD_RENAMES = {
-    "lab_name_raw": "raw_lab_name",
-    "value_raw": "raw_value",
-    "lab_unit_raw": "raw_lab_unit",
-    "reference_min_raw": "raw_reference_min",
-    "reference_max_raw": "raw_reference_max",
-    "reference_range": "raw_reference_range",
-    "comments": "raw_comments",
-}
-
-
-def _normalize_raw_field_names(lab_results: list[dict]) -> None:
-    """Rename old _raw suffix keys to new raw_ prefix keys in lab result dicts."""
-
-    for item in lab_results:
-        if not isinstance(item, dict):
-            continue
-        for old_key, new_key in _RAW_FIELD_RENAMES.items():
-            if old_key in item and new_key not in item:
-                item[new_key] = item.pop(old_key)
-
-
 def _fix_lab_results_format(tool_result_dict: dict) -> dict:
     """Fix common LLM formatting issues in lab_results and dates."""
 
@@ -763,9 +731,6 @@ def _fix_lab_results_format(tool_result_dict: dict) -> dict:
     # Guard: No lab_results to process
     if "lab_results" not in tool_result_dict or not isinstance(tool_result_dict["lab_results"], list):
         return tool_result_dict
-
-    # Normalize old _raw suffix field names to new raw_ prefix names
-    _normalize_raw_field_names(tool_result_dict["lab_results"])
 
     # Clean numeric reference fields (strip embedded metadata like ", comments: ...")
     _clean_numeric_reference_fields(tool_result_dict)
