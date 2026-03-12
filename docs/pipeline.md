@@ -144,6 +144,7 @@ For each extracted review row:
   → standardize_lab_names(): cache lookup raw_name → standardized_name
   → standardize_lab_units(): cache lookup (raw_unit, lab_name) → standardized_unit
   → when raw_unit is blank, fall back to the spec primary unit only for safe implied-unit labs (`pH`, `unitless`, `boolean`)
+  → deterministically remap `%` vs absolute sibling lab names from the resolved standardized unit
   → apply deterministic normalization only
   → attach reviewer-facing ambiguity reasons
   → keep every extracted row visible before deduplication
@@ -190,7 +191,18 @@ Text-only urine strip analytes that initially map to numeric labs are remapped o
 - text urine rows normalize to `0/1` on qualitative boolean variants
 - this avoids mixing numeric and boolean units under the same standardized lab name
 
-### 5d. Exact Unit Conversion
+### 5d. Percentage Variant Canonicalization
+
+The review/export pipeline now uses the resolved standardized unit as the tie-breaker when a raw label can represent both an absolute analyte and a percentage analyte.
+
+Examples:
+
+- `raw_lab_name="Monocitos"` + standardized unit `%` → `Blood - Monocytes (%)`
+- `raw_lab_name="Monocitos (%)"` + standardized unit `10⁹/L` → `Blood - Monocytes`
+
+This remap is generic for any sibling pair present in `lab_specs.json`. It does not change extraction JSON or the name-standardization cache model; it only corrects the derived review/export rows before duplicate detection and export aliasing.
+
+### 5e. Exact Unit Conversion
 
 Converts values to primary units only when the standardized lab and unit are explicit and a conversion factor exists:
 
@@ -201,9 +213,9 @@ raw_value=5.0, raw_unit="mmol/L", lab="Blood - Glucose"
   → value = 5.0 × 18.0 = 90.0 mg/dL
 ```
 
-The runtime still avoids ambiguous auto-corrections such as swapping percentage-vs-absolute variants or nullifying suspicious reference ranges. The only missing-unit fallback is the narrow implied-unit case for labs whose spec primary unit is intrinsically safe to infer (`pH`, `unitless`, `boolean`).
+The runtime still avoids subjective auto-corrections such as nullifying suspicious reference ranges. The only missing-unit fallback is the narrow implied-unit case for labs whose spec primary unit is intrinsically safe to infer (`pH`, `unitless`, `boolean`).
 
-### 5e. Review Reasons
+### 5f. Review Reasons
 
 Review rows now surface ambiguity directly in `review_reason`, including:
 
