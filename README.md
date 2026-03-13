@@ -152,9 +152,10 @@ parselabs --profile myname --pattern "2024-*.pdf"
 
 ```bash
 parselabs review --profile myname
+parselabs review --list-profiles
 ```
 
-`parselabs review` launches the combined Gradio app. Use the default Results Explorer tab for browsing results, or pass `--tab review` to open the Review Queue directly.
+`parselabs review` requires an explicit `--profile` and launches the combined Gradio app for that profile only. Use the default Results Explorer tab for browsing results, or pass `--tab review` to open the Review Queue directly.
 
 The combined review UI provides:
 - **Results Explorer** — Filtered table, summary cards, plots, and source-page inspection

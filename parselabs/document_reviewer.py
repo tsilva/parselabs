@@ -77,9 +77,8 @@ class ReviewerView:
     inspector_html: str
     queue_display: pd.DataFrame
     queue_state: pd.DataFrame
-    progress_html: str
 
-    def as_outputs(self) -> tuple[int, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame, str]:
+    def as_outputs(self) -> tuple[int, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame]:
         """Return UI fragments in the order expected by Gradio callbacks."""
 
         return (
@@ -88,7 +87,6 @@ class ReviewerView:
             self.inspector_html,
             self.queue_display,
             self.queue_state,
-            self.progress_html,
         )
 
 
@@ -250,56 +248,6 @@ def _get_current_row(review_df: pd.DataFrame, current_index: int) -> pd.Series |
     return get_selected_row(review_df, current_index)
 
 
-def _build_progress_chip(label: str, value: str, tone: str = "neutral") -> str:
-    """Build one progress chip for the sticky toolbar."""
-
-    return f'<span class="review-progress-chip {tone}"><span class="label">{html.escape(label)}</span>{html.escape(value)}</span>'
-
-
-def _build_progress_html(
-    document: ProcessedDocument | None,
-    review_df: pd.DataFrame,
-    queue_state: pd.DataFrame,
-    current_index: int,
-    show_reviewed: bool,
-) -> str:
-    """Build the slim sticky toolbar summary for the active document."""
-
-    # Guard: No selected document gets a short neutral summary.
-    if document is None:
-        return '<div class="review-progress-card"><div class="review-progress-title">No processed documents found</div></div>'
-
-    summary = get_document_review_summary(document.doc_dir, review_df)
-    current_row = _get_current_row(review_df, current_index)
-
-    if current_row is not None:
-        selection_chip = _build_progress_chip("At", f"P{int(current_row['page_number'])} R{int(current_row['result_index'])}", tone="neutral")
-    elif review_df.empty:
-        selection_chip = _build_progress_chip("State", "No rows", tone="neutral")
-    elif not show_reviewed and summary.pending == 0:
-        selection_chip = _build_progress_chip("State", "No pending rows", tone="neutral")
-    else:
-        selection_chip = _build_progress_chip("State", "No visible row", tone="neutral")
-
-    chips = [
-        selection_chip,
-        _build_progress_chip("Reviewed", f"{summary.reviewed}/{summary.total}", tone="neutral"),
-        _build_progress_chip("Pending", str(summary.pending), tone="warning"),
-    ]
-    if summary.rejected > 0:
-        chips.append(_build_progress_chip("Rejected", str(summary.rejected), tone="danger"))
-    if summary.missing_row_markers > 0:
-        chips.append(_build_progress_chip("Missing", str(summary.missing_row_markers), tone="warning"))
-    chips.append(_build_progress_chip("Fixture", "Ready" if summary.fixture_ready else "Blocked", tone="success" if summary.fixture_ready else "danger"))
-
-    return (
-        '<div class="review-progress-card compact">'
-        f'<div class="review-progress-title">{html.escape(document.stem)}</div>'
-        f'<div class="review-progress-row">{"".join(chips)}</div>'
-        "</div>"
-    )
-
-
 def _build_inspector_html(document: ProcessedDocument | None, review_df: pd.DataFrame, current_index: int, show_reviewed: bool) -> str:
     """Render the compact inspector for the active review row."""
 
@@ -402,7 +350,6 @@ def _render_document(
         inspector_html=_build_inspector_html(document, review_df, current_index, show_reviewed),
         queue_display=_build_queue_display(queue_state, current_index),
         queue_state=queue_state,
-        progress_html=_build_progress_html(document, review_df, queue_state, current_index, show_reviewed),
     )
 
 
@@ -446,7 +393,17 @@ def _build_dropdown_state(
 
     # Preserve the current document when it still matches the active filter.
     if current_doc_id in available_ids:
-        selected_id = current_doc_id
+        current_document = _get_document_by_id(current_doc_id, output_path)
+        current_review_df = _get_review_frame(current_document, lab_specs)
+        current_summary = get_document_review_summary(current_document.doc_dir, current_review_df) if current_document is not None else None
+
+        # Advance to the next ranked document once the current document has no pending rows left.
+        if current_summary is not None and current_summary.pending == 0 and choices and choices[0][1] != current_doc_id:
+            selected_id = choices[0][1]
+
+        # Otherwise stay on the current document.
+        else:
+            selected_id = current_doc_id
 
     # Otherwise fall back to the highest-priority remaining document.
     elif choices:
@@ -461,11 +418,10 @@ def _build_dropdown_state(
 
 
 def _build_toolbar_outputs(dropdown_state: DropdownState, view: ReviewerView) -> tuple:
-    """Compose the shared output tuple for toolbar-mutating callbacks."""
+    """Compose the shared output tuple for callbacks that may switch documents."""
 
     return (
-        dropdown_state.as_update(),
-        dropdown_state.status_text,
+        dropdown_state.selected_id,
         *view.as_outputs(),
     )
 
@@ -767,7 +723,7 @@ def build_app(context: RuntimeContext) -> gr.Blocks:
     """Build the Gradio document-reviewer app."""
 
     initial_filter = "All"
-    initial_show_reviewed = False
+    initial_show_reviewed = True
     output_path = context.output_path if context.output_path is not None else Path("./output")
     lab_specs = context.lab_specs
     dropdown_state = _build_dropdown_state(None, initial_filter, output_path, lab_specs, rebuild_all=True)
@@ -781,35 +737,9 @@ def build_app(context: RuntimeContext) -> gr.Blocks:
     )
 
     with gr.Blocks(title="Processed Document Reviewer") as demo:
-        gr.Markdown("# Processed Document Reviewer")
-
+        current_document_id = gr.State(dropdown_state.selected_id)
         current_row_index = gr.State(initial_view.current_index)
         queue_state = gr.State(initial_view.queue_state)
-
-        with gr.Column(elem_id="review-toolbar"):
-            with gr.Row():
-                document_filter = gr.Dropdown(
-                    choices=["All", "Not Fixture Ready", "Fixture Ready"],
-                    value=initial_filter,
-                    label="Document Filter",
-                    scale=1,
-                )
-                document_dropdown = gr.Dropdown(
-                    choices=dropdown_state.choices,
-                    value=dropdown_state.selected_id,
-                    label="Document",
-                    scale=3,
-                )
-                show_reviewed = gr.Checkbox(
-                    label="Show reviewed",
-                    value=initial_show_reviewed,
-                    scale=1,
-                    min_width=140,
-                )
-                refresh_btn = gr.Button("Refresh", scale=0, min_width=110)
-
-            toolbar_status = gr.Markdown(dropdown_state.status_text, elem_id="review-toolbar-status")
-            progress_html = gr.HTML(initial_view.progress_html)
 
         with gr.Row(elem_id="review-main-pane"):
             with gr.Column(scale=6, min_width=520, elem_id="review-image-pane"):
@@ -856,142 +786,91 @@ def build_app(context: RuntimeContext) -> gr.Blocks:
             inspector_html,
             queue_table,
             queue_state,
-            progress_html,
         ]
 
-        toolbar_outputs = [
-            document_dropdown,
-            toolbar_status,
+        action_outputs = [
+            current_document_id,
             *view_outputs,
         ]
 
-        document_dropdown.change(
-            fn=lambda doc_id, show_reviewed: _handle_document_change(
-                doc_id,
-                show_reviewed,
-                output_path,
-                lab_specs,
-            ),
-            inputs=[document_dropdown, show_reviewed],
-            outputs=view_outputs,
-        )
-
-        document_filter.change(
-            fn=lambda current_doc_id, current_index, filter_mode, show_reviewed: _handle_document_list_refresh(
-                current_doc_id,
-                current_index,
-                filter_mode,
-                show_reviewed,
-                output_path,
-                lab_specs,
-            ),
-            inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
-            outputs=toolbar_outputs,
-        )
-
-        refresh_btn.click(
-            fn=lambda current_doc_id, current_index, filter_mode, show_reviewed: _handle_document_list_refresh(
-                current_doc_id,
-                current_index,
-                filter_mode,
-                show_reviewed,
-                output_path,
-                lab_specs,
-            ),
-            inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
-            outputs=toolbar_outputs,
-        )
-
-        show_reviewed.change(
-            fn=lambda doc_id, current_index, show_reviewed: _handle_show_reviewed_change(
-                doc_id,
-                current_index,
-                show_reviewed,
-                output_path,
-                lab_specs,
-            ),
-            inputs=[document_dropdown, current_row_index, show_reviewed],
-            outputs=view_outputs,
-        )
-
         queue_table.select(
-            fn=lambda doc_id, queue_state, show_reviewed, evt: _handle_queue_select(
+            fn=lambda doc_id, queue_state, evt: _handle_queue_select(
                 doc_id,
                 queue_state,
-                show_reviewed,
+                initial_show_reviewed,
                 evt,
                 output_path,
                 lab_specs,
             ),
-            inputs=[document_dropdown, queue_state, show_reviewed],
+            inputs=[current_document_id, queue_state],
             outputs=view_outputs,
         )
 
         prev_btn.click(
-            fn=lambda doc_id, idx, visible: _move_row(doc_id, idx, -1, visible, output_path, lab_specs),
-            inputs=[document_dropdown, current_row_index, show_reviewed],
+            fn=lambda doc_id, idx: _move_row(doc_id, idx, -1, initial_show_reviewed, output_path, lab_specs),
+            inputs=[current_document_id, current_row_index],
             outputs=view_outputs,
         )
 
         next_btn.click(
-            fn=lambda doc_id, idx, visible: _move_row(doc_id, idx, 1, visible, output_path, lab_specs),
-            inputs=[document_dropdown, current_row_index, show_reviewed],
+            fn=lambda doc_id, idx: _move_row(doc_id, idx, 1, initial_show_reviewed, output_path, lab_specs),
+            inputs=[current_document_id, current_row_index],
             outputs=view_outputs,
         )
 
         accept_btn.click(
-            fn=lambda doc_id, idx, filter_mode, visible: _apply_review_action(
+            fn=lambda doc_id, idx: _apply_review_action(
                 doc_id,
                 idx,
-                filter_mode,
-                visible,
+                initial_filter,
+                initial_show_reviewed,
                 "accepted",
                 output_path,
                 lab_specs,
             ),
-            inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
-            outputs=toolbar_outputs,
+            inputs=[current_document_id, current_row_index],
+            outputs=action_outputs,
         )
 
         reject_btn.click(
-            fn=lambda doc_id, idx, filter_mode, visible: _apply_review_action(
+            fn=lambda doc_id, idx: _apply_review_action(
                 doc_id,
                 idx,
-                filter_mode,
-                visible,
+                initial_filter,
+                initial_show_reviewed,
                 "rejected",
                 output_path,
                 lab_specs,
             ),
-            inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
-            outputs=toolbar_outputs,
+            inputs=[current_document_id, current_row_index],
+            outputs=action_outputs,
         )
 
         missing_btn.click(
-            fn=lambda doc_id, idx, filter_mode, visible: _mark_missing_row(
+            fn=lambda doc_id, idx: _mark_missing_row(
                 doc_id,
                 idx,
-                filter_mode,
-                visible,
+                initial_filter,
+                initial_show_reviewed,
                 output_path,
                 lab_specs,
             ),
-            inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
-            outputs=toolbar_outputs,
+            inputs=[current_document_id, current_row_index],
+            outputs=action_outputs,
         )
 
         undo_btn.click(
-            fn=lambda doc_id, idx, filter_mode, visible: _apply_review_action(
+            fn=lambda doc_id, idx: _apply_review_action(
                 doc_id,
                 idx,
-                filter_mode,
-                visible,
+                initial_filter,
+                initial_show_reviewed,
                 None,
                 output_path,
                 lab_specs,
             ),
-            inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
-            outputs=toolbar_outputs,
+            inputs=[current_document_id, current_row_index],
+            outputs=action_outputs,
         )
 
     return demo

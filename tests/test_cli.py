@@ -65,6 +65,31 @@ def test_parse_review_args_supports_tab_selection():
     assert args.tab == "review"
 
 
+def test_parse_review_args_requires_profile_for_review_ui(capsys):
+    with pytest.raises(SystemExit) as exc_info:
+        cli._parse_review_args(
+            [],
+            program_name="parselabs review",
+            default_tab="results",
+        )
+
+    captured = capsys.readouterr()
+
+    assert exc_info.value.code == 2
+    assert "--profile is required for review UI commands" in captured.err
+
+
+def test_parse_review_args_allows_listing_profiles_without_profile():
+    args = cli._parse_review_args(
+        ["--list-profiles"],
+        program_name="parselabs review",
+        default_tab="results",
+    )
+
+    assert args.list_profiles is True
+    assert args.profile is None
+
+
 def test_main_help_surfaces_subcommands(capsys):
     with pytest.raises(SystemExit) as exc_info:
         cli.main(["--help"])

@@ -138,7 +138,7 @@ def _parse_review_args(argv: Sequence[str], *, program_name: str, default_tab: s
             prog=program_name,
             description="Launch the combined Parselabs review UI.",
         ),
-        profile_help="Profile name (defaults to the first available profile)",
+        profile_help="Profile name",
     )
     parser.add_argument(
         "--tab",
@@ -146,7 +146,13 @@ def _parse_review_args(argv: Sequence[str], *, program_name: str, default_tab: s
         default=default_tab,
         help="Default tab to open in the combined UI",
     )
-    return parser.parse_args(list(argv))
+    args = parser.parse_args(list(argv))
+
+    # Guard: Review commands must target one explicit profile unless the user is listing choices.
+    if not args.list_profiles and not args.profile:
+        parser.error("--profile is required for review UI commands. Use --list-profiles to see available profiles.")
+
+    return args
 
 
 def _load_ui_context(args: argparse.Namespace):
@@ -182,7 +188,8 @@ def _help_text() -> str:
     return (
         "Usage: parselabs [extract-options]\n"
         "       parselabs extract [extract-options]\n"
-        "       parselabs review [--profile NAME] [--list-profiles] [--tab {results,review}]\n"
+        "       parselabs review --profile NAME [--tab {results,review}]\n"
+        "       parselabs review --list-profiles\n"
         "       parselabs admin <command> [args]\n\n"
         "Commands:\n"
         "  extract   Run lab extraction across one or more configured profiles\n"

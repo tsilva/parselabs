@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import types
+import warnings
 
 import pandas as pd
 from PIL import Image
@@ -268,3 +270,84 @@ def test_apply_review_action_auto_advances_to_next_pending_row(monkeypatch):
 
     assert calls == ["accept"]
     assert result == ("glucose_deadbeef", 1, "All", False, False, False)
+
+
+def test_build_dropdown_state_advances_to_next_document_when_current_has_no_pending(monkeypatch):
+    alpha = ProcessedDocument(
+        doc_dir=Path("/tmp/alpha_deadbeef"),
+        stem="alpha",
+        pdf_path=Path("/tmp/alpha_deadbeef/alpha.pdf"),
+        csv_path=Path("/tmp/alpha_deadbeef/alpha.csv"),
+    )
+    beta = ProcessedDocument(
+        doc_dir=Path("/tmp/beta_deadbeef"),
+        stem="beta",
+        pdf_path=Path("/tmp/beta_deadbeef/beta.pdf"),
+        csv_path=Path("/tmp/beta_deadbeef/beta.csv"),
+    )
+    review_frames = {
+        alpha.doc_dir.name: _make_review_df(statuses=["accepted"], pages=[1], rows=[0]),
+        beta.doc_dir.name: _make_review_df(statuses=[""], pages=[1], rows=[0]),
+    }
+
+    monkeypatch.setattr(review_documents, "_get_documents", lambda output_path: [alpha, beta])
+    monkeypatch.setattr(review_documents, "_get_review_frame", lambda document, lab_specs: review_frames[document.doc_dir.name])
+
+    state = review_documents._build_dropdown_state(
+        alpha.doc_dir.name,
+        "All",
+        Path("/tmp"),
+        object(),
+        rebuild_all=True,
+    )
+
+    assert state.selected_id == beta.doc_dir.name
+
+
+def test_build_app_hides_review_toolbar_and_defaults_to_showing_reviewed(monkeypatch, tmp_path):
+    recorded_show_reviewed: list[bool] = []
+    empty_df = pd.DataFrame(columns=review_documents.QUEUE_DISPLAY_COLUMNS)
+    empty_state = pd.DataFrame(columns=review_documents.QUEUE_STATE_COLUMNS)
+    view = review_documents.ReviewerView(
+        current_index=0,
+        image_value=None,
+        inspector_html="",
+        queue_display=empty_df,
+        queue_state=empty_state,
+    )
+
+    monkeypatch.setattr(
+        review_documents,
+        "_build_dropdown_state",
+        lambda current_doc_id, filter_mode, output_path, lab_specs, rebuild_all: review_documents.DropdownState(
+            selected_id="alpha_deadbeef",
+            choices=[],
+            status_text="",
+        ),
+    )
+    monkeypatch.setattr(review_documents, "_get_document_by_id", lambda doc_id, output_path: object())
+
+    def fake_render_document(document, requested_index, show_reviewed, output_path, lab_specs, *, prefer_first_visible):
+        recorded_show_reviewed.append(show_reviewed)
+        return view
+
+    monkeypatch.setattr(review_documents, "_render_document", fake_render_document)
+
+    context = types.SimpleNamespace(
+        output_path=tmp_path,
+        lab_specs=None,
+    )
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+        demo = review_documents.build_app(context)
+
+    labels = [getattr(component, "label", None) for component in demo.blocks.values()]
+    values = [value for value in (getattr(component, "value", None) for component in demo.blocks.values()) if isinstance(value, str)]
+
+    assert recorded_show_reviewed == [True]
+    assert "Document Filter" not in labels
+    assert "Document" not in labels
+    assert "Show reviewed" not in labels
+    assert "Refresh" not in values
+    assert "# Processed Document Reviewer" not in values

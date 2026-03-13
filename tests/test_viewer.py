@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import sys
 import types
+import warnings
 from pathlib import Path
 
 import pandas as pd
@@ -161,3 +162,41 @@ def test_handle_review_action_uses_shared_entry_persistence(monkeypatch, tmp_pat
 
     assert calls == ["accept"]
     assert result[0].loc[0, "review_status"] == "accepted"
+
+
+def test_create_app_does_not_render_profile_selector(monkeypatch, tmp_path):
+    empty_df = pd.DataFrame()
+    empty_state = viewer.ViewerRenderState(
+        display_df=empty_df,
+        summary_html="",
+        plot=viewer.go.Figure(),
+        filtered_df=empty_df,
+        current_idx=0,
+        position_text="",
+        source_image_value=None,
+        details_html="",
+        status_html="",
+        banner_html="",
+    )
+
+    monkeypatch.setattr(viewer, "_load_output_data", lambda output_path, lab_specs, demographics: (empty_df, []))
+    monkeypatch.setattr(
+        viewer,
+        "_render_viewer_state",
+        lambda full_df, filtered_df, output_path, idx, summary_df=None: empty_state,
+    )
+
+    context = types.SimpleNamespace(
+        output_path=tmp_path,
+        lab_specs=None,
+        demographics=None,
+    )
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Expected 4 arguments for function.*", category=UserWarning)
+        warnings.filterwarnings("ignore", message="Expected at least 4 arguments for function.*", category=UserWarning)
+        demo = viewer.create_app(context)
+
+    labels = [getattr(component, "label", None) for component in demo.blocks.values()]
+
+    assert "Profile" not in labels
