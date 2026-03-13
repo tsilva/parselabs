@@ -12,15 +12,12 @@ Usage:
 """
 
 import argparse
-import hashlib
 import logging
 import re
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from parselabs.config import ProfileConfig  # noqa: E402
+from parselabs.store import compute_file_hash  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -31,14 +28,10 @@ _HASH_SUFFIX_RE = re.compile(r"_[0-9a-f]{8}$")
 def _compute_file_hash(file_path: Path, hash_length: int = 8) -> str:
     """Compute SHA-256 hash of a file, returning first `hash_length` hex chars.
 
-    # Duplicated from main.py to avoid importing it (triggers side effects).
+    Compatibility wrapper around the shared processed-document hash helper.
     """
 
-    h = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-    return h.hexdigest()[:hash_length]
+    return compute_file_hash(file_path, hash_length=hash_length)
 
 
 def _find_matching_pdf(stem: str, input_path: Path, input_file_regex: str | None) -> Path | None:

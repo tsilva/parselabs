@@ -24,7 +24,18 @@ from parselabs.config import (  # noqa: E402
     LabSpecsConfig,
     ProfileConfig,
 )
-from parselabs.documents import (  # noqa: E402
+from parselabs.dataset import (  # noqa: E402
+    COLUMN_SCHEMA,
+    DOCUMENT_REVIEW_COLUMNS,
+    build_document_review_dataframe,
+    get_column_lists,
+    get_document_review_summary,
+    iter_processed_documents,
+    load_document_review_rows,
+    rebuild_document_csv,
+    transform_rows_to_final_export,
+)
+from parselabs.store import (  # noqa: E402
     build_hashed_csv_path as build_hashed_csv_path_from_store,
     compute_file_hash as compute_document_hash,
     discover_pdf_files,
@@ -33,22 +44,16 @@ from parselabs.documents import (  # noqa: E402
     is_page_payload_reusable,
 )
 from parselabs.exceptions import ConfigurationError, PipelineError  # noqa: E402
-from parselabs.export_schema import COLUMN_SCHEMA, get_column_lists  # noqa: E402
 from parselabs.extraction import (  # noqa: E402
     extract_labs_from_page_image,
     extract_labs_from_text,
 )
 from parselabs.paths import get_profiles_dir  # noqa: E402
-from parselabs.rows import (  # noqa: E402
-    DOCUMENT_REVIEW_COLUMNS,
-    build_document_review_dataframe,
-    get_document_review_summary,
-    iter_processed_documents,
-    load_document_review_rows,
-    rebuild_document_csv,
-    transform_rows_to_final_export,
+from parselabs.runtime import (  # noqa: E402
+    RuntimeContext,
+    add_profile_arguments,
+    get_openai_client as get_openai_client_from_runtime,
 )
-from parselabs.profiles import RuntimeContext, add_profile_arguments  # noqa: E402
 from parselabs.utils import (  # noqa: E402
     create_page_image_variants,
     setup_logging,
@@ -64,14 +69,8 @@ EXTRACTION_FAILURE_RAW_NAME = "[EXTRACTION FAILED]"
 def get_openai_client(config: ExtractionConfig) -> OpenAI:
     """Return a cached OpenAI client for the current profile configuration."""
 
-    cache_key = (config.openrouter_base_url, config.openrouter_api_key)
-    cached_client = _client_cache.get(cache_key)
-    if cached_client is None:
-        cached_client = OpenAI(
-            base_url=config.openrouter_base_url,
-            api_key=config.openrouter_api_key,
-        )
-        _client_cache[cache_key] = cached_client
+    cached_client = get_openai_client_from_runtime(config)
+    _client_cache[(config.openrouter_base_url, config.openrouter_api_key)] = cached_client
     return cached_client
 
 
@@ -697,34 +696,22 @@ def _prepare_pdf_run(pdf_files: list[Path], output_path: Path) -> PdfPreflightRe
     if len(pdf_files) > 1:
         logger.info("Hashing PDFs for deduplication...")
         pdf_iterator = tqdm(pdf_files, desc="Hashing PDFs", unit="pdf")
-
-    seen_hashes: dict[str, Path] = {}
-    pdfs_to_process: list[PreflightPdfTask] = []
-    duplicates: list[tuple[Path, Path]] = []
-
-    for pdf_path in pdf_iterator:
-        file_hash = _compute_file_hash(pdf_path.resolve())
-
-        # Skip repeated exact-content files during this run.
-        if file_hash in seen_hashes:
-            duplicates.append((pdf_path, seen_hashes[file_hash]))
-            continue
-
-        seen_hashes[file_hash] = pdf_path
-        pdfs_to_process.append(
-            PreflightPdfTask(
-                pdf_path=pdf_path,
-                file_hash=file_hash,
-                csv_path=_build_hashed_csv_path(pdf_path, output_path, file_hash),
-                resolved_path=pdf_path.resolve(),
-                size_bytes=pdf_path.stat().st_size,
-                mtime_ns=pdf_path.stat().st_mtime_ns,
-            )
+    run_plan = plan_pdf_run(list(pdf_iterator), output_path)
+    pdfs_to_process = [
+        PreflightPdfTask(
+            pdf_path=document.source_pdf,
+            file_hash=document.file_hash,
+            csv_path=document.csv_path,
+            resolved_path=document.source_pdf.resolve(),
+            size_bytes=document.source_pdf.stat().st_size,
+            mtime_ns=document.source_pdf.stat().st_mtime_ns,
         )
+        for document in run_plan.documents_to_process
+    ]
 
     return PdfPreflightResult(
         pdfs_to_process=pdfs_to_process,
-        duplicates=duplicates,
+        duplicates=run_plan.duplicates,
         skipped_count=0,
     )
 
