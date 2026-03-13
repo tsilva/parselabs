@@ -45,7 +45,7 @@ def run_legacy_utility(command: str, argv: list[str] | None = None) -> int:
         raise RuntimeError(f"Utility module '{module_name}' does not expose main().")
 
     old_argv = sys.argv
-    sys.argv = [f"parselabs-admin {command}", *(argv or [])]
+    sys.argv = [f"parselabs admin {command}", *(argv or [])]
 
     try:
         result = module.main()
@@ -62,7 +62,7 @@ def _help_text() -> str:
 
     commands = "\n".join(f"  {name}" for name in sorted(UTILITY_MODULES))
     return (
-        "Usage: parselabs-admin <command> [args]\n\n"
+        "Usage: parselabs admin <command> [args]\n\n"
         "Commands:\n"
         f"{commands}\n"
     )

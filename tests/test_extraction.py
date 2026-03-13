@@ -2,7 +2,7 @@ import warnings
 
 from pydantic.warnings import PydanticDeprecatedSince211
 
-from parselabs.extraction import HealthLabReport, LabResult, _fix_lab_results_format
+from parselabs.extraction import TOOLS, HealthLabReport, HealthLabReportExtraction, LabResult, _fix_lab_results_format
 
 
 def test_fix_lab_results_format_recovers_stringified_json_items():
@@ -115,3 +115,32 @@ def test_normalize_empty_optionals_clears_empty_strings_without_pydantic_depreca
     assert report.lab_results[0].raw_lab_unit is None
     assert report.lab_results[0].raw_reference_range is None
     assert report.lab_results[0].raw_comments is None
+
+
+def test_llm_tool_schema_field_shape_remains_stable():
+    schema = HealthLabReportExtraction.model_json_schema()
+    tool_schema = TOOLS[0]["function"]["parameters"]
+    lab_result_schema = schema["$defs"]["LabResultExtraction"]["properties"]
+
+    assert tool_schema == schema
+    assert list(schema["properties"]) == [
+        "collection_date",
+        "report_date",
+        "lab_facility",
+        "page_has_lab_data",
+        "lab_results",
+    ]
+    assert list(lab_result_schema) == [
+        "raw_lab_name",
+        "raw_value",
+        "raw_lab_unit",
+        "raw_reference_range",
+        "raw_reference_min",
+        "raw_reference_max",
+        "raw_comments",
+        "bbox_left",
+        "bbox_top",
+        "bbox_right",
+        "bbox_bottom",
+    ]
+    assert "pattern" not in schema["properties"]["collection_date"]

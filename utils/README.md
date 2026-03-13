@@ -1,6 +1,6 @@
 # Utility Scripts
 
-`parselabs-admin` is the preferred entry point for maintenance and migration commands. The legacy `utils/*.py` scripts still work as compatibility wrappers, but new documentation should prefer the consolidated admin CLI.
+`parselabs admin` is the preferred entry point for maintenance and migration commands. The legacy `utils/*.py` scripts still work as compatibility wrappers, but new documentation should prefer the consolidated admin CLI.
 
 ## Lab Specifications Manager
 
@@ -19,16 +19,16 @@ Consolidated utility for managing lab_specs.json operations.
 Usage:
 ```bash
 # Sort lab specifications alphabetically
-parselabs-admin lab-specs sort
+parselabs admin lab-specs sort
 
 # Fix encoding issues (creates backup by default)
-parselabs-admin lab-specs fix-encoding
+parselabs admin lab-specs fix-encoding
 
 # Build conversion factors from extracted data
-parselabs-admin lab-specs build-conversions --input output/all.csv
+parselabs admin lab-specs build-conversions --input output/all.csv
 
 # Build healthy ranges using LLM
-parselabs-admin lab-specs build-ranges --user-stats user_stats.json
+parselabs admin lab-specs build-ranges --user-stats user_stats.json
 ```
 
 Options:
@@ -57,7 +57,7 @@ Validates:
 Usage:
 ```bash
 # Run standalone
-parselabs-admin validate-lab-specs
+parselabs admin validate-lab-specs
 
 # Or as part of test suite
 python test.py
@@ -74,7 +74,7 @@ Analyze $UNKNOWN$ values in extracted results to identify patterns and missing l
 
 Usage:
 ```bash
-parselabs-admin analyze-unknowns
+parselabs admin analyze-unknowns
 ```
 
 ## Migration
@@ -85,13 +85,13 @@ Batch-rename legacy output directories to include the file hash suffix (`{stem}/
 Usage:
 ```bash
 # Preview changes without renaming
-parselabs-admin migrate-output-dirs --dry-run
+parselabs admin migrate-output-dirs --dry-run
 
 # Migrate a single profile
-parselabs-admin migrate-output-dirs --profile tsilva
+parselabs admin migrate-output-dirs --profile tsilva
 
 # Migrate all profiles
-parselabs-admin migrate-output-dirs
+parselabs admin migrate-output-dirs
 ```
 
 ### migrate_raw_columns.py
@@ -99,9 +99,9 @@ Rename `_raw` suffix columns to `raw_` prefix in JSON, per-document CSV, and all
 
 Usage:
 ```bash
-parselabs-admin migrate-raw-columns --profile tsilva
-parselabs-admin migrate-raw-columns --profile tsilva --dry-run
-parselabs-admin migrate-raw-columns
+parselabs admin migrate-raw-columns --profile tsilva
+parselabs admin migrate-raw-columns --profile tsilva --dry-run
+parselabs admin migrate-raw-columns
 ```
 
 ## Legacy Scripts (Consolidated)

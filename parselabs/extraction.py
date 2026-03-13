@@ -6,6 +6,7 @@ import json
 import logging
 import re
 from pathlib import Path
+from typing import Annotated
 
 from openai import APIError, OpenAI
 from pydantic import BaseModel, Field, field_validator
@@ -21,6 +22,96 @@ BBOX_FIELDS = [
     "bbox_bottom",
 ]
 
+RAW_LAB_NAME_FIELD = Annotated[
+    str,
+    Field(
+        description="Test name ONLY as written in the PDF. Must contain ONLY the test name - DO NOT include values, units, reference ranges, or field labels. WRONG: 'Glucose, raw_value: 100' CORRECT: 'Glucose'",
+    ),
+]
+RAW_VALUE_FIELD = Annotated[
+    str | None,
+    Field(
+        default=None,
+        description="Result value ONLY. Must contain ONLY the numeric or text result - DO NOT include test names, units, or field labels. Examples: '5.2', '14.8', 'NEGATIVO', 'POSITIVO'",
+    ),
+]
+RAW_LAB_UNIT_FIELD = Annotated[
+    str | None,
+    Field(
+        default=None,
+        description="Unit ONLY as written in PDF. Must contain ONLY the unit symbol - DO NOT include values or test names. Examples: 'mg/dL', '%', 'U/L'",
+    ),
+]
+RAW_REFERENCE_RANGE_FIELD = Annotated[
+    str | None,
+    Field(
+        default=None,
+        description="Complete reference range text EXACTLY as shown.",
+    ),
+]
+BBOX_LEFT_FIELD = Annotated[
+    float | None,
+    Field(
+        default=None,
+        description="Optional normalized left edge of the result bounding box on the page. Use the 0-1000 scale relative to full page width.",
+    ),
+]
+BBOX_TOP_FIELD = Annotated[
+    float | None,
+    Field(
+        default=None,
+        description="Optional normalized top edge of the result bounding box on the page. Use the 0-1000 scale relative to full page height.",
+    ),
+]
+BBOX_RIGHT_FIELD = Annotated[
+    float | None,
+    Field(
+        default=None,
+        description="Optional normalized right edge of the result bounding box on the page. Use the 0-1000 scale relative to full page width.",
+    ),
+]
+BBOX_BOTTOM_FIELD = Annotated[
+    float | None,
+    Field(
+        default=None,
+        description="Optional normalized bottom edge of the result bounding box on the page. Use the 0-1000 scale relative to full page height.",
+    ),
+]
+COLLECTION_DATE_FIELD = Annotated[
+    str | None,
+    Field(
+        default=None,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Specimen collection date in YYYY-MM-DD format",
+    ),
+]
+REPORT_DATE_FIELD = Annotated[
+    str | None,
+    Field(
+        default=None,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Report issue date in YYYY-MM-DD format",
+    ),
+]
+EXTRACTION_COLLECTION_DATE_FIELD = Annotated[
+    str | None,
+    Field(
+        default=None,
+        description="Specimen collection date in YYYY-MM-DD format",
+    ),
+]
+EXTRACTION_REPORT_DATE_FIELD = Annotated[
+    str | None,
+    Field(
+        default=None,
+        description="Report issue date in YYYY-MM-DD format",
+    ),
+]
+LAB_FACILITY_FIELD = Annotated[
+    str | None,
+    Field(default=None, description="Name of laboratory that performed tests"),
+]
+
 
 # ========================================
 # Pydantic Models
@@ -31,21 +122,10 @@ class LabResult(BaseModel):
     """Single lab test result - optimized for extraction accuracy."""
 
     # Raw extraction (exactly as shown in PDF)
-    raw_lab_name: str = Field(
-        description="Test name ONLY as written in the PDF. Must contain ONLY the test name - DO NOT include values, units, reference ranges, or field labels. WRONG: 'Glucose, raw_value: 100' CORRECT: 'Glucose'",
-    )
-    raw_value: str | None = Field(
-        default=None,
-        description="Result value ONLY. Must contain ONLY the numeric or text result - DO NOT include test names, units, or field labels. Examples: '5.2', '14.8', 'NEGATIVO', 'POSITIVO'",
-    )
-    raw_lab_unit: str | None = Field(
-        default=None,
-        description="Unit ONLY as written in PDF. Must contain ONLY the unit symbol - DO NOT include values or test names. Examples: 'mg/dL', '%', 'U/L'",
-    )
-    raw_reference_range: str | None = Field(
-        default=None,
-        description="Complete reference range text EXACTLY as shown.",
-    )
+    raw_lab_name: RAW_LAB_NAME_FIELD
+    raw_value: RAW_VALUE_FIELD
+    raw_lab_unit: RAW_LAB_UNIT_FIELD
+    raw_reference_range: RAW_REFERENCE_RANGE_FIELD
     raw_reference_min: float | None = Field(
         default=None,
         description="Minimum reference value as a PLAIN NUMBER ONLY. Parse from reference_range. Examples: '< 40' → null, '150 - 400' → 150, '26.5-32.6' → 26.5",
@@ -58,22 +138,10 @@ class LabResult(BaseModel):
         default=None,
         description="Additional notes or remarks about the test (NOT the test result itself). Only use for extra information like methodology notes or special conditions.",
     )
-    bbox_left: float | None = Field(
-        default=None,
-        description="Optional normalized left edge of the result bounding box on the page. Use the 0-1000 scale relative to full page width.",
-    )
-    bbox_top: float | None = Field(
-        default=None,
-        description="Optional normalized top edge of the result bounding box on the page. Use the 0-1000 scale relative to full page height.",
-    )
-    bbox_right: float | None = Field(
-        default=None,
-        description="Optional normalized right edge of the result bounding box on the page. Use the 0-1000 scale relative to full page width.",
-    )
-    bbox_bottom: float | None = Field(
-        default=None,
-        description="Optional normalized bottom edge of the result bounding box on the page. Use the 0-1000 scale relative to full page height.",
-    )
+    bbox_left: BBOX_LEFT_FIELD
+    bbox_top: BBOX_TOP_FIELD
+    bbox_right: BBOX_RIGHT_FIELD
+    bbox_bottom: BBOX_BOTTOM_FIELD
     # Internal fields (added by pipeline, not by LLM) — excluded from JSON serialization
     lab_name_standardized: str | None = Field(default=None, exclude=True)
     lab_unit_standardized: str | None = Field(default=None, exclude=True)
@@ -135,17 +203,9 @@ class LabResult(BaseModel):
 class HealthLabReport(BaseModel):
     """Document-level lab report metadata."""
 
-    collection_date: str | None = Field(
-        default=None,
-        pattern=r"^\d{4}-\d{2}-\d{2}$",
-        description="Specimen collection date in YYYY-MM-DD format",
-    )
-    report_date: str | None = Field(
-        default=None,
-        pattern=r"^\d{4}-\d{2}-\d{2}$",
-        description="Report issue date in YYYY-MM-DD format",
-    )
-    lab_facility: str | None = Field(default=None, description="Name of laboratory that performed tests")
+    collection_date: EXTRACTION_COLLECTION_DATE_FIELD
+    report_date: EXTRACTION_REPORT_DATE_FIELD
+    lab_facility: LAB_FACILITY_FIELD
     page_has_lab_data: bool | None = Field(
         default=None,
         description="True if page contains lab test results, False if page is cover/instructions/administrative with no lab data",
@@ -193,21 +253,10 @@ class LabResultExtraction(BaseModel):
     token usage and avoid confusing the model.
     """
 
-    raw_lab_name: str = Field(
-        description="Test name ONLY as written in the PDF. Must contain ONLY the test name - DO NOT include values, units, reference ranges, or field labels. WRONG: 'Glucose, raw_value: 100' CORRECT: 'Glucose'"
-    )
-    raw_value: str | None = Field(
-        default=None,
-        description="Result value ONLY. Must contain ONLY the numeric or text result - DO NOT include test names, units, or field labels. Examples: '5.2', '14.8', 'NEGATIVO', 'POSITIVO'",
-    )
-    raw_lab_unit: str | None = Field(
-        default=None,
-        description="Unit ONLY as written in PDF. Must contain ONLY the unit symbol - DO NOT include values or test names. Examples: 'mg/dL', '%', 'U/L'",
-    )
-    raw_reference_range: str | None = Field(
-        default=None,
-        description="Complete reference range text EXACTLY as shown.",
-    )
+    raw_lab_name: RAW_LAB_NAME_FIELD
+    raw_value: RAW_VALUE_FIELD
+    raw_lab_unit: RAW_LAB_UNIT_FIELD
+    raw_reference_range: RAW_REFERENCE_RANGE_FIELD
     raw_reference_min: float | None = Field(
         default=None,
         description="Minimum reference value as a PLAIN NUMBER ONLY. Parse from reference_range.",
@@ -220,22 +269,10 @@ class LabResultExtraction(BaseModel):
         default=None,
         description="Additional notes or remarks about the test (NOT the test result itself).",
     )
-    bbox_left: float | None = Field(
-        default=None,
-        description="Optional normalized left edge of the result bounding box on the page. Use the 0-1000 scale relative to full page width.",
-    )
-    bbox_top: float | None = Field(
-        default=None,
-        description="Optional normalized top edge of the result bounding box on the page. Use the 0-1000 scale relative to full page height.",
-    )
-    bbox_right: float | None = Field(
-        default=None,
-        description="Optional normalized right edge of the result bounding box on the page. Use the 0-1000 scale relative to full page width.",
-    )
-    bbox_bottom: float | None = Field(
-        default=None,
-        description="Optional normalized bottom edge of the result bounding box on the page. Use the 0-1000 scale relative to full page height.",
-    )
+    bbox_left: BBOX_LEFT_FIELD
+    bbox_top: BBOX_TOP_FIELD
+    bbox_right: BBOX_RIGHT_FIELD
+    bbox_bottom: BBOX_BOTTOM_FIELD
 
 
 class HealthLabReportExtraction(BaseModel):
@@ -245,15 +282,9 @@ class HealthLabReportExtraction(BaseModel):
     to reduce schema size (~41% smaller) and avoid confusing the model.
     """
 
-    collection_date: str | None = Field(
-        default=None,
-        description="Specimen collection date in YYYY-MM-DD format",
-    )
-    report_date: str | None = Field(
-        default=None,
-        description="Report issue date in YYYY-MM-DD format",
-    )
-    lab_facility: str | None = Field(default=None, description="Name of laboratory that performed tests")
+    collection_date: COLLECTION_DATE_FIELD
+    report_date: REPORT_DATE_FIELD
+    lab_facility: LAB_FACILITY_FIELD
     page_has_lab_data: bool | None = Field(
         default=None,
         description="True if page contains lab test results, False if page is cover/instructions/administrative",

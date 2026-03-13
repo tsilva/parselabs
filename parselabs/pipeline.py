@@ -10,6 +10,7 @@ import sys  # noqa: E402
 from dataclasses import dataclass, field  # noqa: E402
 from multiprocessing import Pool  # noqa: E402
 from pathlib import Path  # noqa: E402
+from typing import Callable  # noqa: E402
 
 import pandas as pd  # noqa: E402
 import pdf2image  # noqa: E402
@@ -44,6 +45,7 @@ from parselabs.runtime import (  # noqa: E402
     get_openai_client,
 )
 from parselabs.store import (  # noqa: E402
+    DocumentRef,
     discover_pdf_files,
     is_page_payload_reusable,
     plan_pdf_run,
@@ -291,39 +293,56 @@ def _extract_or_load_page_data(
 
         logger.info(f"[{page_name}] Re-running extraction because cached JSON is missing, invalid, or failed")
 
-    # Prefer text extraction when the page has enough embedded text.
+    attempts: list[tuple[str, Callable[[], dict]]] = []
+
+    # Prefer text extraction only when the embedded page text is substantial enough.
     if _text_has_enough_content(page_text, min_chars=_MIN_PAGE_TEXT_CHARS):
-        text_candidate = _extract_page_data_from_text(page_text, config, page_name)
-        if not _page_requires_image_fallback(text_candidate):
-            page_data = text_candidate
-        else:
-            logger.warning(
-                f"[{page_name}] TEXT extraction needs fallback; trying VISION primary"
-            )
-            page_data = None
-    else:
-        page_data = None
+        attempts.append(("TEXT extraction", lambda: _extract_page_data_from_text(page_text, config, page_name)))
 
-    # Fall back to the primary image only when text was unavailable or unusable.
+    # Fall back through the primary image and then the alternate image.
+    attempts.extend(
+        [
+            (
+                "Primary vision extraction",
+                lambda: _extract_page_data_from_image(
+                    image_paths["primary"],
+                    config,
+                    page_name,
+                    "primary",
+                ),
+            ),
+            (
+                "Fallback vision extraction",
+                lambda: _extract_page_data_from_image(
+                    image_paths["fallback"],
+                    config,
+                    page_name,
+                    "fallback",
+                ),
+            ),
+        ]
+    )
+
+    page_data: dict | None = None
+
+    # Stop at the first extraction attempt that produces a reviewable payload.
+    for attempt_idx, (attempt_label, attempt_fn) in enumerate(attempts):
+        candidate = attempt_fn()
+
+        if not _page_requires_image_fallback(candidate):
+            page_data = candidate
+            break
+
+        has_more_attempts = attempt_idx < len(attempts) - 1
+        if has_more_attempts:
+            logger.warning(f"[{page_name}] {attempt_label} needs fallback; trying next route")
+            continue
+
+        page_data = candidate
+        break
+
     if page_data is None:
-        primary_candidate = _extract_page_data_from_image(
-            image_paths["primary"],
-            config,
-            page_name,
-            "primary",
-        )
-
-        # Retry once on the alternate image only when the primary image still failed.
-        if _page_requires_image_fallback(primary_candidate):
-            logger.warning(f"[{page_name}] Primary vision extraction needs fallback; trying alternate image")
-            page_data = _extract_page_data_from_image(
-                image_paths["fallback"],
-                config,
-                page_name,
-                "fallback",
-            )
-        else:
-            page_data = primary_candidate
+        page_data = {"lab_results": []}
 
     # Set source_file programmatically (LLM can't know the filename)
     page_data["source_file"] = page_name
@@ -610,20 +629,11 @@ def _extract_document_date(data_dict: dict, pdf_stem: str) -> str | None:
 REQUIRED_CSV_COLS = ["result_index", "page_number", "source_file"]
 
 
-@dataclass(frozen=True)
-class PreflightPdfTask:
-    """A unique PDF to process after exact-content deduplication."""
-
-    pdf_path: Path
-    file_hash: str
-    csv_path: Path
-
-
 @dataclass
 class PdfPreflightResult:
     """Unique PDFs plus duplicate metadata for one pipeline invocation."""
 
-    pdfs_to_process: list[PreflightPdfTask]
+    pdfs_to_process: list[DocumentRef]
     duplicates: list[tuple[Path, Path]]
     cached_csv_paths: list[Path] = field(default_factory=list)
 
@@ -633,9 +643,19 @@ class PipelineRunResult:
     """Final dataframe plus pipeline metadata for one corpus run."""
 
     final_df: pd.DataFrame
+    merged_review_df: pd.DataFrame
     csv_paths: list[Path]
     failed_pages: list[dict]
     pdfs_failed: int
+
+
+@dataclass(frozen=True)
+class ReviewedCorpusResult:
+    """Rebuilt per-document CSVs plus merged review and accepted-export data."""
+
+    csv_paths: list[Path]
+    merged_review_df: pd.DataFrame
+    final_df: pd.DataFrame
 
 
 def _prepare_pdf_run(pdf_files: list[Path], output_path: Path) -> PdfPreflightResult:
@@ -648,17 +668,9 @@ def _prepare_pdf_run(pdf_files: list[Path], output_path: Path) -> PdfPreflightRe
         logger.info("Hashing PDFs for deduplication...")
         pdf_iterator = tqdm(pdf_files, desc="Hashing PDFs", unit="pdf")
     run_plan = plan_pdf_run(list(pdf_iterator), output_path)
-    pdfs_to_process = [
-        PreflightPdfTask(
-            pdf_path=document.source_pdf,
-            file_hash=document.file_hash,
-            csv_path=document.csv_path,
-        )
-        for document in run_plan.documents_to_process
-    ]
 
     return PdfPreflightResult(
-        pdfs_to_process=pdfs_to_process,
+        pdfs_to_process=run_plan.documents_to_process,
         duplicates=run_plan.duplicates,
     )
 
@@ -677,7 +689,7 @@ def _log_validation_stats(validation_stats: dict) -> None:
 
 
 def _process_pdfs_in_parallel(
-    pdfs_to_process: list[PreflightPdfTask],
+    pdfs_to_process: list[DocumentRef],
     config: ExtractionConfig,
     lab_specs: LabSpecsConfig,
     log_dir: Path,
@@ -694,7 +706,7 @@ def _process_pdfs_in_parallel(
     logger.info(f"Using {n_workers} worker(s) for PDF processing")
 
     # Build task tuples for each PDF to process
-    tasks = [(task.pdf_path, task.file_hash, config.output_path, config, lab_specs) for task in pdfs_to_process]
+    tasks = [(task.source_pdf, task.file_hash, config.output_path, config, lab_specs) for task in pdfs_to_process]
 
     if n_workers == 1:
         _init_worker_logging(log_dir)
@@ -756,13 +768,13 @@ Examples:
   parselabs
 
   # Run specific profile:
-  parselabs --profile tsilva
+  parselabs extract --profile tsilva
 
   # List available profiles:
   parselabs --list-profiles
 
   # Override settings:
-  parselabs --profile tsilva --model google/gemini-2.5-pro
+  parselabs extract --profile tsilva --model google/gemini-2.5-pro
         """,
     )
 
@@ -1035,21 +1047,24 @@ def _build_merged_review_dataframe_from_csv_paths(csv_paths: list[Path]) -> pd.D
     return pd.concat(review_frames, ignore_index=True, sort=False)
 
 
-def _build_final_export_from_document_dirs(
+def _collect_reviewed_corpus_from_document_dirs(
     doc_dirs: list[Path],
     lab_specs: LabSpecsConfig,
+    *,
     allow_pending: bool,
-) -> tuple[pd.DataFrame, list[Path]]:
-    """Rebuild review CSVs and publish only accepted reviewed rows for the target documents."""
+) -> ReviewedCorpusResult:
+    """Rebuild document CSVs and collect merged review plus accepted export data."""
 
     csv_paths: list[Path] = []
-    review_rows: list[pd.DataFrame] = []
+    review_frames: list[pd.DataFrame] = []
+    accepted_rows: list[pd.DataFrame] = []
     review_issues: list[str] = []
 
-    # Rebuild every document CSV from canonical page JSON before collecting accepted rows.
+    # Rebuild every document CSV from canonical page JSON before collecting rows.
     for doc_dir in doc_dirs:
         csv_paths.append(rebuild_document_csv(doc_dir, lab_specs))
         review_df = build_document_review_dataframe(doc_dir, lab_specs)
+        review_frames.append(review_df)
         summary = get_document_review_summary(doc_dir, review_df)
 
         # Strict publish mode blocks on pending review state unless explicitly allowed.
@@ -1067,13 +1082,13 @@ def _build_final_export_from_document_dirs(
             issue_text = ", ".join(issue_parts) if issue_parts else "document review incomplete"
             review_issues.append(f"{doc_dir.name}: {issue_text}")
 
-        accepted_rows = load_document_review_rows(doc_dir, include_statuses={"accepted"})
+        accepted_df = load_document_review_rows(doc_dir, include_statuses={"accepted"})
 
         # Skip documents that have not produced any accepted reviewed rows yet.
-        if accepted_rows.empty:
+        if accepted_df.empty:
             continue
 
-        review_rows.append(accepted_rows)
+        accepted_rows.append(accepted_df)
 
     # Guard: Strict publish mode must stop before writing outputs when review is incomplete.
     if review_issues:
@@ -1083,20 +1098,49 @@ def _build_final_export_from_document_dirs(
             f"{issue_text}"
         )
 
-    # Guard: Empty accepted corpora still produce a stable empty export schema.
-    if not review_rows:
-        export_cols, _, _, _ = get_column_lists(COLUMN_SCHEMA)
-        return pd.DataFrame(columns=export_cols), csv_paths
+    merged_review_df = (
+        pd.concat(review_frames, ignore_index=True, sort=False)
+        if review_frames
+        else pd.DataFrame(columns=DOCUMENT_REVIEW_COLUMNS)
+    )
 
-    merged_df = pd.concat(review_rows, ignore_index=True)
+    # Guard: Empty accepted corpora still produce a stable empty export schema.
+    if not accepted_rows:
+        export_cols, _, _, _ = get_column_lists(COLUMN_SCHEMA)
+        return ReviewedCorpusResult(
+            csv_paths=csv_paths,
+            merged_review_df=merged_review_df,
+            final_df=pd.DataFrame(columns=export_cols),
+        )
+
+    merged_accepted_df = pd.concat(accepted_rows, ignore_index=True)
     logger.info("Applying shared export pipeline to accepted reviewed rows...")
     final_df, validation_stats = transform_rows_to_final_export(
-        merged_df,
+        merged_accepted_df,
         lab_specs,
         apply_standardization=True,
     )
     _log_validation_stats(validation_stats)
-    return final_df, csv_paths
+    return ReviewedCorpusResult(
+        csv_paths=csv_paths,
+        merged_review_df=merged_review_df,
+        final_df=final_df,
+    )
+
+
+def _build_final_export_from_document_dirs(
+    doc_dirs: list[Path],
+    lab_specs: LabSpecsConfig,
+    allow_pending: bool,
+) -> tuple[pd.DataFrame, list[Path]]:
+    """Rebuild review CSVs and publish only accepted reviewed rows for the target documents."""
+
+    reviewed_corpus = _collect_reviewed_corpus_from_document_dirs(
+        doc_dirs,
+        lab_specs,
+        allow_pending=allow_pending,
+    )
+    return reviewed_corpus.final_df, reviewed_corpus.csv_paths
 
 
 def run_pipeline_for_pdf_files(
@@ -1138,16 +1182,16 @@ def run_pipeline_for_pdf_files(
         raise PipelineError("No PDFs successfully processed.")
 
     logger.info(f"Successfully processed {len(csv_paths)} document review snapshots")
-    doc_dirs = [csv_path.parent for csv_path in csv_paths]
-    final_df, csv_paths = _build_final_export_from_document_dirs(
-        doc_dirs,
+    reviewed_corpus = _collect_reviewed_corpus_from_document_dirs(
+        [csv_path.parent for csv_path in csv_paths],
         lab_specs,
         allow_pending=True,
     )
 
     return PipelineRunResult(
-        final_df=final_df,
-        csv_paths=csv_paths,
+        final_df=reviewed_corpus.final_df,
+        merged_review_df=reviewed_corpus.merged_review_df,
+        csv_paths=reviewed_corpus.csv_paths,
         failed_pages=all_failed_pages,
         pdfs_failed=pdfs_failed,
     )
@@ -1195,21 +1239,19 @@ def _run_reviewed_json_rebuild(profile_name: str, allow_pending: bool) -> None:
     if not documents:
         raise PipelineError(f"No processed documents found in {profile.output_path}")
 
-    csv_paths: list[Path] = []
-
-    # Rebuild every document CSV so the merged export reflects the current JSON state.
-    for document in documents:
-        csv_paths.append(rebuild_document_csv(document.doc_dir, lab_specs))
-
-    merged_review_df = _build_merged_review_dataframe_from_csv_paths(csv_paths)
+    reviewed_corpus = _collect_reviewed_corpus_from_document_dirs(
+        [document.doc_dir for document in documents],
+        lab_specs,
+        allow_pending=allow_pending,
+    )
 
     _export_final_results(
-        merged_review_df,
+        reviewed_corpus.merged_review_df,
         hidden_cols,
         widths,
         profile.output_path,
         [],
-        csv_paths,
+        reviewed_corpus.csv_paths,
     )
 
 
@@ -1243,11 +1285,10 @@ def run_for_profile(args, profile_name: str) -> None:
         raise PipelineError(f"No PDF files found matching '{config.input_file_regex}' in {config.input_path}")
 
     pipeline_result = run_pipeline_for_pdf_files(pdf_files, config, lab_specs)
-    merged_review_df = _build_merged_review_dataframe_from_csv_paths(pipeline_result.csv_paths)
 
     # Export the merged review corpus so all.csv mirrors the per-document review CSVs.
     _export_final_results(
-        merged_review_df,
+        pipeline_result.merged_review_df,
         hidden_cols,
         widths,
         config.output_path,
