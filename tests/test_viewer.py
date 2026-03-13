@@ -16,7 +16,7 @@ sys.modules.setdefault("plotly", plotly_module)
 sys.modules.setdefault("plotly.graph_objects", graph_objects_module)
 sys.modules.setdefault("plotly.subplots", subplots_module)
 
-viewer = importlib.import_module("viewer")
+viewer = importlib.import_module("parselabs.results_view")
 
 
 def _write_viewer_page(output_path: Path, stem: str = "glucose") -> Path:

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from main import _discover_pdf_files
+from parselabs.pipeline import _discover_pdf_files
 from parselabs.exceptions import PipelineError
 
 

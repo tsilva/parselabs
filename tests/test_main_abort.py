@@ -2,7 +2,7 @@ from argparse import Namespace
 
 import pytest
 
-import main
+from parselabs import pipeline as main
 from parselabs.exceptions import ConfigurationError
 
 

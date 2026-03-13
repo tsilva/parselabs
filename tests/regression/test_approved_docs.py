@@ -75,7 +75,7 @@ def approved_regression_run():
         pytest.fail("RUN_APPROVED_DOCS=1 is set, but no approved cases were found under tests/fixtures/approved/.")
 
     try:
-        from main import run_pipeline_for_pdf_files
+        from parselabs.pipeline import run_pipeline_for_pdf_files
     except ModuleNotFoundError as exc:
         pytest.fail(f"Approved document regressions require the extraction runtime dependencies: {exc}")
 

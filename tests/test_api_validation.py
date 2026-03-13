@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from main import _classify_api_check_error, validate_api_access
+from parselabs.pipeline import _classify_api_check_error, validate_api_access
 
 
 class _FakeCompletions:
