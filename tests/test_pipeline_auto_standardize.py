@@ -47,7 +47,7 @@ def test_maybe_auto_standardize_outputs_rebuilds_when_refresh_changes(tmp_path, 
         main,
         "refresh_standardization_caches_from_dataframe",
         lambda *args, **kwargs: StandardizationRefreshResult(
-            uncached_names=("pH",),
+            uncached_names=(("pH", None),),
             uncached_unit_pairs=(("", "Urine Type II - pH"),),
             name_updates=1,
             unit_updates=1,
@@ -94,11 +94,11 @@ def test_maybe_auto_standardize_outputs_skips_rebuild_when_disabled(tmp_path, mo
         "refresh_standardization_caches_from_dataframe",
         lambda *args, **kwargs: refresh_calls.append(kwargs["dry_run"])
         or StandardizationRefreshResult(
-            uncached_names=("Glucose",),
+            uncached_names=(("Glucose", None),),
             uncached_unit_pairs=(),
             name_updates=0,
             unit_updates=0,
-            unresolved_names=("Glucose",),
+            unresolved_names=(("Glucose", None),),
             unresolved_unit_pairs=(),
         ),
     )

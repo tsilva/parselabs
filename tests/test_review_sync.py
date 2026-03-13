@@ -30,6 +30,7 @@ def _write_processed_document(
     statuses: list[str | None],
     stem: str = "glucose",
     raw_names: list[str] | None = None,
+    raw_sections: list[str | None] | None = None,
     raw_values: list[str] | None = None,
     raw_units: list[str] | None = None,
     raw_reference_mins: list[float | None] | None = None,
@@ -51,6 +52,10 @@ def _write_processed_document(
             "raw_reference_min": raw_reference_mins[idx] if raw_reference_mins is not None else 70,
             "raw_reference_max": raw_reference_maxs[idx] if raw_reference_maxs is not None else 100,
         }
+
+        # Persist section metadata when the test needs context-aware standardization.
+        if raw_sections is not None and raw_sections[idx] is not None:
+            result["raw_section_name"] = raw_sections[idx]
 
         # Persist bbox metadata when the test needs review-image highlighting.
         if bboxes is not None and bboxes[idx] is not None:
@@ -89,6 +94,51 @@ def _make_lab_specs(tmp_path: Path) -> LabSpecsConfig:
                     "biological_min": 0,
                     "biological_max": 1000,
                 }
+            }
+        ),
+        encoding="utf-8",
+    )
+    return LabSpecsConfig(config_path=config_path)
+
+
+def _make_mixed_section_lab_specs(tmp_path: Path) -> LabSpecsConfig:
+    """Create lab specs that support both blood and urine disambiguation."""
+
+    config_path = tmp_path / "lab_specs_mixed.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "Blood - Glucose (Fasting)": {
+                    "primary_unit": "mg/dL",
+                    "lab_type": "blood",
+                    "loinc_code": "1558-6",
+                    "ranges": {"default": [70, 100]},
+                },
+                "Blood - Leukocytes": {
+                    "primary_unit": "10⁹/L",
+                    "lab_type": "blood",
+                    "loinc_code": "6690-2",
+                    "ranges": {"default": [4.0, 11.0]},
+                },
+                "Urine Type II - Glucose": {
+                    "primary_unit": "boolean",
+                    "lab_type": "urine",
+                    "loinc_code": "5792-7",
+                    "ranges": {"default": [0, 0]},
+                },
+                "Urine Type II - Glucose, Qualitative": {
+                    "primary_unit": "boolean",
+                    "lab_type": "urine",
+                    "loinc_code": "5792-7-qual",
+                    "ranges": {"default": [0, 0]},
+                },
+                "Urine Type II - Sediment - Leukocytes": {
+                    "primary_unit": "/field",
+                    "lab_type": "urine",
+                    "loinc_code": "20408-1",
+                    "alternatives": [{"unit": "/campo", "factor": 1.0}],
+                    "ranges": {"default": [0, 5]},
+                },
             }
         ),
         encoding="utf-8",
@@ -155,9 +205,12 @@ def _make_percentage_variant_lab_specs(tmp_path: Path) -> LabSpecsConfig:
 def _stub_standardization(monkeypatch) -> None:
     """Stub cache-backed standardization so tests stay self-contained."""
 
+    def fake_standardize_lab_names(name_contexts):
+        return {context: "Blood - Glucose" for context in name_contexts}
+
     monkeypatch.setattr(
         "parselabs.rows.standardize_lab_names",
-        lambda raw_names: {name: "Blood - Glucose" for name in raw_names},
+        fake_standardize_lab_names,
     )
     monkeypatch.setattr(
         "parselabs.rows.standardize_lab_units",
@@ -168,9 +221,12 @@ def _stub_standardization(monkeypatch) -> None:
 def _stub_unknown_unit_standardization(monkeypatch) -> None:
     """Stub standardization with known lab names but unresolved units."""
 
+    def fake_standardize_lab_names(name_contexts):
+        return {context: "Blood - Glucose" for context in name_contexts}
+
     monkeypatch.setattr(
         "parselabs.rows.standardize_lab_names",
-        lambda raw_names: {name: "Blood - Glucose" for name in raw_names},
+        fake_standardize_lab_names,
     )
     monkeypatch.setattr(
         "parselabs.rows.standardize_lab_units",
@@ -186,9 +242,22 @@ def _stub_standardization_maps(
 ) -> None:
     """Stub cache-backed standardization with explicit row-level mappings."""
 
+    def fake_standardize_lab_names(name_contexts):
+        results = {}
+
+        # Resolve context-aware keys first so mixed-section tests can disambiguate duplicate raw names.
+        for raw_name, raw_section_name in name_contexts:
+            if (raw_name, raw_section_name) in name_map:
+                results[(raw_name, raw_section_name)] = name_map[(raw_name, raw_section_name)]
+                continue
+
+            results[(raw_name, raw_section_name)] = name_map.get(raw_name, "$UNKNOWN$")
+
+        return results
+
     monkeypatch.setattr(
         "parselabs.rows.standardize_lab_names",
-        lambda raw_names: {name: name_map.get(name, "$UNKNOWN$") for name in raw_names},
+        fake_standardize_lab_names,
     )
     monkeypatch.setattr(
         "parselabs.rows.standardize_lab_units",
@@ -435,7 +504,7 @@ def test_apply_cached_standardization_infers_safe_missing_primary_units(tmp_path
 
     monkeypatch.setattr(
         "parselabs.rows.standardize_lab_names",
-        lambda raw_names: {name: "Urine Type II - pH" for name in raw_names},
+        lambda name_contexts: {context: "Urine Type II - pH" for context in name_contexts},
     )
     monkeypatch.setattr(
         "parselabs.rows.standardize_lab_units",
@@ -455,6 +524,74 @@ def test_apply_cached_standardization_infers_safe_missing_primary_units(tmp_path
 
     assert standardized_df.loc[0, "lab_name_standardized"] == "Urine Type II - pH"
     assert standardized_df.loc[0, "lab_unit_standardized"] == "pH"
+
+
+def test_apply_cached_standardization_uses_raw_section_name_to_disambiguate_mixed_sections(tmp_path, monkeypatch):
+    lab_specs = _make_mixed_section_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            ("Glicose", "Bioquímica"): "Blood - Glucose (Fasting)",
+            ("Glicose", "Elementos anormais"): "Urine Type II - Glucose",
+            ("LEUCOCITOS", "Hemograma"): "Blood - Leukocytes",
+            ("LEUCOCITOS", "Sedimento urinário"): "Urine Type II - Sediment - Leukocytes",
+        },
+        unit_map={
+            ("mg/dL", "Blood - Glucose (Fasting)"): "mg/dL",
+            ("", "Urine Type II - Glucose"): "boolean",
+            ("/campo", "Urine Type II - Sediment - Leukocytes"): "/field",
+            ("10^9/L", "Blood - Leukocytes"): "10⁹/L",
+        },
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Glicose",
+                "raw_section_name": "Elementos anormais",
+                "raw_lab_unit": "",
+            },
+            {
+                "raw_lab_name": "LEUCOCITOS",
+                "raw_section_name": "Sedimento urinário",
+                "raw_lab_unit": "/campo",
+            },
+            {
+                "raw_lab_name": "Glicose",
+                "raw_section_name": "Bioquímica",
+                "raw_lab_unit": "mg/dL",
+            },
+            {
+                "raw_lab_name": "LEUCOCITOS",
+                "raw_section_name": "Hemograma",
+                "raw_lab_unit": "10^9/L",
+            },
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df["lab_name_standardized"].tolist() == [
+        "Urine Type II - Glucose",
+        "Urine Type II - Sediment - Leukocytes",
+        "Blood - Glucose (Fasting)",
+        "Blood - Leukocytes",
+    ]
+
+
+def test_build_document_review_dataframe_preserves_raw_section_name(tmp_path, monkeypatch):
+    lab_specs = _make_lab_specs(tmp_path)
+    _stub_standardization(monkeypatch)
+    doc_dir = tmp_path / "processed" / "glucose_deadbeef"
+    _write_processed_document(
+        doc_dir,
+        [None],
+        raw_sections=["Bioquímica"],
+    )
+
+    review_df = build_document_review_dataframe(doc_dir, lab_specs)
+
+    assert review_df.loc[0, "raw_section_name"] == "Bioquímica"
 
 
 def test_apply_cached_standardization_remaps_percent_units_to_percentage_variants(tmp_path, monkeypatch):
@@ -675,7 +812,10 @@ def test_review_corpus_report_counts_rejections_missing_rows_and_unknowns(tmp_pa
 
     monkeypatch.setattr(
         "parselabs.rows.standardize_lab_names",
-        lambda raw_names: {name: ("Blood - Glucose" if name == "Glucose" else "$UNKNOWN$") for name in raw_names},
+        lambda name_contexts: {
+            context: ("Blood - Glucose" if context[0] == "Glucose" else "$UNKNOWN$")
+            for context in name_contexts
+        },
     )
     monkeypatch.setattr(
         "parselabs.rows.standardize_lab_units",

@@ -12,6 +12,37 @@ logger = logging.getLogger(__name__)
 CACHE_DIR = get_cache_dir()
 
 
+def normalize_name_cache_key_component(raw_name) -> str:
+    """Normalize raw lab-name text into a stable cache-key token."""
+
+    return str(raw_name).lower().strip()
+
+
+def normalize_section_cache_key_component(raw_section_name) -> str:
+    """Normalize missing and textual section labels to a stable cache-key token."""
+
+    normalized = str(raw_section_name).lower().strip()
+
+    # Collapse all blank-like section values so sectionless rows share one fallback path.
+    if normalized in {"", "nan", "none", "null"}:
+        return ""
+
+    return normalized
+
+
+def build_name_cache_key(raw_name, raw_section_name=None) -> str:
+    """Build the canonical cache key for a raw lab name and optional section label."""
+
+    normalized_name = normalize_name_cache_key_component(raw_name)
+    normalized_section = normalize_section_cache_key_component(raw_section_name)
+
+    # Sectionless rows stay backward-compatible with the legacy bare-name key format.
+    if not normalized_section:
+        return normalized_name
+
+    return f"{normalized_name}|{normalized_section}"
+
+
 def normalize_unit_cache_key_component(raw_unit) -> str:
     """Normalize missing and textual raw-unit values to a stable cache key token."""
 
@@ -77,17 +108,17 @@ def save_cache(name: str, cache: dict):
 
 
 def standardize_lab_names(
-    raw_test_names: list[str],
-) -> dict[str, str]:
+    raw_test_names: list[tuple[str, str | None]],
+) -> dict[tuple[str, str | None], str]:
     """
-    Map raw test names to standardized lab names using cache-only lookup.
+    Map raw test names plus optional section labels to standardized lab names using cache-only lookup.
 
     Cache miss returns $UNKNOWN$ and logs a warning.
 
     Args:
-        raw_test_names: List of raw test names from extraction
+        raw_test_names: List of (raw_test_name, raw_section_name) tuples from extraction
     Returns:
-        Dictionary mapping raw_test_name -> standardized_name
+        Dictionary mapping (raw_test_name, raw_section_name) -> standardized_name
     """
 
     # No input names — nothing to standardize
@@ -97,23 +128,40 @@ def standardize_lab_names(
     # Load cache
     cache = load_cache("name_standardization")
 
-    def cache_key(name):
-        return name.lower().strip()
+    normalized_contexts: list[tuple[str, str | None]] = []
+    for raw_name, raw_section_name in raw_test_names:
+        normalized_contexts.append((str(raw_name), raw_section_name if raw_section_name is not None else None))
 
-    # Get unique raw names and check for cache misses
-    unique_raw_names = list(set(raw_test_names))
-    uncached_names = [n for n in unique_raw_names if cache_key(n) not in cache]
+    # Get unique name contexts and check for cache misses.
+    unique_name_contexts = list(set(normalized_contexts))
+    uncached_names: list[tuple[str, str | None]] = []
+    cached_results: dict[tuple[str, str | None], str] = {}
+
+    for raw_name, raw_section_name in unique_name_contexts:
+        cache_key = build_name_cache_key(raw_name, raw_section_name)
+
+        # Section-aware rows only trust the explicit contextual key.
+        if cache_key in cache:
+            cached_results[(raw_name, raw_section_name)] = cache[cache_key]
+            continue
+
+        uncached_names.append((raw_name, raw_section_name))
+        cached_results[(raw_name, raw_section_name)] = UNKNOWN_VALUE
 
     # Log neutral warnings so callers can decide whether to auto-refresh later.
     if uncached_names:
         logger.warning(f"[name_standardization] {len(uncached_names)} uncached names (using $UNKNOWN$ for this pass).")
-        for name in uncached_names[:10]:  # Log first 10 to avoid flooding
-            logger.warning(f"  Cache miss: '{name}'")
+        for raw_name, raw_section_name in uncached_names[:10]:  # Log first 10 to avoid flooding
+            if normalize_section_cache_key_component(raw_section_name):
+                logger.warning(f"  Cache miss: ('{raw_name}', '{raw_section_name}')")
+                continue
+
+            logger.warning(f"  Cache miss: '{raw_name}'")
         if len(uncached_names) > 10:
             logger.warning(f"  ... and {len(uncached_names) - 10} more")
 
-    # Return results for all names from cache ($UNKNOWN$ for misses)
-    return {name: cache.get(cache_key(name), UNKNOWN_VALUE) for name in raw_test_names}
+    # Return results for all names from cache ($UNKNOWN$ for misses).
+    return {context: cached_results.get(context, UNKNOWN_VALUE) for context in normalized_contexts}
 
 
 def standardize_lab_units(

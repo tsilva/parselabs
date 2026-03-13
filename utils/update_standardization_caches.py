@@ -84,7 +84,11 @@ def _log_refresh_result(result) -> None:
 
     if result.unresolved_names:
         logger.warning(f"Unresolved names remaining: {len(result.unresolved_names)}")
-        for raw_name in result.unresolved_names:
+        for raw_name, raw_section_name in result.unresolved_names:
+            if raw_section_name:
+                logger.warning(f"  - ({raw_name}, {raw_section_name})")
+                continue
+
             logger.warning(f"  - {raw_name}")
 
     if result.unresolved_unit_pairs:

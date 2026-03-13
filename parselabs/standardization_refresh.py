@@ -11,7 +11,14 @@ from openai import OpenAI
 
 from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig
 from parselabs.extraction import load_prompt_template
-from parselabs.standardization import load_cache, normalize_unit_cache_key_component, save_cache
+from parselabs.standardization import (
+    build_name_cache_key,
+    load_cache,
+    normalize_name_cache_key_component,
+    normalize_section_cache_key_component,
+    normalize_unit_cache_key_component,
+    save_cache,
+)
 from parselabs.utils import parse_llm_json_response
 
 logger = logging.getLogger(__name__)
@@ -21,11 +28,11 @@ logger = logging.getLogger(__name__)
 class StandardizationRefreshResult:
     """Structured outcome for one cache-refresh pass."""
 
-    uncached_names: tuple[str, ...]
+    uncached_names: tuple[tuple[str, str | None], ...]
     uncached_unit_pairs: tuple[tuple[str, str], ...]
     name_updates: int
     unit_updates: int
-    unresolved_names: tuple[str, ...]
+    unresolved_names: tuple[tuple[str, str | None], ...]
     unresolved_unit_pairs: tuple[tuple[str, str], ...]
     pruned_name_entries: int = 0
     pruned_unit_entries: int = 0
@@ -90,14 +97,20 @@ def _prune_unknown_cache_entries(cache: dict) -> tuple[dict, int]:
 
 
 def _standardize_names_with_llm(
-    uncached_names: list[str],
+    uncached_names: list[tuple[str, str | None]],
     standardized_names: list[str],
     client: OpenAI,
     model_id: str,
-) -> dict[str, str]:
+) -> dict[tuple[str, str | None], str]:
     """Call the LLM to standardize a batch of raw lab names."""
 
-    items = {name: name for name in uncached_names}
+    items = [
+        {
+            "raw_lab_name": raw_name,
+            "raw_section_name": raw_section_name,
+        }
+        for raw_name, raw_section_name in uncached_names
+    ]
     system_prompt_template = load_prompt_template("name_standardization")
     system_prompt = _render_prompt_template(
         system_prompt_template,
@@ -105,11 +118,11 @@ def _standardize_names_with_llm(
         candidates=json.dumps(standardized_names, ensure_ascii=False, indent=2),
         unknown=UNKNOWN_VALUE,
     )
-    user_prompt = f"""Map these items to standardized values:
+    user_prompt = f"""Map these contextual items to standardized values:
 
 {json.dumps(items, ensure_ascii=False, indent=2)}
 
-Return a JSON object with the standardized values."""
+Return a JSON array of objects with raw_lab_name, raw_section_name, and standardized_name."""
 
     completion = client.chat.completions.create(
         model=model_id,
@@ -122,21 +135,47 @@ Return a JSON object with the standardized values."""
     )
 
     response_text = completion.choices[0].message.content.strip()
-    result = parse_llm_json_response(response_text, fallback={})
+    result = parse_llm_json_response(response_text, fallback=[])
 
-    validated = {}
+    validated: dict[tuple[str, str | None], str] = {}
+    expected_by_key = {
+        build_name_cache_key(item["raw_lab_name"], item.get("raw_section_name")): (
+            item["raw_lab_name"],
+            item.get("raw_section_name"),
+        )
+        for item in items
+    }
 
     # Keep only known standardized names from the configured candidate set.
-    for key in items:
-        if key not in result:
+    if not isinstance(result, list):
+        return validated
+
+    for item in result:
+        raw_name = item.get("raw_lab_name")
+        raw_section_name = item.get("raw_section_name")
+        standardized_name = item.get("standardized_name")
+
+        # Guard: Rows without the identifying inputs cannot be matched back to the request.
+        if raw_name is None:
             continue
 
-        standardized_name = result[key]
+        cache_key = build_name_cache_key(raw_name, raw_section_name)
+        expected_context = expected_by_key.get(cache_key)
+
+        # Guard: Ignore outputs for items that were not part of this prompt.
+        if expected_context is None:
+            continue
+
         if standardized_name in standardized_names:
-            validated[key] = standardized_name
+            validated[expected_context] = standardized_name
             continue
 
-        logger.warning(f"LLM returned invalid standardization '{standardized_name}' for raw name '{key}'")
+        logger.warning(
+            "LLM returned invalid standardization '%s' for raw name '%s' in section '%s'",
+            standardized_name,
+            raw_name,
+            raw_section_name,
+        )
 
     return validated
 
@@ -225,14 +264,9 @@ Return a JSON array with the standardized values."""
     return validated
 
 
-def _normalize_name_key(raw_name: object) -> str:
-    """Return the cache key for a raw lab name."""
-
-    return str(raw_name).strip().lower()
-
-
 def _resolve_effective_lab_name(
     raw_name: object,
+    raw_section_name: object,
     current_lab_name: object,
     name_cache: dict[str, str],
 ) -> str | None:
@@ -244,7 +278,7 @@ def _resolve_effective_lab_name(
     if current_name and current_name != UNKNOWN_VALUE:
         return current_name
 
-    cached_name = name_cache.get(_normalize_name_key(raw_name))
+    cached_name = name_cache.get(build_name_cache_key(raw_name, raw_section_name))
 
     # Guard: Missing or unknown name mappings cannot seed unit standardization.
     if not cached_name or cached_name == UNKNOWN_VALUE:
@@ -253,24 +287,45 @@ def _resolve_effective_lab_name(
     return cached_name
 
 
-def _collect_uncached_names(df: pd.DataFrame, name_cache: dict[str, str]) -> list[str]:
+def _collect_uncached_names(df: pd.DataFrame, name_cache: dict[str, str]) -> list[tuple[str, str | None]]:
     """Collect unresolved raw lab names from the provided dataframe."""
 
     if "raw_lab_name" not in df.columns:
         return []
 
-    uncached_names: list[str] = []
+    raw_section_series = (
+        df["raw_section_name"]
+        if "raw_section_name" in df.columns
+        else pd.Series([None] * len(df))
+    )
+
+    uncached_names: list[tuple[str, str | None]] = []
     seen_keys: set[str] = set()
 
     # Preserve first-seen spelling while deduplicating by normalized cache key.
-    for raw_name in df["raw_lab_name"].fillna("").astype(str):
-        normalized_name = _normalize_name_key(raw_name)
-        if not normalized_name or normalized_name in seen_keys:
+    for raw_name, raw_section_name in zip(
+        df["raw_lab_name"].fillna("").astype(str),
+        raw_section_series.tolist(),
+        strict=False,
+    ):
+        normalized_name = normalize_name_cache_key_component(raw_name)
+        normalized_section = normalize_section_cache_key_component(raw_section_name)
+        cache_key = build_name_cache_key(raw_name, raw_section_name)
+
+        # Guard: Blank raw names cannot form a usable cache key.
+        if not normalized_name or cache_key in seen_keys:
             continue
-        if normalized_name in name_cache:
+
+        # Guard: Cached contextual keys should not be refreshed again.
+        if cache_key in name_cache:
             continue
-        seen_keys.add(normalized_name)
-        uncached_names.append(raw_name)
+
+        # Sectionless rows stay backward-compatible with legacy bare-name cache entries.
+        if not normalized_section and normalized_name in name_cache:
+            continue
+
+        seen_keys.add(cache_key)
+        uncached_names.append((raw_name, raw_section_name if normalized_section else None))
 
     return uncached_names
 
@@ -304,15 +359,21 @@ def _collect_uncached_unit_pairs(
     uncached_pairs: list[tuple[str, str]] = []
     seen_keys: set[str] = set()
     current_lab_names = df["lab_name"] if "lab_name" in df.columns else pd.Series([""] * len(df))
+    raw_section_series = (
+        df["raw_section_name"]
+        if "raw_section_name" in df.columns
+        else pd.Series([None] * len(df))
+    )
 
     # Resolve unit contexts row by row so freshly learned name mappings unlock unit scans.
-    for raw_unit, raw_name, current_lab_name in zip(
+    for raw_unit, raw_name, raw_section_name, current_lab_name in zip(
         df[raw_unit_col].fillna("").astype(str),
         df["raw_lab_name"].fillna("").astype(str),
+        raw_section_series.tolist(),
         current_lab_names.fillna("").astype(str),
         strict=False,
     ):
-        effective_lab_name = _resolve_effective_lab_name(raw_name, current_lab_name, name_cache)
+        effective_lab_name = _resolve_effective_lab_name(raw_name, raw_section_name, current_lab_name, name_cache)
         if effective_lab_name is None:
             continue
 
@@ -332,7 +393,7 @@ def scan_standardization_misses(
     *,
     name_cache: dict[str, str] | None = None,
     unit_cache: dict[str, str] | None = None,
-) -> tuple[list[str], list[tuple[str, str]]]:
+) -> tuple[list[tuple[str, str | None]], list[tuple[str, str]]]:
     """Return uncached name and unit mappings for a review/export dataframe."""
 
     name_cache = load_cache("name_standardization") if name_cache is None else dict(name_cache)
@@ -421,9 +482,10 @@ def refresh_standardization_caches_from_dataframe(
             except Exception as exc:  # pragma: no cover - exercised through pipeline warning path
                 name_error = str(exc)
             else:
-                for raw_name, standardized_name in refreshed_names.items():
-                    working_name_cache[_normalize_name_key(raw_name)] = standardized_name
-                    name_cache[_normalize_name_key(raw_name)] = standardized_name
+                for (raw_name, raw_section_name), standardized_name in refreshed_names.items():
+                    cache_key = build_name_cache_key(raw_name, raw_section_name)
+                    working_name_cache[cache_key] = standardized_name
+                    name_cache[cache_key] = standardized_name
                 name_updates = len(refreshed_names)
 
                 # Save successful name updates immediately so partial refresh progress is not lost.

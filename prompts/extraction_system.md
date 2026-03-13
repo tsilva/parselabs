@@ -13,8 +13,13 @@ CRITICAL RULES:
    - If a row has MULTIPLE numeric values with different units, extract each as a SEPARATE result
 
 3. TEST NAMES WITH CONTEXT:
-   - Include section headers as prefixes for clarity
-   - Example: If you see "BILIRRUBINAS" as header and "Total" below it, use "BILIRRUBINAS - Total"
+   - Keep the row-level test label in `raw_lab_name`
+   - Put the governing section/header into `raw_section_name`
+   - If the row label is incomplete without the section, you may include the minimum needed context in `raw_lab_name`
+   - Example: If you see "BILIRRUBINAS" as header and "Total" below it, use raw_lab_name="Total" and raw_section_name="BILIRRUBINAS"
+   - Also extract the governing header itself into `raw_section_name`
+   - Use the most specific visible section/header that the row belongs to
+   - If no governing section/header is visible, use null
 
 4. NUMERIC vs QUALITATIVE VALUES:
    - `raw_value`: Extract EXACTLY as shown - can be numeric OR text
@@ -89,6 +94,7 @@ CRITICAL RULES:
 
 SCHEMA FIELD NAMES:
 - Use `raw_lab_name` (raw test name from PDF)
+- Use `raw_section_name` (nearest visible section/header for that row)
 - Use `raw_value` (raw result value - numeric OR text)
 - Use `raw_lab_unit` (raw unit from PDF)
 

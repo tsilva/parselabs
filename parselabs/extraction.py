@@ -28,6 +28,13 @@ RAW_LAB_NAME_FIELD = Annotated[
         description="Test name ONLY as written in the PDF. Must contain ONLY the test name - DO NOT include values, units, reference ranges, or field labels. WRONG: 'Glucose, raw_value: 100' CORRECT: 'Glucose'",
     ),
 ]
+RAW_SECTION_NAME_FIELD = Annotated[
+    str | None,
+    Field(
+        default=None,
+        description="Nearest visible section or header name governing this test row, copied EXACTLY as shown. Use the most specific visible section header for the row. If no governing section is visible, use null.",
+    ),
+]
 RAW_VALUE_FIELD = Annotated[
     str | None,
     Field(
@@ -123,6 +130,7 @@ class LabResult(BaseModel):
 
     # Raw extraction (exactly as shown in PDF)
     raw_lab_name: RAW_LAB_NAME_FIELD
+    raw_section_name: RAW_SECTION_NAME_FIELD
     raw_value: RAW_VALUE_FIELD
     raw_lab_unit: RAW_LAB_UNIT_FIELD
     raw_reference_range: RAW_REFERENCE_RANGE_FIELD
@@ -180,6 +188,8 @@ class LabResult(BaseModel):
 
         # Check for embedded metadata patterns (both old and new field name formats)
         malformed_patterns = [
+            "section_name:",
+            "raw_section_name:",
             "value_raw:",
             "raw_value:",
             "lab_unit_raw:",
@@ -254,6 +264,7 @@ class LabResultExtraction(BaseModel):
     """
 
     raw_lab_name: RAW_LAB_NAME_FIELD
+    raw_section_name: RAW_SECTION_NAME_FIELD
     raw_value: RAW_VALUE_FIELD
     raw_lab_unit: RAW_LAB_UNIT_FIELD
     raw_reference_range: RAW_REFERENCE_RANGE_FIELD
@@ -993,7 +1004,7 @@ def _parse_labeled_lab_result(raw_value: str) -> dict | None:
     """Parse strings that inline field labels inside one lab-result item."""
 
     field_pattern = re.compile(
-        r"(?P<field>raw_lab_name|raw_value|raw_lab_unit|raw_reference_range|raw_reference_min|raw_reference_max|raw_comments|bbox_left|bbox_top|bbox_right|bbox_bottom)\s*[:=]\s*",
+        r"(?P<field>raw_lab_name|raw_section_name|raw_value|raw_lab_unit|raw_reference_range|raw_reference_min|raw_reference_max|raw_comments|bbox_left|bbox_top|bbox_right|bbox_bottom)\s*[:=]\s*",
         flags=re.IGNORECASE,
     )
     matches = list(field_pattern.finditer(raw_value))
@@ -1023,6 +1034,7 @@ def _normalize_lab_result_keys(row_dict: dict) -> dict:
     """Map known legacy field aliases onto the canonical extraction schema."""
 
     alias_map = {
+        "section_name": "raw_section_name",
         "raw_unit": "raw_lab_unit",
         "lab_unit_raw": "raw_lab_unit",
         "reference_range": "raw_reference_range",
