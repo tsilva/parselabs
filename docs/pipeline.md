@@ -160,27 +160,35 @@ Based on the current code, not prior documentation:
 - It is the accepted-row export dataframe built by `_build_final_export_from_document_dirs(...)` with `allow_pending=True`.
 - That helper rebuilds document CSVs from JSON again, loads only rows with `review_status == accepted`, applies the shared export path, and returns the final export-shaped dataframe.
 
-24. What `all.csv` and `all.xlsx` actually contain on a normal run.
+24. What `all.csv` and `all.xlsx` contain on the first export pass.
 - `run_for_profile()` does not write `pipeline_result.final_df` to disk.
 - Instead, it reloads the per-document CSVs and merges them with `_build_merged_review_dataframe_from_csv_paths(...)`.
 - It writes that merged review-state dataframe to `output/all.csv` and `output/all.xlsx`.
-- So in the current runtime, top-level `all.csv` mirrors document review CSV state, not accepted-only reviewed truth.
+- So the first export pass still writes the merged review-state dataframe, not accepted-only reviewed truth.
 
-25. Reviewed-JSON rebuild mode.
+25. End-of-run standardization auto-refresh.
+- After the first export pass, the pipeline scans merged review rows for uncached standardization names and unit pairs.
+- By default, it runs one in-process cache refresh pass using the same OpenRouter credentials and extraction model as the active profile.
+- The shared refresh helper updates raw-name mappings first, then rescans unit pairs using the newly resolved standardized names before calling the unit standardizer.
+- This means a row that was `$UNKNOWN$` on the first pass can still contribute a unit mapping in the same automatic refresh cycle.
+- If the refresh adds any cache entries, the pipeline rebuilds per-document CSVs and merged outputs from persisted page JSON only.
+- It does not re-extract PDFs and does not repeat extraction API calls.
+- If `--no-auto-standardize` is passed, the refresh is skipped and the pipeline logs a final manual-fallback summary instead.
+- If refresh calls fail or some mappings remain unresolved, the run keeps the best-effort outputs and ends with a warning summary instead of failing.
+
+26. Reviewed-JSON rebuild mode.
 - If `--rebuild-from-json` is passed, extraction is skipped entirely.
-- `_run_reviewed_json_rebuild(...)` loads processed document directories from the output path.
-- It rebuilds every per-document CSV from page JSON.
-- It merges those rebuilt review CSVs and writes fresh `all.csv` and `all.xlsx`.
-- This path is for regenerating review outputs from existing reviewed JSON state.
+- `_run_reviewed_json_rebuild(...)` rebuilds every per-document CSV from page JSON, writes merged `all.csv` and `all.xlsx`, and then runs the same optional post-export auto-refresh step.
+- This path regenerates review outputs from existing reviewed JSON state while keeping the auto-refresh behavior consistent with normal extraction runs.
 
-26. Strict reviewed-truth helpers still exist separately.
+27. Strict reviewed-truth helpers still exist separately.
 - `build_final_output_dataframe_from_reviewed_json(...)` and related helpers build accepted-row export data from reviewed JSON.
 - In strict mode, `ensure_document_fixture_ready(...)` blocks promotion if any rows are still pending or any missing-row markers remain unresolved.
 - `--allow-pending` affects those reviewed-truth helpers.
 - It does not change what the normal merged `all.csv` export contains.
 
-27. Canonical source of truth.
+28. Canonical source of truth.
 - The canonical persisted intermediate is the per-page JSON in each hashed document directory.
 - Per-document CSVs are derived review snapshots.
-- Top-level `all.csv` and `all.xlsx` are merged review-state outputs.
+- Top-level `all.csv` and `all.xlsx` are merged review-state outputs, potentially rebuilt once more after automatic standardization refresh.
 - Accepted-only final export data is computed through a separate export path and returned by helpers, but not written by the normal extraction run.
