@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
@@ -24,6 +25,15 @@ logger = logging.getLogger(__name__)
 
 SOURCE_BBOX_LABEL = "Selected result"
 _PAGE_IMAGE_SIZE_CACHE: dict[str, tuple[int, int]] = {}
+_PENDING_STATUS_LABEL = "Pending"
+
+
+@dataclass(frozen=True)
+class ReviewStatusBadge:
+    """Presentation-ready review status label and rendered HTML."""
+
+    label: str
+    html: str
 
 
 def normalize_review_status(status: object) -> str:
@@ -92,6 +102,32 @@ def format_mapped_reference_text(row: pd.Series) -> str:
         row.get("reference_max"),
         unit=row.get("lab_unit"),
     )
+
+
+def format_raw_value(row: pd.Series) -> str:
+    """Format the raw value and unit into one compact display string."""
+
+    value_text = format_text(row.get("raw_value"))
+    unit_text = format_text(row.get("raw_lab_unit"), empty="")
+
+    # Omit the placeholder unit suffix when the unit is genuinely absent.
+    if unit_text:
+        return f"{value_text} {unit_text}".strip()
+
+    return value_text
+
+
+def format_mapped_value(row: pd.Series) -> str:
+    """Format the standardized value and unit into one compact display string."""
+
+    value_text = format_text(row.get("value"))
+    unit_text = format_text(row.get("lab_unit"), empty="")
+
+    # Omit the placeholder unit suffix when the unit is genuinely absent.
+    if unit_text:
+        return f"{value_text} {unit_text}".strip()
+
+    return value_text
 
 
 def get_bbox_coordinates(entry: dict | pd.Series) -> tuple[float, float, float, float] | None:
@@ -264,6 +300,120 @@ def get_review_status(entry: dict) -> str | None:
     return None
 
 
+def get_review_status_label(entry: dict | pd.Series | None) -> str:
+    """Return Accepted, Rejected, or Pending for one row-like entry."""
+
+    # Guard: Empty selections default to the undecided state.
+    if entry is None:
+        return _PENDING_STATUS_LABEL
+
+    status = normalize_review_status(get_review_status(entry))
+
+    # Surface accepted rows as explicit approvals.
+    if status == "accepted":
+        return "Accepted"
+
+    # Surface rejected rows as explicit rejections.
+    if status == "rejected":
+        return "Rejected"
+
+    return _PENDING_STATUS_LABEL
+
+
+def build_review_status_html(status_label: str) -> str:
+    """Build the compact review-status badge used in the results viewer."""
+
+    colors = {"Accepted": "#2e7d32", "Rejected": "#c62828", "Pending": "#757575"}
+    color = colors.get(status_label, "#757575")
+    return f'<div style="text-align:center;padding:4px 0;"><span style="color:{color};font-weight:bold;font-size:0.9em;">{status_label}</span></div>'
+
+
+def build_review_status_badge(entry: dict | pd.Series | None) -> ReviewStatusBadge:
+    """Return both the normalized label and the rendered HTML badge."""
+
+    label = get_review_status_label(entry)
+    return ReviewStatusBadge(label=label, html=build_review_status_html(label))
+
+
+def build_reason_badges(review_reason: object) -> str:
+    """Render validation reason codes as compact badges."""
+
+    reason_text = format_text(review_reason, empty="")
+
+    # Guard: Rows without validation flags do not need badge markup.
+    if not reason_text:
+        return '<span class="review-inline-muted">None</span>'
+
+    badges: list[str] = []
+
+    # Split semicolon-delimited reasons into individual badges for faster scanning.
+    for reason in [part.strip() for part in html.unescape(reason_text).split(";") if part.strip()]:
+        badges.append(f'<span class="review-reason-chip">{html.escape(reason)}</span>')
+
+    return "".join(badges)
+
+
+def build_details_html(entry: dict) -> str:
+    """Build the raw-vs-standardized details table for one selected row."""
+
+    # Guard: Empty selections render the stable placeholder.
+    if not entry:
+        return "<p>No entry selected</p>"
+
+    paired_fields = [
+        ("Lab Name", "raw_lab_name", "lab_name"),
+        ("Value", "raw_value", "value"),
+        ("Unit", "raw_unit", "lab_unit"),
+        ("Ref Min", "reference_min", "reference_min"),
+        ("Ref Max", "reference_max", "reference_max"),
+    ]
+
+    def get_val(field: str) -> str:
+        value = entry.get(field)
+        if value is not None and pd.notna(value) and str(value).strip():
+            return str(value)
+        return "-"
+
+    html_parts = [
+        '<table style="width:100%; border-collapse:collapse; font-size:0.9em;">',
+        '<thead><tr style="background:#f5f5f5;"><th style="padding:6px; text-align:left;">Field</th><th style="padding:6px; text-align:left;">Raw</th><th style="padding:6px; text-align:left;">Standardized</th></tr></thead>',
+        "<tbody>",
+    ]
+
+    # Render each paired raw vs standardized field row.
+    for label, raw_field, std_field in paired_fields:
+        raw_val = get_val(raw_field)
+        std_val = get_val(std_field)
+        html_parts.append(f'<tr><td style="padding:6px; border-bottom:1px solid #ddd;">{label}</td>')
+        html_parts.append(f'<td style="padding:6px; border-bottom:1px solid #ddd;">{raw_val}</td>')
+        html_parts.append(f'<td style="padding:6px; border-bottom:1px solid #ddd;">{std_val}</td></tr>')
+
+    html_parts.append("</tbody></table>")
+
+    bbox = get_bbox_coordinates(entry)
+
+    # Surface bbox metadata so reviewers can verify the stored highlight geometry.
+    if bbox is not None:
+        left, top, right, bottom = bbox
+        html_parts.append(
+            '<div style="margin-top:12px; color:#555; font-size:0.9em;">'
+            f"<strong>Bounding Box:</strong> left={left:g}, top={top:g}, right={right:g}, bottom={bottom:g}"
+            " (normalized page coordinates)</div>"
+        )
+
+    review_needed = entry.get("review_needed")
+    review_reason = entry.get("review_reason")
+
+    # Show review details when flags are present.
+    if review_needed or review_reason:
+        html_parts.append('<div style="margin-top:15px;">')
+        if review_reason and pd.notna(review_reason):
+            html_parts.append(f'<div class="status-warning">Reason: {review_reason}</div>')
+        html_parts.append("</div>")
+
+    return "".join(html_parts)
+
+
 def _load_json_cached(json_path: Path, cache: dict[str, dict | None]) -> dict | None:
     """Load and cache page JSON for review-status backfills."""
 
@@ -409,17 +559,25 @@ def load_results_dataframe(
 
 
 __all__ = [
+    "ReviewStatusBadge",
     "SOURCE_BBOX_LABEL",
     "build_annotated_image_value",
+    "build_details_html",
+    "build_reason_badges",
     "build_page_image_value_for_document",
     "build_page_image_value_for_entry",
+    "build_review_status_badge",
+    "build_review_status_html",
+    "format_mapped_value",
     "format_mapped_reference_text",
+    "format_raw_value",
     "format_reference_bounds",
     "format_reference_text",
     "format_text",
     "get_bbox_coordinates",
     "get_image_size",
     "get_review_status",
+    "get_review_status_label",
     "load_results_dataframe",
     "normalize_review_status",
     "scale_bbox_to_pixels",

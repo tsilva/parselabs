@@ -11,7 +11,8 @@ Based on the current code, not prior documentation:
 - Legacy public modules such as `parselabs.profiles` and `parselabs.documents` remain import-compatible as thin shims over the new subsystem modules.
 
 1. Profile/runtime setup.
-- `parselabs` parses CLI flags in `parselabs/pipeline.py`.
+- `parselabs/cli.py` dispatches the top-level `parselabs` command into `extract`, `review`, and `admin` flows.
+- Extraction-mode flags are still parsed in `parselabs/pipeline.py`.
 - It resolves the selected profile through `RuntimeContext.from_profile(...)` in `parselabs/runtime.py`.
 - For normal extraction runs, it requires input path, output path, API settings, and logging.
 - It copies the active `lab_specs.json` into the output directory so the run remains reproducible.

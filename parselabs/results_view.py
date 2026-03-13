@@ -5,8 +5,8 @@ Interactive UI for browsing and reviewing extracted lab results.
 Shows data table with interactive plots and review actions side-by-side.
 
 Usage:
-  parselabs-viewer --profile tiago
-  parselabs-viewer --list-profiles
+  parselabs review --profile tiago
+  parselabs review --list-profiles
 
 Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate
 """
@@ -14,6 +14,7 @@ Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate
 from __future__ import annotations
 
 import logging  # noqa: E402
+from dataclasses import dataclass  # noqa: E402
 from pathlib import Path  # noqa: E402
 
 import gradio as gr  # noqa: E402
@@ -25,15 +26,15 @@ from parselabs.config import Demographics, LabSpecsConfig, ProfileConfig  # noqa
 from parselabs.paths import get_static_dir  # noqa: E402
 from parselabs.review import (  # noqa: E402
     SOURCE_BBOX_LABEL,
-    build_page_image_value_for_entry,
-    get_bbox_coordinates,
+    build_review_status_html,
     load_results_dataframe,
 )
-from parselabs.review import (
-    get_review_status as get_review_status_from_review,
+from parselabs.review_state import (  # noqa: E402
+    apply_review_action_for_entry,
+    build_viewer_row_context,
+    get_selected_row,
 )
 from parselabs.runtime import RuntimeContext, list_non_template_profiles  # noqa: E402
-from parselabs.store import apply_review_action, resolve_document_dir  # noqa: E402
 
 # Initialize module logger
 logger = logging.getLogger(__name__)
@@ -41,6 +42,55 @@ logger = logging.getLogger(__name__)
 _STATIC_DIR = get_static_dir()
 KEYBOARD_JS = (_STATIC_DIR / "viewer.js").read_text()
 CUSTOM_CSS = (_STATIC_DIR / "viewer.css").read_text()
+
+
+@dataclass(frozen=True)
+class ViewerRenderState:
+    """Standard output payload shared by the viewer callbacks."""
+
+    display_df: pd.DataFrame
+    summary_html: str
+    plot: go.Figure
+    filtered_df: pd.DataFrame
+    current_idx: int
+    position_text: str
+    source_image_value: tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None
+    details_html: str
+    status_html: str
+    banner_html: str
+
+    def as_filter_outputs(self) -> tuple:
+        """Return outputs for filter-driven viewer updates."""
+
+        return (
+            self.display_df,
+            self.summary_html,
+            self.plot,
+            self.filtered_df,
+            self.current_idx,
+            self.position_text,
+            self.source_image_value,
+            self.details_html,
+            self.status_html,
+            self.banner_html,
+        )
+
+    def as_review_outputs(self, full_df: pd.DataFrame) -> tuple:
+        """Return outputs for review-action callbacks that also update full_df state."""
+
+        return (
+            full_df,
+            self.filtered_df,
+            self.display_df,
+            self.plot,
+            self.current_idx,
+            self.position_text,
+            self.source_image_value,
+            self.details_html,
+            self.status_html,
+            self.summary_html,
+            self.banner_html,
+        )
 
 def load_viewer_context(profile_name: str) -> RuntimeContext | None:
     """Load a runtime context for the requested profile when it exists."""
@@ -92,73 +142,6 @@ COLUMN_LABELS = {
     "is_out_of_reference": "Abn",
     "review_status": "Review",
 }
-
-
-# =============================================================================
-# Path Resolution
-# =============================================================================
-
-_doc_dir_cache: dict[tuple[str, str], Path | None] = {}
-def _resolve_doc_dir(stem: str, output_path: Path) -> Path | None:
-    """Resolve a processed document directory in canonical {stem}_{hash} layout.
-
-    Results are cached to avoid repeated glob calls.
-    """
-
-    cache_key = (stem, str(output_path))
-    if cache_key in _doc_dir_cache:
-        return _doc_dir_cache[cache_key]
-
-    resolved_doc_dir = resolve_document_dir(stem, output_path)
-    if resolved_doc_dir is not None:
-        _doc_dir_cache[cache_key] = resolved_doc_dir
-        return resolved_doc_dir
-
-    _doc_dir_cache[cache_key] = None
-    return None
-
-# =============================================================================
-# JSON File Operations (Review Persistence)
-# =============================================================================
-
-
-def save_review_to_json(entry: dict, status: str, output_path: Path) -> tuple[bool, str]:
-    """Save review status directly to the source JSON file."""
-
-    source_file = entry.get("source_file", "")
-    stem = source_file.rsplit(".", 1)[0] if "." in source_file else source_file
-    doc_dir = _resolve_doc_dir(stem, output_path)
-    result_index = entry.get("result_index")
-    page_number = entry.get("page_number")
-
-    if result_index is None or pd.isna(result_index):
-        return False, "Missing result_index for entry."
-    if page_number is None or pd.isna(page_number):
-        return False, "Missing page_number for entry."
-    if doc_dir is None:
-        return False, f"Document directory not found for '{source_file}'."
-
-    action = {
-        "accepted": "accept",
-        "rejected": "reject",
-    }.get(status, "clear")
-    return apply_review_action(
-        doc_dir,
-        int(page_number),
-        int(result_index),
-        action,
-    )
-
-
-# =============================================================================
-# Review Status Helpers
-# =============================================================================
-
-
-def get_review_status(entry: dict) -> str | None:
-    """Get review status for an entry (accepted/rejected/None)."""
-
-    return get_review_status_from_review(entry)
 
 
 # =============================================================================
@@ -786,111 +769,8 @@ def create_interactive_plot(
 
 
 # =============================================================================
-# Details Display (from review.py)
-# =============================================================================
-
-
-def build_details_html(entry: dict) -> str:
-    """Build HTML for entry details (raw vs standardized comparison)."""
-
-    # Guard: no entry
-    if not entry:
-        return "<p>No entry selected</p>"
-
-    paired_fields = [
-        ("Lab Name", "raw_lab_name", "lab_name"),
-        ("Value", "raw_value", "value"),
-        ("Unit", "raw_unit", "lab_unit"),
-        ("Ref Min", "reference_min", "reference_min"),
-        ("Ref Max", "reference_max", "reference_max"),
-    ]
-
-    def get_val(field: str) -> str:
-        val = entry.get(field)
-        if val is not None and pd.notna(val) and str(val).strip():
-            return str(val)
-        return "-"
-
-    html = '<table style="width:100%; border-collapse:collapse; font-size:0.9em;">'
-    html += '<thead><tr style="background:#f5f5f5;"><th style="padding:6px; text-align:left;">Field</th><th style="padding:6px; text-align:left;">Raw</th><th style="padding:6px; text-align:left;">Standardized</th></tr></thead>'
-    html += "<tbody>"
-
-    for label, raw_field, std_field in paired_fields:
-        raw_val = get_val(raw_field)
-        std_val = get_val(std_field)
-        html += f'<tr><td style="padding:6px; border-bottom:1px solid #ddd;">{label}</td>'
-        html += f'<td style="padding:6px; border-bottom:1px solid #ddd;">{raw_val}</td>'
-        html += f'<td style="padding:6px; border-bottom:1px solid #ddd;">{std_val}</td></tr>'
-
-    html += "</tbody></table>"
-
-    bbox = get_bbox_coordinates(entry)
-
-    # Surface bbox metadata so reviewers can verify the stored highlight geometry.
-    if bbox is not None:
-        left, top, right, bottom = bbox
-        html += (
-            '<div style="margin-top:12px; color:#555; font-size:0.9em;">'
-            f"<strong>Bounding Box:</strong> left={left:g}, top={top:g}, right={right:g}, bottom={bottom:g}"
-            " (normalized page coordinates)</div>"
-        )
-
-    # Add review info if present
-    review_needed = entry.get("review_needed")
-    review_reason = entry.get("review_reason")
-
-    # Show review details when flags are present
-    if review_needed or review_reason:
-        html += '<div style="margin-top:15px;">'
-        if review_reason and pd.notna(review_reason):
-            html += f'<div class="status-warning">Reason: {review_reason}</div>'
-        html += "</div>"
-
-    return html
-
-
-def get_review_status_label(entry: dict) -> str:
-    """Get review status label for display."""
-
-    # Guard: no entry
-    if not entry:
-        return "Pending"
-
-    status = get_review_status(entry)
-
-    if status == "accepted":
-        return "Accepted"
-    elif status == "rejected":
-        return "Rejected"
-    else:
-        return "Pending"
-
-
-def build_review_status_html(status_label: str) -> str:
-    """Build HTML badge for current review status."""
-
-    colors = {"Accepted": "#2e7d32", "Rejected": "#c62828", "Pending": "#757575"}
-    color = colors.get(status_label, "#757575")
-    return f'<div style="text-align:center;padding:4px 0;"><span style="color:{color};font-weight:bold;font-size:0.9em;">{status_label}</span></div>'
-
-
-# =============================================================================
 # Event Handlers
 # =============================================================================
-
-
-def _empty_nav_state(full_df: pd.DataFrame) -> tuple:
-    """Return standard empty state tuple for navigation handlers."""
-
-    return (
-        create_interactive_plot(full_df, []),
-        0,
-        "No results",
-        None,
-        "<p>No entry selected</p>",
-        build_review_status_html("Pending"),
-        "",
-    )
 
 
 def _load_output_data(
@@ -906,47 +786,101 @@ def _load_output_data(
     return full_df, get_lab_name_choices(full_df)
 
 
-def _build_row_context(
-    filtered_df: pd.DataFrame,
-    row_idx: int,
+def _build_empty_viewer_state(
     full_df: pd.DataFrame,
-    lab_names: str | None,
+    filtered_df: pd.DataFrame,
+    *,
+    summary_df: pd.DataFrame,
+    plot_labs: list[str] | None = None,
+    position_text: str = "No results",
+    details_html: str = "<p>No entry selected</p>",
+) -> ViewerRenderState:
+    """Build the stable empty-state payload for viewer callbacks."""
+
+    return ViewerRenderState(
+        display_df=prepare_display_df(filtered_df),
+        summary_html=build_summary_cards(summary_df),
+        plot=create_interactive_plot(full_df, plot_labs or []),
+        filtered_df=filtered_df,
+        current_idx=0,
+        position_text=position_text,
+        source_image_value=None,
+        details_html=details_html,
+        status_html=build_review_status_html("Pending"),
+        banner_html="",
+    )
+
+
+def _render_viewer_state(
+    full_df: pd.DataFrame,
+    filtered_df: pd.DataFrame,
     output_path: Path,
-) -> tuple:
-    """Build common row context for navigation/selection handlers.
+    lab_names: str | None,
+    *,
+    row_index: int = 0,
+    summary_df: pd.DataFrame | None = None,
+    empty_position_text: str = "No results",
+    empty_details_html: str = "<p>No entry selected</p>",
+) -> ViewerRenderState:
+    """Build the unified viewer render payload for the current filtered dataframe."""
 
-    Returns:
-        Tuple of (plot, row_idx, position_text, source_image_value, details_html, status_update, banner_html)
-    """
+    resolved_summary_df = filtered_df if summary_df is None else summary_df
 
-    row = filtered_df.iloc[row_idx]
-    position_text = f"**Row {row_idx + 1} of {len(filtered_df)}**"
-    source_image_value = build_page_image_value_for_entry(row.to_dict(), output_path, label=SOURCE_BBOX_LABEL)
-    details_html = build_details_html(row.to_dict())
-    status_value = get_review_status_label(row.to_dict())
-    banner_html = build_review_reason_banner(row.to_dict())
+    # Guard: Empty result sets render the stable placeholder state.
+    if filtered_df.empty:
+        return _build_empty_viewer_state(
+            full_df,
+            filtered_df,
+            summary_df=resolved_summary_df,
+            plot_labs=[lab_names] if lab_names else [],
+            position_text=empty_position_text,
+            details_html=empty_details_html,
+        )
 
-    # Determine which labs to plot
-    if lab_names:
-        plot_labs = [lab_names]
-    else:
-        # Default to the selected row's lab
-        plot_labs = [row.get("lab_name")]
+    resolved_row_index = max(0, min(int(row_index), len(filtered_df) - 1))
+    selected_row = get_selected_row(filtered_df, resolved_row_index)
 
-    ref_min = row.get("reference_min")
-    ref_max = row.get("reference_max")
-    selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
+    # Guard: Missing selections fall back to the stable empty placeholder.
+    if selected_row is None:
+        return _build_empty_viewer_state(
+            full_df,
+            filtered_df,
+            summary_df=resolved_summary_df,
+            plot_labs=[lab_names] if lab_names else [],
+            position_text=empty_position_text,
+            details_html=empty_details_html,
+        )
 
-    plot = create_interactive_plot(full_df, plot_labs, selected_ref=selected_ref)
+    row_context = build_viewer_row_context(
+        filtered_df,
+        resolved_row_index,
+        output_path,
+        selected_lab_name=lab_names,
+        banner_html=build_review_reason_banner(selected_row.to_dict()),
+    )
 
-    return (
-        plot,
-        row_idx,
-        position_text,
-        source_image_value,
-        details_html,
-        build_review_status_html(status_value),
-        banner_html,
+    # Guard: Row-context resolution failures should degrade gracefully.
+    if row_context is None:
+        return _build_empty_viewer_state(
+            full_df,
+            filtered_df,
+            summary_df=resolved_summary_df,
+            plot_labs=[lab_names] if lab_names else [],
+            position_text=empty_position_text,
+            details_html=empty_details_html,
+        )
+
+    return ViewerRenderState(
+        display_df=prepare_display_df(filtered_df),
+        summary_html=build_summary_cards(resolved_summary_df),
+        plot=create_interactive_plot(full_df, row_context.plot_labs, selected_ref=row_context.selected_ref),
+        filtered_df=filtered_df,
+        current_idx=row_context.row_index,
+        position_text=row_context.position_text,
+        source_image_value=row_context.source_image_value,
+        details_html=row_context.details_html,
+        status_html=row_context.status_html,
+        banner_html=row_context.banner_html,
     )
 
 
@@ -956,46 +890,17 @@ def handle_filter_change(
     review_filter: str,
     full_df: pd.DataFrame,
     output_path: Path,
-):
-    """Handle filter changes and update display."""
+) -> tuple:
+    """Handle filter changes and update viewer state from the first visible row."""
 
     filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter)
-    display_df = prepare_display_df(filtered_df)
-    summary = build_summary_cards(filtered_df)
-
-    # Build context from first row if results exist
-    if not filtered_df.empty:
-        (
-            plot,
-            current_idx,
-            position_text,
-            source_image_value,
-            details_html,
-            status_update,
-            banner_html,
-        ) = _build_row_context(filtered_df, 0, full_df, lab_names, output_path)
-    else:
-        # Empty result set
-        current_idx = 0
-        position_text = "No results"
-        source_image_value = None
-        details_html = "<p>No entry selected</p>"
-        status_update = build_review_status_html("Pending")
-        banner_html = ""
-        plot = create_interactive_plot(full_df, [lab_names] if lab_names else [])
-
-    return (
-        display_df,
-        summary,
-        plot,
+    return _render_viewer_state(
+        full_df,
         filtered_df,
-        current_idx,
-        position_text,
-        source_image_value,
-        details_html,
-        status_update,
-        banner_html,
-    )
+        output_path,
+        lab_names,
+        summary_df=filtered_df,
+    ).as_filter_outputs()
 
 
 def handle_row_select(
@@ -1004,66 +909,68 @@ def handle_row_select(
     full_df: pd.DataFrame,
     lab_names: str | None,
     output_path: Path,
-):
+) -> tuple:
     """Handle row selection to update plot, details, and current index."""
 
-    # Guard: no selection or data
+    # Guard: Empty selections render the stable placeholder state.
     if evt is None or filtered_df.empty:
-        return _empty_nav_state(full_df)
-
-    # Extract row index from selection event
-    if isinstance(evt.index, (list, tuple)):
-        row_idx = evt.index[0]
+        render_state = _build_empty_viewer_state(full_df, filtered_df, summary_df=filtered_df)
     else:
-        row_idx = evt.index
+        row_idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
+        selected_idx = 0 if row_idx is None or row_idx < 0 or row_idx >= len(filtered_df) else int(row_idx)
+        render_state = _render_viewer_state(
+            full_df,
+            filtered_df,
+            output_path,
+            lab_names,
+            row_index=selected_idx,
+            summary_df=filtered_df,
+        )
 
-    # Clamp to valid range
-    if row_idx < 0 or row_idx >= len(filtered_df):
-        row_idx = 0
+    return (
+        render_state.plot,
+        render_state.current_idx,
+        render_state.position_text,
+        render_state.source_image_value,
+        render_state.details_html,
+        render_state.status_html,
+        render_state.banner_html,
+    )
 
-    return _build_row_context(filtered_df, row_idx, full_df, lab_names, output_path)
 
-
-def handle_previous(
+def handle_navigation(
     current_idx: int,
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
     lab_names: str | None,
+    delta: int,
     output_path: Path,
-):
-    """Navigate to previous row."""
+) -> tuple:
+    """Move the current selection backward or forward through the filtered rows."""
 
-    # Guard: no data
+    # Guard: Empty result sets render the stable placeholder state.
     if filtered_df.empty:
-        return _empty_nav_state(full_df)
+        render_state = _build_empty_viewer_state(full_df, filtered_df, summary_df=filtered_df)
+    else:
+        next_idx = (int(current_idx) + delta) % len(filtered_df)
+        render_state = _render_viewer_state(
+            full_df,
+            filtered_df,
+            output_path,
+            lab_names,
+            row_index=next_idx,
+            summary_df=filtered_df,
+        )
 
-    # Wrap around to end
-    new_idx = current_idx - 1
-    if new_idx < 0:
-        new_idx = len(filtered_df) - 1
-
-    return _build_row_context(filtered_df, new_idx, full_df, lab_names, output_path)
-
-
-def handle_next(
-    current_idx: int,
-    filtered_df: pd.DataFrame,
-    full_df: pd.DataFrame,
-    lab_names: str | None,
-    output_path: Path,
-):
-    """Navigate to next row."""
-
-    # Guard: no data
-    if filtered_df.empty:
-        return _empty_nav_state(full_df)
-
-    # Wrap around to start
-    new_idx = current_idx + 1
-    if new_idx >= len(filtered_df):
-        new_idx = 0
-
-    return _build_row_context(filtered_df, new_idx, full_df, lab_names, output_path)
+    return (
+        render_state.plot,
+        render_state.current_idx,
+        render_state.position_text,
+        render_state.source_image_value,
+        render_state.details_html,
+        render_state.status_html,
+        render_state.banner_html,
+    )
 
 
 def handle_review_action(
@@ -1075,119 +982,39 @@ def handle_review_action(
     review_filter: str,
     status: str,
     output_path: Path,
-):
-    """Handle review action (accept/reject)."""
+) -> tuple:
+    """Handle review action (accept or reject) and rerender the current filter."""
 
-    # Guard: no data to review
+    # Guard: Empty result sets render the stable placeholder state.
     if filtered_df.empty:
-        return (
-            full_df,  # full_df unchanged
-            filtered_df,  # filtered_df unchanged
-            prepare_display_df(filtered_df),  # display_df
-            create_interactive_plot(full_df, []),  # plot
-            0,  # current_idx
-            "No results",  # position_text
-            None,  # image
-            "<p>No entry selected</p>",  # details
-            build_review_status_html("Pending"),  # status display
-            build_summary_cards(full_df),  # summary
-            "",  # banner_html
-        )
+        return _build_empty_viewer_state(full_df, filtered_df, summary_df=full_df).as_review_outputs(full_df)
 
-    # Clamp index to valid range
-    if current_idx >= len(filtered_df):
-        current_idx = 0
+    resolved_index = max(0, min(int(current_idx), len(filtered_df) - 1))
+    current_entry = filtered_df.iloc[resolved_index].to_dict()
+    action = {"accepted": "accept", "rejected": "reject"}.get(status, "clear")
+    success, error = apply_review_action_for_entry(current_entry, output_path, action)
 
-    current_entry = filtered_df.iloc[current_idx].to_dict()
-    # Save to JSON
-    success, error = save_review_to_json(current_entry, status, output_path)
-
-    # Handle save result
+    # Surface persistence errors without mutating the local dataframe mirror.
     if not success:
         gr.Warning(f"Failed to save review: {error}")
+
+    # Mirror successful review writes into the in-memory full dataframe state.
     else:
-        # Update the entry in full_df to reflect new status
-        # Find the matching row by source_file, page_number, and result_index
         mask = (full_df["source_file"] == current_entry.get("source_file")) & (full_df["page_number"] == current_entry.get("page_number")) & (full_df["result_index"] == current_entry.get("result_index"))
         full_df.loc[mask, "review_status"] = status
 
-    # Re-filter
     filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter)
-    display_df = prepare_display_df(filtered_df)
-    summary = build_summary_cards(full_df)
-
-    # All entries reviewed under this filter
-    if len(filtered_df) == 0:
-        current_idx = 0
-        return (
-            full_df,
-            filtered_df,
-            display_df,
-            create_interactive_plot(full_df, [lab_names] if lab_names else []),
-            current_idx,
-            "All done!",
-            None,
-            "<p>All entries reviewed in this filter!</p>",
-            build_review_status_html("Pending"),
-            summary,
-            "",  # banner_html
-        )
-
-    # Clamp index after re-filtering
-    if current_idx >= len(filtered_df):
-        current_idx = max(0, len(filtered_df) - 1)
-
-    (
-        plot,
-        current_idx,
-        position_text,
-        source_image_value,
-        details_html,
-        status_update,
-        banner_html,
-    ) = _build_row_context(filtered_df, current_idx, full_df, lab_names, output_path)
-
-    return (
+    render_state = _render_viewer_state(
         full_df,
         filtered_df,
-        display_df,
-        plot,
-        current_idx,
-        position_text,
-        source_image_value,
-        details_html,
-        status_update,
-        summary,
-        banner_html,
+        output_path,
+        lab_names,
+        row_index=min(resolved_index, max(0, len(filtered_df) - 1)) if not filtered_df.empty else 0,
+        summary_df=full_df,
+        empty_position_text="All done!",
+        empty_details_html="<p>All entries reviewed in this filter!</p>",
     )
-
-
-def handle_accept_click(
-    current_idx: int,
-    filtered_df: pd.DataFrame,
-    full_df: pd.DataFrame,
-    lab_names: str | None,
-    latest_only: bool,
-    review_filter: str,
-    output_path: Path,
-):
-    """Handle accept button click."""
-
-    return handle_review_action(current_idx, filtered_df, full_df, lab_names, latest_only, review_filter, "accepted", output_path)
-
-
-def handle_reject_click(
-    current_idx: int,
-    filtered_df: pd.DataFrame,
-    full_df: pd.DataFrame,
-    lab_names: str | None,
-    latest_only: bool,
-    review_filter: str,
-    output_path: Path,
-):
-    """Handle reject button click."""
-
-    return handle_review_action(current_idx, filtered_df, full_df, lab_names, latest_only, review_filter, "rejected", output_path)
+    return render_state.as_review_outputs(full_df)
 
 
 def export_csv(filtered_df: pd.DataFrame, output_path: Path):
@@ -1222,22 +1049,13 @@ def create_app(context: RuntimeContext):
         active_context.lab_specs,
         active_context.demographics,
     )
-
-    initial_position = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
-    initial_image = (
-        build_page_image_value_for_entry(full_df.iloc[0].to_dict(), current_output_path(), label=SOURCE_BBOX_LABEL)
-        if not full_df.empty
-        else None
+    initial_view = _render_viewer_state(
+        full_df,
+        full_df,
+        current_output_path(),
+        None,
+        summary_df=full_df,
     )
-    initial_details = build_details_html(full_df.iloc[0].to_dict()) if not full_df.empty else "<p>No entry selected</p>"
-    initial_status_html = build_review_status_html(get_review_status_label(full_df.iloc[0].to_dict()) if not full_df.empty else "Pending")
-
-    # Auto-select first row - get its lab name for the initial plot
-    initial_plot_labs = []
-    if not full_df.empty:
-        first_lab = full_df.iloc[0].get("lab_name")
-        if first_lab:
-            initial_plot_labs = [first_lab]
 
     available_profiles = list_non_template_profiles()
     current_profile = active_context.profile_name
@@ -1249,38 +1067,42 @@ def create_app(context: RuntimeContext):
 
         # Guard: no profile selected
         if not profile_name:
+            empty_df = pd.DataFrame()
+            empty_view = _build_empty_viewer_state(empty_df, empty_df, summary_df=empty_df)
             return (
-                pd.DataFrame(),
+                empty_view.display_df,
                 '<div class="summary-row"><span class="stat-card">No profile selected</span></div>',
-                go.Figure(),
-                pd.DataFrame(),
-                pd.DataFrame(),
-                0,
-                "No results",
-                None,
-                [],
-                "<p>No entry selected</p>",
-                build_review_status_html("Pending"),
-                "",
+                empty_view.plot,
+                empty_df,
+                empty_df,
+                empty_view.current_idx,
+                empty_view.position_text,
+                empty_view.source_image_value,
+                gr.update(choices=[], value=None),
+                empty_view.details_html,
+                empty_view.status_html,
+                empty_view.banner_html,
             )
 
         next_context = load_viewer_context(profile_name)
 
         # Guard: profile not found or missing an output path
         if next_context is None or next_context.output_path is None:
+            empty_df = pd.DataFrame()
+            empty_view = _build_empty_viewer_state(empty_df, empty_df, summary_df=empty_df)
             return (
-                pd.DataFrame(),
+                empty_view.display_df,
                 f'<div class="summary-row"><span class="stat-card warning">Profile \'{profile_name}\' not found or has no output path</span></div>',
-                go.Figure(),
-                pd.DataFrame(),
-                pd.DataFrame(),
-                0,
-                "No results",
-                None,
-                [],
-                "<p>No entry selected</p>",
-                build_review_status_html("Pending"),
-                "",
+                empty_view.plot,
+                empty_df,
+                empty_df,
+                empty_view.current_idx,
+                empty_view.position_text,
+                empty_view.source_image_value,
+                gr.update(choices=[], value=None),
+                empty_view.details_html,
+                empty_view.status_html,
+                empty_view.banner_html,
             )
 
         active_context = next_context
@@ -1289,41 +1111,27 @@ def create_app(context: RuntimeContext):
             active_context.lab_specs,
             active_context.demographics,
         )
-
-        display_df = prepare_display_df(full_df)
-        summary = build_summary_cards(full_df)
-        position_text = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
-        source_image_value = (
-            build_page_image_value_for_entry(full_df.iloc[0].to_dict(), current_output_path(), label=SOURCE_BBOX_LABEL)
-            if not full_df.empty
-            else None
+        render_state = _render_viewer_state(
+            full_df,
+            full_df,
+            current_output_path(),
+            None,
+            summary_df=full_df,
         )
-        details_html = build_details_html(full_df.iloc[0].to_dict()) if not full_df.empty else "<p>No entry selected</p>"
-        status_label = get_review_status_label(full_df.iloc[0].to_dict()) if not full_df.empty else "Pending"
-        banner_html = build_review_reason_banner(full_df.iloc[0].to_dict()) if not full_df.empty else ""
-
-        # Auto-select first row - show its plot
-        initial_plot_labs = []
-        if not full_df.empty:
-            first_lab = full_df.iloc[0].get("lab_name")
-            if first_lab:
-                initial_plot_labs = [first_lab]
-
-        plot = create_interactive_plot(full_df, initial_plot_labs)
 
         return (
-            display_df,
-            summary,
-            plot,
+            render_state.display_df,
+            render_state.summary_html,
+            render_state.plot,
             full_df,
-            full_df,
-            0,
-            position_text,
-            source_image_value,
+            render_state.filtered_df,
+            render_state.current_idx,
+            render_state.position_text,
+            render_state.source_image_value,
             gr.update(choices=lab_name_choices, value=None),
-            details_html,
-            build_review_status_html(status_label),
-            banner_html,
+            render_state.details_html,
+            render_state.status_html,
+            render_state.banner_html,
         )
 
     with gr.Blocks(title="Lab Results Viewer") as demo:
@@ -1381,7 +1189,7 @@ def create_app(context: RuntimeContext):
                 )
 
         # Summary cards
-        summary_display = gr.HTML(build_summary_cards(full_df))
+        summary_display = gr.HTML(initial_view.summary_html)
 
         gr.Markdown("---")
 
@@ -1392,7 +1200,7 @@ def create_app(context: RuntimeContext):
                 gr.Markdown("### Data Table")
                 gr.Markdown("*Click a row or use arrow keys to navigate*")
                 data_table = gr.DataFrame(
-                    value=prepare_display_df(full_df),
+                    value=initial_view.display_df,
                     interactive=False,
                     wrap=True,
                     max_height=500,
@@ -1408,19 +1216,19 @@ def create_app(context: RuntimeContext):
                 # Navigation controls
                 with gr.Row():
                     prev_btn = gr.Button("< Prev [k]", elem_id="prev-btn", size="sm")
-                    position_display = gr.Markdown(initial_position, elem_id="position-display")
+                    position_display = gr.Markdown(initial_view.position_text, elem_id="position-display")
                     next_btn = gr.Button("Next [j] >", elem_id="next-btn", size="sm")
 
                 # Tabs for Plot, Source Image, and Details
                 with gr.Tabs():
                     with gr.TabItem("Plot"):
                         plot_display = gr.Plot(
-                            value=create_interactive_plot(full_df, initial_plot_labs),
+                            value=initial_view.plot,
                             label="",
                         )
                     with gr.TabItem("Source"):
                         source_image = gr.AnnotatedImage(
-                            value=initial_image,
+                            value=initial_view.source_image_value,
                             label="Source Document Page",
                             color_map={SOURCE_BBOX_LABEL: "#dc2626"},
                             show_legend=False,
@@ -1428,7 +1236,7 @@ def create_app(context: RuntimeContext):
                             height=400,
                         )
                     with gr.TabItem("Details"):
-                        details_display = gr.HTML(value=initial_details)
+                        details_display = gr.HTML(value=initial_view.details_html)
 
                 gr.Markdown("---")
 
@@ -1436,12 +1244,11 @@ def create_app(context: RuntimeContext):
                 gr.Markdown("### Review")
 
                 # Review reason banner (shows why item needs review)
-                initial_banner = build_review_reason_banner(full_df.iloc[0].to_dict()) if not full_df.empty else ""
-                review_reason_banner = gr.HTML(value=initial_banner)
+                review_reason_banner = gr.HTML(value=initial_view.banner_html)
 
                 with gr.Row():
                     accept_btn = gr.Button("Accept [y]", elem_id="accept-btn", size="sm")
-                    review_status_display = gr.HTML(value=initial_status_html)
+                    review_status_display = gr.HTML(value=initial_view.status_html)
                     reject_btn = gr.Button("Reject [n]", elem_id="reject-btn", size="sm")
 
         gr.Markdown("---")
@@ -1560,22 +1367,24 @@ def create_app(context: RuntimeContext):
         ]
 
         prev_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name: handle_previous(
+            fn=lambda current_idx, filtered_df, full_df, lab_name: handle_navigation(
                 current_idx,
                 filtered_df,
                 full_df,
                 lab_name,
+                -1,
                 current_output_path(),
             ),
             inputs=nav_inputs,
             outputs=nav_outputs,
         )
         next_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name: handle_next(
+            fn=lambda current_idx, filtered_df, full_df, lab_name: handle_navigation(
                 current_idx,
                 filtered_df,
                 full_df,
                 lab_name,
+                1,
                 current_output_path(),
             ),
             inputs=nav_inputs,
@@ -1606,26 +1415,28 @@ def create_app(context: RuntimeContext):
         ]
 
         accept_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter: handle_accept_click(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
                 lab_name,
                 latest_only,
                 review_filter,
+                "accepted",
                 current_output_path(),
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
         reject_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter: handle_reject_click(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
                 lab_name,
                 latest_only,
                 review_filter,
+                "rejected",
                 current_output_path(),
             ),
             inputs=review_btn_inputs,

@@ -227,3 +227,44 @@ def test_get_review_frame_uses_build_review_rows_even_without_csv(monkeypatch, t
     review_df = review_documents._get_review_frame(document, object())
 
     assert review_df.equals(expected_df.fillna(""))
+
+
+def test_apply_review_action_auto_advances_to_next_pending_row(monkeypatch):
+    document = ProcessedDocument(
+        doc_dir=Path("/tmp/glucose_deadbeef"),
+        stem="glucose",
+        pdf_path=Path("/tmp/glucose_deadbeef/glucose.pdf"),
+        csv_path=Path("/tmp/glucose_deadbeef/glucose.csv"),
+    )
+    initial_df = _make_review_df(statuses=["", "", ""], pages=[1, 1, 2], rows=[0, 1, 0])
+    refreshed_df = _make_review_df(statuses=["accepted", "", ""], pages=[1, 1, 2], rows=[0, 1, 0])
+    calls: list[object] = []
+
+    monkeypatch.setattr(review_documents, "_get_document_by_id", lambda doc_id, output_path: document)
+    monkeypatch.setattr(review_documents, "_get_review_frame", lambda document, lab_specs: initial_df if not calls else refreshed_df)
+    monkeypatch.setattr(review_documents, "_persist_row_action", lambda document, current_row, action: (calls.append(action) or True, ""))
+    monkeypatch.setattr(
+        review_documents,
+        "_rerender_toolbar_state",
+        lambda current_doc_id, current_index, filter_mode, show_reviewed, output_path, lab_specs, rebuild_all, prefer_first_visible: (
+            current_doc_id,
+            current_index,
+            filter_mode,
+            show_reviewed,
+            rebuild_all,
+            prefer_first_visible,
+        ),
+    )
+
+    result = review_documents._apply_review_action(
+        "glucose_deadbeef",
+        0,
+        "All",
+        False,
+        "accepted",
+        Path("/tmp"),
+        object(),
+    )
+
+    assert calls == ["accept"]
+    assert result == ("glucose_deadbeef", 1, "All", False, False, False)

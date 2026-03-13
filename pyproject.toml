@@ -48,9 +48,6 @@ Issues = "https://github.com/tsilva/parselabs/issues"
 
 [project.scripts]
 parselabs = "parselabs.cli:main"
-parselabs-viewer = "parselabs.cli:viewer"
-parselabs-review-docs = "parselabs.cli:review_documents"
-parselabs-admin = "parselabs.cli:admin"
 
 [build-system]
 requires = ["hatchling"]

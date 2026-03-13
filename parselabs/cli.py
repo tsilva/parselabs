@@ -1,6 +1,10 @@
 """CLI entry points for parselabs."""
 
+from __future__ import annotations
+
 import argparse
+import sys
+from collections.abc import Callable, Sequence
 
 
 def _handle_ui_import_error(exc: ImportError) -> None:
@@ -19,56 +23,130 @@ def _handle_ui_import_error(exc: ImportError) -> None:
     raise SystemExit(f"UI dependencies failed to import: {message}") from exc
 
 
-def main() -> None:
-    """Run the extraction CLI."""
+def main(argv: Sequence[str] | None = None) -> None:
+    """Run the unified parselabs CLI."""
 
-    from parselabs.pipeline import main as _main
+    args = _coerce_argv(argv)
 
-    _main()
+    # Default to extraction mode for backward compatibility with the original CLI.
+    if not args:
+        _run_extract([])
+        return
+
+    command, *rest = args
+
+    # Surface the consolidated help text before dispatching to a subcommand parser.
+    if command in {"-h", "--help", "help"}:
+        print(_help_text())
+        raise SystemExit(0)
+
+    # Route explicit extraction subcommands to the existing pipeline parser.
+    if command == "extract":
+        _run_extract(rest, program_name="parselabs extract")
+        return
+
+    # Route the combined review UI and allow selecting the initial tab.
+    if command == "review":
+        _run_review(rest, program_name="parselabs review")
+        return
+
+    # Preserve the legacy viewer alias as an undocumented subcommand.
+    if command == "viewer":
+        _run_review(rest, program_name="parselabs viewer", default_tab="results")
+        return
+
+    # Preserve the legacy review-docs alias as an undocumented subcommand.
+    if command == "review-docs":
+        _run_review(rest, program_name="parselabs review-docs", default_tab="review")
+        return
+
+    # Route maintenance utilities through the unified admin command tree.
+    if command == "admin":
+        _run_admin(rest)
+        return
+
+    # Treat any other argv shape as the legacy extraction invocation style.
+    _run_extract(args)
 
 
 def viewer() -> None:
     """Run the review viewer CLI."""
 
-    try:
-        from parselabs.ui import launch_app
-    except ImportError as exc:
-        _handle_ui_import_error(exc)
-
-    context = _load_ui_context(_parse_ui_args())
-    launch_app(context, default_tab="results")
+    _run_review(sys.argv[1:], program_name="parselabs-viewer", default_tab="results")
 
 
 def review_documents() -> None:
     """Run the processed document reviewer CLI."""
 
-    try:
-        from parselabs.ui import launch_app
-    except ImportError as exc:
-        _handle_ui_import_error(exc)
-
-    context = _load_ui_context(_parse_ui_args())
-    launch_app(context, default_tab="review")
+    _run_review(sys.argv[1:], program_name="parselabs-review-docs", default_tab="review")
 
 
 def admin() -> None:
     """Run the unified admin CLI."""
 
+    _run_admin(sys.argv[1:])
+
+
+def _run_extract(argv: Sequence[str], *, program_name: str = "parselabs") -> None:
+    """Run the extraction pipeline with a temporary argv context."""
+
+    from parselabs.pipeline import main as _main
+
+    _run_with_argv(_main, argv, program_name)
+
+
+def _run_review(argv: Sequence[str], *, program_name: str, default_tab: str = "results") -> None:
+    """Run the combined review UI with tab-aware argument parsing."""
+
+    try:
+        from parselabs.ui import launch_app
+    except ImportError as exc:
+        _handle_ui_import_error(exc)
+
+    args = _parse_review_args(argv, program_name=program_name, default_tab=default_tab)
+    context = _load_ui_context(args)
+    launch_app(context, default_tab=args.tab)
+
+
+def _run_admin(argv: Sequence[str]) -> None:
+    """Run the admin CLI with forwarded arguments."""
+
     from parselabs.admin_commands import main as _main
 
-    raise SystemExit(_main())
+    raise SystemExit(_main(list(argv)))
 
 
-def _parse_ui_args() -> argparse.Namespace:
-    """Parse the shared profile-selection arguments for UI commands."""
+def _run_with_argv(callback: Callable[[], None], argv: Sequence[str], program_name: str) -> None:
+    """Call a CLI entry point after swapping in the desired argv."""
+
+    old_argv = sys.argv
+    sys.argv = [program_name, *argv]
+
+    try:
+        callback()
+    finally:
+        sys.argv = old_argv
+
+
+def _parse_review_args(argv: Sequence[str], *, program_name: str, default_tab: str) -> argparse.Namespace:
+    """Parse the review CLI arguments."""
 
     from parselabs.runtime import add_profile_arguments
 
     parser = add_profile_arguments(
-        argparse.ArgumentParser(),
+        argparse.ArgumentParser(
+            prog=program_name,
+            description="Launch the combined Parselabs review UI.",
+        ),
         profile_help="Profile name (defaults to the first available profile)",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--tab",
+        choices=["results", "review"],
+        default=default_tab,
+        help="Default tab to open in the combined UI",
+    )
+    return parser.parse_args(list(argv))
 
 
 def _load_ui_context(args: argparse.Namespace):
@@ -87,3 +165,33 @@ def _load_ui_context(args: argparse.Namespace):
         raise SystemExit(0)
 
     return load_ui_context(args.profile)
+
+
+def _coerce_argv(argv: Sequence[str] | None) -> list[str]:
+    """Return a mutable argv list for top-level dispatch."""
+
+    if argv is None:
+        return list(sys.argv[1:])
+
+    return list(argv)
+
+
+def _help_text() -> str:
+    """Return the top-level CLI help text."""
+
+    return (
+        "Usage: parselabs [extract-options]\n"
+        "       parselabs extract [extract-options]\n"
+        "       parselabs review [--profile NAME] [--list-profiles] [--tab {results,review}]\n"
+        "       parselabs admin <command> [args]\n\n"
+        "Commands:\n"
+        "  extract   Run lab extraction across one or more configured profiles\n"
+        "  review    Launch the combined review UI\n"
+        "  admin     Run maintenance and migration utilities\n\n"
+        "Examples:\n"
+        "  parselabs --profile tsilva\n"
+        "  parselabs extract --pattern \"2024-*.pdf\"\n"
+        "  parselabs review --profile tsilva\n"
+        "  parselabs review --profile tsilva --tab review\n"
+        "  parselabs admin validate-lab-specs\n"
+    )

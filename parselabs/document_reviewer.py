@@ -15,14 +15,17 @@ from parselabs.paths import get_static_dir
 from parselabs.review import (
     SOURCE_BBOX_LABEL,
     build_page_image_value_for_document,
+    build_reason_badges,
     format_mapped_reference_text,
+    format_mapped_value,
+    format_raw_value,
     format_reference_text,
     format_text,
     normalize_review_status,
 )
+from parselabs.review_state import ReviewTarget, apply_review_action_for_target, get_selected_row
 from parselabs.rows import ProcessedDocument, build_review_rows, get_document_review_summary, iter_processed_documents
 from parselabs.runtime import RuntimeContext
-from parselabs.store import apply_review_action
 
 logger = logging.getLogger(__name__)
 
@@ -154,32 +157,6 @@ def _matches_document_filter(
     return summary.fixture_ready
 
 
-def _format_raw_value(row: pd.Series) -> str:
-    """Format the raw value and raw unit into one compact queue cell."""
-
-    value_text = format_text(row.get("raw_value"))
-    unit_text = format_text(row.get("raw_lab_unit"), empty="")
-
-    # Omit the placeholder unit suffix when the unit is genuinely absent.
-    if unit_text:
-        return f"{value_text} {unit_text}".strip()
-
-    return value_text
-
-
-def _format_mapped_value(row: pd.Series) -> str:
-    """Format the normalized value and unit for inspector display."""
-
-    value_text = format_text(row.get("value"))
-    unit_text = format_text(row.get("lab_unit"), empty="")
-
-    # Omit the placeholder unit suffix when the unit is genuinely absent.
-    if unit_text:
-        return f"{value_text} {unit_text}".strip()
-
-    return value_text
-
-
 def _format_queue_status_icon(status_code: object) -> str:
     """Render the document-table status column as compact symbols."""
 
@@ -215,7 +192,7 @@ def _build_queue_state(review_df: pd.DataFrame, show_reviewed: bool) -> pd.DataF
     queue_df["page_label"] = queue_df["page_number"].apply(lambda value: str(int(value)) if str(value).strip() else "-")
     queue_df["row_label"] = queue_df["result_index"].apply(lambda value: str(int(value)) if str(value).strip() else "-")
     queue_df["raw_lab_label"] = queue_df["raw_lab_name"].apply(format_text)
-    queue_df["raw_value_label"] = queue_df.apply(_format_raw_value, axis=1)
+    queue_df["raw_value_label"] = queue_df.apply(format_raw_value, axis=1)
     queue_df["mapped_lab_label"] = queue_df["lab_name"].apply(format_text)
     return queue_df[QUEUE_STATE_COLUMNS].copy()
 
@@ -270,29 +247,7 @@ def _resolve_current_index(queue_state: pd.DataFrame, requested_index: int | Non
 def _get_current_row(review_df: pd.DataFrame, current_index: int) -> pd.Series | None:
     """Return the active row from the full review dataframe."""
 
-    # Guard: Empty documents or synthetic indexes have no active row.
-    if review_df.empty or current_index < 0 or current_index >= len(review_df):
-        return None
-
-    return review_df.iloc[current_index]
-
-
-def _build_reason_badges(review_reason: object) -> str:
-    """Render validation reason codes as compact badges."""
-
-    reason_text = format_text(review_reason, empty="")
-
-    # Guard: Rows without validation flags do not need badge markup.
-    if not reason_text:
-        return '<span class="review-inline-muted">None</span>'
-
-    badges: list[str] = []
-
-    # Split semicolon-delimited reasons into individual badges for faster scanning.
-    for reason in [part.strip() for part in html.unescape(reason_text).split(";") if part.strip()]:
-        badges.append(f'<span class="review-reason-chip">{html.escape(reason)}</span>')
-
-    return "".join(badges)
+    return get_selected_row(review_df, current_index)
 
 
 def _build_progress_chip(label: str, value: str, tone: str = "neutral") -> str:
@@ -371,7 +326,7 @@ def _build_inspector_html(document: ProcessedDocument | None, review_df: pd.Data
     reference_text = format_reference_text(current_row)
     mapped_reference_text = format_mapped_reference_text(current_row)
     comments_text = format_text(current_row.get("raw_comments"), empty="")
-    reason_badges_html = _build_reason_badges(current_row.get("review_reason"))
+    reason_badges_html = build_reason_badges(current_row.get("review_reason"))
 
     meta_rows: list[str] = []
     if reason_badges_html != '<span class="review-inline-muted">None</span>':
@@ -402,13 +357,13 @@ def _build_inspector_html(document: ProcessedDocument | None, review_df: pd.Data
         '<div class="review-compare-panel">'
         '<div class="review-panel-title">Mapped</div>'
         f'<div class="review-field"><span>Lab</span><strong>{format_text(current_row.get("lab_name"))}</strong></div>'
-        f'<div class="review-field"><span>Value</span><strong>{_format_mapped_value(current_row)}</strong></div>'
+        f'<div class="review-field"><span>Value</span><strong>{format_mapped_value(current_row)}</strong></div>'
         f'<div class="review-field"><span>Reference</span><strong>{mapped_reference_text}</strong></div>'
         "</div>"
         '<div class="review-compare-panel">'
         '<div class="review-panel-title">Raw</div>'
         f'<div class="review-field"><span>Lab</span><strong>{format_text(current_row.get("raw_lab_name"))}</strong></div>'
-        f'<div class="review-field"><span>Value</span><strong>{_format_raw_value(current_row)}</strong></div>'
+        f'<div class="review-field"><span>Value</span><strong>{format_raw_value(current_row)}</strong></div>'
         f'<div class="review-field"><span>Reference</span><strong>{reference_text}</strong></div>'
         "</div>"
         "</div>"
@@ -515,6 +470,44 @@ def _build_toolbar_outputs(dropdown_state: DropdownState, view: ReviewerView) ->
     )
 
 
+def _rerender_toolbar_state(
+    current_doc_id: str | None,
+    current_index: int | None,
+    filter_mode: str,
+    show_reviewed: bool,
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
+    *,
+    rebuild_all: bool,
+    prefer_first_visible: bool,
+) -> tuple:
+    """Rebuild dropdown state and rerender the selected document in one path."""
+
+    dropdown_state = _build_dropdown_state(current_doc_id, filter_mode, output_path, lab_specs, rebuild_all=rebuild_all)
+    selected_document = _get_document_by_id(dropdown_state.selected_id, output_path)
+    selected_changed = dropdown_state.selected_id != current_doc_id
+    view = _render_document(
+        selected_document,
+        None if prefer_first_visible or selected_changed else current_index,
+        show_reviewed,
+        output_path,
+        lab_specs,
+        prefer_first_visible=prefer_first_visible or selected_changed,
+    )
+    return _build_toolbar_outputs(dropdown_state, view)
+
+
+def _persist_row_action(document: ProcessedDocument, current_row: pd.Series, action: str) -> tuple[bool, str]:
+    """Persist one review action for the currently selected row."""
+
+    target = ReviewTarget(
+        doc_dir=document.doc_dir,
+        page_number=int(current_row["page_number"]),
+        result_index=int(current_row["result_index"]),
+    )
+    return apply_review_action_for_target(target, action)
+
+
 def _handle_document_list_refresh(
     current_doc_id: str | None,
     current_index: int,
@@ -525,16 +518,16 @@ def _handle_document_list_refresh(
 ) -> tuple:
     """Refresh the visible document list and rerender the active document."""
 
-    dropdown_state = _build_dropdown_state(current_doc_id, filter_mode, output_path, lab_specs, rebuild_all=True)
-    selected_document = _get_document_by_id(dropdown_state.selected_id, output_path)
-
-    # Preserve the current row only when the selected document did not change.
-    if dropdown_state.selected_id == current_doc_id:
-        view = _render_document(selected_document, current_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False)
-    else:
-        view = _render_document(selected_document, None, show_reviewed, output_path, lab_specs, prefer_first_visible=True)
-
-    return _build_toolbar_outputs(dropdown_state, view)
+    return _rerender_toolbar_state(
+        current_doc_id,
+        current_index,
+        filter_mode,
+        show_reviewed,
+        output_path,
+        lab_specs,
+        rebuild_all=True,
+        prefer_first_visible=False,
+    )
 
 
 def _handle_document_change(
@@ -664,32 +657,33 @@ def _apply_review_action(
 
     # Guard: Ignore actions when there is no active row to mutate.
     if document is None or current_row is None:
-        dropdown_state = _build_dropdown_state(doc_id, filter_mode, output_path, lab_specs, rebuild_all=False)
-        view = _render_document(_get_document_by_id(dropdown_state.selected_id, output_path), current_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False)
-        return _build_toolbar_outputs(dropdown_state, view)
+        return _rerender_toolbar_state(
+            doc_id,
+            current_index,
+            filter_mode,
+            show_reviewed,
+            output_path,
+            lab_specs,
+            rebuild_all=False,
+            prefer_first_visible=False,
+        )
 
     action = "clear" if status is None else ("accept" if status == "accepted" else "reject")
-    success, error = apply_review_action(
-        document.doc_dir,
-        int(current_row["page_number"]),
-        int(current_row["result_index"]),
-        action,
-    )
+    success, error = _persist_row_action(document, current_row, action)
 
     # Guard: Surface persistence errors without advancing away from the current row.
     if not success:
         gr.Warning(error)
-        dropdown_state = _build_dropdown_state(doc_id, filter_mode, output_path, lab_specs, rebuild_all=False)
-        view = _render_document(_get_document_by_id(dropdown_state.selected_id, output_path), current_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False)
-        return _build_toolbar_outputs(dropdown_state, view)
-
-    dropdown_state = _build_dropdown_state(doc_id, filter_mode, output_path, lab_specs, rebuild_all=False)
-    selected_document = _get_document_by_id(dropdown_state.selected_id, output_path)
-
-    # Switching documents should restart from the new document's first visible row.
-    if dropdown_state.selected_id != doc_id:
-        view = _render_document(selected_document, None, show_reviewed, output_path, lab_specs, prefer_first_visible=True)
-        return _build_toolbar_outputs(dropdown_state, view)
+        return _rerender_toolbar_state(
+            doc_id,
+            current_index,
+            filter_mode,
+            show_reviewed,
+            output_path,
+            lab_specs,
+            rebuild_all=False,
+            prefer_first_visible=False,
+        )
 
     refreshed_df = _get_review_frame(document, lab_specs)
 
@@ -701,8 +695,16 @@ def _apply_review_action(
     else:
         next_index = _choose_next_pending_index(refreshed_df, current_index)
 
-    view = _render_document(document, next_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False)
-    return _build_toolbar_outputs(dropdown_state, view)
+    return _rerender_toolbar_state(
+        doc_id,
+        next_index,
+        filter_mode,
+        show_reviewed,
+        output_path,
+        lab_specs,
+        rebuild_all=False,
+        prefer_first_visible=False,
+    )
 
 
 def _mark_missing_row(
@@ -721,36 +723,44 @@ def _mark_missing_row(
 
     # Guard: Ignore missing-row markers when there is no active row to anchor them to.
     if document is None or current_row is None:
-        dropdown_state = _build_dropdown_state(doc_id, filter_mode, output_path, lab_specs, rebuild_all=False)
-        view = _render_document(_get_document_by_id(dropdown_state.selected_id, output_path), current_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False)
-        return _build_toolbar_outputs(dropdown_state, view)
+        return _rerender_toolbar_state(
+            doc_id,
+            current_index,
+            filter_mode,
+            show_reviewed,
+            output_path,
+            lab_specs,
+            rebuild_all=False,
+            prefer_first_visible=False,
+        )
 
-    success, error = apply_review_action(
-        document.doc_dir,
-        int(current_row["page_number"]),
-        int(current_row["result_index"]),
-        "missing_row",
-    )
+    success, error = _persist_row_action(document, current_row, "missing_row")
 
     # Guard: Surface persistence errors without moving the current row.
     if not success:
         gr.Warning(error)
-        dropdown_state = _build_dropdown_state(doc_id, filter_mode, output_path, lab_specs, rebuild_all=False)
-        view = _render_document(_get_document_by_id(dropdown_state.selected_id, output_path), current_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False)
-        return _build_toolbar_outputs(dropdown_state, view)
+        return _rerender_toolbar_state(
+            doc_id,
+            current_index,
+            filter_mode,
+            show_reviewed,
+            output_path,
+            lab_specs,
+            rebuild_all=False,
+            prefer_first_visible=False,
+        )
 
     gr.Info("Missing-row marker recorded. Resolve it by editing the page JSON and clearing review_missing_rows.")
-
-    dropdown_state = _build_dropdown_state(doc_id, filter_mode, output_path, lab_specs, rebuild_all=False)
-    selected_document = _get_document_by_id(dropdown_state.selected_id, output_path)
-
-    # Switching documents should restart from the new document's first visible row.
-    if dropdown_state.selected_id != doc_id:
-        view = _render_document(selected_document, None, show_reviewed, output_path, lab_specs, prefer_first_visible=True)
-        return _build_toolbar_outputs(dropdown_state, view)
-
-    view = _render_document(document, current_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False)
-    return _build_toolbar_outputs(dropdown_state, view)
+    return _rerender_toolbar_state(
+        doc_id,
+        current_index,
+        filter_mode,
+        show_reviewed,
+        output_path,
+        lab_specs,
+        rebuild_all=False,
+        prefer_first_visible=False,
+    )
 
 
 def build_app(context: RuntimeContext) -> gr.Blocks:
