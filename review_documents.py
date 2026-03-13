@@ -7,6 +7,7 @@ import html
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import gradio as gr
 import pandas as pd
@@ -23,6 +24,9 @@ from parselabs.review_sync import (
     save_missing_row_marker,
     save_review_status,
 )
+
+if TYPE_CHECKING:
+    from parselabs.runtime import RuntimeContext
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +126,17 @@ def get_lab_specs() -> LabSpecsConfig:
         _lab_specs = LabSpecsConfig()
 
     return _lab_specs
+
+
+def apply_runtime_context(context: "RuntimeContext") -> None:
+    """Apply a shared runtime context to the document reviewer module state."""
+
+    global _lab_specs
+
+    if context.output_path is not None:
+        set_output_path(context.output_path)
+
+    _lab_specs = context.lab_specs
 
 
 def load_profile(profile_name: str) -> ProfileConfig | None:
@@ -1216,6 +1231,9 @@ def build_app() -> gr.Blocks:
 def main() -> None:
     """Document-reviewer CLI entry point."""
 
+    from parselabs.app import launch_app
+    from parselabs.runtime import RuntimeContext
+
     args = parse_args()
 
     # Print the available profiles and exit when requested.
@@ -1224,31 +1242,22 @@ def main() -> None:
             print(profile_name)
         return
 
-    # Load the selected profile when one was provided.
-    if args.profile:
-        profile = load_profile(args.profile)
-
-        # Guard: Unknown profiles cannot start the reviewer.
-        if profile is None:
-            raise SystemExit(f"Profile '{args.profile}' was not found.")
-
-        # Guard: The reviewer needs a processed output directory.
-        if profile.output_path is None:
-            raise SystemExit(f"Profile '{args.profile}' has no output_path configured.")
+    profile_name = args.profile
+    if not profile_name:
+        profiles = [name for name in ProfileConfig.list_profiles() if not name.startswith("_")]
+        if not profiles:
+            raise SystemExit("No profiles configured.")
+        profile_name = profiles[0]
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    demo = build_app()
-    allowed_paths = _build_allowed_paths()
-    logger.info("Starting Processed Document Reviewer on http://localhost:7863")
-    demo.launch(
-        server_name="127.0.0.1",
-        server_port=7863,
-        show_error=True,
-        inbrowser=False,
-        allowed_paths=allowed_paths,
-        css=CUSTOM_CSS,
-        head=KEYBOARD_SHORTCUTS_JS,
+    context = RuntimeContext.from_profile(
+        profile_name,
+        need_input=False,
+        need_output=True,
+        need_api=False,
+        setup_logs=False,
     )
+    launch_app(context, default_tab="review")
 
 
 if __name__ == "__main__":

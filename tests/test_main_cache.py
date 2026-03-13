@@ -1,69 +1,20 @@
 import json
+from pathlib import Path
 
 import pandas as pd
 
-from main import REQUIRED_CSV_COLS, _build_merged_review_dataframe_from_csv_paths, _is_csv_valid
+import main
+from parselabs.config import ExtractionConfig
 
 
-def test_is_csv_valid_rejects_empty_csv_when_page_extraction_failed(tmp_path):
-    doc_dir = tmp_path / "document_12345678"
-    doc_dir.mkdir()
-    csv_path = doc_dir / "document.csv"
-
-    pd.DataFrame(columns=REQUIRED_CSV_COLS).to_csv(csv_path, index=False)
-    (doc_dir / "document.001.json").write_text(
-        json.dumps(
-            {
-                "page_has_lab_data": True,
-                "lab_results": [],
-                "_extraction_failed": True,
-            }
-        ),
-        encoding="utf-8",
+def _build_config(tmp_path: Path) -> ExtractionConfig:
+    return ExtractionConfig(
+        input_path=tmp_path,
+        output_path=tmp_path / "output",
+        openrouter_api_key="test-key",
+        extract_model_id="test-model",
+        max_workers=1,
     )
-
-    assert _is_csv_valid(csv_path) is False
-
-
-def test_is_csv_valid_accepts_empty_csv_for_confirmed_blank_document(tmp_path):
-    doc_dir = tmp_path / "document_12345678"
-    doc_dir.mkdir()
-    csv_path = doc_dir / "document.csv"
-
-    pd.DataFrame(columns=REQUIRED_CSV_COLS).to_csv(csv_path, index=False)
-    (doc_dir / "document.001.json").write_text(
-        json.dumps(
-            {
-                "page_has_lab_data": False,
-                "lab_results": [],
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    assert _is_csv_valid(csv_path) is True
-
-
-def test_is_csv_valid_accepts_non_empty_csv_with_required_columns(tmp_path):
-    doc_dir = tmp_path / "document_12345678"
-    doc_dir.mkdir()
-    csv_path = doc_dir / "document.csv"
-
-    pd.DataFrame(
-        [
-            {
-                "page_number": 1,
-                "result_index": 0,
-                "raw_lab_name": "Glicose",
-                "raw_value": "92",
-                "raw_lab_unit": "mg/dL",
-                "review_status": "",
-            }
-        ],
-        columns=REQUIRED_CSV_COLS,
-    ).to_csv(csv_path, index=False)
-
-    assert _is_csv_valid(csv_path) is True
 
 
 def test_build_merged_review_dataframe_from_csv_paths_keeps_review_rows(tmp_path):
@@ -103,7 +54,85 @@ def test_build_merged_review_dataframe_from_csv_paths_keeps_review_rows(tmp_path
         ]
     ).to_csv(second_csv, index=False)
 
-    merged_df = _build_merged_review_dataframe_from_csv_paths([first_csv, second_csv])
+    merged_df = main._build_merged_review_dataframe_from_csv_paths([first_csv, second_csv])
 
     assert merged_df["source_file"].tolist() == ["a.pdf", "b.pdf"]
     assert merged_df["review_status"].fillna("").tolist() == ["", "accepted"]
+
+
+def test_extract_or_load_page_data_reuses_valid_cached_json(tmp_path, monkeypatch):
+    config = _build_config(tmp_path)
+    json_path = tmp_path / "glucose.001.json"
+    json_path.write_text(
+        json.dumps(
+            {
+                "page_has_lab_data": True,
+                "lab_results": [
+                    {
+                        "raw_lab_name": "Glucose",
+                        "raw_value": "92",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(main, "_extract_page_data_from_text", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("text extraction not expected")))
+    monkeypatch.setattr(main, "_extract_page_data_from_image", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("image extraction not expected")))
+
+    page_data = main._extract_or_load_page_data(
+        {"primary": tmp_path / "primary.jpg", "fallback": tmp_path / "fallback.jpg"},
+        json_path,
+        "glucose.001",
+        config,
+        "glucose",
+        0,
+        [],
+        "",
+    )
+
+    assert page_data["lab_results"][0]["raw_lab_name"] == "Glucose"
+
+
+def test_extract_or_load_page_data_retries_failed_cached_json(tmp_path, monkeypatch):
+    config = _build_config(tmp_path)
+    json_path = tmp_path / "glucose.001.json"
+    json_path.write_text(
+        json.dumps(
+            {
+                "_extraction_failed": True,
+                "_failure_reason": "boom",
+                "lab_results": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        main,
+        "_extract_page_data_from_image",
+        lambda *args, **kwargs: {
+            "page_has_lab_data": True,
+            "lab_results": [
+                {
+                    "raw_lab_name": "Glucose",
+                    "raw_value": "92",
+                }
+            ],
+        },
+    )
+
+    page_data = main._extract_or_load_page_data(
+        {"primary": tmp_path / "primary.jpg", "fallback": tmp_path / "fallback.jpg"},
+        json_path,
+        "glucose.001",
+        config,
+        "glucose",
+        0,
+        [],
+        "",
+    )
+
+    assert page_data.get("_extraction_failed") is not True
+    assert page_data["lab_results"][0]["raw_lab_name"] == "Glucose"
