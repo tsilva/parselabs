@@ -11,27 +11,21 @@ Usage:
 import argparse
 import json
 import logging
-import sys
 from pathlib import Path
-
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd  # noqa: E402
 from openai import OpenAI  # noqa: E402
 
 from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig, ProfileConfig  # noqa: E402
-from parselabs.paths import get_prompts_dir  # noqa: E402
+from parselabs.extraction import load_prompt_template  # noqa: E402
 from parselabs.standardization import load_cache, normalize_unit_cache_key_component, save_cache  # noqa: E402
 from parselabs.utils import parse_llm_json_response  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-_PROMPTS_DIR = get_prompts_dir()
-
 
 def _load_prompt(name: str) -> str:
-    return (_PROMPTS_DIR / f"{name}.md").read_text(encoding="utf-8")
+    return load_prompt_template(name)
 
 
 def _render_prompt_template(template: str, **replacements: str) -> str:

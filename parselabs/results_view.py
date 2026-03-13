@@ -21,14 +21,21 @@ from pathlib import Path  # noqa: E402
 import gradio as gr  # noqa: E402
 import pandas as pd  # noqa: E402
 import plotly.graph_objects as go  # noqa: E402
-from PIL import Image  # noqa: E402
 from plotly.subplots import make_subplots  # noqa: E402
 
 from parselabs.config import Demographics, LabSpecsConfig, ProfileConfig  # noqa: E402
-from parselabs.documents import apply_review_action, resolve_page_path  # noqa: E402
+from parselabs.review import (  # noqa: E402
+    SOURCE_BBOX_LABEL,
+    build_page_image_value_for_entry,
+    get_bbox_coordinates as get_bbox_coordinates_from_review,
+    get_image_size as get_image_size_from_review,
+    get_review_status as get_review_status_from_review,
+    load_results_dataframe,
+    scale_bbox_to_pixels as scale_bbox_to_pixels_from_review,
+)
+from parselabs.store import apply_review_action, resolve_document_dir, resolve_page_path  # noqa: E402
 from parselabs.paths import get_static_dir  # noqa: E402
-from parselabs.profiles import RuntimeContext, list_non_template_profiles  # noqa: E402
-from parselabs.rows import build_corpus_review_rows  # noqa: E402
+from parselabs.runtime import RuntimeContext, list_non_template_profiles  # noqa: E402
 
 # Initialize module logger
 logger = logging.getLogger(__name__)
@@ -95,7 +102,6 @@ COLUMN_LABELS = {
 
 _doc_dir_cache: dict[tuple[str, str], Path | None] = {}
 _page_image_size_cache: dict[str, tuple[int, int]] = {}
-SOURCE_BBOX_LABEL = "Selected result"
 
 
 def _resolve_doc_dir(stem: str, output_path: Path) -> Path | None:
@@ -108,11 +114,10 @@ def _resolve_doc_dir(stem: str, output_path: Path) -> Path | None:
     if cache_key in _doc_dir_cache:
         return _doc_dir_cache[cache_key]
 
-    # Try new-style: {stem}_{8-char-hash}
-    matches = sorted(output_path.glob(f"{stem}_????????"))
-    if matches:
-        _doc_dir_cache[cache_key] = matches[0]
-        return matches[0]
+    resolved_doc_dir = resolve_document_dir(stem, output_path)
+    if resolved_doc_dir is not None:
+        _doc_dir_cache[cache_key] = resolved_doc_dir
+        return resolved_doc_dir
 
     _doc_dir_cache[cache_key] = None
     return None
@@ -159,47 +164,13 @@ def get_json_path(entry: dict, output_path: Path) -> Path:
 def _get_bbox_coordinates(entry: dict) -> tuple[float, float, float, float] | None:
     """Return viewer-usable bounding-box coordinates from an entry."""
 
-    bbox_keys = ["bbox_left", "bbox_top", "bbox_right", "bbox_bottom"]
-    coords: list[float] = []
-
-    # Parse each coordinate independently so missing values fail cleanly.
-    for key in bbox_keys:
-        value = entry.get(key)
-
-        # Guard: Missing coordinates mean there is no highlightable box.
-        if value is None or pd.isna(value):
-            return None
-
-        try:
-            coords.append(float(value))
-        except (TypeError, ValueError):
-            return None
-
-    left, top, right, bottom = coords
-
-    # Guard: Ignore degenerate or inverted boxes.
-    if right <= left or bottom <= top:
-        return None
-
-    return left, top, right, bottom
+    return get_bbox_coordinates_from_review(entry)
 
 
 def _get_image_size(image_path: str) -> tuple[int, int] | None:
     """Return image dimensions with a simple in-memory cache."""
 
-    # Guard: Reuse prior file reads when the same page stays selected.
-    if image_path in _page_image_size_cache:
-        return _page_image_size_cache[image_path]
-
-    try:
-        with Image.open(image_path) as image:
-            size = image.size
-    except (FileNotFoundError, OSError) as exc:
-        logger.warning(f"Failed to read source image size from {image_path}: {exc}")
-        return None
-
-    _page_image_size_cache[image_path] = size
-    return size
+    return get_image_size_from_review(image_path)
 
 
 def _scale_bbox_to_pixels(
@@ -208,46 +179,7 @@ def _scale_bbox_to_pixels(
 ) -> tuple[int, int, int, int] | None:
     """Scale normalized or absolute bbox coordinates into image pixels."""
 
-    width, height = image_size
-    left, top, right, bottom = bbox
-    max_coord = max(left, top, right, bottom)
-
-    # Support occasional 0-1 normalized output even though prompts request 0-1000.
-    if max_coord <= 1:
-        scaled = (
-            int(round(left * width)),
-            int(round(top * height)),
-            int(round(right * width)),
-            int(round(bottom * height)),
-        )
-    # Use the canonical 0-1000 scale requested from the model.
-    elif max_coord <= 1000:
-        scaled = (
-            int(round(left * width / 1000)),
-            int(round(top * height / 1000)),
-            int(round(right * width / 1000)),
-            int(round(bottom * height / 1000)),
-        )
-    # Fall back to absolute pixel coordinates when the payload is already image-sized.
-    else:
-        scaled = (
-            int(round(left)),
-            int(round(top)),
-            int(round(right)),
-            int(round(bottom)),
-        )
-
-    left_px, top_px, right_px, bottom_px = scaled
-    left_px = max(0, min(left_px, width - 1))
-    top_px = max(0, min(top_px, height - 1))
-    right_px = max(0, min(right_px, width))
-    bottom_px = max(0, min(bottom_px, height))
-
-    # Guard: Clamping may collapse the box on tiny or malformed inputs.
-    if right_px <= left_px or bottom_px <= top_px:
-        return None
-
-    return left_px, top_px, right_px, bottom_px
+    return scale_bbox_to_pixels_from_review(bbox, image_size)
 
 
 def build_source_image_value(
@@ -256,33 +188,7 @@ def build_source_image_value(
 ) -> tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None:
     """Build the annotated-image payload for the Source tab."""
 
-    image_path = get_image_path(entry, output_path)
-
-    # Guard: Missing page images should keep the Source tab empty.
-    if not image_path:
-        return None
-
-    annotations: list[tuple[tuple[int, int, int, int], str]] = []
-    bbox = _get_bbox_coordinates(entry)
-
-    # Guard: Rows without bbox data still show the underlying page image.
-    if bbox is None:
-        return image_path, annotations
-
-    image_size = _get_image_size(image_path)
-
-    # Guard: If the image cannot be opened, degrade gracefully to the raw page image.
-    if image_size is None:
-        return image_path, annotations
-
-    scaled_bbox = _scale_bbox_to_pixels(bbox, image_size)
-
-    # Guard: Unusable boxes should not break source-page rendering.
-    if scaled_bbox is None:
-        return image_path, annotations
-
-    annotations.append((scaled_bbox, SOURCE_BBOX_LABEL))
-    return image_path, annotations
+    return build_page_image_value_for_entry(entry, output_path, label=SOURCE_BBOX_LABEL)
 
 
 # =============================================================================
@@ -462,48 +368,7 @@ def load_data(
 ) -> pd.DataFrame:
     """Load review data from canonical page JSON, falling back to all.csv when needed."""
 
-    df = build_corpus_review_rows(output_path, lab_specs)
-
-    # Fall back to the merged review snapshot only for legacy outputs without page JSON.
-    if df.empty:
-        csv_path = output_path / "all.csv"
-
-        # Guard: no fallback data file
-        if not csv_path.exists():
-            return pd.DataFrame()
-
-        df = pd.read_csv(csv_path)
-
-    # Convert date column to datetime
-    if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
-
-    # Sync review status only for legacy all.csv fallbacks that did not originate from review JSON.
-    if "review_status" not in df.columns:
-        df["review_status"] = _sync_review_statuses(df, output_path)
-
-    # Compute reference_range display string
-    if "reference_min" in df.columns and "reference_max" in df.columns:
-        df["reference_range"] = df.apply(_format_reference_range, axis=1)
-
-    # Compute is_out_of_reference (PDF reference range)
-    if "value" in df.columns and "reference_min" in df.columns and "reference_max" in df.columns:
-        df["is_out_of_reference"] = df.apply(_check_out_of_reference, axis=1)
-
-    # Compute lab_specs healthy ranges based on demographics
-    gender = demographics.gender if demographics else None
-    age = demographics.age if demographics else None
-
-    if "lab_name" in df.columns and lab_specs.exists:
-        range_df = df["lab_name"].apply(lambda name: _get_lab_spec_range(name, lab_specs, gender, age))
-        df["lab_specs_min"] = range_df["lab_specs_min"]
-        df["lab_specs_max"] = range_df["lab_specs_max"]
-
-    # Compute is_out_of_healthy_range (lab_specs healthy range)
-    if "value" in df.columns and "lab_specs_min" in df.columns and "lab_specs_max" in df.columns:
-        df["is_out_of_healthy_range"] = df.apply(_check_out_of_healthy_range, axis=1)
-
-    return df
+    return load_results_dataframe(output_path, lab_specs, demographics)
 
 
 # =============================================================================
@@ -514,10 +379,7 @@ def load_data(
 def get_review_status(entry: dict) -> str | None:
     """Get review status for an entry (accepted/rejected/None)."""
 
-    status = entry.get("review_status")
-    if status is not None and pd.notna(status) and str(status).strip():
-        return str(status).strip()
-    return None
+    return get_review_status_from_review(entry)
 
 
 # =============================================================================

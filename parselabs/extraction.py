@@ -282,9 +282,17 @@ TOOLS = [
 # ========================================
 
 _PROMPTS_DIR = get_prompts_dir()
-EXTRACTION_SYSTEM_PROMPT = (_PROMPTS_DIR / "extraction_system.md").read_text(encoding="utf-8").strip()
-EXTRACTION_USER_PROMPT = (_PROMPTS_DIR / "extraction_user.md").read_text(encoding="utf-8").strip()
-TEXT_EXTRACTION_USER_PROMPT = (_PROMPTS_DIR / "text_extraction_user.md").read_text(encoding="utf-8").strip()
+
+
+def load_prompt_template(name: str) -> str:
+    """Load one prompt template from the shared prompts directory."""
+
+    return (_PROMPTS_DIR / f"{name}.md").read_text(encoding="utf-8").strip()
+
+
+EXTRACTION_SYSTEM_PROMPT = load_prompt_template("extraction_system")
+EXTRACTION_USER_PROMPT = load_prompt_template("extraction_user")
+TEXT_EXTRACTION_USER_PROMPT = load_prompt_template("text_extraction_user")
 
 
 def _empty_report() -> dict:

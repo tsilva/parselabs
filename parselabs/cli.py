@@ -62,7 +62,7 @@ def admin() -> None:
 def _parse_ui_args() -> argparse.Namespace:
     """Parse the shared profile-selection arguments for UI commands."""
 
-    from parselabs.profiles import add_profile_arguments
+    from parselabs.runtime import add_profile_arguments
 
     parser = add_profile_arguments(
         argparse.ArgumentParser(),
@@ -74,7 +74,8 @@ def _parse_ui_args() -> argparse.Namespace:
 def _load_ui_context(args: argparse.Namespace):
     """Resolve the profile for the combined UI commands."""
 
-    from parselabs.profiles import ProfileConfig, load_ui_context
+    from parselabs.config import ProfileConfig
+    from parselabs.runtime import load_ui_context
 
     if args.list_profiles:
         profiles = ProfileConfig.list_profiles()

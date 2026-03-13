@@ -9,18 +9,28 @@ from pathlib import Path
 
 import gradio as gr
 import pandas as pd
-from PIL import Image
 
 from parselabs.config import LabSpecsConfig
-from parselabs.documents import apply_review_action
 from parselabs.paths import get_static_dir
-from parselabs.profiles import RuntimeContext
-from parselabs.rows import ProcessedDocument, build_review_rows, get_document_review_summary, get_page_image_path, iter_processed_documents
+from parselabs.review import (
+    SOURCE_BBOX_LABEL,
+    build_page_image_value_for_document,
+    format_mapped_reference_text,
+    format_reference_bounds,
+    format_reference_text,
+    format_text,
+    get_bbox_coordinates as get_bbox_coordinates_from_review,
+    get_image_size as get_image_size_from_review,
+    normalize_review_status,
+    scale_bbox_to_pixels as scale_bbox_to_pixels_from_review,
+)
+from parselabs.runtime import RuntimeContext
+from parselabs.store import apply_review_action
+from parselabs.dataset import ProcessedDocument, build_review_rows, get_document_review_summary, iter_processed_documents
 
 logger = logging.getLogger(__name__)
 
 _STATIC_DIR = get_static_dir()
-SOURCE_BBOX_LABEL = "Selected result"
 _page_image_size_cache: dict[str, tuple[int, int]] = {}
 
 KEYBOARD_SHORTCUTS_JS = (_STATIC_DIR / "review_documents.js").read_text()
@@ -153,37 +163,13 @@ def _matches_document_filter(
 def _normalize_status(status: object) -> str:
     """Normalize reviewer status values into accepted, rejected, or pending."""
 
-    # Guard: Missing statuses stay pending.
-    if status is None:
-        return ""
-
-    normalized = str(status).strip().lower()
-
-    # Guard: Empty strings are treated as pending decisions.
-    if not normalized:
-        return ""
-
-    # Guard: Only the two persisted review outcomes are surfaced explicitly.
-    if normalized in {"accepted", "rejected"}:
-        return normalized
-
-    return ""
+    return normalize_review_status(status)
 
 
 def _format_text(value: object, empty: str = "-") -> str:
     """Return a safe string for UI display, normalizing missing values."""
 
-    # Guard: Missing values render as a short placeholder.
-    if value is None or pd.isna(value):
-        return empty
-
-    text = str(value).strip()
-
-    # Guard: Blank strings also render as a short placeholder.
-    if not text:
-        return empty
-
-    return html.escape(text)
+    return format_text(value, empty=empty)
 
 
 def _format_raw_value(row: pd.Series) -> str:
@@ -215,47 +201,19 @@ def _format_mapped_value(row: pd.Series) -> str:
 def _format_reference_bounds(ref_min: object, ref_max: object, *, unit: object = None) -> str:
     """Format min/max reference bounds, including one-sided ranges."""
 
-    min_text = _format_text(ref_min, empty="")
-    max_text = _format_text(ref_max, empty="")
-    unit_text = _format_text(unit, empty="")
-
-    # Full ranges render as "min - max" with an optional unit suffix.
-    if min_text and max_text:
-        range_text = f"{min_text} - {max_text}"
-    elif min_text:
-        range_text = f">{min_text}"
-    elif max_text:
-        range_text = f"<{max_text}"
-    else:
-        return "-"
-
-    # Omit the unit suffix when the unit is genuinely absent.
-    if unit_text:
-        return f"{range_text} {unit_text}".strip()
-
-    return range_text
+    return format_reference_bounds(ref_min, ref_max, unit=unit)
 
 
 def _format_reference_text(row: pd.Series) -> str:
     """Format the best available reference range for the inspector."""
 
-    raw_reference = _format_text(row.get("raw_reference_range"), empty="")
-
-    # Prefer the extracted range string when the model provided one.
-    if raw_reference:
-        return raw_reference
-
-    return _format_reference_bounds(row.get("reference_min"), row.get("reference_max"))
+    return format_reference_text(row)
 
 
 def _format_mapped_reference_text(row: pd.Series) -> str:
     """Format the normalized reference range in the standardized unit."""
 
-    return _format_reference_bounds(
-        row.get("reference_min"),
-        row.get("reference_max"),
-        unit=row.get("lab_unit"),
-    )
+    return format_mapped_reference_text(row)
 
 
 def _format_queue_status_icon(status_code: object) -> str:
@@ -271,47 +229,13 @@ def _format_queue_status_icon(status_code: object) -> str:
 def _get_bbox_coordinates(row: pd.Series) -> tuple[float, float, float, float] | None:
     """Return viewer-usable bbox coordinates from the active review row."""
 
-    bbox_keys = ["bbox_left", "bbox_top", "bbox_right", "bbox_bottom"]
-    coords: list[float] = []
-
-    # Parse each coordinate independently so missing values fail cleanly.
-    for key in bbox_keys:
-        value = row.get(key)
-
-        # Guard: Missing coordinates mean there is no review overlay to draw.
-        if value is None or pd.isna(value) or str(value).strip() == "":
-            return None
-
-        try:
-            coords.append(float(value))
-        except (TypeError, ValueError):
-            return None
-
-    left, top, right, bottom = coords
-
-    # Guard: Ignore degenerate or inverted boxes.
-    if right <= left or bottom <= top:
-        return None
-
-    return left, top, right, bottom
+    return get_bbox_coordinates_from_review(row)
 
 
 def _get_image_size(image_path: str) -> tuple[int, int] | None:
     """Return page-image dimensions with a small in-memory cache."""
 
-    # Guard: Reuse prior file reads when the reviewer stays on the same page.
-    if image_path in _page_image_size_cache:
-        return _page_image_size_cache[image_path]
-
-    try:
-        with Image.open(image_path) as image:
-            size = image.size
-    except (FileNotFoundError, OSError) as exc:
-        logger.warning(f"Failed to read review page image size from {image_path}: {exc}")
-        return None
-
-    _page_image_size_cache[image_path] = size
-    return size
+    return get_image_size_from_review(image_path)
 
 
 def _scale_bbox_to_pixels(
@@ -320,46 +244,7 @@ def _scale_bbox_to_pixels(
 ) -> tuple[int, int, int, int] | None:
     """Scale normalized or absolute bbox coordinates into image pixels."""
 
-    width, height = image_size
-    left, top, right, bottom = bbox
-    max_coord = max(left, top, right, bottom)
-
-    # Support occasional 0-1 normalized output even though prompts request 0-1000.
-    if max_coord <= 1:
-        scaled = (
-            int(round(left * width)),
-            int(round(top * height)),
-            int(round(right * width)),
-            int(round(bottom * height)),
-        )
-    # Use the canonical 0-1000 scale requested from extraction.
-    elif max_coord <= 1000:
-        scaled = (
-            int(round(left * width / 1000)),
-            int(round(top * height / 1000)),
-            int(round(right * width / 1000)),
-            int(round(bottom * height / 1000)),
-        )
-    # Fall back to absolute pixel coordinates when the payload is already image-sized.
-    else:
-        scaled = (
-            int(round(left)),
-            int(round(top)),
-            int(round(right)),
-            int(round(bottom)),
-        )
-
-    left_px, top_px, right_px, bottom_px = scaled
-    left_px = max(0, min(left_px, width - 1))
-    top_px = max(0, min(top_px, height - 1))
-    right_px = max(0, min(right_px, width))
-    bottom_px = max(0, min(bottom_px, height))
-
-    # Guard: Clamping may collapse the box on malformed inputs.
-    if right_px <= left_px or bottom_px <= top_px:
-        return None
-
-    return left_px, top_px, right_px, bottom_px
+    return scale_bbox_to_pixels_from_review(bbox, image_size)
 
 
 def _build_page_image_value(
@@ -368,39 +253,14 @@ def _build_page_image_value(
 ) -> tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None:
     """Build the annotated-image payload for the active review row."""
 
-    # Guard: No selected document or row means there is no page image to render.
     if document is None or current_row is None:
         return None
 
-    page_number = int(current_row["page_number"])
-    image_path = get_page_image_path(document.doc_dir, page_number)
-
-    # Guard: Missing page images should keep the review pane empty.
-    if image_path is None:
-        return None
-
-    image_path_str = str(image_path)
-    annotations: list[tuple[tuple[int, int, int, int], str]] = []
-    bbox = _get_bbox_coordinates(current_row)
-
-    # Guard: Rows without bbox data still show the raw page image.
-    if bbox is None:
-        return image_path_str, annotations
-
-    image_size = _get_image_size(image_path_str)
-
-    # Guard: If the image cannot be opened, degrade gracefully to the raw page image.
-    if image_size is None:
-        return image_path_str, annotations
-
-    scaled_bbox = _scale_bbox_to_pixels(bbox, image_size)
-
-    # Guard: Unusable boxes should not block page rendering.
-    if scaled_bbox is None:
-        return image_path_str, annotations
-
-    annotations.append((scaled_bbox, SOURCE_BBOX_LABEL))
-    return image_path_str, annotations
+    return build_page_image_value_for_document(
+        document.doc_dir,
+        current_row,
+        label=SOURCE_BBOX_LABEL,
+    )
 
 
 def _build_queue_state(review_df: pd.DataFrame, show_reviewed: bool) -> pd.DataFrame:

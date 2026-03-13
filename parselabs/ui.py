@@ -7,7 +7,7 @@ import logging
 import gradio as gr
 
 from parselabs import document_reviewer, results_view
-from parselabs.profiles import RuntimeContext
+from parselabs.runtime import RuntimeContext
 
 logger = logging.getLogger(__name__)
 
