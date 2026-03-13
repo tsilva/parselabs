@@ -9,7 +9,7 @@ import pytest
 
 from parselabs import pipeline as main
 from parselabs.config import ExtractionConfig, LabSpecsConfig, ProfileConfig
-from parselabs.review_sync import (
+from parselabs.rows import (
     ReviewStateError,
     apply_cached_standardization,
     build_document_expected_dataframe_from_reviewed_json,
@@ -156,11 +156,11 @@ def _stub_standardization(monkeypatch) -> None:
     """Stub cache-backed standardization so tests stay self-contained."""
 
     monkeypatch.setattr(
-        "parselabs.review_sync.standardize_lab_names",
+        "parselabs.rows.standardize_lab_names",
         lambda raw_names: {name: "Blood - Glucose" for name in raw_names},
     )
     monkeypatch.setattr(
-        "parselabs.review_sync.standardize_lab_units",
+        "parselabs.rows.standardize_lab_units",
         lambda unit_contexts: {context: "mg/dL" for context in unit_contexts},
     )
 
@@ -169,11 +169,11 @@ def _stub_unknown_unit_standardization(monkeypatch) -> None:
     """Stub standardization with known lab names but unresolved units."""
 
     monkeypatch.setattr(
-        "parselabs.review_sync.standardize_lab_names",
+        "parselabs.rows.standardize_lab_names",
         lambda raw_names: {name: "Blood - Glucose" for name in raw_names},
     )
     monkeypatch.setattr(
-        "parselabs.review_sync.standardize_lab_units",
+        "parselabs.rows.standardize_lab_units",
         lambda unit_contexts: {context: "$UNKNOWN$" for context in unit_contexts},
     )
 
@@ -187,11 +187,11 @@ def _stub_standardization_maps(
     """Stub cache-backed standardization with explicit row-level mappings."""
 
     monkeypatch.setattr(
-        "parselabs.review_sync.standardize_lab_names",
+        "parselabs.rows.standardize_lab_names",
         lambda raw_names: {name: name_map.get(name, "$UNKNOWN$") for name in raw_names},
     )
     monkeypatch.setattr(
-        "parselabs.review_sync.standardize_lab_units",
+        "parselabs.rows.standardize_lab_units",
         lambda unit_contexts: {context: unit_map.get(context, "$UNKNOWN$") for context in unit_contexts},
     )
 
@@ -440,11 +440,11 @@ def test_apply_cached_standardization_infers_safe_missing_primary_units(tmp_path
     lab_specs = LabSpecsConfig(config_path=config_path)
 
     monkeypatch.setattr(
-        "parselabs.review_sync.standardize_lab_names",
+        "parselabs.rows.standardize_lab_names",
         lambda raw_names: {name: "Urine Type II - pH" for name in raw_names},
     )
     monkeypatch.setattr(
-        "parselabs.review_sync.standardize_lab_units",
+        "parselabs.rows.standardize_lab_units",
         lambda unit_contexts: {context: "$UNKNOWN$" for context in unit_contexts},
     )
 
@@ -680,11 +680,11 @@ def test_review_corpus_report_counts_rejections_missing_rows_and_unknowns(tmp_pa
     )
 
     monkeypatch.setattr(
-        "parselabs.review_sync.standardize_lab_names",
+        "parselabs.rows.standardize_lab_names",
         lambda raw_names: {name: ("Blood - Glucose" if name == "Glucose" else "$UNKNOWN$") for name in raw_names},
     )
     monkeypatch.setattr(
-        "parselabs.review_sync.standardize_lab_units",
+        "parselabs.rows.standardize_lab_units",
         lambda unit_contexts: {context: ("mg/dL" if context[0] == "mg/dL" else "$UNKNOWN$") for context in unit_contexts},
     )
 

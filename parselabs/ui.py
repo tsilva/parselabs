@@ -7,7 +7,7 @@ import logging
 import gradio as gr
 
 from parselabs import document_reviewer, results_view
-from parselabs.runtime import RuntimeContext
+from parselabs.profiles import RuntimeContext
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +19,8 @@ def build_app(context: RuntimeContext, default_tab: str) -> gr.Blocks:
     """Build the combined Gradio app with a selectable default tab."""
 
     selected_tab = _normalize_default_tab(default_tab)
-    results_view.apply_runtime_context(context)
-    document_reviewer.apply_runtime_context(context)
-    explorer_app = results_view.create_app()
-    reviewer_app = document_reviewer.build_app()
+    explorer_app = results_view.create_app(context)
+    reviewer_app = document_reviewer.build_app(context)
 
     with gr.Blocks(title="Parselabs") as demo:
         with gr.Tabs(selected=selected_tab):

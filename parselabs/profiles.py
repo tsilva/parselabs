@@ -1,7 +1,8 @@
-"""Shared runtime context for CLI, UI, and utility entry points."""
+"""Shared profile and runtime helpers for CLI, UI, and utility entry points."""
 
 from __future__ import annotations
 
+import argparse
 import logging
 import os
 from dataclasses import dataclass
@@ -164,3 +165,51 @@ class RuntimeContext:
                 output_roots.add(str(profile.output_path.parent))
 
         return sorted(output_roots)
+
+
+def add_profile_arguments(
+    parser: argparse.ArgumentParser,
+    *,
+    profile_help: str,
+    list_profiles_help: str = "List available profiles and exit",
+) -> argparse.ArgumentParser:
+    """Attach the shared profile-selection arguments to a parser."""
+
+    parser.add_argument("--profile", "-p", type=str, help=profile_help)
+    parser.add_argument("--list-profiles", action="store_true", help=list_profiles_help)
+    return parser
+
+
+def list_non_template_profiles() -> list[str]:
+    """Return user-selectable profile names, excluding templates."""
+
+    return [name for name in ProfileConfig.list_profiles() if not name.startswith("_")]
+
+
+def resolve_profile_name(profile_name: str | None) -> str:
+    """Resolve the active profile name or raise when none is available."""
+
+    if profile_name:
+        return profile_name
+
+    available_profiles = list_non_template_profiles()
+
+    # Guard: UI-backed flows need at least one configured profile.
+    if not available_profiles:
+        raise ConfigurationError(
+            f"No profiles found. Create profile files in {ProfileConfig.get_profiles_dir()}."
+        )
+
+    return available_profiles[0]
+
+
+def load_ui_context(profile_name: str | None) -> RuntimeContext:
+    """Resolve a runtime context for the combined UI commands."""
+
+    return RuntimeContext.from_profile(
+        resolve_profile_name(profile_name),
+        need_input=False,
+        need_output=True,
+        need_api=False,
+        setup_logs=False,
+    )

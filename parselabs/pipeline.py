@@ -5,7 +5,6 @@ import fnmatch  # noqa: E402
 import hashlib  # noqa: E402
 import json  # noqa: E402
 import logging  # noqa: E402
-import os  # noqa: E402
 import re  # noqa: E402
 import shutil  # noqa: E402
 import subprocess  # noqa: E402
@@ -25,7 +24,7 @@ from parselabs.config import (  # noqa: E402
     LabSpecsConfig,
     ProfileConfig,
 )
-from parselabs.document_store import (  # noqa: E402
+from parselabs.documents import (  # noqa: E402
     build_hashed_csv_path as build_hashed_csv_path_from_store,
     compute_file_hash as compute_document_hash,
     discover_pdf_files,
@@ -40,7 +39,7 @@ from parselabs.extraction import (  # noqa: E402
     extract_labs_from_text,
 )
 from parselabs.paths import get_profiles_dir  # noqa: E402
-from parselabs.review_sync import (  # noqa: E402
+from parselabs.rows import (  # noqa: E402
     DOCUMENT_REVIEW_COLUMNS,
     build_document_review_dataframe,
     get_document_review_summary,
@@ -49,7 +48,7 @@ from parselabs.review_sync import (  # noqa: E402
     rebuild_document_csv,
     transform_rows_to_final_export,
 )
-from parselabs.runtime import RuntimeContext  # noqa: E402
+from parselabs.profiles import RuntimeContext, add_profile_arguments  # noqa: E402
 from parselabs.utils import (  # noqa: E402
     create_page_image_variants,
     setup_logging,
@@ -833,17 +832,10 @@ Examples:
         """,
     )
 
-    # Profile-based
-    parser.add_argument(
-        "--profile",
-        "-p",
-        type=str,
-        help="Profile name (without extension). If not specified, runs all profiles.",
-    )
-    parser.add_argument(
-        "--list-profiles",
-        action="store_true",
-        help="List available profiles and exit",
+    # Shared profile-selection arguments
+    add_profile_arguments(
+        parser,
+        profile_help="Profile name (without extension). If not specified, runs all profiles.",
     )
 
     # Overrides
@@ -871,88 +863,6 @@ Examples:
     )
 
     return parser.parse_args()
-
-
-def _validate_profile(args) -> ProfileConfig:
-    """Validate profile configuration.
-
-    Returns validated ProfileConfig.
-    Raises ConfigurationError if validation fails.
-    """
-    errors = []
-
-    # Find and validate profile exists
-    profile_path = ProfileConfig.find_path(args.profile)
-    if not profile_path:
-        raise ConfigurationError(f"Profile '{args.profile}' not found. Use --list-profiles to see available profiles.")
-
-    # Load profile configuration
-    profile = ProfileConfig.from_file(profile_path)
-
-    # Validate required paths are defined in profile
-    if not profile.input_path:
-        errors.append(f"Profile '{args.profile}' has no input_path defined.")
-    if not profile.output_path:
-        errors.append(f"Profile '{args.profile}' has no output_path defined.")
-
-    # Validate required runtime settings
-    if not profile.openrouter_api_key:
-        errors.append(f"Profile '{args.profile}' has no openrouter_api_key defined.")
-    if not profile.extract_model_id:
-        errors.append(f"Profile '{args.profile}' has no extract_model_id defined.")
-
-    if errors:
-        raise ConfigurationError("\n".join(errors))
-    return profile
-
-
-def _build_config_from_profile(profile: ProfileConfig, args) -> ExtractionConfig:
-    """Build ExtractionConfig from validated profile and CLI args."""
-
-    # Build base configuration from profile
-    config = ExtractionConfig(
-        input_path=profile.input_path,
-        output_path=profile.output_path,
-        openrouter_api_key=profile.openrouter_api_key,
-        openrouter_base_url=profile.openrouter_base_url or "https://openrouter.ai/api/v1",
-        extract_model_id=profile.extract_model_id,
-        input_file_regex=profile.input_file_regex or "*.pdf",
-        max_workers=profile.workers or (os.cpu_count() or 1),
-    )
-
-    # Apply CLI argument overrides (highest priority)
-    if args.model:
-        config.extract_model_id = args.model
-    if args.workers:
-        config.max_workers = args.workers
-    if args.pattern:
-        config.input_file_regex = args.pattern
-
-    return config
-
-
-def build_config(args) -> ExtractionConfig:
-    """Build ExtractionConfig from args and profile.
-
-    Returns validated ExtractionConfig.
-    Raises ConfigurationError if validation fails.
-    """
-
-    # Validate profile configuration (raises ConfigurationError on failure)
-    profile = _validate_profile(args)
-
-    # Build configuration from validated profile
-    config = _build_config_from_profile(profile, args)
-
-    # Validate input path exists (runtime check)
-    if not config.input_path.exists():
-        raise ConfigurationError(f"Input path does not exist: {config.input_path}")
-
-    # Ensure output directory exists
-    config.output_path.mkdir(parents=True, exist_ok=True)
-
-    logger.info(f"Using profile: {profile.name}")
-    return config
 
 
 def _load_profile_for_rebuild(profile_name: str) -> ProfileConfig:
@@ -1066,25 +976,6 @@ def validate_api_access(client: OpenAI, model_id: str, timeout: int = 10) -> tup
     except Exception as e:
         # Classify the error to provide helpful diagnostic messages
         return _classify_api_check_error(str(e), timeout)
-
-
-def _build_and_validate_config(args, profile_name: str) -> ExtractionConfig:
-    """Build and validate configuration for a profile.
-
-    Returns validated ExtractionConfig.
-    Raises ConfigurationError if validation fails.
-    """
-
-    # Temporarily override args.profile for config building
-    original_profile = args.profile
-    args.profile = profile_name
-
-    try:
-        # Build and validate configuration (raises ConfigurationError on failure)
-        return build_config(args)
-    finally:
-        # Restore original profile name regardless of outcome
-        args.profile = original_profile
 
 
 def _merge_unique_csv_paths(csv_paths: list[Path]) -> list[Path]:

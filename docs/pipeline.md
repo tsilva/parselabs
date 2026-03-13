@@ -43,7 +43,7 @@ This avoids the misleading "0 PDFs found" result that `Path.glob()` can produce 
 
 ## Stage 2: Hash-Only Deduplication
 
-**Modules:** `parselabs/pipeline.py`, `parselabs/document_store.py`
+**Modules:** `parselabs/pipeline.py`, `parselabs/documents.py`
 
 Explicit runs now hash every discovered PDF once before any extraction workers start:
 
@@ -134,7 +134,7 @@ Failed pages are also persisted in page JSON with `_extraction_failed` metadata 
 
 ## Stage 5: Review Dataset Build
 
-**Modules:** `parselabs/row_pipeline.py`, `parselabs/review_sync.py`, `parselabs/standardization.py`, `parselabs/normalization.py`
+**Modules:** `parselabs/rows.py`, `parselabs/standardization.py`, `parselabs/normalization.py`
 
 Per-document review CSVs are rebuilt from canonical page JSON, not treated as persisted runtime truth.
 
@@ -228,7 +228,7 @@ Review rows now surface ambiguity directly in `review_reason`, including:
 
 ## Stage 6: Human Review
 
-**Modules:** `parselabs/ui_app.py`, `parselabs/results_view.py`, `parselabs/document_reviewer.py`
+**Modules:** `parselabs/ui.py`, `parselabs/results_view.py`, `parselabs/document_reviewer.py`
 
 `parselabs-viewer` and `parselabs-review-docs` now launch the same combined Gradio app with different default tabs. The app reads derived review rows from canonical page JSON and lets the reviewer:
 
@@ -240,7 +240,7 @@ Review rows now surface ambiguity directly in `review_reason`, including:
 
 ## Stage 7: Reviewed-Truth Transform
 
-**Modules:** `parselabs/pipeline.py`, `parselabs/review_sync.py`, `parselabs/validation.py`
+**Modules:** `parselabs/pipeline.py`, `parselabs/rows.py`, `parselabs/validation.py`
 
 The reviewed-truth helpers used by fixture sync and approved-document regression start from rows with `review_status == accepted` only. They then:
 

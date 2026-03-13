@@ -10,11 +10,13 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 logger = logging.getLogger(__name__)
 
 HASHED_DOCUMENT_DIR_RE = re.compile(r"^(?P<stem>.+)_(?P<file_hash>[0-9a-fA-F]{8})$")
 REVIEW_MISSING_ROWS_KEY = "review_missing_rows"
+ReviewAction = Literal["accept", "reject", "clear", "missing_row"]
 
 
 @dataclass(frozen=True, init=False)
@@ -312,6 +314,26 @@ def save_review_status(doc_dir: Path, page_number: int, result_index: int, statu
         return False, f"Failed to write JSON file: {exc}"
 
     return True, ""
+
+
+def apply_review_action(
+    doc_dir: Path,
+    page_number: int,
+    result_index: int,
+    action: ReviewAction,
+) -> tuple[bool, str]:
+    """Persist one supported review action for a processed row."""
+
+    # Missing-row markers are stored on the page payload instead of the row.
+    if action == "missing_row":
+        return save_missing_row_marker(doc_dir, page_number, result_index)
+
+    status = {
+        "accept": "accepted",
+        "reject": "rejected",
+        "clear": None,
+    }[action]
+    return save_review_status(doc_dir, page_number, result_index, status)
 
 
 def save_missing_row_marker(doc_dir: Path, page_number: int, anchor_result_index: int) -> tuple[bool, str]:

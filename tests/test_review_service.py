@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 
-from parselabs.review_service import ReviewService
+from parselabs.documents import apply_review_action
 
 
-def test_review_service_persists_accept_and_missing_row(tmp_path):
+def test_apply_review_action_persists_accept_and_missing_row(tmp_path):
     doc_dir = tmp_path / "glucose_deadbeef"
     doc_dir.mkdir(parents=True)
     payload = {
@@ -19,11 +19,11 @@ def test_review_service_persists_accept_and_missing_row(tmp_path):
     json_path = doc_dir / "glucose.001.json"
     json_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    success, error = ReviewService.apply_action(doc_dir, 1, 0, "accept")
+    success, error = apply_review_action(doc_dir, 1, 0, "accept")
     assert success is True
     assert error == ""
 
-    success, error = ReviewService.apply_action(doc_dir, 1, 0, "missing_row")
+    success, error = apply_review_action(doc_dir, 1, 0, "missing_row")
     assert success is True
     assert error == ""
 

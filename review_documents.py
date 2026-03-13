@@ -1,9 +1,7 @@
-"""Legacy compatibility wrapper for the package-native document reviewer."""
+"""Legacy compatibility wrapper for the package-native reviewer CLI."""
 
-from parselabs import document_reviewer as _document_reviewer
-
-globals().update({name: getattr(_document_reviewer, name) for name in dir(_document_reviewer) if not name.startswith("__")})
+from parselabs import cli as _cli
 
 
 if __name__ == "__main__":
-    _document_reviewer.main()
+    _cli.review_documents()

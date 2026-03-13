@@ -13,13 +13,10 @@ Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate
 
 from __future__ import annotations
 
-import argparse  # noqa: E402
 import json  # noqa: E402
 import logging  # noqa: E402
-import sys  # noqa: E402
 from datetime import datetime  # noqa: E402
 from pathlib import Path  # noqa: E402
-from typing import TYPE_CHECKING  # noqa: E402
 
 import gradio as gr  # noqa: E402
 import pandas as pd  # noqa: E402
@@ -28,132 +25,32 @@ from PIL import Image  # noqa: E402
 from plotly.subplots import make_subplots  # noqa: E402
 
 from parselabs.config import Demographics, LabSpecsConfig, ProfileConfig  # noqa: E402
-from parselabs.document_store import resolve_page_path  # noqa: E402
-from parselabs.paths import get_profiles_dir, get_static_dir  # noqa: E402
-from parselabs.review_service import ReviewService  # noqa: E402
-from parselabs.row_pipeline import RowPipeline  # noqa: E402
-
-if TYPE_CHECKING:
-    from parselabs.runtime import RuntimeContext
+from parselabs.documents import apply_review_action, resolve_page_path  # noqa: E402
+from parselabs.paths import get_static_dir  # noqa: E402
+from parselabs.profiles import RuntimeContext, list_non_template_profiles  # noqa: E402
+from parselabs.rows import build_corpus_review_rows  # noqa: E402
 
 # Initialize module logger
 logger = logging.getLogger(__name__)
 
-PROFILES_DIR = get_profiles_dir()
 _STATIC_DIR = get_static_dir()
 KEYBOARD_JS = (_STATIC_DIR / "viewer.js").read_text()
 CUSTOM_CSS = (_STATIC_DIR / "viewer.css").read_text()
 
-# =============================================================================
-# Configuration - Global State
-# =============================================================================
+def load_viewer_context(profile_name: str) -> RuntimeContext | None:
+    """Load a runtime context for the requested profile when it exists."""
 
-# Global output path (set from profile)
-_configured_output_path: Path | None = None
-
-# Demographics for personalized healthy ranges (set from profile)
-_configured_demographics: Demographics | None = None
-
-# Lab specs config (loaded once)
-_lab_specs: LabSpecsConfig | None = None
-
-# Current profile name
-_current_profile_name: str | None = None
-
-
-def set_output_path(path: Path) -> None:
-    """Set the output path (called from main when using profile)."""
-    global _configured_output_path
-    _configured_output_path = path
-
-
-def get_output_path() -> Path:
-    """Get output path from the selected profile."""
-
-    global _configured_output_path
-
-    # Return configured path if available
-    if _configured_output_path:
-        return _configured_output_path
-    return Path("./output")
-
-
-def set_current_profile(name: str) -> None:
-    """Set the current profile name."""
-    global _current_profile_name
-    _current_profile_name = name
-
-
-def get_current_profile() -> str | None:
-    """Get the current profile name."""
-    return _current_profile_name
-
-
-def set_demographics(demographics: Demographics | None) -> None:
-    """Set demographics for personalized range selection."""
-    global _configured_demographics
-    _configured_demographics = demographics
-
-
-def get_demographics() -> Demographics | None:
-    """Get configured demographics."""
-    return _configured_demographics
-
-
-def apply_runtime_context(context: "RuntimeContext") -> None:
-    """Apply a shared runtime context to the viewer module state."""
-
-    global _lab_specs
-
-    set_current_profile(context.profile_name)
-
-    if context.output_path is not None:
-        set_output_path(context.output_path)
-
-    set_demographics(context.demographics)
-    _lab_specs = context.lab_specs
-
-
-def get_lab_specs() -> LabSpecsConfig:
-    """Get or initialize lab specs config."""
-
-    global _lab_specs
-
-    # Initialize on first access
-    if _lab_specs is None:
-        _lab_specs = LabSpecsConfig()
-    return _lab_specs
-
-
-def load_profile(profile_name: str) -> ProfileConfig | None:
-    """Load a profile by name and update global configuration."""
-
-    # Guard: profile must exist
-    profile_path = ProfileConfig.find_path(profile_name)
-    if not profile_path:
+    # Guard: profile must exist before the UI can switch to it.
+    if not ProfileConfig.find_path(profile_name):
         return None
 
-    profile = ProfileConfig.from_file(profile_path)
-    set_current_profile(profile_name)
-
-    # Apply profile output path
-    if profile.output_path:
-        set_output_path(profile.output_path)
-
-    # Apply demographics (or clear if not configured)
-    if profile.demographics:
-        set_demographics(profile.demographics)
-    else:
-        set_demographics(None)
-
-    return profile
-
-
-def get_available_profiles() -> list[str]:
-    """Get list of available profile names (excluding templates)."""
-
-    profiles = ProfileConfig.list_profiles()
-    return [p for p in profiles if not p.startswith("_")]
+    return RuntimeContext.from_profile(
+        profile_name,
+        need_input=False,
+        need_output=True,
+        need_api=False,
+        setup_logs=False,
+    )
 
 
 def get_lab_name_choices(df: pd.DataFrame) -> list[str]:
@@ -413,7 +310,7 @@ def save_review_to_json(entry: dict, status: str, output_path: Path) -> tuple[bo
         "accepted": "accept",
         "rejected": "reject",
     }.get(status, "clear")
-    return ReviewService.apply_action(
+    return apply_review_action(
         doc_dir,
         int(page_number),
         int(result_index),
@@ -558,11 +455,14 @@ def _check_out_of_healthy_range(row) -> bool | None:
     return _is_out_of_range(val, spec_min, spec_max)
 
 
-def load_data(output_path: Path) -> pd.DataFrame:
+def load_data(
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
+    demographics: Demographics | None,
+) -> pd.DataFrame:
     """Load review data from canonical page JSON, falling back to all.csv when needed."""
 
-    lab_specs = get_lab_specs()
-    df = RowPipeline.build_corpus_review_rows(output_path, lab_specs)
+    df = build_corpus_review_rows(output_path, lab_specs)
 
     # Fall back to the merged review snapshot only for legacy outputs without page JSON.
     if df.empty:
@@ -591,7 +491,6 @@ def load_data(output_path: Path) -> pd.DataFrame:
         df["is_out_of_reference"] = df.apply(_check_out_of_reference, axis=1)
 
     # Compute lab_specs healthy ranges based on demographics
-    demographics = get_demographics()
     gender = demographics.gender if demographics else None
     age = demographics.age if demographics else None
 
@@ -1353,10 +1252,14 @@ def _empty_nav_state(full_df: pd.DataFrame) -> tuple:
     )
 
 
-def _load_output_data(output_path: Path) -> tuple[pd.DataFrame, list[str]]:
+def _load_output_data(
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
+    demographics: Demographics | None,
+) -> tuple[pd.DataFrame, list[str]]:
     """Load and sort data from output path, return (full_df, lab_name_choices)."""
 
-    full_df = load_data(output_path)
+    full_df = load_data(output_path, lab_specs, demographics)
     if not full_df.empty and "date" in full_df.columns:
         full_df = full_df.sort_values(["date", "lab_name"], ascending=[False, True], na_position="last").reset_index(drop=True)
     return full_df, get_lab_name_choices(full_df)
@@ -1367,6 +1270,7 @@ def _build_row_context(
     row_idx: int,
     full_df: pd.DataFrame,
     lab_names: str | None,
+    output_path: Path,
 ) -> tuple:
     """Build common row context for navigation/selection handlers.
 
@@ -1376,7 +1280,7 @@ def _build_row_context(
 
     row = filtered_df.iloc[row_idx]
     position_text = f"**Row {row_idx + 1} of {len(filtered_df)}**"
-    source_image_value = build_source_image_value(row.to_dict(), get_output_path())
+    source_image_value = build_source_image_value(row.to_dict(), output_path)
     details_html = build_details_html(row.to_dict())
     status_value = get_review_status_label(row.to_dict())
     banner_html = build_review_reason_banner(row.to_dict())
@@ -1410,6 +1314,7 @@ def handle_filter_change(
     latest_only: bool,
     review_filter: str,
     full_df: pd.DataFrame,
+    output_path: Path,
 ):
     """Handle filter changes and update display."""
 
@@ -1427,7 +1332,7 @@ def handle_filter_change(
             details_html,
             status_update,
             banner_html,
-        ) = _build_row_context(filtered_df, 0, full_df, lab_names)
+        ) = _build_row_context(filtered_df, 0, full_df, lab_names, output_path)
     else:
         # Empty result set
         current_idx = 0
@@ -1457,6 +1362,7 @@ def handle_row_select(
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
     lab_names: str | None,
+    output_path: Path,
 ):
     """Handle row selection to update plot, details, and current index."""
 
@@ -1474,7 +1380,7 @@ def handle_row_select(
     if row_idx < 0 or row_idx >= len(filtered_df):
         row_idx = 0
 
-    return _build_row_context(filtered_df, row_idx, full_df, lab_names)
+    return _build_row_context(filtered_df, row_idx, full_df, lab_names, output_path)
 
 
 def handle_previous(
@@ -1482,6 +1388,7 @@ def handle_previous(
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
     lab_names: str | None,
+    output_path: Path,
 ):
     """Navigate to previous row."""
 
@@ -1494,7 +1401,7 @@ def handle_previous(
     if new_idx < 0:
         new_idx = len(filtered_df) - 1
 
-    return _build_row_context(filtered_df, new_idx, full_df, lab_names)
+    return _build_row_context(filtered_df, new_idx, full_df, lab_names, output_path)
 
 
 def handle_next(
@@ -1502,6 +1409,7 @@ def handle_next(
     filtered_df: pd.DataFrame,
     full_df: pd.DataFrame,
     lab_names: str | None,
+    output_path: Path,
 ):
     """Navigate to next row."""
 
@@ -1514,7 +1422,7 @@ def handle_next(
     if new_idx >= len(filtered_df):
         new_idx = 0
 
-    return _build_row_context(filtered_df, new_idx, full_df, lab_names)
+    return _build_row_context(filtered_df, new_idx, full_df, lab_names, output_path)
 
 
 def handle_review_action(
@@ -1525,6 +1433,7 @@ def handle_review_action(
     latest_only: bool,
     review_filter: str,
     status: str,
+    output_path: Path,
 ):
     """Handle review action (accept/reject)."""
 
@@ -1549,8 +1458,6 @@ def handle_review_action(
         current_idx = 0
 
     current_entry = filtered_df.iloc[current_idx].to_dict()
-    output_path = get_output_path()
-
     # Save to JSON
     success, error = save_review_to_json(current_entry, status, output_path)
 
@@ -1597,7 +1504,7 @@ def handle_review_action(
         details_html,
         status_update,
         banner_html,
-    ) = _build_row_context(filtered_df, current_idx, full_df, lab_names)
+    ) = _build_row_context(filtered_df, current_idx, full_df, lab_names, output_path)
 
     return (
         full_df,
@@ -1621,10 +1528,11 @@ def handle_accept_click(
     lab_names: str | None,
     latest_only: bool,
     review_filter: str,
+    output_path: Path,
 ):
     """Handle accept button click."""
 
-    return handle_review_action(current_idx, filtered_df, full_df, lab_names, latest_only, review_filter, "accepted")
+    return handle_review_action(current_idx, filtered_df, full_df, lab_names, latest_only, review_filter, "accepted", output_path)
 
 
 def handle_reject_click(
@@ -1634,98 +1542,23 @@ def handle_reject_click(
     lab_names: str | None,
     latest_only: bool,
     review_filter: str,
+    output_path: Path,
 ):
     """Handle reject button click."""
 
-    return handle_review_action(current_idx, filtered_df, full_df, lab_names, latest_only, review_filter, "rejected")
+    return handle_review_action(current_idx, filtered_df, full_df, lab_names, latest_only, review_filter, "rejected", output_path)
 
 
-def export_csv(filtered_df: pd.DataFrame):
+def export_csv(filtered_df: pd.DataFrame, output_path: Path):
     """Export filtered data to CSV file."""
 
     # Guard: no data to export
     if filtered_df.empty:
         return None
 
-    output_path = get_output_path()
     export_path = output_path / "filtered_export.csv"
     filtered_df.to_csv(export_path, index=False)
     return str(export_path)
-
-
-def handle_profile_change(profile_name: str):
-    """Handle profile switch - reload all data for the new profile."""
-
-    # Guard: no profile selected
-    if not profile_name:
-        return (
-            pd.DataFrame(),  # display_df
-            '<div class="summary-row"><span class="stat-card">No profile selected</span></div>',  # summary
-            go.Figure(),  # plot
-            pd.DataFrame(),  # full_df
-            pd.DataFrame(),  # filtered_df
-            0,  # current_idx
-            "No results",  # position_text
-            None,  # image
-            [],  # lab_name_choices
-            "<p>No entry selected</p>",  # details
-            build_review_status_html("Pending"),  # status display
-            "",  # banner_html
-        )
-
-    # Guard: profile not found or no output path
-    profile = load_profile(profile_name)
-    if not profile or not profile.output_path:
-        return (
-            pd.DataFrame(),
-            f'<div class="summary-row"><span class="stat-card warning">Profile \'{profile_name}\' not found or has no output path</span></div>',
-            go.Figure(),
-            pd.DataFrame(),
-            pd.DataFrame(),
-            0,
-            "No results",
-            None,
-            [],
-            "<p>No entry selected</p>",
-            build_review_status_html("Pending"),  # status display
-            "",  # banner_html
-        )
-
-    output_path = get_output_path()
-    full_df, lab_name_choices = _load_output_data(output_path)
-
-    display_df = prepare_display_df(full_df)
-    summary = build_summary_cards(full_df)
-
-    position_text = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
-    source_image_value = build_source_image_value(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
-    details_html = build_details_html(full_df.iloc[0].to_dict()) if not full_df.empty else "<p>No entry selected</p>"
-    status_label = get_review_status_label(full_df.iloc[0].to_dict()) if not full_df.empty else "Pending"
-    banner_html = build_review_reason_banner(full_df.iloc[0].to_dict()) if not full_df.empty else ""
-
-    # Auto-select first row - show its plot
-    initial_plot_labs = []
-    if not full_df.empty:
-        first_lab = full_df.iloc[0].get("lab_name")
-        if first_lab:
-            initial_plot_labs = [first_lab]
-
-    plot = create_interactive_plot(full_df, initial_plot_labs)
-
-    return (
-        display_df,
-        summary,
-        plot,
-        full_df,
-        full_df,
-        0,
-        position_text,
-        source_image_value,
-        gr.update(choices=lab_name_choices, value=None),
-        details_html,
-        build_review_status_html(status_label),
-        banner_html,
-    )
 
 
 # =============================================================================
@@ -1733,14 +1566,24 @@ def handle_profile_change(profile_name: str):
 # =============================================================================
 
 
-def create_app():
-    """Create and configure the Gradio app."""
+def create_app(context: RuntimeContext):
+    """Create and configure the Gradio app for one runtime context."""
 
-    output_path = get_output_path()
-    full_df, lab_name_choices = _load_output_data(output_path)
+    active_context = context
+
+    def current_output_path() -> Path:
+        """Return the active output path for callback closures."""
+
+        return active_context.output_path if active_context.output_path is not None else Path("./output")
+
+    full_df, lab_name_choices = _load_output_data(
+        current_output_path(),
+        active_context.lab_specs,
+        active_context.demographics,
+    )
 
     initial_position = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
-    initial_image = build_source_image_value(full_df.iloc[0].to_dict(), output_path) if not full_df.empty else None
+    initial_image = build_source_image_value(full_df.iloc[0].to_dict(), current_output_path()) if not full_df.empty else None
     initial_details = build_details_html(full_df.iloc[0].to_dict()) if not full_df.empty else "<p>No entry selected</p>"
     initial_status_html = build_review_status_html(get_review_status_label(full_df.iloc[0].to_dict()) if not full_df.empty else "Pending")
 
@@ -1751,8 +1594,88 @@ def create_app():
         if first_lab:
             initial_plot_labs = [first_lab]
 
-    available_profiles = get_available_profiles()
-    current_profile = get_current_profile()
+    available_profiles = list_non_template_profiles()
+    current_profile = active_context.profile_name
+
+    def handle_profile_change(profile_name: str):
+        """Handle profile switch - reload all data for the new profile."""
+
+        nonlocal active_context
+
+        # Guard: no profile selected
+        if not profile_name:
+            return (
+                pd.DataFrame(),
+                '<div class="summary-row"><span class="stat-card">No profile selected</span></div>',
+                go.Figure(),
+                pd.DataFrame(),
+                pd.DataFrame(),
+                0,
+                "No results",
+                None,
+                [],
+                "<p>No entry selected</p>",
+                build_review_status_html("Pending"),
+                "",
+            )
+
+        next_context = load_viewer_context(profile_name)
+
+        # Guard: profile not found or missing an output path
+        if next_context is None or next_context.output_path is None:
+            return (
+                pd.DataFrame(),
+                f'<div class="summary-row"><span class="stat-card warning">Profile \'{profile_name}\' not found or has no output path</span></div>',
+                go.Figure(),
+                pd.DataFrame(),
+                pd.DataFrame(),
+                0,
+                "No results",
+                None,
+                [],
+                "<p>No entry selected</p>",
+                build_review_status_html("Pending"),
+                "",
+            )
+
+        active_context = next_context
+        full_df, lab_name_choices = _load_output_data(
+            current_output_path(),
+            active_context.lab_specs,
+            active_context.demographics,
+        )
+
+        display_df = prepare_display_df(full_df)
+        summary = build_summary_cards(full_df)
+        position_text = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
+        source_image_value = build_source_image_value(full_df.iloc[0].to_dict(), current_output_path()) if not full_df.empty else None
+        details_html = build_details_html(full_df.iloc[0].to_dict()) if not full_df.empty else "<p>No entry selected</p>"
+        status_label = get_review_status_label(full_df.iloc[0].to_dict()) if not full_df.empty else "Pending"
+        banner_html = build_review_reason_banner(full_df.iloc[0].to_dict()) if not full_df.empty else ""
+
+        # Auto-select first row - show its plot
+        initial_plot_labs = []
+        if not full_df.empty:
+            first_lab = full_df.iloc[0].get("lab_name")
+            if first_lab:
+                initial_plot_labs = [first_lab]
+
+        plot = create_interactive_plot(full_df, initial_plot_labs)
+
+        return (
+            display_df,
+            summary,
+            plot,
+            full_df,
+            full_df,
+            0,
+            position_text,
+            source_image_value,
+            gr.update(choices=lab_name_choices, value=None),
+            details_html,
+            build_review_status_html(status_label),
+            banner_html,
+        )
 
     with gr.Blocks(title="Lab Results Viewer") as demo:
         # State variables
@@ -1916,24 +1839,48 @@ def create_app():
         ]
 
         lab_name_filter.change(
-            fn=handle_filter_change,
+            fn=lambda lab_names, latest_only, review_filter, full_df: handle_filter_change(
+                lab_names,
+                latest_only,
+                review_filter,
+                full_df,
+                current_output_path(),
+            ),
             inputs=filter_inputs,
             outputs=filter_outputs,
         )
         latest_filter.change(
-            fn=handle_filter_change,
+            fn=lambda lab_names, latest_only, review_filter, full_df: handle_filter_change(
+                lab_names,
+                latest_only,
+                review_filter,
+                full_df,
+                current_output_path(),
+            ),
             inputs=filter_inputs,
             outputs=filter_outputs,
         )
         review_filter.change(
-            fn=handle_filter_change,
+            fn=lambda lab_names, latest_only, review_filter, full_df: handle_filter_change(
+                lab_names,
+                latest_only,
+                review_filter,
+                full_df,
+                current_output_path(),
+            ),
             inputs=filter_inputs,
             outputs=filter_outputs,
         )
 
         # Row selection
         data_table.select(
-            fn=handle_row_select,
+            fn=lambda evt, filtered_df, full_df, lab_name: handle_row_select(
+                evt,
+                filtered_df,
+                full_df,
+                lab_name,
+                current_output_path(),
+            ),
             inputs=[filtered_df_state, full_df_state, lab_name_filter],
             outputs=[
                 plot_display,
@@ -1963,8 +1910,28 @@ def create_app():
             review_reason_banner,
         ]
 
-        prev_btn.click(fn=handle_previous, inputs=nav_inputs, outputs=nav_outputs)
-        next_btn.click(fn=handle_next, inputs=nav_inputs, outputs=nav_outputs)
+        prev_btn.click(
+            fn=lambda current_idx, filtered_df, full_df, lab_name: handle_previous(
+                current_idx,
+                filtered_df,
+                full_df,
+                lab_name,
+                current_output_path(),
+            ),
+            inputs=nav_inputs,
+            outputs=nav_outputs,
+        )
+        next_btn.click(
+            fn=lambda current_idx, filtered_df, full_df, lab_name: handle_next(
+                current_idx,
+                filtered_df,
+                full_df,
+                lab_name,
+                current_output_path(),
+            ),
+            inputs=nav_inputs,
+            outputs=nav_outputs,
+        )
 
         # Review action buttons
         review_btn_inputs = [
@@ -1989,91 +1956,38 @@ def create_app():
             review_reason_banner,
         ]
 
-        accept_btn.click(fn=handle_accept_click, inputs=review_btn_inputs, outputs=review_outputs)
-        reject_btn.click(fn=handle_reject_click, inputs=review_btn_inputs, outputs=review_outputs)
+        accept_btn.click(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter: handle_accept_click(
+                current_idx,
+                filtered_df,
+                full_df,
+                lab_name,
+                latest_only,
+                review_filter,
+                current_output_path(),
+            ),
+            inputs=review_btn_inputs,
+            outputs=review_outputs,
+        )
+        reject_btn.click(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter: handle_reject_click(
+                current_idx,
+                filtered_df,
+                full_df,
+                lab_name,
+                latest_only,
+                review_filter,
+                current_output_path(),
+            ),
+            inputs=review_btn_inputs,
+            outputs=review_outputs,
+        )
 
         # Export
-        export_btn.click(fn=export_csv, inputs=[filtered_df_state], outputs=[export_file]).then(fn=lambda: gr.update(visible=True), outputs=[export_file])
+        export_btn.click(
+            fn=lambda filtered_df: export_csv(filtered_df, current_output_path()),
+            inputs=[filtered_df_state],
+            outputs=[export_file],
+        ).then(fn=lambda: gr.update(visible=True), outputs=[export_file])
 
     return demo
-
-
-def parse_args():
-    """Parse command-line arguments."""
-
-    parser = argparse.ArgumentParser(
-        description="Lab Results Viewer",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  parselabs-viewer --profile tiago     # Start with specific profile
-  parselabs-viewer                     # Uses first available profile
-  parselabs-viewer --list-profiles     # List available profiles
-        """,
-    )
-    parser.add_argument(
-        "--profile",
-        "-p",
-        type=str,
-        help="Profile name (defaults to first available profile)",
-    )
-    parser.add_argument(
-        "--list-profiles",
-        action="store_true",
-        help="List available profiles and exit",
-    )
-    return parser.parse_args()
-
-
-def main() -> None:
-    """Viewer CLI entry point."""
-
-    from parselabs.ui_app import launch_app
-    from parselabs.runtime import RuntimeContext
-
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    args = parse_args()
-
-    if args.list_profiles:
-        profiles = ProfileConfig.list_profiles()
-        if profiles:
-            logger.info("Available profiles:")
-            for name in profiles:
-                logger.info(f"  - {name}")
-        else:
-            logger.info(f"No profiles found. Create profile files in {PROFILES_DIR}.")
-        sys.exit(0)
-
-    profile_name = args.profile
-    if not profile_name:
-        available = get_available_profiles()
-        if not available:
-            logger.error("No profiles found.")
-            logger.error(f"Create profile files in {PROFILES_DIR}.")
-            sys.exit(1)
-        profile_name = available[0]
-        logger.info(f"No profile specified, defaulting to: {profile_name}")
-
-    context = RuntimeContext.from_profile(
-        profile_name,
-        need_input=False,
-        need_output=True,
-        need_api=False,
-        setup_logs=False,
-    )
-
-    logger.info(f"Using profile: {context.profile.name}")
-    if context.demographics:
-        demo_info = []
-        if context.demographics.gender:
-            demo_info.append(f"gender={context.demographics.gender}")
-        if context.demographics.age is not None:
-            demo_info.append(f"age={context.demographics.age}")
-        if demo_info:
-            logger.info(f"Demographics: {', '.join(demo_info)}")
-
-    launch_app(context, default_tab="results")
-
-
-if __name__ == "__main__":
-    main()
