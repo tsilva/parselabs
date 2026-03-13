@@ -51,9 +51,12 @@ mkdir -p ~/.config/parselabs/profiles
 # Extract lab results
 parselabs --profile myname
 
-# Review results
+# Review results (same combined app, different default tabs)
 parselabs-viewer --profile myname
 parselabs-review-docs --profile myname
+
+# Admin / maintenance
+parselabs-admin --help
 
 # Rebuild final outputs from reviewed JSON only
 parselabs --profile myname --rebuild-from-json
@@ -151,7 +154,10 @@ parselabs --profile myname --pattern "2024-*.pdf"
 parselabs-viewer --profile myname
 ```
 
-The Gradio-based review UI provides:
+`parselabs-viewer` and `parselabs-review-docs` now launch the same combined Gradio app. The former opens the Results Explorer tab by default; the latter opens the Review Queue tab.
+
+The combined review UI provides:
+- **Results Explorer** — Filtered table, summary cards, plots, and source-page inspection
 - **3-pane review workspace** — Pending-row queue, large source page, and compact row inspector
 - **Keyboard shortcuts** — Y=Approve, N=Reject, M=Missing Row, U=Undo, Arrow keys/J/K=Navigate
 - **Show reviewed toggle** — Hide reviewed rows by default and reveal them only when needed
@@ -187,7 +193,7 @@ parselabs --profile myname --rebuild-from-json
 3. Sync all fixture-ready processed documents into the private approved fixture corpus:
 
 ```bash
-uv run python utils/regression_cases.py sync-reviewed --profile myname
+parselabs-admin regression sync-reviewed --profile myname
 ```
 4. Run the approved-document regression suite:
 
@@ -205,7 +211,7 @@ Notes:
 - Approved fixtures live under `tests/fixtures/approved/` and remain uncommitted/private.
 - Each case directory contains `document.pdf`, `expected.csv`, `review_state.json`, and `case.json`.
 - `sync-reviewed` also removes stale fixture cases from the same profile when the processed document is no longer fixture-ready.
-- `uv run python utils/regression_cases.py report --profile myname` prints rejected-row, missing-row, unknown-mapping, and validation-reason counts for the reviewed corpus.
+- `parselabs-admin regression report --profile myname` prints rejected-row, missing-row, unknown-mapping, and validation-reason counts for the reviewed corpus.
 
 ## Output
 

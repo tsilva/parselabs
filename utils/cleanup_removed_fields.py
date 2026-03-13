@@ -163,4 +163,6 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main())
+    from parselabs.admin import run_legacy_utility
+
+    raise SystemExit(run_legacy_utility("cleanup-removed-fields"))

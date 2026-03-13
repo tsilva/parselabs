@@ -41,19 +41,18 @@ Immediately before this stage, `run_for_profile()` sends a tiny prompt through `
 
 This avoids the misleading "0 PDFs found" result that `Path.glob()` can produce on some cloud-backed macOS folders when directory access is denied.
 
-## Stage 2: Preflight Cache Check & Hashing
+## Stage 2: Hash-Only Deduplication
 
-**Module:** `main.py` — `_prepare_pdf_run()`, `_load_pdf_inventory()`, `_compute_file_hash()`
+**Modules:** `main.py`, `parselabs/document_store.py`
 
-Explicit runs perform a stat-first preflight before any extraction workers start:
+Explicit runs now hash every discovered PDF once before any extraction workers start:
 
-1. Collect `resolved path`, `size`, and `mtime_ns` for each input PDF
-2. Load `output/logs/pdf_inventory.json` if it exists
-3. Treat manifest matches with valid per-PDF CSVs as warm-cache hits
-4. Hash only the remaining PDFs with SHA-256 (first 8 hex chars)
-5. Deduplicate exact-content matches across both cached and newly-hashed PDFs
+1. Compute SHA-256 for each input PDF (first 8 hex chars used in output paths)
+2. Derive the canonical processed directory: `{stem}_{hash}/`
+3. Deduplicate exact-content matches in-memory for the current run
+4. Queue only the first copy of each exact-content document for processing
 
-The manifest is only a warm-cache shortcut. Exact identity still comes from SHA-256, and files are re-hashed whenever size or modification time changes.
+There is no persisted manifest cache. Page JSON remains the only canonical intermediate state, and page-level reuse happens when existing page JSON is readable and not marked `_extraction_failed=True`.
 
 ## Stage 3: PDF Processing
 
@@ -229,9 +228,9 @@ Review rows now surface ambiguity directly in `review_reason`, including:
 
 ## Stage 6: Human Review
 
-**Modules:** `viewer.py`, `review_documents.py`
+**Modules:** `parselabs/app.py`, `viewer.py`, `review_documents.py`
 
-The viewer reads derived review rows from canonical page JSON and lets the reviewer:
+`parselabs-viewer` and `parselabs-review-docs` now launch the same combined Gradio app with different default tabs. The app reads derived review rows from canonical page JSON and lets the reviewer:
 
 - inspect every extracted row before deduplication
 - accept or reject rows directly in the backing page JSON
@@ -317,10 +316,9 @@ INPUT: PDF files (per profile)
 [run_pipeline_for_pdf_files]
     │
     ├── _prepare_pdf_run()
-    │   ├── _load_pdf_inventory()
-    │   ├── stat each PDF (path, size, mtime_ns)
-    │   ├── warm-cache check against valid per-PDF CSVs
-    │   └── _compute_file_hash() only for uncached/changed PDFs
+    │   ├── _compute_file_hash() for every discovered PDF
+    │   ├── derive {stem}_{hash}/ output directory
+    │   └── dedupe exact-content duplicates in-memory for the current run
     │
     └── [process_single_pdf] ─ parallelized via multiprocessing.Pool
     │
@@ -442,7 +440,7 @@ Then rebuild reviewed outputs and sync fixture-ready documents into the private 
 
 ```bash
 parselabs --profile myname --rebuild-from-json
-uv run python utils/regression_cases.py sync-reviewed --profile myname
+parselabs-admin regression sync-reviewed --profile myname
 ```
 
 The sync helper:
@@ -459,7 +457,7 @@ The sync helper:
 For corpus-level quality analysis:
 
 ```bash
-uv run python utils/regression_cases.py report --profile myname
+parselabs-admin regression report --profile myname
 ```
 
 This prints counts for rejected rows, unresolved missing-row markers, unknown mappings, validation reasons, and the top raw names/units involved in rejected rows.

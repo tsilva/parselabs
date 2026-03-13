@@ -19,6 +19,7 @@ import logging  # noqa: E402
 import sys  # noqa: E402
 from datetime import datetime  # noqa: E402
 from pathlib import Path  # noqa: E402
+from typing import TYPE_CHECKING  # noqa: E402
 
 import gradio as gr  # noqa: E402
 import pandas as pd  # noqa: E402
@@ -27,8 +28,16 @@ from PIL import Image  # noqa: E402
 from plotly.subplots import make_subplots  # noqa: E402
 
 from parselabs.config import Demographics, LabSpecsConfig, ProfileConfig  # noqa: E402
+from parselabs.document_store import resolve_page_path  # noqa: E402
 from parselabs.paths import get_profiles_dir, get_static_dir  # noqa: E402
-from parselabs.review_sync import build_document_review_dataframe, iter_processed_documents  # noqa: E402
+from parselabs.review_sync import (  # noqa: E402
+    build_document_review_dataframe,
+    iter_processed_documents,
+    save_review_status as save_review_status_for_row,
+)
+
+if TYPE_CHECKING:
+    from parselabs.runtime import RuntimeContext
 
 # Initialize module logger
 logger = logging.getLogger(__name__)
@@ -92,6 +101,20 @@ def set_demographics(demographics: Demographics | None) -> None:
 def get_demographics() -> Demographics | None:
     """Get configured demographics."""
     return _configured_demographics
+
+
+def apply_runtime_context(context: "RuntimeContext") -> None:
+    """Apply a shared runtime context to the viewer module state."""
+
+    global _lab_specs
+
+    set_current_profile(context.profile_name)
+
+    if context.output_path is not None:
+        set_output_path(context.output_path)
+
+    set_demographics(context.demographics)
+    _lab_specs = context.lab_specs
 
 
 def get_lab_specs() -> LabSpecsConfig:
@@ -213,27 +236,13 @@ def _resolve_page_path(entry: dict, output_path: Path, suffix: str) -> Path:
         Resolved Path (may not exist on disk)
     """
 
-    # Guard: no source file
     source_file = entry.get("source_file", "")
-    if not source_file:
-        return Path()
-
-    stem = source_file.rsplit(".", 1)[0] if "." in source_file else source_file
     page_number = entry.get("page_number")
-
-    # Format page number with zero-padding
     if page_number is not None and pd.notna(page_number):
-        page_str = f"{int(page_number):03d}"
+        page_number = int(page_number)
     else:
-        # Default to first page
-        page_str = "001"
-
-    # Resolve document directory using the canonical hash-suffixed layout.
-    doc_dir = _resolve_doc_dir(stem, output_path)
-    if doc_dir is None:
-        return Path()
-
-    return doc_dir / f"{stem}.{page_str}{suffix}"
+        page_number = None
+    return resolve_page_path(output_path, source_file, page_number, suffix)
 
 
 def get_image_path(entry: dict, output_path: Path) -> str | None:
@@ -390,40 +399,26 @@ def build_source_image_value(
 def save_review_to_json(entry: dict, status: str, output_path: Path) -> tuple[bool, str]:
     """Save review status directly to the source JSON file."""
 
-    json_path = get_json_path(entry, output_path)
+    source_file = entry.get("source_file", "")
+    stem = source_file.rsplit(".", 1)[0] if "." in source_file else source_file
+    doc_dir = _resolve_doc_dir(stem, output_path)
     result_index = entry.get("result_index")
+    page_number = entry.get("page_number")
 
-    # Guard: JSON file must exist
-    if not json_path.exists():
-        return False, f"JSON file not found: {json_path}"
-
-    # Guard: result_index is required
     if result_index is None or pd.isna(result_index):
         return False, "Missing result_index for entry."
+    if page_number is None or pd.isna(page_number):
+        return False, "Missing page_number for entry."
+    if doc_dir is None:
+        return False, f"Document directory not found for '{source_file}'."
 
-    result_index = int(result_index)
-
-    try:
-        data = json.loads(json_path.read_text(encoding="utf-8"))
-
-        # Guard: JSON must contain lab_results array
-        if "lab_results" not in data:
-            return False, "No lab_results in JSON file"
-
-        # Guard: index must be within bounds
-        if result_index >= len(data["lab_results"]):
-            return False, f"result_index {result_index} out of range"
-
-        # Update review status and timestamp
-        data["lab_results"][result_index]["review_status"] = status
-        data["lab_results"][result_index]["review_completed_at"] = datetime.utcnow().isoformat() + "Z" if status else None
-
-        # Persist updated data
-        json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-        return True, ""
-
-    except Exception as e:
-        return False, f"Failed to save review: {e}"
+    normalized_status = status if status in {"accepted", "rejected"} else None
+    return save_review_status_for_row(
+        doc_dir,
+        int(page_number),
+        int(result_index),
+        normalized_status,
+    )
 
 
 # =============================================================================
@@ -2041,29 +2036,25 @@ Examples:
 def main() -> None:
     """Viewer CLI entry point."""
 
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    from parselabs.app import launch_app
+    from parselabs.runtime import RuntimeContext
 
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = parse_args()
 
-    # Handle --list-profiles
     if args.list_profiles:
         profiles = ProfileConfig.list_profiles()
-        # Print profiles if available
         if profiles:
             logger.info("Available profiles:")
             for name in profiles:
                 logger.info(f"  - {name}")
         else:
-            # No profiles configured
             logger.info(f"No profiles found. Create profile files in {PROFILES_DIR}.")
         sys.exit(0)
 
-    # Determine which profile to use
     profile_name = args.profile
-    # No profile specified — auto-select first available
     if not profile_name:
         available = get_available_profiles()
-        # No profiles configured at all
         if not available:
             logger.error("No profiles found.")
             logger.error(f"Create profile files in {PROFILES_DIR}.")
@@ -2071,68 +2062,25 @@ def main() -> None:
         profile_name = available[0]
         logger.info(f"No profile specified, defaulting to: {profile_name}")
 
-    # Guard: profile must exist
-    profile = load_profile(profile_name)
-    if not profile:
-        logger.error(f"Profile '{profile_name}' not found")
-        logger.error("Use --list-profiles to see available profiles.")
-        sys.exit(1)
+    context = RuntimeContext.from_profile(
+        profile_name,
+        need_input=False,
+        need_output=True,
+        need_api=False,
+        setup_logs=False,
+    )
 
-    logger.info(f"Using profile: {profile.name}")
-
-    # Display demographics info if configured
-    if profile.demographics:
+    logger.info(f"Using profile: {context.profile.name}")
+    if context.demographics:
         demo_info = []
-        if profile.demographics.gender:
-            demo_info.append(f"gender={profile.demographics.gender}")
-        if profile.demographics.age is not None:
-            demo_info.append(f"age={profile.demographics.age}")
+        if context.demographics.gender:
+            demo_info.append(f"gender={context.demographics.gender}")
+        if context.demographics.age is not None:
+            demo_info.append(f"age={context.demographics.age}")
         if demo_info:
             logger.info(f"Demographics: {', '.join(demo_info)}")
 
-    # Guard: output_path must be configured
-    if not profile.output_path:
-        logger.error(f"Profile '{profile_name}' has no output_path defined.")
-        sys.exit(1)
-
-    # Verify output path has all.csv
-    output_path = get_output_path()
-    csv_path = output_path / "all.csv"
-    if not csv_path.exists():
-        logger.error(f"No all.csv found at {csv_path}")
-        logger.error("Run parselabs first to extract lab results.")
-        sys.exit(1)
-
-    # Build allowed paths for serving files from all profiles
-    # Read profile configs directly without modifying global state
-    available = get_available_profiles()
-    logger.info(f"Available profiles: {', '.join(available)}")
-
-    allowed_paths = set()
-    for pname in available:
-        profile_path = ProfileConfig.find_path(pname)
-        if profile_path:
-            p = ProfileConfig.from_file(profile_path)
-            if p.output_path:
-                allowed_paths.add(str(p.output_path))
-                if p.output_path.parent != p.output_path:
-                    allowed_paths.add(str(p.output_path.parent))
-
-    allowed_paths = list(allowed_paths)
-
-    logger.info(f"Output path: {output_path}")
-    logger.info("Starting Lab Results Viewer on http://localhost:7862")
-
-    demo = create_app()
-
-    demo.launch(
-        server_name="127.0.0.1",
-        server_port=7862,  # New port for unified viewer
-        show_error=True,
-        allowed_paths=allowed_paths,
-        head=KEYBOARD_JS,
-        css=CUSTOM_CSS,
-    )
+    launch_app(context, default_tab="results")
 
 
 if __name__ == "__main__":

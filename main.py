@@ -10,7 +10,7 @@ import re  # noqa: E402
 import shutil  # noqa: E402
 import subprocess  # noqa: E402
 import sys  # noqa: E402
-from dataclasses import dataclass  # noqa: E402
+from dataclasses import dataclass, field  # noqa: E402
 from multiprocessing import Pool  # noqa: E402
 from pathlib import Path  # noqa: E402
 
@@ -24,6 +24,14 @@ from parselabs.config import (  # noqa: E402
     ExtractionConfig,
     LabSpecsConfig,
     ProfileConfig,
+)
+from parselabs.document_store import (  # noqa: E402
+    build_hashed_csv_path as build_hashed_csv_path_from_store,
+    compute_file_hash as compute_document_hash,
+    discover_pdf_files,
+    plan_pdf_run,
+    read_page_payload,
+    is_page_payload_reusable,
 )
 from parselabs.exceptions import ConfigurationError, PipelineError  # noqa: E402
 from parselabs.export_schema import COLUMN_SCHEMA, get_column_lists  # noqa: E402
@@ -41,6 +49,7 @@ from parselabs.review_sync import (  # noqa: E402
     rebuild_document_csv,
     transform_rows_to_final_export,
 )
+from parselabs.runtime import RuntimeContext  # noqa: E402
 from parselabs.utils import (  # noqa: E402
     create_page_image_variants,
     setup_logging,
@@ -152,12 +161,7 @@ def _compute_file_hash(file_path: Path, hash_length: int = 8) -> str:
     if resolved in _file_hash_cache:
         return _file_hash_cache[resolved]
 
-    h = hashlib.sha256()
-    with open(resolved, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-
-    result = h.hexdigest()[:hash_length]
+    result = compute_document_hash(resolved, hash_length=hash_length)
     _file_hash_cache[resolved] = result
     return result
 
@@ -311,14 +315,20 @@ def _extract_or_load_page_data(
 ) -> dict:
     """Extract data from image or load from cache."""
 
-    # Check if extraction results already cached for this page
+    # Reuse only valid cached JSON payloads so failed pages are retried automatically.
     if json_path.exists():
-        logger.info(f"[{page_name}] Loading cached extraction data")
-        page_data = json.loads(json_path.read_text(encoding="utf-8"))
-        page_data["source_file"] = page_name
-        page_data = _ensure_extraction_failure_placeholder(page_data)
-        _check_and_record_failure(page_data, pdf_stem, page_idx, failed_pages)
-        return page_data
+        cached_payload = read_page_payload(json_path)
+
+        # Cached failures and unreadable JSON should be retried on the next run.
+        if is_page_payload_reusable(cached_payload):
+            logger.info(f"[{page_name}] Loading cached extraction data")
+            page_data = cached_payload
+            page_data["source_file"] = page_name
+            page_data = _ensure_extraction_failure_placeholder(page_data)
+            _check_and_record_failure(page_data, pdf_stem, page_idx, failed_pages)
+            return page_data
+
+        logger.info(f"[{page_name}] Re-running extraction because cached JSON is missing, invalid, or failed")
 
     # Prefer text extraction when the page has enough embedded text.
     if _text_has_enough_content(page_text, min_chars=_MIN_PAGE_TEXT_CHARS):
@@ -639,96 +649,34 @@ def _extract_document_date(data_dict: dict, pdf_stem: str) -> str | None:
 def _build_hashed_csv_path(pdf_path: Path, output_path: Path, file_hash: str) -> Path:
     """Return the hash-suffixed CSV path for a PDF."""
 
-    return output_path / f"{pdf_path.stem}_{file_hash}" / f"{pdf_path.stem}.csv"
+    return build_hashed_csv_path_from_store(pdf_path, output_path, file_hash)
 
 
 REQUIRED_CSV_COLS = ["result_index", "page_number", "source_file"]
 
 
 @dataclass(frozen=True)
-class PdfFileStat:
-    """Filesystem metadata collected once per input PDF during preflight."""
-
-    pdf_path: Path
-    resolved_path: Path
-    size_bytes: int
-    mtime_ns: int
-
-
-@dataclass
-class PdfInventoryEntry:
-    """Cached identity for a previously-seen PDF."""
-
-    source_path: str
-    size_bytes: int
-    mtime_ns: int
-    file_hash: str
-    csv_path: str
-
-    def matches(self, pdf_stat: PdfFileStat) -> bool:
-        """Return whether this entry still matches the current filesystem metadata."""
-
-        # Guard: Path changes invalidate the cache entry immediately.
-        if self.source_path != str(pdf_stat.resolved_path):
-            return False
-
-        # Guard: Size changes mean the file contents may have changed.
-        if self.size_bytes != pdf_stat.size_bytes:
-            return False
-
-        # Guard: Mtime changes also invalidate the warm-cache shortcut.
-        if self.mtime_ns != pdf_stat.mtime_ns:
-            return False
-
-        # Metadata still matches, so the cached hash can be trusted.
-        return True
-
-    def to_dict(self) -> dict[str, int | str]:
-        """Serialize the entry for the manifest JSON file."""
-
-        return {
-            "source_path": self.source_path,
-            "size_bytes": self.size_bytes,
-            "mtime_ns": self.mtime_ns,
-            "file_hash": self.file_hash,
-            "csv_path": self.csv_path,
-        }
-
-    @classmethod
-    def from_dict(cls, source_path: str, data: dict) -> "PdfInventoryEntry":
-        """Build an entry from manifest JSON data."""
-
-        return cls(
-            source_path=str(data.get("source_path") or source_path),
-            size_bytes=int(data["size_bytes"]),
-            mtime_ns=int(data["mtime_ns"]),
-            file_hash=str(data["file_hash"]),
-            csv_path=str(data["csv_path"]),
-        )
-
-
-@dataclass(frozen=True)
 class PreflightPdfTask:
-    """A PDF that still needs processing after the cache pass."""
+    """A unique PDF to process after exact-content deduplication."""
 
     pdf_path: Path
-    resolved_path: Path
-    size_bytes: int
-    mtime_ns: int
     file_hash: str
     csv_path: Path
+    resolved_path: Path | None = None
+    size_bytes: int = 0
+    mtime_ns: int = 0
 
 
 @dataclass
 class PdfPreflightResult:
-    """Inputs needed to continue the pipeline after preflight."""
+    """Unique PDFs plus duplicate metadata for one pipeline invocation."""
 
-    cached_csv_paths: list[Path]
     pdfs_to_process: list[PreflightPdfTask]
     duplicates: list[tuple[Path, Path]]
     skipped_count: int
-    inventory: dict[str, PdfInventoryEntry]
-    inventory_candidates: dict[str, PdfInventoryEntry]
+    cached_csv_paths: list[Path] = field(default_factory=list)
+    inventory: dict = field(default_factory=dict)
+    inventory_candidates: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -741,308 +689,45 @@ class PipelineRunResult:
     pdfs_failed: int
 
 
-def _get_pdf_inventory_path(output_path: Path) -> Path:
-    """Return the manifest path used for PDF preflight metadata."""
+def _prepare_pdf_run(pdf_files: list[Path], output_path: Path) -> PdfPreflightResult:
+    """Hash every PDF once, dedupe exact duplicates, and derive hashed output paths."""
 
-    return output_path / "logs" / "pdf_inventory.json"
-
-
-def _stat_pdf_file(pdf_path: Path) -> PdfFileStat:
-    """Collect immutable filesystem metadata for a PDF."""
-
-    resolved_path = pdf_path.resolve()
-    stat_result = resolved_path.stat()
-    return PdfFileStat(
-        pdf_path=pdf_path,
-        resolved_path=resolved_path,
-        size_bytes=stat_result.st_size,
-        mtime_ns=stat_result.st_mtime_ns,
-    )
-
-
-def _build_inventory_entry(pdf_stat: PdfFileStat, file_hash: str, csv_path: Path) -> PdfInventoryEntry:
-    """Create a manifest entry from the current PDF state."""
-
-    return PdfInventoryEntry(
-        source_path=str(pdf_stat.resolved_path),
-        size_bytes=pdf_stat.size_bytes,
-        mtime_ns=pdf_stat.mtime_ns,
-        file_hash=file_hash,
-        csv_path=str(csv_path),
-    )
-
-
-def _load_pdf_inventory(output_path: Path) -> dict[str, PdfInventoryEntry]:
-    """Load the warm-cache manifest, ignoring corrupt data."""
-
-    inventory_path = _get_pdf_inventory_path(output_path)
-
-    # Guard: Missing manifest is a normal first-run condition.
-    if not inventory_path.exists():
-        return {}
-
-    try:
-        raw_data = json.loads(inventory_path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        # Corrupt manifests should not block the pipeline.
-        logger.warning(f"Ignoring corrupt PDF inventory manifest: {inventory_path} ({exc})")
-        return {}
-
-    # Guard: Unexpected top-level data means the manifest cannot be trusted.
-    if not isinstance(raw_data, dict):
-        logger.warning(f"Ignoring corrupt PDF inventory manifest: {inventory_path} (expected object)")
-        return {}
-
-    inventory: dict[str, PdfInventoryEntry] = {}
-
-    # Parse each manifest entry independently so one bad row does not poison the rest.
-    for source_path, entry_data in raw_data.items():
-        # Skip malformed entry payloads and keep processing valid rows.
-        if not isinstance(entry_data, dict):
-            logger.warning(f"Ignoring malformed PDF inventory entry for {source_path}")
-            continue
-
-        try:
-            inventory[source_path] = PdfInventoryEntry.from_dict(source_path, entry_data)
-        except (KeyError, TypeError, ValueError) as exc:
-            logger.warning(f"Ignoring malformed PDF inventory entry for {source_path}: {exc}")
-
-    return inventory
-
-
-def _save_pdf_inventory(output_path: Path, inventory: dict[str, PdfInventoryEntry]) -> None:
-    """Persist the warm-cache manifest without failing the pipeline on write issues."""
-
-    inventory_path = _get_pdf_inventory_path(output_path)
-    serialized = {
-        source_path: entry.to_dict()
-        for source_path, entry in sorted(inventory.items())
-    }
-
-    try:
-        # Ensure the log directory exists before writing the manifest.
-        inventory_path.parent.mkdir(parents=True, exist_ok=True)
-        inventory_path.write_text(json.dumps(serialized, indent=2, sort_keys=True), encoding="utf-8")
-    except Exception as exc:
-        # Manifest persistence is best-effort and should never fail the run.
-        logger.warning(f"Failed to save PDF inventory manifest: {inventory_path} ({exc})")
-
-
-def _collect_cached_pdf_state(
-    pdf_files: list[Path],
-    inventory: dict[str, PdfInventoryEntry],
-) -> tuple[list[Path], list[PdfFileStat], list[tuple[Path, Path]], int, dict[str, Path], dict[str, Path], dict[str, PdfInventoryEntry]]:
-    """Classify PDFs as warm-cache hits or pending hash work."""
-
-    cached_csv_paths: list[Path] = []
-    pending_stats: list[PdfFileStat] = []
-    duplicates: list[tuple[Path, Path]] = []
-    skipped_count = 0
-    seen_hashes: dict[str, Path] = {}
-    hash_to_csv_path: dict[str, Path] = {}
-    inventory_candidates: dict[str, PdfInventoryEntry] = {}
     pdf_iterator = pdf_files
 
-    # Show progress for large explicit runs so slow cloud-backed stats are visible.
+    # Show hashing progress for larger explicit runs.
     if len(pdf_files) > 1:
-        logger.info("Checking for cached CSV outputs...")
-        pdf_iterator = tqdm(pdf_files, desc="Checking cached outputs", unit="pdf")
+        logger.info("Hashing PDFs for deduplication...")
+        pdf_iterator = tqdm(pdf_files, desc="Hashing PDFs", unit="pdf")
 
-    # Inspect each file once and reuse its stat data for the rest of preflight.
-    for pdf_path in pdf_iterator:
-        pdf_stat = _stat_pdf_file(pdf_path)
-        cached_entry = inventory.get(str(pdf_stat.resolved_path))
-
-        # Guard: Files with no matching manifest entry must be hashed later.
-        if cached_entry is None or not cached_entry.matches(pdf_stat):
-            pending_stats.append(pdf_stat)
-            continue
-
-        cached_csv_path = Path(cached_entry.csv_path)
-
-        # Guard: Invalid cached CSVs force a re-hash and reprocess.
-        if not _is_csv_valid(cached_csv_path):
-            if cached_csv_path.exists():
-                logger.warning(f"Re-processing {pdf_path.name}: CSV missing required columns")
-            pending_stats.append(pdf_stat)
-            continue
-
-        normalized_entry = _build_inventory_entry(pdf_stat, cached_entry.file_hash, cached_csv_path)
-        inventory_candidates[str(pdf_stat.resolved_path)] = normalized_entry
-
-        # Treat repeated hashes as duplicates even when both files are cache hits.
-        if cached_entry.file_hash in seen_hashes:
-            duplicates.append((pdf_path, seen_hashes[cached_entry.file_hash]))
-            continue
-
-        # Record this exact cached document so later pending hashes can dedupe against it.
-        seen_hashes[cached_entry.file_hash] = pdf_path
-        hash_to_csv_path[cached_entry.file_hash] = cached_csv_path
-        cached_csv_paths.append(cached_csv_path)
-        skipped_count += 1
-
-    return (
-        cached_csv_paths,
-        pending_stats,
-        duplicates,
-        skipped_count,
-        seen_hashes,
-        hash_to_csv_path,
-        inventory_candidates,
-    )
-
-
-def _hash_pending_pdf_tasks(
-    pending_stats: list[PdfFileStat],
-    output_path: Path,
-    duplicates: list[tuple[Path, Path]],
-    seen_hashes: dict[str, Path],
-    hash_to_csv_path: dict[str, Path],
-    inventory_candidates: dict[str, PdfInventoryEntry],
-) -> list[PreflightPdfTask]:
-    """Hash only PDFs that still need work after the warm-cache pass."""
-
+    seen_hashes: dict[str, Path] = {}
     pdfs_to_process: list[PreflightPdfTask] = []
-    pending_iterator = pending_stats
+    duplicates: list[tuple[Path, Path]] = []
 
-    # Show hashing progress only when there is actual hash work remaining.
-    if len(pending_stats) > 1:
-        logger.info("Computing PDF hashes for deduplication...")
-        pending_iterator = tqdm(pending_stats, desc="Hashing PDFs", unit="pdf")
+    for pdf_path in pdf_iterator:
+        file_hash = _compute_file_hash(pdf_path.resolve())
 
-    # Hash each remaining PDF exactly once and dedupe against both cached and pending files.
-    for pdf_stat in pending_iterator:
-        file_hash = _compute_file_hash(pdf_stat.resolved_path)
-
-        # Reuse the first exact match instead of scheduling duplicate work.
+        # Skip repeated exact-content files during this run.
         if file_hash in seen_hashes:
-            original_path = seen_hashes[file_hash]
-            duplicate_csv_path = hash_to_csv_path[file_hash]
-            duplicates.append((pdf_stat.pdf_path, original_path))
-            inventory_candidates[str(pdf_stat.resolved_path)] = _build_inventory_entry(
-                pdf_stat,
-                file_hash,
-                duplicate_csv_path,
-            )
+            duplicates.append((pdf_path, seen_hashes[file_hash]))
             continue
 
-        csv_path = _build_hashed_csv_path(pdf_stat.pdf_path, output_path, file_hash)
-        task = PreflightPdfTask(
-            pdf_path=pdf_stat.pdf_path,
-            resolved_path=pdf_stat.resolved_path,
-            size_bytes=pdf_stat.size_bytes,
-            mtime_ns=pdf_stat.mtime_ns,
-            file_hash=file_hash,
-            csv_path=csv_path,
+        seen_hashes[file_hash] = pdf_path
+        pdfs_to_process.append(
+            PreflightPdfTask(
+                pdf_path=pdf_path,
+                file_hash=file_hash,
+                csv_path=_build_hashed_csv_path(pdf_path, output_path, file_hash),
+                resolved_path=pdf_path.resolve(),
+                size_bytes=pdf_path.stat().st_size,
+                mtime_ns=pdf_path.stat().st_mtime_ns,
+            )
         )
-        inventory_candidates[str(pdf_stat.resolved_path)] = _build_inventory_entry(pdf_stat, file_hash, csv_path)
-        seen_hashes[file_hash] = pdf_stat.pdf_path
-        hash_to_csv_path[file_hash] = csv_path
-        pdfs_to_process.append(task)
-
-    return pdfs_to_process
-
-
-def _prepare_pdf_run(pdf_files: list[Path], output_path: Path) -> PdfPreflightResult:
-    """Prepare an explicit PDF run using manifest-backed cache checks."""
-
-    inventory = _load_pdf_inventory(output_path)
-    (
-        cached_csv_paths,
-        pending_stats,
-        duplicates,
-        skipped_count,
-        seen_hashes,
-        hash_to_csv_path,
-        inventory_candidates,
-    ) = _collect_cached_pdf_state(pdf_files, inventory)
-    pdfs_to_process = _hash_pending_pdf_tasks(
-        pending_stats,
-        output_path,
-        duplicates,
-        seen_hashes,
-        hash_to_csv_path,
-        inventory_candidates,
-    )
 
     return PdfPreflightResult(
-        cached_csv_paths=cached_csv_paths,
         pdfs_to_process=pdfs_to_process,
         duplicates=duplicates,
-        skipped_count=skipped_count,
-        inventory=inventory,
-        inventory_candidates=inventory_candidates,
+        skipped_count=0,
     )
-
-
-def _is_csv_valid(csv_path: Path, required_cols: list[str] = REQUIRED_CSV_COLS) -> bool:
-    """Check if CSV exists and has all required columns."""
-
-    # Guard: File must exist
-    if not csv_path.exists():
-        return False
-
-    try:
-        # Read the header first so malformed files fail fast without loading the full CSV.
-        header_df = pd.read_csv(csv_path, nrows=0)
-
-        # Guard: Missing required columns means the cached output cannot be trusted.
-        if not all(col in header_df.columns for col in required_cols):
-            return False
-
-        # Empty review CSVs need deeper inspection because extraction failures also produce headers only.
-        data_df = pd.read_csv(csv_path)
-
-        # Guard: Non-empty CSVs are valid once the schema is confirmed.
-        if not data_df.empty:
-            return True
-
-        return _is_empty_document_cache_valid(csv_path)
-    except Exception:
-        # Any error (corrupt file, permissions, etc.) means invalid
-        return False
-
-
-def _is_empty_document_cache_valid(csv_path: Path) -> bool:
-    """Return whether a zero-row document CSV reflects an intentional blank document."""
-
-    doc_dir = csv_path.parent
-    json_paths = sorted(doc_dir.glob("*.json"))
-
-    # Guard: Missing page JSON means the empty CSV has no evidence backing it.
-    if not json_paths:
-        return False
-
-    saw_confirmed_blank_page = False
-
-    # Inspect each page payload so extraction failures do not enter the warm cache.
-    for json_path in json_paths:
-        try:
-            page_data = json.loads(json_path.read_text(encoding="utf-8"))
-        except Exception:
-            return False
-
-        lab_results = page_data.get("lab_results")
-        page_has_lab_data = page_data.get("page_has_lab_data")
-
-        # Guard: Explicit extraction failures must be retried on the next run.
-        if page_data.get("_extraction_failed"):
-            return False
-
-        # Confirm pages the model explicitly classified as having no lab data.
-        if page_has_lab_data is False:
-            saw_confirmed_blank_page = True
-            continue
-
-        # Guard: Any page with extracted rows should have produced non-empty CSV data.
-        if isinstance(lab_results, list) and lab_results:
-            return False
-
-        # Guard: Ambiguous empty pages are treated as failed extraction attempts.
-        return False
-
-    # Accept only documents where every page was explicitly confirmed as blank/non-lab.
-    return saw_confirmed_blank_page
 
 
 def _log_validation_stats(validation_stats: dict) -> None:
@@ -1103,7 +788,7 @@ def _process_pdfs_in_parallel(
         all_failed_pages.extend(failed_pages)
 
     # Keep only successful CSV outputs from the worker run.
-    csv_paths = [csv_path for csv_path, _ in results if csv_path and _is_csv_valid(csv_path)]
+    csv_paths = [csv_path for csv_path, _ in results if csv_path and csv_path.exists()]
 
     return csv_paths, all_failed_pages, pdfs_failed
 
@@ -1295,23 +980,26 @@ def _load_profile_for_rebuild(profile_name: str) -> ProfileConfig:
 def _setup_rebuild_environment(profile_name: str) -> tuple[ProfileConfig, LabSpecsConfig]:
     """Setup logging and lab specs for a reviewed-JSON rebuild."""
 
-    profile = _load_profile_for_rebuild(profile_name)
+    context = RuntimeContext.from_profile(
+        profile_name,
+        need_input=False,
+        need_output=True,
+        need_api=False,
+        setup_logs=True,
+        clear_logs=False,
+    )
 
     global logger
-    log_dir = profile.output_path / "logs"
-    logger = setup_logging(log_dir, clear_logs=False)
-    logger.info(f"Using profile: {profile.name}")
-    logger.info(f"Output: {profile.output_path}")
-
-    lab_specs = LabSpecsConfig()
+    logger = context.logger
+    logger.info(f"Using profile: {context.profile.name}")
+    logger.info(f"Output: {context.output_path}")
 
     # Copy lab specs to the output folder so rebuild artifacts stay reproducible.
-    if lab_specs.exists:
-        lab_specs_dest = profile.output_path / "lab_specs.json"
-        shutil.copy2(lab_specs.config_path, lab_specs_dest)
-        logger.info(f"Copied lab specs to output: {lab_specs_dest}")
+    copied_path = context.copy_lab_specs_to_output()
+    if copied_path is not None:
+        logger.info(f"Copied lab specs to output: {copied_path}")
 
-    return profile, lab_specs
+    return context.profile, context.lab_specs
 
 
 # ========================================
@@ -1400,18 +1088,16 @@ def _build_and_validate_config(args, profile_name: str) -> ExtractionConfig:
 
 
 def _merge_unique_csv_paths(csv_paths: list[Path]) -> list[Path]:
-    """Return valid CSV paths in stable order without duplicates."""
+    """Return readable CSV paths in stable order without duplicates."""
 
     unique_paths: list[Path] = []
     seen_paths: set[Path] = set()
 
     # Preserve first-seen order so merges remain stable across reruns.
     for csv_path in csv_paths:
-        # Skip invalid paths because downstream merge expects readable CSV files.
-        if not _is_csv_valid(csv_path):
+        # Skip missing paths because downstream merge expects readable CSV files.
+        if not csv_path.exists():
             continue
-
-        # Skip repeated CSV references from duplicate-content PDFs.
         if csv_path in seen_paths:
             continue
 
@@ -1421,67 +1107,27 @@ def _merge_unique_csv_paths(csv_paths: list[Path]) -> list[Path]:
     return unique_paths
 
 
-def _persist_preflight_inventory(
-    preflight: PdfPreflightResult,
-    output_path: Path,
-    processed_csv_paths: list[Path],
-) -> None:
-    """Save manifest entries for every PDF with a valid CSV outcome."""
-
-    inventory = dict(preflight.inventory)
-    hash_to_csv_path: dict[str, Path] = {}
-
-    # Seed hash-to-CSV mappings from all current valid outputs.
-    for csv_path in _merge_unique_csv_paths(preflight.cached_csv_paths + processed_csv_paths):
-        # Match each valid path back to the manifest candidates that produced it.
-        for entry in preflight.inventory_candidates.values():
-            if Path(entry.csv_path) == csv_path:
-                hash_to_csv_path[entry.file_hash] = csv_path
-
-    # Persist only entries whose hash currently resolves to a valid CSV.
-    for source_path, entry in preflight.inventory_candidates.items():
-        valid_csv_path = hash_to_csv_path.get(entry.file_hash)
-
-        # Skip entries whose source hash never produced a valid CSV this run.
-        if valid_csv_path is None:
-            continue
-
-        inventory[source_path] = PdfInventoryEntry(
-            source_path=entry.source_path,
-            size_bytes=entry.size_bytes,
-            mtime_ns=entry.mtime_ns,
-            file_hash=entry.file_hash,
-            csv_path=str(valid_csv_path),
-        )
-
-    _save_pdf_inventory(output_path, inventory)
-
-
 def _process_pdfs_or_use_cache(
     preflight: PdfPreflightResult,
     config: ExtractionConfig,
     lab_specs: LabSpecsConfig,
     log_dir: Path,
 ) -> tuple[list[Path], list[dict], int]:
-    """Process PDFs or use cached results if all already processed.
+    """Process the exact-content unique PDFs for this run.
 
     Returns tuple of (csv_paths, all_failed_pages, pdfs_failed).
     """
 
-    # All PDFs already have valid CSVs, so the pipeline can skip worker startup.
     if not preflight.pdfs_to_process:
-        logger.info("All PDFs already processed. Moving to merge step...")
         return _merge_unique_csv_paths(preflight.cached_csv_paths), [], 0
 
-    # Process the remaining unique PDFs and merge them with warm-cache hits.
-    processed_csv_paths, all_failed_pages, pdfs_failed = _process_pdfs_in_parallel(
+    csv_paths, all_failed_pages, pdfs_failed = _process_pdfs_in_parallel(
         preflight.pdfs_to_process,
         config,
         lab_specs,
         log_dir,
     )
-    csv_paths = _merge_unique_csv_paths(preflight.cached_csv_paths + processed_csv_paths)
-    return csv_paths, all_failed_pages, pdfs_failed
+    return _merge_unique_csv_paths(csv_paths), all_failed_pages, pdfs_failed
 
 
 def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfig, LabSpecsConfig]:
@@ -1491,29 +1137,36 @@ def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfi
     Raises ConfigurationError if setup fails.
     """
 
-    # Build and validate configuration (raises ConfigurationError on failure)
-    config = _build_and_validate_config(args, profile_name)
+    context = RuntimeContext.from_profile(
+        profile_name,
+        need_input=True,
+        need_output=True,
+        need_api=True,
+        overrides={
+            "model": getattr(args, "model", None),
+            "workers": getattr(args, "workers", None),
+            "pattern": getattr(args, "pattern", None),
+        },
+        create_output_dir=True,
+        setup_logs=True,
+        clear_logs=True,
+    )
 
-    # Setup logging to output folder for later review
+    # Guard: Extraction flows always require a validated extraction config.
+    if context.extraction_config is None:
+        raise ConfigurationError(f"Profile '{profile_name}' is missing extraction runtime settings.")
+
     global logger
-    log_dir = config.output_path / "logs"
-    logger = setup_logging(log_dir, clear_logs=True)
+    logger = context.logger
+    logger.info(f"Input: {context.extraction_config.input_path}")
+    logger.info(f"Output: {context.extraction_config.output_path}")
+    logger.info(f"Model: {context.extraction_config.extract_model_id}")
 
-    # Log configuration for debugging/auditing
-    logger.info(f"Input: {config.input_path}")
-    logger.info(f"Output: {config.output_path}")
-    logger.info(f"Model: {config.extract_model_id}")
+    copied_path = context.copy_lab_specs_to_output()
+    if copied_path is not None:
+        logger.info(f"Copied lab specs to output: {copied_path}")
 
-    # Load lab specifications for normalization and validation
-    lab_specs = LabSpecsConfig()
-
-    # Copy lab specs to output folder for reproducibility (if available)
-    if lab_specs.exists:
-        lab_specs_dest = config.output_path / "lab_specs.json"
-        shutil.copy2(lab_specs.config_path, lab_specs_dest)
-        logger.info(f"Copied lab specs to output: {lab_specs_dest}")
-
-    return config, lab_specs
+    return context.extraction_config, context.lab_specs
 
 
 def _export_final_results(
@@ -1635,9 +1288,9 @@ def run_pipeline_for_pdf_files(
         raise PipelineError("No PDF files provided for processing.")
 
     preflight = _prepare_pdf_run(pdf_files, config.output_path)
-    unique_pdf_count = preflight.skipped_count + len(preflight.pdfs_to_process)
+    unique_pdf_count = len(preflight.pdfs_to_process)
 
-    # Report duplicate-content PDFs before moving on to cache and processing stats.
+    # Report duplicate-content PDFs before moving on to processing stats.
     for dup_path, orig_path in preflight.duplicates:
         logger.warning(f"Skipping duplicate PDF: {dup_path.name} (same content as {orig_path.name})")
     if preflight.duplicates:
@@ -1646,8 +1299,6 @@ def run_pipeline_for_pdf_files(
             f"{unique_pdf_count} unique PDF(s) remaining"
         )
 
-    # Report warm-cache and remaining-work totals after deduplication.
-    logger.info(f"Skipping {preflight.skipped_count} already-processed PDF(s)")
     logger.info(f"Processing {len(preflight.pdfs_to_process)} PDF(s)")
 
     log_dir = config.output_path / "logs"
@@ -1657,9 +1308,6 @@ def run_pipeline_for_pdf_files(
         lab_specs,
         log_dir,
     )
-
-    # Save the updated manifest after the pipeline knows which CSVs are valid.
-    _persist_preflight_inventory(preflight, config.output_path, csv_paths)
 
     if not csv_paths:
         raise PipelineError("No PDFs successfully processed.")
@@ -1749,18 +1397,9 @@ def _discover_pdf_files(input_path: Path, input_file_regex: str | None) -> list[
     """
 
     try:
-        entries = list(input_path.iterdir())
-    except FileNotFoundError as exc:
-        raise PipelineError(f"Input directory does not exist: {input_path}") from exc
-    except PermissionError as exc:
-        detail = exc.strerror or str(exc)
-        raise PipelineError(f"Cannot access input directory {input_path}: {detail}") from exc
-    except OSError as exc:
-        detail = exc.strerror or str(exc)
-        raise PipelineError(f"Cannot enumerate input directory {input_path}: {detail}") from exc
-
-    pattern = (input_file_regex or "*.pdf").lower()
-    return sorted(path for path in entries if path.is_file() and fnmatch.fnmatch(path.name.lower(), pattern))
+        return discover_pdf_files(input_path, input_file_regex)
+    except (FileNotFoundError, PermissionError, OSError) as exc:
+        raise PipelineError(str(exc)) from exc
 
 
 def run_for_profile(args, profile_name: str) -> None:

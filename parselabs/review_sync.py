@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from collections import Counter
@@ -12,6 +11,21 @@ from pathlib import Path
 import pandas as pd
 
 from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig
+from parselabs.document_store import (
+    REVIEW_MISSING_ROWS_KEY,
+    DocumentRef,
+    count_review_missing_rows as count_review_missing_rows_in_store,
+    get_document_csv_path,
+    get_document_stem,
+    get_page_image_path as get_page_image_path_from_store,
+    get_page_json_path,
+    get_review_missing_rows as get_review_missing_rows_from_store,
+    iter_processed_documents as iter_processed_documents_from_store,
+    parse_page_number,
+    read_page_payload,
+    save_missing_row_marker as save_missing_row_marker_in_store,
+    save_review_status as save_review_status_in_store,
+)
 from parselabs.export_schema import COLUMN_ORDER, COLUMN_SCHEMA, get_column_lists
 from parselabs.normalization import (
     apply_dtype_conversions,
@@ -25,7 +39,6 @@ from parselabs.validation import ValueValidator
 
 logger = logging.getLogger(__name__)
 
-REVIEW_MISSING_ROWS_KEY = "review_missing_rows"
 EXTRACTION_FAILED_REASON = "EXTRACTION_FAILED"
 UNKNOWN_LAB_MAPPING_REASON = "UNKNOWN_LAB_MAPPING"
 UNKNOWN_UNIT_MAPPING_REASON = "UNKNOWN_UNIT_MAPPING"
@@ -64,15 +77,7 @@ DOCUMENT_REVIEW_COLUMNS = [
     "review_completed_at",
 ]
 
-
-@dataclass(frozen=True)
-class ProcessedDocument:
-    """Single processed document directory under an output path."""
-
-    doc_dir: Path
-    stem: str
-    pdf_path: Path
-    csv_path: Path
+ProcessedDocument = DocumentRef
 
 
 @dataclass(frozen=True)
@@ -120,33 +125,7 @@ class ReviewStateError(RuntimeError):
 def iter_processed_documents(output_path: Path) -> list[ProcessedDocument]:
     """Discover processed document directories under an output path."""
 
-    documents: list[ProcessedDocument] = []
-
-    # Guard: Missing output directories simply mean there is nothing to review.
-    if not output_path.exists():
-        return documents
-
-    # Inspect only child directories because processed documents are stored per folder.
-    for doc_dir in sorted(path for path in output_path.iterdir() if path.is_dir()):
-        # Skip operational folders that do not contain document artifacts.
-        if doc_dir.name == "logs":
-            continue
-
-        # Skip directories that do not use the canonical hash-suffixed layout.
-        if not _is_hashed_document_dir(doc_dir):
-            continue
-
-        # Skip directories that do not contain a copied source PDF.
-        pdf_path = _find_document_pdf(doc_dir)
-        if pdf_path is None:
-            continue
-
-        # Build the canonical per-document CSV path from the copied PDF stem.
-        stem = pdf_path.stem
-        csv_path = doc_dir / f"{stem}.csv"
-        documents.append(ProcessedDocument(doc_dir=doc_dir, stem=stem, pdf_path=pdf_path, csv_path=csv_path))
-
-    return documents
+    return iter_processed_documents_from_store(output_path)
 
 
 def get_review_summary(review_df: pd.DataFrame, missing_row_markers: int = 0) -> ReviewSummary:
@@ -200,7 +179,7 @@ def build_document_review_dataframe(doc_dir: Path, lab_specs: LabSpecsConfig) ->
         return empty_df
 
     # Normalize extracted rows into the review dataframe shape without dropping reviewable rows.
-    review_df = _prepare_rows_for_review(review_df, lab_specs)
+    review_df, _ = prepare_rows(review_df, lab_specs, mode="review")
 
     # Ensure the review CSV keeps a stable column order even when some fields are absent.
     ensure_columns(review_df, DOCUMENT_REVIEW_COLUMNS, default=None)
@@ -216,7 +195,7 @@ def rebuild_document_csv(doc_dir: Path, lab_specs: LabSpecsConfig) -> Path:
 
     # Recompute the review frame from JSON so CSV contents always match persisted review state.
     review_df = build_document_review_dataframe(doc_dir, lab_specs)
-    csv_path = _get_document_csv_path(doc_dir)
+    csv_path = get_document_csv_path(doc_dir)
     review_df.to_csv(csv_path, index=False, encoding="utf-8")
     return csv_path
 
@@ -270,9 +249,10 @@ def transform_rows_to_final_export(
             {"total_rows": 0, "rows_flagged": 0, "flags_by_reason": {}},
         )
 
-    prepared_df, validation_stats = _prepare_rows_for_export(
+    prepared_df, validation_stats = prepare_rows(
         rows_df,
         lab_specs,
+        mode="export",
         apply_standardization=apply_standardization,
     )
 
@@ -290,159 +270,25 @@ def transform_rows_to_final_export(
 def save_review_status(doc_dir: Path, page_number: int, result_index: int, status: str | None) -> tuple[bool, str]:
     """Persist a review decision to the page JSON backing a CSV row."""
 
-    normalized_status = _normalize_review_status(status)
-
-    # Guard: Persist only supported review decisions or an explicit reset to pending.
-    if normalized_status not in {"accepted", "rejected", None}:
-        return False, f"Unsupported review status: {status}"
-
-    # Resolve the JSON file for the selected page before attempting any mutation.
-    json_path = _get_page_json_path(doc_dir, page_number)
-
-    # Guard: The page JSON must exist for review persistence to work.
-    if not json_path.exists():
-        return False, f"JSON file not found: {json_path}"
-
-    try:
-        data = json.loads(json_path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        # Invalid JSON should surface as an actionable error rather than being ignored.
-        return False, f"Failed to read JSON file: {exc}"
-
-    # Guard: Review writes only make sense for extraction payloads with lab_results.
-    results = data.get("lab_results")
-    if not isinstance(results, list):
-        return False, "No lab_results in JSON file."
-
-    # Guard: The selected result index must point at a real row.
-    if result_index < 0 or result_index >= len(results):
-        return False, f"result_index {result_index} out of range."
-
-    # Persist explicit review decisions plus a timestamp for auditability.
-    if normalized_status in {"accepted", "rejected"}:
-        results[result_index]["review_status"] = normalized_status
-        results[result_index]["review_completed_at"] = pd.Timestamp.now(tz="UTC").isoformat()
-
-    # Clearing a decision should restore the row to the canonical pending state.
-    if normalized_status is None:
-        results[result_index].pop("review_status", None)
-        results[result_index].pop("review_completed_at", None)
-
-    try:
-        # Rewrite the JSON atomically enough for local desktop usage.
-        json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    except Exception as exc:
-        # Surface filesystem errors directly so the caller can warn the reviewer.
-        return False, f"Failed to write JSON file: {exc}"
-
-    return True, ""
+    return save_review_status_in_store(doc_dir, page_number, result_index, status)
 
 
 def save_missing_row_marker(doc_dir: Path, page_number: int, anchor_result_index: int) -> tuple[bool, str]:
     """Persist a missing-row marker to the page JSON backing the current review row."""
 
-    # Resolve the JSON file for the selected page before attempting any mutation.
-    json_path = _get_page_json_path(doc_dir, page_number)
-
-    # Guard: The page JSON must exist for missing-row markers to persist.
-    if not json_path.exists():
-        return False, f"JSON file not found: {json_path}"
-
-    try:
-        data = json.loads(json_path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        # Invalid JSON should surface as an actionable error rather than being ignored.
-        return False, f"Failed to read JSON file: {exc}"
-
-    results = data.get("lab_results")
-
-    # Guard: Missing-row markers must anchor to an existing extracted result.
-    if not isinstance(results, list):
-        return False, "No lab_results in JSON file."
-
-    # Guard: Reject anchors that do not point at an existing extracted row.
-    if anchor_result_index < 0 or anchor_result_index >= len(results):
-        return False, f"anchor_result_index {anchor_result_index} out of range."
-
-    markers = data.get(REVIEW_MISSING_ROWS_KEY)
-
-    # Guard: Normalize absent marker lists into a fresh mutable list.
-    if markers is None:
-        markers = []
-
-    # Guard: Reject malformed marker containers so the reviewer can repair the JSON.
-    if not isinstance(markers, list):
-        return False, f"{REVIEW_MISSING_ROWS_KEY} must be a list in {json_path.name}."
-
-    markers.append(
-        {
-            "anchor_result_index": int(anchor_result_index),
-            "created_at": pd.Timestamp.now(tz="UTC").isoformat(),
-        }
-    )
-    data[REVIEW_MISSING_ROWS_KEY] = markers
-
-    try:
-        # Rewrite the JSON atomically enough for local desktop usage.
-        json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    except Exception as exc:
-        # Surface filesystem errors directly so the caller can warn the reviewer.
-        return False, f"Failed to write JSON file: {exc}"
-
-    return True, ""
+    return save_missing_row_marker_in_store(doc_dir, page_number, anchor_result_index)
 
 
 def get_review_missing_rows(doc_dir: Path, page_number: int | None = None) -> list[dict]:
     """Return unresolved missing-row markers for a document or page."""
 
-    markers: list[dict] = []
-
-    # Scan every processed page JSON so unresolved omissions are counted consistently.
-    for page_json_path in sorted(doc_dir.glob("*.json")):
-        current_page_number = _parse_page_number(page_json_path)
-
-        # Skip files that do not follow the processed page naming convention.
-        if current_page_number is None:
-            continue
-
-        # Skip non-target pages when the caller requested a single page summary.
-        if page_number is not None and current_page_number != page_number:
-            continue
-
-        try:
-            page_payload = json.loads(page_json_path.read_text(encoding="utf-8"))
-        except Exception as exc:
-            # Corrupt JSON files should be logged and skipped instead of breaking review summaries.
-            logger.warning(f"Failed to read processed page JSON {page_json_path}: {exc}")
-            continue
-
-        page_markers = page_payload.get(REVIEW_MISSING_ROWS_KEY, [])
-
-        # Skip malformed marker containers because they cannot be summarized safely.
-        if not isinstance(page_markers, list):
-            logger.warning(f"Invalid {REVIEW_MISSING_ROWS_KEY} payload in {page_json_path}")
-            continue
-
-        for marker in page_markers:
-            # Skip malformed marker entries so one bad item does not poison the summary.
-            if not isinstance(marker, dict):
-                continue
-
-            markers.append(
-                {
-                    "page_number": current_page_number,
-                    "anchor_result_index": marker.get("anchor_result_index"),
-                    "created_at": marker.get("created_at"),
-                }
-            )
-
-    return markers
+    return get_review_missing_rows_from_store(doc_dir, page_number=page_number)
 
 
 def count_review_missing_rows(doc_dir: Path, page_number: int | None = None) -> int:
     """Return the number of unresolved missing-row markers for a document or page."""
 
-    return len(get_review_missing_rows(doc_dir, page_number=page_number))
+    return count_review_missing_rows_in_store(doc_dir, page_number=page_number)
 
 
 def ensure_document_fixture_ready(doc_dir: Path, lab_specs: LabSpecsConfig) -> ReviewSummary:
@@ -466,7 +312,7 @@ def ensure_document_fixture_ready(doc_dir: Path, lab_specs: LabSpecsConfig) -> R
         issue_parts.append(f"{summary.missing_row_markers} unresolved missing-row marker(s)")
 
     issue_text = ", ".join(issue_parts) if issue_parts else "document review incomplete"
-    raise ReviewStateError(f"{_get_document_stem(doc_dir)} is not fixture-ready: {issue_text}.")
+    raise ReviewStateError(f"{get_document_stem(doc_dir)} is not fixture-ready: {issue_text}.")
 
 
 def build_review_corpus_report(output_path: Path, lab_specs: LabSpecsConfig) -> ReviewCorpusReport:
@@ -530,89 +376,7 @@ def build_review_corpus_report(output_path: Path, lab_specs: LabSpecsConfig) -> 
 def get_page_image_path(doc_dir: Path, page_number: int) -> Path | None:
     """Return the primary page image for a review row when it exists."""
 
-    # Resolve the page image path using the processed document stem and page number.
-    stem = _get_document_stem(doc_dir)
-    image_path = doc_dir / f"{stem}.{page_number:03d}.jpg"
-
-    # Guard: Return None when the image is unavailable.
-    if not image_path.exists():
-        return None
-
-    return image_path
-
-
-def _find_document_pdf(doc_dir: Path) -> Path | None:
-    """Return the copied source PDF for a processed document directory."""
-
-    pdf_paths = sorted(doc_dir.glob("*.pdf"))
-
-    # Guard: Processed document directories without a PDF are incomplete.
-    if not pdf_paths:
-        return None
-
-    return pdf_paths[0]
-
-
-def _get_document_stem(doc_dir: Path) -> str:
-    """Resolve the logical document stem for a processed output directory."""
-
-    # Prefer the copied PDF because it preserves the original filename exactly.
-    pdf_path = _find_document_pdf(doc_dir)
-    if pdf_path is not None:
-        return pdf_path.stem
-
-    # Fall back to the directory name for partially-built outputs.
-    hashed_match = re.match(r"^(?P<stem>.+)_[0-9a-fA-F]{8}$", doc_dir.name)
-    if hashed_match:
-        return str(hashed_match.group("stem"))
-
-    return doc_dir.name
-
-
-def _get_document_csv_path(doc_dir: Path) -> Path:
-    """Return the canonical CSV path for a processed document directory."""
-
-    stem = _get_document_stem(doc_dir)
-    return doc_dir / f"{stem}.csv"
-
-
-def _get_page_json_path(doc_dir: Path, page_number: int) -> Path:
-    """Resolve the page JSON path for a document row."""
-
-    stem = _get_document_stem(doc_dir)
-    return doc_dir / f"{stem}.{page_number:03d}.json"
-
-
-def _normalize_review_status(status: object) -> str | None:
-    """Normalize persisted review statuses to the supported values."""
-
-    # Guard: Missing statuses stay unset.
-    if status is None:
-        return None
-
-    normalized = str(status).strip().lower()
-
-    # Guard: Empty strings are treated as unset review decisions.
-    if not normalized:
-        return None
-
-    # Guard: Pass through only the supported persisted status values.
-    if normalized in {"accepted", "rejected"}:
-        return normalized
-
-    return normalized
-
-
-def _parse_page_number(page_json_path: Path) -> int | None:
-    """Extract the 1-based page number from a processed page JSON filename."""
-
-    match = re.search(r"\.(\d{3})\.json$", page_json_path.name)
-
-    # Guard: Unexpected filenames cannot contribute review rows reliably.
-    if not match:
-        return None
-
-    return int(match.group(1))
+    return get_page_image_path_from_store(doc_dir, page_number)
 
 
 def _extract_document_date(page_payload: dict, doc_dir: Path) -> str | None:
@@ -627,7 +391,7 @@ def _extract_document_date(page_payload: dict, doc_dir: Path) -> str | None:
 
     # Fall back to a YYYY-MM-DD token in the document stem when metadata is absent.
     if not doc_date:
-        stem = _get_document_stem(doc_dir)
+        stem = get_document_stem(doc_dir)
         match = re.search(r"(\d{4}-\d{2}-\d{2})", stem)
         if match:
             doc_date = match.group(1)
@@ -643,22 +407,21 @@ def load_document_review_rows(
 
     rows: list[dict] = []
     page_json_paths = sorted(doc_dir.glob("*.json"))
-    source_file = f"{_get_document_stem(doc_dir)}.csv"
+    source_file = f"{get_document_stem(doc_dir)}.csv"
     doc_date: str | None = None
 
     # Read each page JSON once and flatten its lab_results into row records.
     for page_json_path in page_json_paths:
-        page_number = _parse_page_number(page_json_path)
+        page_number = parse_page_number(page_json_path)
 
         # Skip malformed filenames because they cannot round-trip to review actions.
         if page_number is None:
             continue
 
-        try:
-            page_payload = json.loads(page_json_path.read_text(encoding="utf-8"))
-        except Exception as exc:
-            # Corrupt JSON files should be logged and skipped instead of breaking the whole review UI.
-            logger.warning(f"Failed to read processed page JSON {page_json_path}: {exc}")
+        page_payload = read_page_payload(page_json_path)
+
+        # Guard: Invalid JSON files should not break the whole review UI.
+        if page_payload is None:
             continue
 
         # Capture the first usable document date for all rows in this document.
@@ -678,7 +441,8 @@ def load_document_review_rows(
             if not isinstance(result, dict):
                 continue
 
-            status = _normalize_review_status(result.get("review_status"))
+            status_text = str(result.get("review_status") or "").strip().lower()
+            status = status_text if status_text in {"accepted", "rejected"} else None
             review_needed = bool(result.get("review_needed")) or page_failed
             review_reason = str(result.get("review_reason") or "").strip()
 
@@ -1044,30 +808,75 @@ def _filter_exportable_rows(review_df: pd.DataFrame) -> pd.DataFrame:
     return review_df[~unresolved_mask].reset_index(drop=True)
 
 
+def prepare_rows(
+    rows_df: pd.DataFrame,
+    context: LabSpecsConfig,
+    *,
+    mode: str,
+    include_statuses: set[str] | None = None,
+    apply_standardization: bool = True,
+) -> tuple[pd.DataFrame, dict[str, int | dict[str, int]]]:
+    """Prepare extracted rows for either review rendering or final export."""
+
+    lab_specs = context
+
+    # Guard: Empty inputs still return stable validation stats.
+    if rows_df.empty:
+        return rows_df, {"total_rows": 0, "rows_flagged": 0, "flags_by_reason": {}}
+
+    prepared_df = rows_df.copy()
+
+    # Filter by persisted review decision when the caller wants only a subset.
+    if include_statuses is not None and "review_status" in prepared_df.columns:
+        allowed_statuses = {str(status).strip().lower() for status in include_statuses}
+        status_series = prepared_df["review_status"].fillna("").astype(str).str.strip().str.lower()
+        prepared_df = prepared_df[status_series.isin(allowed_statuses)].reset_index(drop=True)
+
+    # Guard: Filtering can legitimately remove every row.
+    if prepared_df.empty:
+        return prepared_df, {"total_rows": 0, "rows_flagged": 0, "flags_by_reason": {}}
+
+    # Apply cache-backed standardization once so both modes share one mapping path.
+    if apply_standardization:
+        prepared_df = apply_cached_standardization(prepared_df, lab_specs)
+
+    # Normalize raw values and reference bounds before any mode-specific handling.
+    prepared_df = apply_normalizations(prepared_df, lab_specs)
+    prepared_df = _flag_review_ambiguities(prepared_df, lab_specs)
+
+    # Review mode keeps every row visible but still surfaces duplicates and validation flags.
+    if mode == "review":
+        prepared_df = flag_duplicate_entries(prepared_df)
+        prepared_df = _add_export_column_aliases(prepared_df)
+        validator = ValueValidator(lab_specs)
+        prepared_df = validator.validate(prepared_df)
+        return prepared_df, validator.validation_stats
+
+    # Guard: Export mode only publishes rows with resolved mappings and publishable units.
+    if mode == "export":
+        prepared_df = _filter_exportable_rows(prepared_df)
+        if prepared_df.empty:
+            return prepared_df, {"total_rows": 0, "rows_flagged": 0, "flags_by_reason": {}}
+
+        prepared_df = flag_duplicate_entries(prepared_df)
+        if lab_specs.exists:
+            prepared_df = deduplicate_results(prepared_df, lab_specs)
+        prepared_df = _add_export_column_aliases(prepared_df)
+        validator = ValueValidator(lab_specs)
+        prepared_df = validator.validate(prepared_df)
+        return prepared_df, validator.validation_stats
+
+    raise ValueError(f"Unsupported row-preparation mode: {mode}")
+
+
 def _prepare_rows_for_review(
     review_df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
 ) -> pd.DataFrame:
     """Normalize extracted rows into the review dataframe shape."""
 
-    # Apply cached standardization so the reviewer sees the mapped interpretation.
-    review_df = apply_cached_standardization(review_df, lab_specs)
-
-    # Apply normalization logic without deduplication so every extracted row remains reviewable.
-    review_df = apply_normalizations(review_df, lab_specs)
-
-    # Surface unresolved mappings and ambiguous interpretations before any validation flags are added.
-    review_df = _flag_review_ambiguities(review_df, lab_specs)
-
-    # Add duplicate-review flags before export-name aliases are added.
-    review_df = flag_duplicate_entries(review_df)
-
-    # Add the public export-name aliases used throughout the viewer and rebuild path.
-    review_df = _add_export_column_aliases(review_df)
-
-    # Run value validation so the review tool surfaces the same warnings as final export.
-    validator = ValueValidator(lab_specs)
-    return validator.validate(review_df)
+    prepared_df, _ = prepare_rows(review_df, lab_specs, mode="review")
+    return prepared_df
 
 
 def _prepare_rows_for_export(
@@ -1077,26 +886,12 @@ def _prepare_rows_for_export(
 ) -> tuple[pd.DataFrame, dict[str, int | dict[str, int]]]:
     """Normalize, deduplicate, and validate extracted rows for final export."""
 
-    if apply_standardization:
-        rows_df = apply_cached_standardization(rows_df, lab_specs)
-
-    rows_df = apply_normalizations(rows_df, lab_specs)
-    rows_df = _flag_review_ambiguities(rows_df, lab_specs)
-    rows_df = _filter_exportable_rows(rows_df)
-
-    # Guard: Rows that still lack publishable mappings cannot contribute to the final export.
-    if rows_df.empty:
-        return rows_df, {"total_rows": 0, "rows_flagged": 0, "flags_by_reason": {}}
-
-    rows_df = flag_duplicate_entries(rows_df)
-
-    if lab_specs.exists:
-        rows_df = deduplicate_results(rows_df, lab_specs)
-
-    rows_df = _add_export_column_aliases(rows_df)
-    validator = ValueValidator(lab_specs)
-    rows_df = validator.validate(rows_df)
-    return rows_df, validator.validation_stats
+    return prepare_rows(
+        rows_df,
+        lab_specs,
+        mode="export",
+        apply_standardization=apply_standardization,
+    )
 
 
 def _is_hashed_document_dir(doc_dir: Path) -> bool:
