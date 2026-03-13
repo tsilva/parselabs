@@ -22,6 +22,45 @@ def test_standardize_lab_units_normalizes_missing_unit_tokens(monkeypatch):
     assert result[("nan", "Urine Type II - Specific Gravity")] == "unitless"
 
 
+def test_standardize_lab_names_prefers_section_aware_keys(monkeypatch):
+    monkeypatch.setattr(
+        standardization,
+        "load_cache",
+        lambda name: {
+            "glicose": "Blood - Glucose (Fasting)",
+            "glicose|elementos anormais": "Urine Type II - Glucose",
+        },
+    )
+
+    result = standardization.standardize_lab_names(
+        [
+            ("Glicose", "Elementos anormais"),
+            ("Glicose", None),
+        ]
+    )
+
+    assert result[("Glicose", "Elementos anormais")] == "Urine Type II - Glucose"
+    assert result[("Glicose", None)] == "Blood - Glucose (Fasting)"
+
+
+def test_standardize_lab_names_does_not_fallback_to_legacy_key_when_section_is_present(monkeypatch):
+    monkeypatch.setattr(
+        standardization,
+        "load_cache",
+        lambda name: {
+            "leucocitos": "Blood - Leukocytes",
+        },
+    )
+
+    result = standardization.standardize_lab_names(
+        [
+            ("LEUCOCITOS", "Sedimento urinário"),
+        ]
+    )
+
+    assert result[("LEUCOCITOS", "Sedimento urinário")] == "$UNKNOWN$"
+
+
 def test_load_cache_ignores_unknown_entries_for_standardization(tmp_path, monkeypatch):
     monkeypatch.setattr(standardization, "CACHE_DIR", tmp_path)
     (tmp_path / "unit_standardization.json").write_text(

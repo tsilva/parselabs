@@ -84,6 +84,7 @@ Based on the current code, not prior documentation:
 
 12. Extraction payload persistence.
 - After extraction, the runtime adds `source_file` programmatically because the model cannot know it.
+- Each extracted row can now also carry `raw_section_name`, copied directly from the governing section/header visible on the page.
 - If extraction failed and returned no lab rows, `_ensure_extraction_failure_placeholder(...)` inserts a synthetic placeholder row.
 - Every useful outcome is saved as page JSON: extracted rows, explicit no-lab pages, and explicit extraction failures.
 - Completely empty non-final outcomes are not cached, so they will be retried later.
@@ -115,6 +116,8 @@ Based on the current code, not prior documentation:
 
 17. Cached standardization.
 - `apply_cached_standardization(...)` standardizes raw lab names using `standardize_lab_names(...)`.
+- Name standardization is now section-aware: it prefers a cache key built from `(raw_lab_name, raw_section_name)` when a section/header was extracted for the row.
+- Legacy bare-name cache keys remain as a fallback only for rows that have no extracted section name.
 - It standardizes units using `standardize_lab_units(...)` only after the lab name is known.
 - Unknown name mappings become `$UNKNOWN$`.
 - Blank raw units are only inferred from the lab spec primary unit for a narrow safe set: `boolean`, `pH`, and `unitless`.
@@ -169,7 +172,7 @@ Based on the current code, not prior documentation:
 25. End-of-run standardization auto-refresh.
 - After the first export pass, the pipeline scans merged review rows for uncached standardization names and unit pairs.
 - By default, it runs one in-process cache refresh pass using the same OpenRouter credentials and extraction model as the active profile.
-- The shared refresh helper updates raw-name mappings first, then rescans unit pairs using the newly resolved standardized names before calling the unit standardizer.
+- The shared refresh helper updates raw-name mappings first, using the extracted `raw_section_name` as part of the name-cache key when available, then rescans unit pairs using the newly resolved standardized names before calling the unit standardizer.
 - This means a row that was `$UNKNOWN$` on the first pass can still contribute a unit mapping in the same automatic refresh cycle.
 - If the refresh adds any cache entries, the pipeline rebuilds per-document CSVs and merged outputs from persisted page JSON only.
 - It does not re-extract PDFs and does not repeat extraction API calls.

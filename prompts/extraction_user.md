@@ -2,14 +2,21 @@ Please extract ALL lab test results from this medical lab report image.
 
 CRITICAL: For EACH lab test you find, you MUST extract:
 1. raw_lab_name - The test name EXACTLY as shown (required)
-2. raw_value - The result value EXACTLY as shown (ALWAYS PUT THE RESULT HERE - whether numeric or text)
-3. raw_lab_unit - The unit EXACTLY as shown (extract what you see, can be null if no unit)
-4. raw_reference_range - The reference range text (if visible)
-5. raw_reference_min and raw_reference_max - Parse the numeric bounds from the reference range
-6. bbox_left, bbox_top, bbox_right, bbox_bottom - The result bounding box in normalized 0-1000 page coordinates
+2. raw_section_name - The nearest visible section/header governing that row (copy EXACTLY as shown, or null if none is visible)
+3. raw_value - The result value EXACTLY as shown (ALWAYS PUT THE RESULT HERE - whether numeric or text)
+4. raw_lab_unit - The unit EXACTLY as shown (extract what you see, can be null if no unit)
+5. raw_reference_range - The reference range text (if visible)
+6. raw_reference_min and raw_reference_max - Parse the numeric bounds from the reference range
+7. bbox_left, bbox_top, bbox_right, bbox_bottom - The result bounding box in normalized 0-1000 page coordinates
 
 Extract test names, values, units, and reference ranges EXACTLY as they appear.
 Pay special attention to preserving the exact formatting and symbols.
+
+IMPORTANT FOR SECTION NAMES:
+- Use the most specific visible section/header for the row
+- If the page has nested headers, choose the innermost visible one that governs the row
+- If no governing section/header is visible, set raw_section_name to null
+- Prefer keeping the section/header in raw_section_name instead of repeating it inside raw_lab_name
 
 IMPORTANT FOR BOUNDING BOXES:
 - Use the full page image as the coordinate space

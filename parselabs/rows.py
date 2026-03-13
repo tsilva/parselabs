@@ -62,6 +62,7 @@ DOCUMENT_REVIEW_COLUMNS = [
     "page_number",
     "result_index",
     "raw_lab_name",
+    "raw_section_name",
     "raw_value",
     "raw_lab_unit",
     "raw_reference_range",
@@ -396,6 +397,7 @@ def _flatten_page_payloads(
                     "page_number": page_number,
                     "result_index": result_index,
                     "raw_lab_name": result.get("raw_lab_name"),
+                    "raw_section_name": result.get("raw_section_name"),
                     "raw_value": result.get("raw_value"),
                     "raw_lab_unit": result.get("raw_lab_unit"),
                     "raw_reference_range": result.get("raw_reference_range"),
@@ -618,6 +620,7 @@ def load_document_review_rows(
                     "page_number": page_number,
                     "result_index": result_index,
                     "raw_lab_name": result.get("raw_lab_name"),
+                    "raw_section_name": result.get("raw_section_name"),
                     "raw_value": result.get("raw_value"),
                     "raw_lab_unit": result.get("raw_lab_unit"),
                     "raw_reference_range": result.get("raw_reference_range"),
@@ -654,13 +657,18 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
 
     # Guard: Skip standardization entirely when lab specs are unavailable.
     if not lab_specs.exists:
-        ensure_columns(review_df, ["lab_name_standardized", "lab_unit_standardized"], default=None)
+        ensure_columns(review_df, ["raw_section_name", "lab_name_standardized", "lab_unit_standardized"], default=None)
         return review_df
+
+    # Ensure the optional section-context column exists before building contextual cache keys.
+    ensure_columns(review_df, ["raw_section_name"], default=None)
 
     # Standardize lab names in one pass so repeated raw labels share the same cached mapping.
     raw_names = review_df["raw_lab_name"].fillna("").astype(str).tolist()
-    name_map = standardize_lab_names(raw_names)
-    review_df["lab_name_standardized"] = [name_map.get(name, UNKNOWN_VALUE) for name in raw_names]
+    raw_section_names = [str(value).strip() if pd.notna(value) and str(value).strip() else None for value in review_df["raw_section_name"].tolist()]
+    name_contexts = list(zip(raw_names, raw_section_names, strict=False))
+    name_map = standardize_lab_names(name_contexts)
+    review_df["lab_name_standardized"] = [name_map.get(context, UNKNOWN_VALUE) for context in name_contexts]
 
     # Standardize units only for rows whose lab names mapped successfully.
     unit_contexts: list[tuple[str, str]] = []

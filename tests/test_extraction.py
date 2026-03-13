@@ -26,7 +26,7 @@ def test_fix_lab_results_format_recovers_stringified_json_items():
 def test_fix_lab_results_format_recovers_label_packed_string_items():
     payload = {
         "lab_results": [
-            "raw_lab_name: Hemoglobina, raw_value: 14.2, raw_lab_unit: g/dL, raw_reference_range: 12.0 - 16.0, raw_reference_min: 12.0, raw_reference_max: 16.0"
+            "raw_lab_name: Hemoglobina, raw_section_name: Hemograma, raw_value: 14.2, raw_lab_unit: g/dL, raw_reference_range: 12.0 - 16.0, raw_reference_min: 12.0, raw_reference_max: 16.0"
         ]
     }
 
@@ -35,6 +35,7 @@ def test_fix_lab_results_format_recovers_label_packed_string_items():
     assert fixed_payload["lab_results"] == [
         {
             "raw_lab_name": "Hemoglobina",
+            "raw_section_name": "Hemograma",
             "raw_value": "14.2",
             "raw_lab_unit": "g/dL",
             "raw_reference_range": "12.0 - 16.0",
@@ -98,6 +99,7 @@ def test_normalize_empty_optionals_clears_empty_strings_without_pydantic_depreca
         lab_results=[
             LabResult(
                 raw_lab_name="Glucose",
+                raw_section_name="",
                 raw_value="",
                 raw_lab_unit="",
                 raw_reference_range="",
@@ -112,9 +114,28 @@ def test_normalize_empty_optionals_clears_empty_strings_without_pydantic_depreca
         report.normalize_empty_optionals()
 
     assert report.lab_results[0].raw_value is None
+    assert report.lab_results[0].raw_section_name is None
     assert report.lab_results[0].raw_lab_unit is None
     assert report.lab_results[0].raw_reference_range is None
     assert report.lab_results[0].raw_comments is None
+
+
+def test_raw_section_name_survives_model_round_trip():
+    report = HealthLabReport(
+        collection_date="2024-01-01",
+        lab_results=[
+            LabResult(
+                raw_lab_name="Glicose",
+                raw_section_name="Elementos anormais",
+                raw_value="NAO CONTEM",
+                raw_lab_unit=None,
+            )
+        ],
+    )
+
+    payload = report.model_dump(mode="json")
+
+    assert payload["lab_results"][0]["raw_section_name"] == "Elementos anormais"
 
 
 def test_llm_tool_schema_field_shape_remains_stable():
@@ -132,6 +153,7 @@ def test_llm_tool_schema_field_shape_remains_stable():
     ]
     assert list(lab_result_schema) == [
         "raw_lab_name",
+        "raw_section_name",
         "raw_value",
         "raw_lab_unit",
         "raw_reference_range",

@@ -21,6 +21,11 @@ def _make_lab_specs(tmp_path):
                     "lab_type": "urine",
                     "loinc_code": "5803-2",
                 },
+                "Urine Type II - Glucose": {
+                    "primary_unit": "boolean",
+                    "lab_type": "urine",
+                    "loinc_code": "5792-7",
+                },
             }
         ),
         encoding="utf-8",
@@ -85,7 +90,7 @@ def test_refresh_standardization_caches_updates_name_and_dependent_unit_in_one_p
     monkeypatch.setattr(
         refresh,
         "_standardize_names_with_llm",
-        lambda uncached_names, standardized_names, client, model_id: {"pH": "Urine Type II - pH"},
+        lambda uncached_names, standardized_names, client, model_id: {("pH", None): "Urine Type II - pH"},
     )
 
     def fake_standardize_units(uncached_pairs, standardized_units, client, model_id, lab_specs):
@@ -101,7 +106,7 @@ def test_refresh_standardization_caches_updates_name_and_dependent_unit_in_one_p
         client=object(),
     )
 
-    assert result.uncached_names == ("pH",)
+    assert result.uncached_names == (("pH", None),)
     assert result.uncached_unit_pairs == (("", "Urine Type II - pH"),)
     assert result.name_updates == 1
     assert result.unit_updates == 1
@@ -159,7 +164,7 @@ def test_refresh_standardization_caches_reports_partial_unresolved_results(tmp_p
     monkeypatch.setattr(
         refresh,
         "_standardize_names_with_llm",
-        lambda uncached_names, standardized_names, client, model_id: {"pH": "Urine Type II - pH"},
+        lambda uncached_names, standardized_names, client, model_id: {("pH", None): "Urine Type II - pH"},
     )
     monkeypatch.setattr(refresh, "_standardize_units_with_llm", lambda *args, **kwargs: {})
 
@@ -174,3 +179,47 @@ def test_refresh_standardization_caches_reports_partial_unresolved_results(tmp_p
     assert result.unit_updates == 0
     assert result.unresolved_names == ()
     assert result.unresolved_unit_pairs == (("", "Urine Type II - pH"),)
+
+
+def test_refresh_standardization_caches_persists_contextual_name_keys(tmp_path, monkeypatch):
+    lab_specs = _make_lab_specs(tmp_path)
+    cache_store = _install_cache_store(
+        monkeypatch,
+        name_cache={"glicose": "Blood - Glucose"},
+    )
+    dataframe = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Glicose",
+                "raw_section_name": "Elementos anormais",
+                "raw_unit": "",
+                "lab_name": UNKNOWN_VALUE,
+            }
+        ]
+    )
+
+    monkeypatch.setattr(
+        refresh,
+        "_standardize_names_with_llm",
+        lambda uncached_names, standardized_names, client, model_id: {
+            ("Glicose", "Elementos anormais"): "Urine Type II - Glucose"
+        },
+    )
+    monkeypatch.setattr(
+        refresh,
+        "_standardize_units_with_llm",
+        lambda *args, **kwargs: {"null|urine type ii - glucose": "boolean"},
+    )
+
+    result = refresh.refresh_standardization_caches_from_dataframe(
+        dataframe,
+        lab_specs,
+        model_id="test-model",
+        client=object(),
+    )
+
+    assert result.uncached_names == (("Glicose", "Elementos anormais"),)
+    assert result.name_updates == 1
+    assert result.unresolved_names == ()
+    assert cache_store["name_standardization"]["glicose"] == "Blood - Glucose"
+    assert cache_store["name_standardization"]["glicose|elementos anormais"] == "Urine Type II - Glucose"
