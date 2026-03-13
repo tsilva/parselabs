@@ -29,7 +29,7 @@ Per-page JSON is the only canonical persisted intermediate state. Per-document C
 
 ## Stage 1: PDF Discovery
 
-**Module:** `main.py` — `_discover_pdf_files()`, `run_for_profile()`
+**Module:** `parselabs/pipeline.py` — `_discover_pdf_files()`, `run_for_profile()`
 
 Before processing starts, the runner enumerates the input directory and matches only top-level files against `input_file_regex`.
 
@@ -43,7 +43,7 @@ This avoids the misleading "0 PDFs found" result that `Path.glob()` can produce 
 
 ## Stage 2: Hash-Only Deduplication
 
-**Modules:** `main.py`, `parselabs/document_store.py`
+**Modules:** `parselabs/pipeline.py`, `parselabs/document_store.py`
 
 Explicit runs now hash every discovered PDF once before any extraction workers start:
 
@@ -56,7 +56,7 @@ There is no persisted manifest cache. Page JSON remains the only canonical inter
 
 ## Stage 3: PDF Processing
 
-**Module:** `main.py` — `_setup_pdf_processing()`, `process_single_pdf()`
+**Module:** `parselabs/pipeline.py` — `_setup_pdf_processing()`, `process_single_pdf()`
 
 Each unique PDF that survives preflight is processed independently (parallelized via `multiprocessing.Pool`):
 
@@ -66,7 +66,7 @@ Each unique PDF that survives preflight is processed independently (parallelized
 
 ## Stage 4: Extraction To Canonical Page JSON
 
-**Modules:** `main.py` — `process_single_pdf()`, `parselabs/extraction.py`
+**Modules:** `parselabs/pipeline.py` — `process_single_pdf()`, `parselabs/extraction.py`
 
 The pipeline uses a **deterministic per-page routing strategy**:
 
@@ -134,9 +134,9 @@ Failed pages are also persisted in page JSON with `_extraction_failed` metadata 
 
 ## Stage 5: Review Dataset Build
 
-**Modules:** `parselabs/review_sync.py`, `parselabs/standardization.py`, `parselabs/normalization.py`
+**Modules:** `parselabs/row_pipeline.py`, `parselabs/review_sync.py`, `parselabs/standardization.py`, `parselabs/normalization.py`
 
-Per-document review CSVs are rebuilt from canonical page JSON, not treated as persisted truth.
+Per-document review CSVs are rebuilt from canonical page JSON, not treated as persisted runtime truth.
 
 ```
 For each extracted review row:
@@ -228,7 +228,7 @@ Review rows now surface ambiguity directly in `review_reason`, including:
 
 ## Stage 6: Human Review
 
-**Modules:** `parselabs/app.py`, `viewer.py`, `review_documents.py`
+**Modules:** `parselabs/ui_app.py`, `parselabs/results_view.py`, `parselabs/document_reviewer.py`
 
 `parselabs-viewer` and `parselabs-review-docs` now launch the same combined Gradio app with different default tabs. The app reads derived review rows from canonical page JSON and lets the reviewer:
 
@@ -240,7 +240,7 @@ Review rows now surface ambiguity directly in `review_reason`, including:
 
 ## Stage 7: Reviewed-Truth Transform
 
-**Modules:** `main.py`, `parselabs/review_sync.py`, `parselabs/validation.py`
+**Modules:** `parselabs/pipeline.py`, `parselabs/review_sync.py`, `parselabs/validation.py`
 
 The reviewed-truth helpers used by fixture sync and approved-document regression start from rows with `review_status == accepted` only. They then:
 
@@ -292,7 +292,7 @@ Inter-lab relationships use formulas from the `_relationships` key:
 
 ## Stage 8: Final Export
 
-**Module:** `main.py` — `run_pipeline_for_pdf_files()`, `build_final_output_dataframe()`, `export_excel()`
+**Module:** `parselabs/pipeline.py` — `run_pipeline_for_pdf_files()`, `build_final_output_dataframe()`, `export_excel()`
 
 ### Output Files
 
@@ -342,7 +342,7 @@ INPUT: PDF files (per profile)
         └── rebuild_document_csv() ── derived review CSV from page JSON
              │
              ▼
-[build_document_review_dataframe]
+[RowPipeline.build_review_rows]
          │
          ▼
 [human review in viewer]
@@ -384,7 +384,7 @@ Approved-document regressions rerun a private PDF corpus and compare the final C
 
 ### Shared Pipeline Entry Point
 
-`main.py` now exposes:
+`parselabs/pipeline.py` now exposes:
 
 - `run_pipeline_for_pdf_files(pdf_files, config, lab_specs)` — runs extraction, rebuilds the per-document review CSVs, computes the accepted-row reviewed-truth DataFrame for regression helpers, and returns that final DataFrame plus run metadata.
 - `build_final_output_dataframe(pdf_files, config, lab_specs)` — convenience wrapper that returns the accepted-row reviewed-truth DataFrame used by the regression tooling.

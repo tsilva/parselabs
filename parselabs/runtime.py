@@ -136,3 +136,31 @@ class RuntimeContext:
         destination = self.output_path / "lab_specs.json"
         destination.write_bytes(self.lab_specs.config_path.read_bytes())
         return destination
+
+    @classmethod
+    def list_output_roots(cls) -> list[str]:
+        """Return profile-backed filesystem roots that UI servers may expose."""
+
+        output_roots: set[str] = set()
+
+        # Read every configured profile once so the combined UI can serve assets safely.
+        for profile_name in ProfileConfig.list_profiles():
+            profile_path = ProfileConfig.find_path(profile_name)
+
+            # Skip profiles that disappeared between discovery and resolution.
+            if not profile_path:
+                continue
+
+            profile = ProfileConfig.from_file(profile_path)
+
+            # Skip profiles without a processed-output root.
+            if not profile.output_path:
+                continue
+
+            output_roots.add(str(profile.output_path))
+
+            # Gradio also validates ancestor roots for served files.
+            if profile.output_path.parent != profile.output_path:
+                output_roots.add(str(profile.output_path.parent))
+
+        return sorted(output_roots)

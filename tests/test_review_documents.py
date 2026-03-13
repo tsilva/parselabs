@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 from PIL import Image
 
-import review_documents
+from parselabs import document_reviewer as review_documents
 from parselabs.review_sync import ProcessedDocument
 
 
@@ -207,3 +207,23 @@ def test_build_queue_display_shows_reviewed_status_as_icons():
     display_df = review_documents._build_queue_display(queue_state, current_index=1)
 
     assert display_df["St"].tolist() == ["", "✅", "❌"]
+
+
+def test_get_review_frame_uses_row_pipeline_even_without_csv(monkeypatch, tmp_path):
+    doc_dir = tmp_path / "glucose_deadbeef"
+    doc_dir.mkdir(parents=True)
+
+    document = ProcessedDocument(
+        doc_dir=doc_dir,
+        stem="glucose",
+        pdf_path=doc_dir / "glucose.pdf",
+        csv_path=doc_dir / "glucose.csv",
+    )
+    expected_df = pd.DataFrame([{"page_number": 1, "result_index": 0, "review_status": ""}])
+
+    monkeypatch.setattr(review_documents, "get_lab_specs", lambda: object())
+    monkeypatch.setattr(review_documents.RowPipeline, "build_review_rows", lambda doc_dir, lab_specs: expected_df)
+
+    review_df = review_documents._get_review_frame(document)
+
+    assert review_df.equals(expected_df.fillna(""))

@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-import main
+from parselabs import pipeline as main
 from parselabs.config import ExtractionConfig, LabSpecsConfig, ProfileConfig
 from parselabs.review_sync import (
     ReviewStateError,

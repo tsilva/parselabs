@@ -29,8 +29,7 @@ def viewer() -> None:
     """Run the review viewer CLI."""
 
     try:
-        from parselabs.app import launch_app
-        from parselabs.runtime import RuntimeContext
+        from parselabs.ui_app import launch_app
     except ImportError as exc:
         _handle_ui_import_error(exc)
 
@@ -42,8 +41,7 @@ def review_documents() -> None:
     """Run the processed document reviewer CLI."""
 
     try:
-        from parselabs.app import launch_app
-        from parselabs.runtime import RuntimeContext
+        from parselabs.ui_app import launch_app
     except ImportError as exc:
         _handle_ui_import_error(exc)
 
@@ -54,7 +52,7 @@ def review_documents() -> None:
 def admin() -> None:
     """Run the unified admin CLI."""
 
-    from parselabs.admin import main as _main
+    from parselabs.admin_commands import main as _main
 
     raise SystemExit(_main())
 

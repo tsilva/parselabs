@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-import main
+from parselabs import pipeline as main
 from parselabs.config import ExtractionConfig
 
 

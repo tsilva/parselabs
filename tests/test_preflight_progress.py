@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import main
+from parselabs import pipeline as main
 
 
 def test_prepare_pdf_run_shows_hash_progress_for_multiple_pdfs(tmp_path, monkeypatch):
