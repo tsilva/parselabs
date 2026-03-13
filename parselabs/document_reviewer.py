@@ -2,25 +2,20 @@
 
 from __future__ import annotations
 
-import argparse
 import html
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import gradio as gr
 import pandas as pd
 from PIL import Image
 
-from parselabs.config import LabSpecsConfig, ProfileConfig
+from parselabs.config import LabSpecsConfig
+from parselabs.documents import apply_review_action
 from parselabs.paths import get_static_dir
-from parselabs.review_service import ReviewService
-from parselabs.review_sync import ProcessedDocument, get_document_review_summary, get_page_image_path, iter_processed_documents
-from parselabs.row_pipeline import RowPipeline
-
-if TYPE_CHECKING:
-    from parselabs.runtime import RuntimeContext
+from parselabs.profiles import RuntimeContext
+from parselabs.rows import ProcessedDocument, build_review_rows, get_document_review_summary, get_page_image_path, iter_processed_documents
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +25,6 @@ _page_image_size_cache: dict[str, tuple[int, int]] = {}
 
 KEYBOARD_SHORTCUTS_JS = (_STATIC_DIR / "review_documents.js").read_text()
 CUSTOM_CSS = (_STATIC_DIR / "review_documents.css").read_text()
-
-_output_path: Path | None = None
-_lab_specs: LabSpecsConfig | None = None
 
 QUEUE_STATE_COLUMNS = [
     "actual_index",
@@ -93,73 +85,6 @@ class ReviewerView:
         )
 
 
-def set_output_path(path: Path) -> None:
-    """Persist the active processed-output directory for UI callbacks."""
-
-    global _output_path
-    _output_path = path
-
-
-def get_output_path() -> Path:
-    """Return the active processed-output directory."""
-
-    # Guard: Default to a local output directory when the CLI did not set a profile.
-    if _output_path is None:
-        return Path("./output")
-
-    return _output_path
-
-
-def get_lab_specs() -> LabSpecsConfig:
-    """Return the shared lab specs config used by review helpers."""
-
-    global _lab_specs
-
-    # Initialize the config lazily so imports stay lightweight.
-    if _lab_specs is None:
-        _lab_specs = LabSpecsConfig()
-
-    return _lab_specs
-
-
-def apply_runtime_context(context: "RuntimeContext") -> None:
-    """Apply a shared runtime context to the document reviewer module state."""
-
-    global _lab_specs
-
-    if context.output_path is not None:
-        set_output_path(context.output_path)
-
-    _lab_specs = context.lab_specs
-
-
-def load_profile(profile_name: str) -> ProfileConfig | None:
-    """Load a configured profile and apply its output path."""
-
-    profile_path = ProfileConfig.find_path(profile_name)
-
-    # Guard: Unknown profiles cannot be used to resolve processed outputs.
-    if not profile_path:
-        return None
-
-    profile = ProfileConfig.from_file(profile_path)
-
-    # Guard: This reviewer needs an output path with processed documents.
-    if profile.output_path:
-        set_output_path(profile.output_path)
-
-    return profile
-
-
-def parse_args() -> argparse.Namespace:
-    """Parse document-reviewer CLI arguments."""
-
-    parser = argparse.ArgumentParser(description="Review processed lab documents line by line")
-    parser.add_argument("--profile", help="Profile name used to locate the processed output directory")
-    parser.add_argument("--list-profiles", action="store_true", help="List available profiles and exit")
-    return parser.parse_args()
-
-
 def _empty_queue_state() -> pd.DataFrame:
     """Return an empty queue-state dataframe with stable columns."""
 
@@ -172,20 +97,20 @@ def _empty_queue_display() -> pd.DataFrame:
     return pd.DataFrame(columns=QUEUE_DISPLAY_COLUMNS)
 
 
-def _get_documents() -> list[ProcessedDocument]:
+def _get_documents(output_path: Path) -> list[ProcessedDocument]:
     """Return all processed documents for the active output path."""
 
-    return iter_processed_documents(get_output_path())
+    return iter_processed_documents(output_path)
 
 
-def _get_document_by_id(doc_id: str | None) -> ProcessedDocument | None:
+def _get_document_by_id(doc_id: str | None, output_path: Path) -> ProcessedDocument | None:
     """Resolve a processed document from its directory name."""
 
     # Guard: Empty selection means there is no active document.
     if not doc_id:
         return None
 
-    for document in _get_documents():
+    for document in _get_documents(output_path):
         # Match the directory name because it is unique within the processed output path.
         if document.doc_dir.name == doc_id:
             return document
@@ -193,48 +118,24 @@ def _get_document_by_id(doc_id: str | None) -> ProcessedDocument | None:
     return None
 
 
-def _build_allowed_paths() -> list[str]:
-    """Return filesystem roots Gradio may serve for the document reviewer."""
-
-    allowed_paths: set[str] = set()
-
-    # Read profile configs directly so the reviewer can switch across output roots safely.
-    for profile_name in ProfileConfig.list_profiles():
-        profile_path = ProfileConfig.find_path(profile_name)
-
-        # Skip profiles that disappeared between discovery and load.
-        if not profile_path:
-            continue
-
-        profile = ProfileConfig.from_file(profile_path)
-
-        # Skip profiles without an output path because they cannot serve processed files.
-        if not profile.output_path:
-            continue
-
-        allowed_paths.add(str(profile.output_path))
-
-        # Allow the parent directory too because Gradio checks ancestor roots.
-        if profile.output_path.parent != profile.output_path:
-            allowed_paths.add(str(profile.output_path.parent))
-
-    return sorted(allowed_paths)
-
-
-def _get_review_frame(document: ProcessedDocument | None) -> pd.DataFrame:
+def _get_review_frame(document: ProcessedDocument | None, lab_specs: LabSpecsConfig) -> pd.DataFrame:
     """Load the current review dataframe for a processed document."""
 
     # Guard: No selected document means no rows to render.
     if document is None:
         return pd.DataFrame()
 
-    return RowPipeline.build_review_rows(document.doc_dir, get_lab_specs()).fillna("")
+    return build_review_rows(document.doc_dir, lab_specs).fillna("")
 
 
-def _matches_document_filter(document: ProcessedDocument, filter_mode: str) -> bool:
+def _matches_document_filter(
+    document: ProcessedDocument,
+    filter_mode: str,
+    lab_specs: LabSpecsConfig,
+) -> bool:
     """Return whether a document should appear under the selected review filter."""
 
-    review_df = _get_review_frame(document)
+    review_df = _get_review_frame(document, lab_specs)
     summary = get_document_review_summary(document.doc_dir, review_df)
 
     # Show every document when no fixture-readiness filter is active.
@@ -733,12 +634,14 @@ def _render_document(
     document: ProcessedDocument | None,
     requested_index: int | None,
     show_reviewed: bool,
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
     *,
     prefer_first_visible: bool,
 ) -> ReviewerView:
     """Render all UI fragments for the active document and queue selection."""
 
-    review_df = _get_review_frame(document)
+    review_df = _get_review_frame(document, lab_specs)
     queue_state = _build_queue_state(review_df, show_reviewed)
     current_index = _resolve_current_index(queue_state, requested_index, prefer_first_visible)
     current_row = _get_current_row(review_df, current_index)
@@ -755,7 +658,11 @@ def _render_document(
     )
 
 
-def _build_dropdown_choices(documents: list[ProcessedDocument], filter_mode: str) -> list[tuple[str, str]]:
+def _build_dropdown_choices(
+    documents: list[ProcessedDocument],
+    filter_mode: str,
+    lab_specs: LabSpecsConfig,
+) -> list[tuple[str, str]]:
     """Build labeled dropdown choices from processed document summaries."""
 
     ranked_documents: list[tuple[int, int, str, str, str]] = []
@@ -763,10 +670,10 @@ def _build_dropdown_choices(documents: list[ProcessedDocument], filter_mode: str
     # Label each document with review progress so triage stays possible from the toolbar.
     for document in documents:
         # Skip documents excluded by the active fixture-readiness filter.
-        if not _matches_document_filter(document, filter_mode):
+        if not _matches_document_filter(document, filter_mode, lab_specs):
             continue
 
-        review_df = _get_review_frame(document)
+        review_df = _get_review_frame(document, lab_specs)
         summary = get_document_review_summary(document.doc_dir, review_df)
         label = f"{document.stem} (pending {summary.pending}, rejected {summary.rejected}, missing {summary.missing_row_markers}, reviewed {summary.reviewed}/{summary.total})"
         ranked_documents.append((1 if summary.fixture_ready else 0, -summary.pending, document.stem.lower(), label, document.doc_dir.name))
@@ -775,11 +682,18 @@ def _build_dropdown_choices(documents: list[ProcessedDocument], filter_mode: str
     return [(label, doc_id) for _, _, _, label, doc_id in ranked_documents]
 
 
-def _build_dropdown_state(current_doc_id: str | None, filter_mode: str, *, rebuild_all: bool) -> DropdownState:
+def _build_dropdown_state(
+    current_doc_id: str | None,
+    filter_mode: str,
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
+    *,
+    rebuild_all: bool,
+) -> DropdownState:
     """Resolve dropdown choices and the selected document for the current toolbar filter."""
 
-    documents = _get_documents()
-    choices = _build_dropdown_choices(documents, filter_mode)
+    documents = _get_documents(output_path)
+    choices = _build_dropdown_choices(documents, filter_mode, lab_specs)
     available_ids = {value for _, value in choices}
 
     # Preserve the current document when it still matches the active filter.
@@ -813,17 +727,19 @@ def _handle_document_list_refresh(
     current_index: int,
     filter_mode: str,
     show_reviewed: bool,
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
 ) -> tuple:
     """Refresh the visible document list and rerender the active document."""
 
-    dropdown_state = _build_dropdown_state(current_doc_id, filter_mode, rebuild_all=True)
-    selected_document = _get_document_by_id(dropdown_state.selected_id)
+    dropdown_state = _build_dropdown_state(current_doc_id, filter_mode, output_path, lab_specs, rebuild_all=True)
+    selected_document = _get_document_by_id(dropdown_state.selected_id, output_path)
 
     # Preserve the current row only when the selected document did not change.
     if dropdown_state.selected_id == current_doc_id:
-        view = _render_document(selected_document, current_index, show_reviewed, prefer_first_visible=False)
+        view = _render_document(selected_document, current_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False)
     else:
-        view = _render_document(selected_document, None, show_reviewed, prefer_first_visible=True)
+        view = _render_document(selected_document, None, show_reviewed, output_path, lab_specs, prefer_first_visible=True)
 
     return _build_toolbar_outputs(dropdown_state, view)
 
@@ -831,22 +747,26 @@ def _handle_document_list_refresh(
 def _handle_document_change(
     doc_id: str | None,
     show_reviewed: bool,
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
 ) -> tuple[int, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame, str]:
     """Render a newly selected document, starting from its first visible queue row."""
 
-    document = _get_document_by_id(doc_id)
-    return _render_document(document, None, show_reviewed, prefer_first_visible=True).as_outputs()
+    document = _get_document_by_id(doc_id, output_path)
+    return _render_document(document, None, show_reviewed, output_path, lab_specs, prefer_first_visible=True).as_outputs()
 
 
 def _handle_show_reviewed_change(
     doc_id: str | None,
     current_index: int,
     show_reviewed: bool,
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
 ) -> tuple[int, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame, str]:
     """Toggle whether accepted and rejected rows stay visible in the queue."""
 
-    document = _get_document_by_id(doc_id)
-    return _render_document(document, current_index, show_reviewed, prefer_first_visible=False).as_outputs()
+    document = _get_document_by_id(doc_id, output_path)
+    return _render_document(document, current_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False).as_outputs()
 
 
 def _handle_queue_select(
@@ -854,23 +774,25 @@ def _handle_queue_select(
     queue_state: pd.DataFrame,
     show_reviewed: bool,
     evt: gr.SelectData,
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
 ) -> tuple[int, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame, str]:
     """Select a row directly from the left queue pane."""
 
-    document = _get_document_by_id(doc_id)
+    document = _get_document_by_id(doc_id, output_path)
 
     # Guard: Ignore queue-selection events when there is no visible queue.
     if evt is None or queue_state.empty:
-        return _render_document(document, None, show_reviewed, prefer_first_visible=False).as_outputs()
+        return _render_document(document, None, show_reviewed, output_path, lab_specs, prefer_first_visible=False).as_outputs()
 
     selected_index = evt.index[0] if isinstance(evt.index, (tuple, list)) else evt.index
 
     # Guard: Ignore clicks that do not resolve to a visible queue row.
     if selected_index is None or selected_index < 0 or selected_index >= len(queue_state):
-        return _render_document(document, None, show_reviewed, prefer_first_visible=False).as_outputs()
+        return _render_document(document, None, show_reviewed, output_path, lab_specs, prefer_first_visible=False).as_outputs()
 
     actual_index = int(queue_state.iloc[int(selected_index)]["actual_index"])
-    return _render_document(document, actual_index, show_reviewed, prefer_first_visible=False).as_outputs()
+    return _render_document(document, actual_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False).as_outputs()
 
 
 def _move_row(
@@ -878,26 +800,28 @@ def _move_row(
     current_index: int,
     delta: int,
     show_reviewed: bool,
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
 ) -> tuple[int, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame, str]:
     """Move to the previous or next visible queue row."""
 
-    document = _get_document_by_id(doc_id)
-    review_df = _get_review_frame(document)
+    document = _get_document_by_id(doc_id, output_path)
+    review_df = _get_review_frame(document, lab_specs)
     queue_state = _build_queue_state(review_df, show_reviewed)
 
     # Guard: Empty queue state means there is nothing to navigate.
     if queue_state.empty:
-        return _render_document(document, None, show_reviewed, prefer_first_visible=False).as_outputs()
+        return _render_document(document, None, show_reviewed, output_path, lab_specs, prefer_first_visible=False).as_outputs()
 
     visible_indices = [int(value) for value in queue_state["actual_index"].tolist()]
 
     # Default to the first visible row when the current selection disappeared.
     if current_index not in set(visible_indices):
-        return _render_document(document, visible_indices[0], show_reviewed, prefer_first_visible=False).as_outputs()
+        return _render_document(document, visible_indices[0], show_reviewed, output_path, lab_specs, prefer_first_visible=False).as_outputs()
 
     current_position = visible_indices.index(int(current_index))
     next_position = max(0, min(current_position + delta, len(visible_indices) - 1))
-    return _render_document(document, visible_indices[next_position], show_reviewed, prefer_first_visible=False).as_outputs()
+    return _render_document(document, visible_indices[next_position], show_reviewed, output_path, lab_specs, prefer_first_visible=False).as_outputs()
 
 
 def _choose_next_pending_index(review_df: pd.DataFrame, current_index: int) -> int:
@@ -936,21 +860,23 @@ def _apply_review_action(
     filter_mode: str,
     show_reviewed: bool,
     status: str | None,
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
 ) -> tuple:
     """Persist an accept, reject, or undo action and rerender the reviewer."""
 
-    document = _get_document_by_id(doc_id)
-    review_df = _get_review_frame(document)
+    document = _get_document_by_id(doc_id, output_path)
+    review_df = _get_review_frame(document, lab_specs)
     current_row = _get_current_row(review_df, current_index)
 
     # Guard: Ignore actions when there is no active row to mutate.
     if document is None or current_row is None:
-        dropdown_state = _build_dropdown_state(doc_id, filter_mode, rebuild_all=False)
-        view = _render_document(_get_document_by_id(dropdown_state.selected_id), current_index, show_reviewed, prefer_first_visible=False)
+        dropdown_state = _build_dropdown_state(doc_id, filter_mode, output_path, lab_specs, rebuild_all=False)
+        view = _render_document(_get_document_by_id(dropdown_state.selected_id, output_path), current_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False)
         return _build_toolbar_outputs(dropdown_state, view)
 
     action = "clear" if status is None else ("accept" if status == "accepted" else "reject")
-    success, error = ReviewService.apply_action(
+    success, error = apply_review_action(
         document.doc_dir,
         int(current_row["page_number"]),
         int(current_row["result_index"]),
@@ -960,19 +886,19 @@ def _apply_review_action(
     # Guard: Surface persistence errors without advancing away from the current row.
     if not success:
         gr.Warning(error)
-        dropdown_state = _build_dropdown_state(doc_id, filter_mode, rebuild_all=False)
-        view = _render_document(_get_document_by_id(dropdown_state.selected_id), current_index, show_reviewed, prefer_first_visible=False)
+        dropdown_state = _build_dropdown_state(doc_id, filter_mode, output_path, lab_specs, rebuild_all=False)
+        view = _render_document(_get_document_by_id(dropdown_state.selected_id, output_path), current_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False)
         return _build_toolbar_outputs(dropdown_state, view)
 
-    dropdown_state = _build_dropdown_state(doc_id, filter_mode, rebuild_all=False)
-    selected_document = _get_document_by_id(dropdown_state.selected_id)
+    dropdown_state = _build_dropdown_state(doc_id, filter_mode, output_path, lab_specs, rebuild_all=False)
+    selected_document = _get_document_by_id(dropdown_state.selected_id, output_path)
 
     # Switching documents should restart from the new document's first visible row.
     if dropdown_state.selected_id != doc_id:
-        view = _render_document(selected_document, None, show_reviewed, prefer_first_visible=True)
+        view = _render_document(selected_document, None, show_reviewed, output_path, lab_specs, prefer_first_visible=True)
         return _build_toolbar_outputs(dropdown_state, view)
 
-    refreshed_df = _get_review_frame(document)
+    refreshed_df = _get_review_frame(document, lab_specs)
 
     # Undo keeps the current row selected so the reviewer can immediately decide again.
     if status is None:
@@ -982,7 +908,7 @@ def _apply_review_action(
     else:
         next_index = _choose_next_pending_index(refreshed_df, current_index)
 
-    view = _render_document(document, next_index, show_reviewed, prefer_first_visible=False)
+    view = _render_document(document, next_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False)
     return _build_toolbar_outputs(dropdown_state, view)
 
 
@@ -991,20 +917,22 @@ def _mark_missing_row(
     current_index: int,
     filter_mode: str,
     show_reviewed: bool,
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
 ) -> tuple:
     """Persist a missing-row marker and rerender the active document."""
 
-    document = _get_document_by_id(doc_id)
-    review_df = _get_review_frame(document)
+    document = _get_document_by_id(doc_id, output_path)
+    review_df = _get_review_frame(document, lab_specs)
     current_row = _get_current_row(review_df, current_index)
 
     # Guard: Ignore missing-row markers when there is no active row to anchor them to.
     if document is None or current_row is None:
-        dropdown_state = _build_dropdown_state(doc_id, filter_mode, rebuild_all=False)
-        view = _render_document(_get_document_by_id(dropdown_state.selected_id), current_index, show_reviewed, prefer_first_visible=False)
+        dropdown_state = _build_dropdown_state(doc_id, filter_mode, output_path, lab_specs, rebuild_all=False)
+        view = _render_document(_get_document_by_id(dropdown_state.selected_id, output_path), current_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False)
         return _build_toolbar_outputs(dropdown_state, view)
 
-    success, error = ReviewService.apply_action(
+    success, error = apply_review_action(
         document.doc_dir,
         int(current_row["page_number"]),
         int(current_row["result_index"]),
@@ -1014,34 +942,38 @@ def _mark_missing_row(
     # Guard: Surface persistence errors without moving the current row.
     if not success:
         gr.Warning(error)
-        dropdown_state = _build_dropdown_state(doc_id, filter_mode, rebuild_all=False)
-        view = _render_document(_get_document_by_id(dropdown_state.selected_id), current_index, show_reviewed, prefer_first_visible=False)
+        dropdown_state = _build_dropdown_state(doc_id, filter_mode, output_path, lab_specs, rebuild_all=False)
+        view = _render_document(_get_document_by_id(dropdown_state.selected_id, output_path), current_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False)
         return _build_toolbar_outputs(dropdown_state, view)
 
     gr.Info("Missing-row marker recorded. Resolve it by editing the page JSON and clearing review_missing_rows.")
 
-    dropdown_state = _build_dropdown_state(doc_id, filter_mode, rebuild_all=False)
-    selected_document = _get_document_by_id(dropdown_state.selected_id)
+    dropdown_state = _build_dropdown_state(doc_id, filter_mode, output_path, lab_specs, rebuild_all=False)
+    selected_document = _get_document_by_id(dropdown_state.selected_id, output_path)
 
     # Switching documents should restart from the new document's first visible row.
     if dropdown_state.selected_id != doc_id:
-        view = _render_document(selected_document, None, show_reviewed, prefer_first_visible=True)
+        view = _render_document(selected_document, None, show_reviewed, output_path, lab_specs, prefer_first_visible=True)
         return _build_toolbar_outputs(dropdown_state, view)
 
-    view = _render_document(document, current_index, show_reviewed, prefer_first_visible=False)
+    view = _render_document(document, current_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False)
     return _build_toolbar_outputs(dropdown_state, view)
 
 
-def build_app() -> gr.Blocks:
+def build_app(context: RuntimeContext) -> gr.Blocks:
     """Build the Gradio document-reviewer app."""
 
     initial_filter = "All"
     initial_show_reviewed = False
-    dropdown_state = _build_dropdown_state(None, initial_filter, rebuild_all=True)
+    output_path = context.output_path if context.output_path is not None else Path("./output")
+    lab_specs = context.lab_specs
+    dropdown_state = _build_dropdown_state(None, initial_filter, output_path, lab_specs, rebuild_all=True)
     initial_view = _render_document(
-        _get_document_by_id(dropdown_state.selected_id),
+        _get_document_by_id(dropdown_state.selected_id, output_path),
         None,
         initial_show_reviewed,
+        output_path,
+        lab_specs,
         prefer_first_visible=True,
     )
 
@@ -1131,105 +1063,132 @@ def build_app() -> gr.Blocks:
         ]
 
         document_dropdown.change(
-            fn=_handle_document_change,
+            fn=lambda doc_id, show_reviewed: _handle_document_change(
+                doc_id,
+                show_reviewed,
+                output_path,
+                lab_specs,
+            ),
             inputs=[document_dropdown, show_reviewed],
             outputs=view_outputs,
         )
 
         document_filter.change(
-            fn=_handle_document_list_refresh,
+            fn=lambda current_doc_id, current_index, filter_mode, show_reviewed: _handle_document_list_refresh(
+                current_doc_id,
+                current_index,
+                filter_mode,
+                show_reviewed,
+                output_path,
+                lab_specs,
+            ),
             inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
             outputs=toolbar_outputs,
         )
 
         refresh_btn.click(
-            fn=_handle_document_list_refresh,
+            fn=lambda current_doc_id, current_index, filter_mode, show_reviewed: _handle_document_list_refresh(
+                current_doc_id,
+                current_index,
+                filter_mode,
+                show_reviewed,
+                output_path,
+                lab_specs,
+            ),
             inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
             outputs=toolbar_outputs,
         )
 
         show_reviewed.change(
-            fn=_handle_show_reviewed_change,
+            fn=lambda doc_id, current_index, show_reviewed: _handle_show_reviewed_change(
+                doc_id,
+                current_index,
+                show_reviewed,
+                output_path,
+                lab_specs,
+            ),
             inputs=[document_dropdown, current_row_index, show_reviewed],
             outputs=view_outputs,
         )
 
         queue_table.select(
-            fn=_handle_queue_select,
+            fn=lambda doc_id, queue_state, show_reviewed, evt: _handle_queue_select(
+                doc_id,
+                queue_state,
+                show_reviewed,
+                evt,
+                output_path,
+                lab_specs,
+            ),
             inputs=[document_dropdown, queue_state, show_reviewed],
             outputs=view_outputs,
         )
 
         prev_btn.click(
-            fn=lambda doc_id, idx, visible: _move_row(doc_id, idx, -1, visible),
+            fn=lambda doc_id, idx, visible: _move_row(doc_id, idx, -1, visible, output_path, lab_specs),
             inputs=[document_dropdown, current_row_index, show_reviewed],
             outputs=view_outputs,
         )
 
         next_btn.click(
-            fn=lambda doc_id, idx, visible: _move_row(doc_id, idx, 1, visible),
+            fn=lambda doc_id, idx, visible: _move_row(doc_id, idx, 1, visible, output_path, lab_specs),
             inputs=[document_dropdown, current_row_index, show_reviewed],
             outputs=view_outputs,
         )
 
         accept_btn.click(
-            fn=lambda doc_id, idx, filter_mode, visible: _apply_review_action(doc_id, idx, filter_mode, visible, "accepted"),
+            fn=lambda doc_id, idx, filter_mode, visible: _apply_review_action(
+                doc_id,
+                idx,
+                filter_mode,
+                visible,
+                "accepted",
+                output_path,
+                lab_specs,
+            ),
             inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
             outputs=toolbar_outputs,
         )
 
         reject_btn.click(
-            fn=lambda doc_id, idx, filter_mode, visible: _apply_review_action(doc_id, idx, filter_mode, visible, "rejected"),
+            fn=lambda doc_id, idx, filter_mode, visible: _apply_review_action(
+                doc_id,
+                idx,
+                filter_mode,
+                visible,
+                "rejected",
+                output_path,
+                lab_specs,
+            ),
             inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
             outputs=toolbar_outputs,
         )
 
         missing_btn.click(
-            fn=_mark_missing_row,
+            fn=lambda doc_id, idx, filter_mode, visible: _mark_missing_row(
+                doc_id,
+                idx,
+                filter_mode,
+                visible,
+                output_path,
+                lab_specs,
+            ),
             inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
             outputs=toolbar_outputs,
         )
 
         undo_btn.click(
-            fn=lambda doc_id, idx, filter_mode, visible: _apply_review_action(doc_id, idx, filter_mode, visible, None),
+            fn=lambda doc_id, idx, filter_mode, visible: _apply_review_action(
+                doc_id,
+                idx,
+                filter_mode,
+                visible,
+                None,
+                output_path,
+                lab_specs,
+            ),
             inputs=[document_dropdown, current_row_index, document_filter, show_reviewed],
             outputs=toolbar_outputs,
         )
 
     return demo
-
-
-def main() -> None:
-    """Document-reviewer CLI entry point."""
-
-    from parselabs.ui_app import launch_app
-    from parselabs.runtime import RuntimeContext
-
-    args = parse_args()
-
-    # Print the available profiles and exit when requested.
-    if args.list_profiles:
-        for profile_name in ProfileConfig.list_profiles():
-            print(profile_name)
-        return
-
-    profile_name = args.profile
-    if not profile_name:
-        profiles = [name for name in ProfileConfig.list_profiles() if not name.startswith("_")]
-        if not profiles:
-            raise SystemExit("No profiles configured.")
-        profile_name = profiles[0]
-
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    context = RuntimeContext.from_profile(
-        profile_name,
-        need_input=False,
-        need_output=True,
-        need_api=False,
-        setup_logs=False,
-    )
-    launch_app(context, default_tab="review")
-
-
-if __name__ == "__main__":
-    main()

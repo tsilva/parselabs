@@ -1,5 +1,7 @@
 """CLI entry points for parselabs."""
 
+import argparse
+
 
 def _handle_ui_import_error(exc: ImportError) -> None:
     """Raise a concise remediation message for broken UI dependencies."""
@@ -29,11 +31,11 @@ def viewer() -> None:
     """Run the review viewer CLI."""
 
     try:
-        from parselabs.ui_app import launch_app
+        from parselabs.ui import launch_app
     except ImportError as exc:
         _handle_ui_import_error(exc)
 
-    context = _load_ui_context()
+    context = _load_ui_context(_parse_ui_args())
     launch_app(context, default_tab="results")
 
 
@@ -41,11 +43,11 @@ def review_documents() -> None:
     """Run the processed document reviewer CLI."""
 
     try:
-        from parselabs.ui_app import launch_app
+        from parselabs.ui import launch_app
     except ImportError as exc:
         _handle_ui_import_error(exc)
 
-    context = _load_ui_context()
+    context = _load_ui_context(_parse_ui_args())
     launch_app(context, default_tab="review")
 
 
@@ -57,19 +59,22 @@ def admin() -> None:
     raise SystemExit(_main())
 
 
-def _load_ui_context():
+def _parse_ui_args() -> argparse.Namespace:
+    """Parse the shared profile-selection arguments for UI commands."""
+
+    from parselabs.profiles import add_profile_arguments
+
+    parser = add_profile_arguments(
+        argparse.ArgumentParser(),
+        profile_help="Profile name (defaults to the first available profile)",
+    )
+    return parser.parse_args()
+
+
+def _load_ui_context(args: argparse.Namespace):
     """Resolve the profile for the combined UI commands."""
 
-    import argparse
-
-    from parselabs.config import ProfileConfig
-    from parselabs.paths import get_profiles_dir
-    from parselabs.runtime import RuntimeContext
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--profile", "-p", type=str)
-    parser.add_argument("--list-profiles", action="store_true")
-    args = parser.parse_args()
+    from parselabs.profiles import ProfileConfig, load_ui_context
 
     if args.list_profiles:
         profiles = ProfileConfig.list_profiles()
@@ -77,20 +82,7 @@ def _load_ui_context():
             for name in profiles:
                 print(name)
         else:
-            print(f"No profiles found. Create profile files in {get_profiles_dir()}.")
+            print(f"No profiles found. Create profile files in {ProfileConfig.get_profiles_dir()}.")
         raise SystemExit(0)
 
-    profile_name = args.profile
-    if not profile_name:
-        available = [name for name in ProfileConfig.list_profiles() if not name.startswith("_")]
-        if not available:
-            raise SystemExit(f"No profiles found. Create profile files in {get_profiles_dir()}.")
-        profile_name = available[0]
-
-    return RuntimeContext.from_profile(
-        profile_name,
-        need_input=False,
-        need_output=True,
-        need_api=False,
-        setup_logs=False,
-    )
+    return load_ui_context(args.profile)

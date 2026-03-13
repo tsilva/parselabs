@@ -16,7 +16,7 @@ from parselabs.regression import (
     empty_export_dataframe,
     get_required_regression_profile,
 )
-from parselabs.review_sync import build_document_expected_dataframe_from_reviewed_json, save_review_status
+from parselabs.rows import build_document_expected_dataframe_from_reviewed_json, save_review_status
 from parselabs.utils import setup_logging
 
 

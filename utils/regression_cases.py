@@ -26,7 +26,7 @@ from parselabs.regression import (  # noqa: E402
     discover_approved_cases,
     write_canonical_csv,
 )
-from parselabs.review_sync import (  # noqa: E402
+from parselabs.rows import (  # noqa: E402
     build_document_expected_dataframe,
     build_document_review_dataframe,
     build_review_corpus_report,

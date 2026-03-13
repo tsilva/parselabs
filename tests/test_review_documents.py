@@ -6,7 +6,7 @@ import pandas as pd
 from PIL import Image
 
 from parselabs import document_reviewer as review_documents
-from parselabs.review_sync import ProcessedDocument
+from parselabs.rows import ProcessedDocument
 
 
 def _make_review_df(statuses: list[str], pages: list[int], rows: list[int]) -> pd.DataFrame:
@@ -105,9 +105,9 @@ def test_build_dropdown_choices_prioritizes_incomplete_documents(monkeypatch):
     }
 
     # Stub review-frame loading so dropdown sorting can be tested without touching disk.
-    monkeypatch.setattr(review_documents, "_get_review_frame", lambda document: review_frames[document.doc_dir.name])
+    monkeypatch.setattr(review_documents, "_get_review_frame", lambda document, lab_specs: review_frames[document.doc_dir.name])
 
-    choices = review_documents._build_dropdown_choices([beta, gamma, alpha], filter_mode="All")
+    choices = review_documents._build_dropdown_choices([beta, gamma, alpha], filter_mode="All", lab_specs=object())
 
     assert [doc_id for _, doc_id in choices] == [
         alpha.doc_dir.name,
@@ -209,7 +209,7 @@ def test_build_queue_display_shows_reviewed_status_as_icons():
     assert display_df["St"].tolist() == ["", "✅", "❌"]
 
 
-def test_get_review_frame_uses_row_pipeline_even_without_csv(monkeypatch, tmp_path):
+def test_get_review_frame_uses_build_review_rows_even_without_csv(monkeypatch, tmp_path):
     doc_dir = tmp_path / "glucose_deadbeef"
     doc_dir.mkdir(parents=True)
 
@@ -221,9 +221,8 @@ def test_get_review_frame_uses_row_pipeline_even_without_csv(monkeypatch, tmp_pa
     )
     expected_df = pd.DataFrame([{"page_number": 1, "result_index": 0, "review_status": ""}])
 
-    monkeypatch.setattr(review_documents, "get_lab_specs", lambda: object())
-    monkeypatch.setattr(review_documents.RowPipeline, "build_review_rows", lambda doc_dir, lab_specs: expected_df)
+    monkeypatch.setattr(review_documents, "build_review_rows", lambda doc_dir, lab_specs: expected_df)
 
-    review_df = review_documents._get_review_frame(document)
+    review_df = review_documents._get_review_frame(document, object())
 
     assert review_df.equals(expected_df.fillna(""))
