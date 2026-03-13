@@ -37,6 +37,9 @@ class _FakeFigure:
     def update_yaxes(self, *args, **kwargs):
         return None
 
+    def to_json(self):
+        return "{}"
+
 
 graph_objects_module.Figure = _FakeFigure
 graph_objects_module.Scatter = lambda *args, **kwargs: None
@@ -198,5 +201,8 @@ def test_create_app_does_not_render_profile_selector(monkeypatch, tmp_path):
         demo = viewer.create_app(context)
 
     labels = [getattr(component, "label", None) for component in demo.blocks.values()]
+    values = [value for value in (getattr(component, "value", None) for component in demo.blocks.values()) if isinstance(value, str)]
 
     assert "Profile" not in labels
+    assert "# Lab Results Viewer" not in values
+    assert "Browse, analyze, and review extracted lab results." not in values

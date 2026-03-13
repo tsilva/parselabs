@@ -1044,13 +1044,6 @@ def create_app(context: RuntimeContext):
         filtered_df_state = gr.State(value=full_df)
         current_idx_state = gr.State(value=0)
 
-        # Header stays informational because the active profile is fixed at launch time.
-        with gr.Row():
-            with gr.Column():
-                gr.Markdown("# Lab Results Viewer")
-
-        gr.Markdown("Browse, analyze, and review extracted lab results.")
-
         # Unified filter row: Lab dropdown | Status pills | Latest toggle
         with gr.Row(elem_classes="filter-row"):
             with gr.Column(scale=1, min_width=200):
