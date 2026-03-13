@@ -13,9 +13,7 @@ Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate
 
 from __future__ import annotations
 
-import json  # noqa: E402
 import logging  # noqa: E402
-from datetime import datetime  # noqa: E402
 from pathlib import Path  # noqa: E402
 
 import gradio as gr  # noqa: E402
@@ -24,18 +22,18 @@ import plotly.graph_objects as go  # noqa: E402
 from plotly.subplots import make_subplots  # noqa: E402
 
 from parselabs.config import Demographics, LabSpecsConfig, ProfileConfig  # noqa: E402
+from parselabs.paths import get_static_dir  # noqa: E402
 from parselabs.review import (  # noqa: E402
     SOURCE_BBOX_LABEL,
     build_page_image_value_for_entry,
-    get_bbox_coordinates as get_bbox_coordinates_from_review,
-    get_image_size as get_image_size_from_review,
-    get_review_status as get_review_status_from_review,
+    get_bbox_coordinates,
     load_results_dataframe,
-    scale_bbox_to_pixels as scale_bbox_to_pixels_from_review,
 )
-from parselabs.store import apply_review_action, resolve_document_dir, resolve_page_path  # noqa: E402
-from parselabs.paths import get_static_dir  # noqa: E402
+from parselabs.review import (
+    get_review_status as get_review_status_from_review,
+)
 from parselabs.runtime import RuntimeContext, list_non_template_profiles  # noqa: E402
+from parselabs.store import apply_review_action, resolve_document_dir  # noqa: E402
 
 # Initialize module logger
 logger = logging.getLogger(__name__)
@@ -101,9 +99,6 @@ COLUMN_LABELS = {
 # =============================================================================
 
 _doc_dir_cache: dict[tuple[str, str], Path | None] = {}
-_page_image_size_cache: dict[str, tuple[int, int]] = {}
-
-
 def _resolve_doc_dir(stem: str, output_path: Path) -> Path | None:
     """Resolve a processed document directory in canonical {stem}_{hash} layout.
 
@@ -121,75 +116,6 @@ def _resolve_doc_dir(stem: str, output_path: Path) -> Path | None:
 
     _doc_dir_cache[cache_key] = None
     return None
-
-
-def _resolve_page_path(entry: dict, output_path: Path, suffix: str) -> Path:
-    """Resolve page-level file path from entry metadata.
-
-    Args:
-        entry: Dict with 'source_file' and 'page_number' keys
-        output_path: Base output directory
-        suffix: File extension including dot (e.g., '.jpg', '.json')
-
-    Returns:
-        Resolved Path (may not exist on disk)
-    """
-
-    source_file = entry.get("source_file", "")
-    page_number = entry.get("page_number")
-    if page_number is not None and pd.notna(page_number):
-        page_number = int(page_number)
-    else:
-        page_number = None
-    return resolve_page_path(output_path, source_file, page_number, suffix)
-
-
-def get_image_path(entry: dict, output_path: Path) -> str | None:
-    """Get page image path from source_file and page_number."""
-
-    image_path = _resolve_page_path(entry, output_path, ".jpg")
-
-    # Return path only if it resolves to an existing file
-    if image_path.parts and image_path.exists():
-        return str(image_path)
-
-    return None
-
-
-def get_json_path(entry: dict, output_path: Path) -> Path:
-    """Get the JSON file path for an entry."""
-    return _resolve_page_path(entry, output_path, ".json")
-
-
-def _get_bbox_coordinates(entry: dict) -> tuple[float, float, float, float] | None:
-    """Return viewer-usable bounding-box coordinates from an entry."""
-
-    return get_bbox_coordinates_from_review(entry)
-
-
-def _get_image_size(image_path: str) -> tuple[int, int] | None:
-    """Return image dimensions with a simple in-memory cache."""
-
-    return get_image_size_from_review(image_path)
-
-
-def _scale_bbox_to_pixels(
-    bbox: tuple[float, float, float, float],
-    image_size: tuple[int, int],
-) -> tuple[int, int, int, int] | None:
-    """Scale normalized or absolute bbox coordinates into image pixels."""
-
-    return scale_bbox_to_pixels_from_review(bbox, image_size)
-
-
-def build_source_image_value(
-    entry: dict,
-    output_path: Path,
-) -> tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None:
-    """Build the annotated-image payload for the Source tab."""
-
-    return build_page_image_value_for_entry(entry, output_path, label=SOURCE_BBOX_LABEL)
-
 
 # =============================================================================
 # JSON File Operations (Review Persistence)
@@ -222,153 +148,6 @@ def save_review_to_json(entry: dict, status: str, output_path: Path) -> tuple[bo
         int(result_index),
         action,
     )
-
-
-# =============================================================================
-# Data Loading
-# =============================================================================
-
-
-def _is_out_of_range(value: float, range_min, range_max) -> bool:
-    """Check if a value falls outside a min/max range."""
-    return (pd.notna(range_min) and value < range_min) or (pd.notna(range_max) and value > range_max)
-
-
-def _load_json_cached(json_path: Path, cache: dict) -> dict | None:
-    """Load and cache a JSON file, returning None on missing/invalid files."""
-
-    json_path_str = str(json_path)
-
-    # Cache hit
-    if json_path_str in cache:
-        return cache[json_path_str]
-
-    # File doesn't exist
-    if not json_path.exists():
-        cache[json_path_str] = None
-        return None
-
-    # Load and cache the JSON data
-    try:
-        cache[json_path_str] = json.loads(json_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as e:
-        logger.warning(f"Failed to parse JSON from {json_path}: {e}")
-        cache[json_path_str] = None
-    except (IOError, OSError) as e:
-        logger.warning(f"Failed to read JSON file {json_path}: {e}")
-        cache[json_path_str] = None
-
-    return cache[json_path_str]
-
-
-def _sync_review_statuses(df: pd.DataFrame, output_path: Path) -> list:
-    """Read review_status from JSON files for each row, using a file cache."""
-
-    json_cache: dict = {}
-    review_statuses = []
-
-    for row in df.itertuples():
-        result_index = getattr(row, "result_index", None)
-
-        # Skip rows without a result_index
-        if result_index is None or pd.isna(result_index):
-            review_statuses.append(None)
-            continue
-
-        # Load the JSON file for this row
-        entry = {
-            "source_file": getattr(row, "source_file", ""),
-            "page_number": getattr(row, "page_number", None),
-        }
-        json_data = _load_json_cached(get_json_path(entry, output_path), json_cache)
-
-        # Extract review_status from the matching lab_result entry
-        if json_data and "lab_results" in json_data:
-            result_idx = int(result_index)
-            if result_idx < len(json_data["lab_results"]):
-                review_statuses.append(json_data["lab_results"][result_idx].get("review_status"))
-                continue
-
-        review_statuses.append(None)
-
-    return review_statuses
-
-
-def _format_reference_range(row) -> str:
-    """Format reference_min/reference_max into a display string."""
-
-    ref_min = row["reference_min"]
-    ref_max = row["reference_max"]
-
-    # Both missing — show boolean default or empty
-    if pd.isna(ref_min) and pd.isna(ref_max):
-        if row.get("lab_unit") == "boolean":
-            return "0 - 1"
-        return ""
-
-    # One-sided ranges
-    if pd.isna(ref_min):
-        return f"< {ref_max}"
-    if pd.isna(ref_max):
-        return f"> {ref_min}"
-
-    return f"{ref_min} - {ref_max}"
-
-
-def _check_out_of_reference(row) -> bool | None:
-    """Check if value falls outside the PDF reference range."""
-
-    val = row["value"]
-
-    # Missing value — cannot evaluate
-    if pd.isna(val):
-        return None
-
-    ref_min = row["reference_min"]
-    ref_max = row["reference_max"]
-
-    # No reference range — check boolean special case
-    if pd.isna(ref_min) and pd.isna(ref_max):
-        if row.get("lab_unit") == "boolean":
-            return val > 0
-        return None
-
-    return _is_out_of_range(val, ref_min, ref_max)
-
-
-def _get_lab_spec_range(lab_name: str, lab_specs: LabSpecsConfig, gender: str | None, age: int | None) -> pd.Series:
-    """Look up healthy range for a lab from lab_specs, adjusted for demographics."""
-    range_min, range_max = lab_specs.get_healthy_range_for_demographics(lab_name, gender=gender, age=age)
-    return pd.Series({"lab_specs_min": range_min, "lab_specs_max": range_max})
-
-
-def _check_out_of_healthy_range(row) -> bool | None:
-    """Check if value falls outside the lab_specs healthy range."""
-
-    val = row.get("value")
-
-    # Missing value — cannot evaluate
-    if pd.isna(val):
-        return None
-
-    spec_min = row.get("lab_specs_min")
-    spec_max = row.get("lab_specs_max")
-
-    # No healthy range defined
-    if pd.isna(spec_min) and pd.isna(spec_max):
-        return None
-
-    return _is_out_of_range(val, spec_min, spec_max)
-
-
-def load_data(
-    output_path: Path,
-    lab_specs: LabSpecsConfig,
-    demographics: Demographics | None,
-) -> pd.DataFrame:
-    """Load review data from canonical page JSON, falling back to all.csv when needed."""
-
-    return load_results_dataframe(output_path, lab_specs, demographics)
 
 
 # =============================================================================
@@ -1045,7 +824,7 @@ def build_details_html(entry: dict) -> str:
 
     html += "</tbody></table>"
 
-    bbox = _get_bbox_coordinates(entry)
+    bbox = get_bbox_coordinates(entry)
 
     # Surface bbox metadata so reviewers can verify the stored highlight geometry.
     if bbox is not None:
@@ -1121,7 +900,7 @@ def _load_output_data(
 ) -> tuple[pd.DataFrame, list[str]]:
     """Load and sort data from output path, return (full_df, lab_name_choices)."""
 
-    full_df = load_data(output_path, lab_specs, demographics)
+    full_df = load_results_dataframe(output_path, lab_specs, demographics)
     if not full_df.empty and "date" in full_df.columns:
         full_df = full_df.sort_values(["date", "lab_name"], ascending=[False, True], na_position="last").reset_index(drop=True)
     return full_df, get_lab_name_choices(full_df)
@@ -1142,7 +921,7 @@ def _build_row_context(
 
     row = filtered_df.iloc[row_idx]
     position_text = f"**Row {row_idx + 1} of {len(filtered_df)}**"
-    source_image_value = build_source_image_value(row.to_dict(), output_path)
+    source_image_value = build_page_image_value_for_entry(row.to_dict(), output_path, label=SOURCE_BBOX_LABEL)
     details_html = build_details_html(row.to_dict())
     status_value = get_review_status_label(row.to_dict())
     banner_html = build_review_reason_banner(row.to_dict())
@@ -1445,7 +1224,11 @@ def create_app(context: RuntimeContext):
     )
 
     initial_position = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
-    initial_image = build_source_image_value(full_df.iloc[0].to_dict(), current_output_path()) if not full_df.empty else None
+    initial_image = (
+        build_page_image_value_for_entry(full_df.iloc[0].to_dict(), current_output_path(), label=SOURCE_BBOX_LABEL)
+        if not full_df.empty
+        else None
+    )
     initial_details = build_details_html(full_df.iloc[0].to_dict()) if not full_df.empty else "<p>No entry selected</p>"
     initial_status_html = build_review_status_html(get_review_status_label(full_df.iloc[0].to_dict()) if not full_df.empty else "Pending")
 
@@ -1510,7 +1293,11 @@ def create_app(context: RuntimeContext):
         display_df = prepare_display_df(full_df)
         summary = build_summary_cards(full_df)
         position_text = f"**Row 1 of {len(full_df)}**" if not full_df.empty else "No results"
-        source_image_value = build_source_image_value(full_df.iloc[0].to_dict(), current_output_path()) if not full_df.empty else None
+        source_image_value = (
+            build_page_image_value_for_entry(full_df.iloc[0].to_dict(), current_output_path(), label=SOURCE_BBOX_LABEL)
+            if not full_df.empty
+            else None
+        )
         details_html = build_details_html(full_df.iloc[0].to_dict()) if not full_df.empty else "<p>No entry selected</p>"
         status_label = get_review_status_label(full_df.iloc[0].to_dict()) if not full_df.empty else "Pending"
         banner_html = build_review_reason_banner(full_df.iloc[0].to_dict()) if not full_df.empty else ""

@@ -11,7 +11,7 @@ Usage:
 import argparse
 import json
 import logging
-from pathlib import Path
+import sys
 
 import pandas as pd  # noqa: E402
 from openai import OpenAI  # noqa: E402
@@ -291,6 +291,6 @@ def main():
 
 
 if __name__ == "__main__":
-    from parselabs.admin import run_legacy_utility
+    from parselabs.admin_commands import run_legacy_utility
 
     raise SystemExit(run_legacy_utility("update-standardization-caches"))

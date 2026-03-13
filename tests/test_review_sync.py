@@ -363,9 +363,6 @@ def test_run_pipeline_and_reviewed_rebuild_produce_matching_exports(tmp_path, mo
         cached_csv_paths=[csv_path],
         pdfs_to_process=[],
         duplicates=[],
-        skipped_count=1,
-        inventory={},
-        inventory_candidates={},
     )
     monkeypatch.setattr(main, "_prepare_pdf_run", lambda pdf_files, _: preflight)
 
@@ -398,9 +395,6 @@ def test_run_pipeline_with_only_pending_rows_publishes_empty_final_export(tmp_pa
         cached_csv_paths=[csv_path],
         pdfs_to_process=[],
         duplicates=[],
-        skipped_count=1,
-        inventory={},
-        inventory_candidates={},
     )
     monkeypatch.setattr(main, "_prepare_pdf_run", lambda pdf_files, _: preflight)
 

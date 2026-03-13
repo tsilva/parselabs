@@ -12,21 +12,6 @@ from typing import Iterable
 import pandas as pd
 
 from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig
-from parselabs.documents import (
-    REVIEW_MISSING_ROWS_KEY,
-    DocumentRef,
-    count_review_missing_rows as count_review_missing_rows_in_store,
-    get_document_csv_path,
-    get_document_stem,
-    get_page_image_path as get_page_image_path_from_store,
-    get_page_json_path,
-    get_review_missing_rows as get_review_missing_rows_from_store,
-    iter_processed_documents as iter_processed_documents_from_store,
-    parse_page_number,
-    read_page_payload,
-    save_missing_row_marker as save_missing_row_marker_in_store,
-    save_review_status as save_review_status_in_store,
-)
 from parselabs.export_schema import COLUMN_ORDER, COLUMN_SCHEMA, get_column_lists
 from parselabs.normalization import (
     apply_dtype_conversions,
@@ -35,6 +20,31 @@ from parselabs.normalization import (
     flag_duplicate_entries,
 )
 from parselabs.standardization import standardize_lab_names, standardize_lab_units
+from parselabs.store import (
+    DocumentRef,
+    get_document_csv_path,
+    get_document_stem,
+    parse_page_number,
+    read_page_payload,
+)
+from parselabs.store import (
+    count_review_missing_rows as count_review_missing_rows_in_store,
+)
+from parselabs.store import (
+    get_page_image_path as get_page_image_path_from_store,
+)
+from parselabs.store import (
+    get_review_missing_rows as get_review_missing_rows_from_store,
+)
+from parselabs.store import (
+    iter_processed_documents as iter_processed_documents_from_store,
+)
+from parselabs.store import (
+    save_missing_row_marker as save_missing_row_marker_in_store,
+)
+from parselabs.store import (
+    save_review_status as save_review_status_in_store,
+)
 from parselabs.utils import ensure_columns
 from parselabs.validation import ValueValidator
 

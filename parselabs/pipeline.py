@@ -1,8 +1,6 @@
 """Main entry point for lab results extraction and processing."""
 
 import argparse  # noqa: E402
-import fnmatch  # noqa: E402
-import hashlib  # noqa: E402
 import json  # noqa: E402
 import logging  # noqa: E402
 import re  # noqa: E402
@@ -24,35 +22,32 @@ from parselabs.config import (  # noqa: E402
     LabSpecsConfig,
     ProfileConfig,
 )
-from parselabs.dataset import (  # noqa: E402
-    COLUMN_SCHEMA,
+from parselabs.exceptions import ConfigurationError, PipelineError  # noqa: E402
+from parselabs.export_schema import COLUMN_SCHEMA, get_column_lists  # noqa: E402
+from parselabs.extraction import (  # noqa: E402
+    extract_labs_from_page_image,
+    extract_labs_from_text,
+)
+from parselabs.paths import get_profiles_dir  # noqa: E402
+from parselabs.rows import (  # noqa: E402
     DOCUMENT_REVIEW_COLUMNS,
     build_document_review_dataframe,
-    get_column_lists,
     get_document_review_summary,
     iter_processed_documents,
     load_document_review_rows,
     rebuild_document_csv,
     transform_rows_to_final_export,
 )
-from parselabs.store import (  # noqa: E402
-    build_hashed_csv_path as build_hashed_csv_path_from_store,
-    compute_file_hash as compute_document_hash,
-    discover_pdf_files,
-    plan_pdf_run,
-    read_page_payload,
-    is_page_payload_reusable,
-)
-from parselabs.exceptions import ConfigurationError, PipelineError  # noqa: E402
-from parselabs.extraction import (  # noqa: E402
-    extract_labs_from_page_image,
-    extract_labs_from_text,
-)
-from parselabs.paths import get_profiles_dir  # noqa: E402
 from parselabs.runtime import (  # noqa: E402
     RuntimeContext,
     add_profile_arguments,
-    get_openai_client as get_openai_client_from_runtime,
+    get_openai_client,
+)
+from parselabs.store import (  # noqa: E402
+    discover_pdf_files,
+    is_page_payload_reusable,
+    plan_pdf_run,
+    read_page_payload,
 )
 from parselabs.utils import (  # noqa: E402
     create_page_image_variants,
@@ -62,16 +57,7 @@ from parselabs.utils import (  # noqa: E402
 # Module-level logger (file handlers added after config is loaded)
 logger = logging.getLogger(__name__)
 PROFILES_DIR = get_profiles_dir()
-_client_cache: dict[tuple[str, str], OpenAI] = {}
 EXTRACTION_FAILURE_RAW_NAME = "[EXTRACTION FAILED]"
-
-
-def get_openai_client(config: ExtractionConfig) -> OpenAI:
-    """Return a cached OpenAI client for the current profile configuration."""
-
-    cached_client = get_openai_client_from_runtime(config)
-    _client_cache[(config.openrouter_base_url, config.openrouter_api_key)] = cached_client
-    return cached_client
 
 
 # ========================================
@@ -139,29 +125,6 @@ def _extract_page_texts_from_pdf(pdf_path: Path, expected_pages: int) -> list[st
         page_texts = page_texts[:expected_pages]
 
     return page_texts
-
-
-# ========================================
-# File Hashing
-# ========================================
-
-_file_hash_cache: dict[Path, str] = {}
-
-
-def _compute_file_hash(file_path: Path, hash_length: int = 8) -> str:
-    """Compute SHA-256 hash of a file, returning first `hash_length` hex chars.
-
-    Results are cached to avoid re-hashing the same file.
-    """
-
-    # Return cached result if available
-    resolved = file_path.resolve()
-    if resolved in _file_hash_cache:
-        return _file_hash_cache[resolved]
-
-    result = compute_document_hash(resolved, hash_length=hash_length)
-    _file_hash_cache[resolved] = result
-    return result
 
 
 # ========================================
@@ -644,12 +607,6 @@ def _extract_document_date(data_dict: dict, pdf_stem: str) -> str | None:
     return doc_date
 
 
-def _build_hashed_csv_path(pdf_path: Path, output_path: Path, file_hash: str) -> Path:
-    """Return the hash-suffixed CSV path for a PDF."""
-
-    return build_hashed_csv_path_from_store(pdf_path, output_path, file_hash)
-
-
 REQUIRED_CSV_COLS = ["result_index", "page_number", "source_file"]
 
 
@@ -660,9 +617,6 @@ class PreflightPdfTask:
     pdf_path: Path
     file_hash: str
     csv_path: Path
-    resolved_path: Path | None = None
-    size_bytes: int = 0
-    mtime_ns: int = 0
 
 
 @dataclass
@@ -671,10 +625,7 @@ class PdfPreflightResult:
 
     pdfs_to_process: list[PreflightPdfTask]
     duplicates: list[tuple[Path, Path]]
-    skipped_count: int
     cached_csv_paths: list[Path] = field(default_factory=list)
-    inventory: dict = field(default_factory=dict)
-    inventory_candidates: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -702,9 +653,6 @@ def _prepare_pdf_run(pdf_files: list[Path], output_path: Path) -> PdfPreflightRe
             pdf_path=document.source_pdf,
             file_hash=document.file_hash,
             csv_path=document.csv_path,
-            resolved_path=document.source_pdf.resolve(),
-            size_bytes=document.source_pdf.stat().st_size,
-            mtime_ns=document.source_pdf.stat().st_mtime_ns,
         )
         for document in run_plan.documents_to_process
     ]
@@ -712,7 +660,6 @@ def _prepare_pdf_run(pdf_files: list[Path], output_path: Path) -> PdfPreflightRe
     return PdfPreflightResult(
         pdfs_to_process=pdfs_to_process,
         duplicates=run_plan.duplicates,
-        skipped_count=0,
     )
 
 
@@ -1266,20 +1213,6 @@ def _run_reviewed_json_rebuild(profile_name: str, allow_pending: bool) -> None:
     )
 
 
-def _discover_pdf_files(input_path: Path, input_file_regex: str | None) -> list[Path]:
-    """Return top-level PDF files matching the configured pattern.
-
-    `Path.glob()` can silently return zero matches on some cloud-backed macOS
-    directories when directory enumeration is denied. Listing the directory
-    first makes those access failures explicit.
-    """
-
-    try:
-        return discover_pdf_files(input_path, input_file_regex)
-    except (FileNotFoundError, PermissionError, OSError) as exc:
-        raise PipelineError(str(exc)) from exc
-
-
 def run_for_profile(args, profile_name: str) -> None:
     """Run extraction pipeline for a single profile.
 
@@ -1300,7 +1233,10 @@ def run_for_profile(args, profile_name: str) -> None:
     _, hidden_cols, widths, _ = get_column_lists(COLUMN_SCHEMA)
 
     # Discover PDF files matching the input pattern
-    pdf_files = _discover_pdf_files(config.input_path, config.input_file_regex)
+    try:
+        pdf_files = discover_pdf_files(config.input_path, config.input_file_regex)
+    except (FileNotFoundError, PermissionError, OSError) as exc:
+        raise PipelineError(str(exc)) from exc
     logger.info(f"Found {len(pdf_files)} PDF(s) matching '{config.input_file_regex}'")
 
     if not pdf_files:

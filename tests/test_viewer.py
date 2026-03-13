@@ -17,6 +17,7 @@ sys.modules.setdefault("plotly.graph_objects", graph_objects_module)
 sys.modules.setdefault("plotly.subplots", subplots_module)
 
 viewer = importlib.import_module("parselabs.results_view")
+review_helpers = importlib.import_module("parselabs.review")
 
 
 def _write_viewer_page(output_path: Path, stem: str = "glucose") -> Path:
@@ -28,7 +29,7 @@ def _write_viewer_page(output_path: Path, stem: str = "glucose") -> Path:
     return doc_dir
 
 
-def test_build_source_image_value_scales_normalized_bbox(tmp_path):
+def test_build_page_image_value_for_entry_scales_normalized_bbox(tmp_path):
     _write_viewer_page(tmp_path)
 
     entry = {
@@ -40,15 +41,15 @@ def test_build_source_image_value_scales_normalized_bbox(tmp_path):
         "bbox_bottom": 800,
     }
 
-    value = viewer.build_source_image_value(entry, tmp_path)
+    value = review_helpers.build_page_image_value_for_entry(entry, tmp_path)
 
     assert value is not None
     image_path, annotations = value
     assert image_path.endswith("glucose.001.jpg")
-    assert annotations == [((20, 20, 120, 80), viewer.SOURCE_BBOX_LABEL)]
+    assert annotations == [((20, 20, 120, 80), review_helpers.SOURCE_BBOX_LABEL)]
 
 
-def test_build_source_image_value_returns_plain_image_when_bbox_missing(tmp_path):
+def test_build_page_image_value_for_entry_returns_plain_image_when_bbox_missing(tmp_path):
     _write_viewer_page(tmp_path)
 
     entry = {
@@ -56,7 +57,7 @@ def test_build_source_image_value_returns_plain_image_when_bbox_missing(tmp_path
         "page_number": 1,
     }
 
-    value = viewer.build_source_image_value(entry, tmp_path)
+    value = review_helpers.build_page_image_value_for_entry(entry, tmp_path)
 
     assert value is not None
     image_path, annotations = value
