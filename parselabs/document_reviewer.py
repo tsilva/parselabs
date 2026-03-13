@@ -742,17 +742,17 @@ def build_app(context: RuntimeContext) -> gr.Blocks:
         queue_state = gr.State(initial_view.queue_state)
 
         with gr.Row(elem_id="review-main-pane"):
-            with gr.Column(scale=6, min_width=520, elem_id="review-image-pane"):
+            with gr.Column(scale=7, min_width=680, elem_id="review-image-pane"):
                 page_image = gr.AnnotatedImage(
                     value=initial_view.image_value,
                     color_map={SOURCE_BBOX_LABEL: "#dc2626"},
                     show_legend=False,
                     show_label=False,
-                    height=640,
+                    height=780,
                     elem_id="review-page-image",
                 )
 
-            with gr.Column(scale=5, min_width=380, elem_id="review-inspector-pane"):
+            with gr.Column(scale=4, min_width=360, elem_id="review-inspector-pane"):
                 inspector_html = gr.HTML(initial_view.inspector_html, elem_id="review-inspector")
 
                 with gr.Column(elem_id="review-action-bar"):
