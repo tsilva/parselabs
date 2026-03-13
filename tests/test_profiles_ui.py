@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 
+import pytest
+
 from parselabs import config as config_module
+from parselabs.exceptions import ConfigurationError
 from parselabs.runtime import add_profile_arguments, load_ui_context
 from parselabs.ui import selected_tab_label
 
@@ -19,7 +22,7 @@ def test_add_profile_arguments_parses_shared_flags():
     assert args.list_profiles is True
 
 
-def test_load_ui_context_defaults_to_first_available_profile(monkeypatch, tmp_path):
+def test_load_ui_context_requires_explicit_profile(monkeypatch, tmp_path):
     profiles_dir = tmp_path / "profiles"
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
@@ -47,10 +50,10 @@ def test_load_ui_context_defaults_to_first_available_profile(monkeypatch, tmp_pa
 
     monkeypatch.setattr(config_module, "get_profiles_dir", lambda: profiles_dir)
 
-    context = load_ui_context(None)
+    with pytest.raises(ConfigurationError, match="requires --profile"):
+        load_ui_context(None)
 
-    assert context.profile_name == "alpha"
-    assert context.output_path == output_dir.resolve()
+    assert (profiles_dir / "alpha.yaml").exists()
 
 
 def test_selected_tab_label_handles_review_aliases():

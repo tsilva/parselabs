@@ -226,7 +226,8 @@ def resolve_profile_name(profile_name: str | None) -> str:
             f"No profiles found. Create profile files in {ProfileConfig.get_profiles_dir()}."
         )
 
-    return available_profiles[0]
+    # Guard: Review UI flows must be started against one explicit profile.
+    raise ConfigurationError("Review UI requires --profile. Use --list-profiles to see available profiles.")
 
 
 def load_ui_context(profile_name: str | None) -> RuntimeContext:

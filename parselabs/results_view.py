@@ -22,7 +22,7 @@ import pandas as pd  # noqa: E402
 import plotly.graph_objects as go  # noqa: E402
 from plotly.subplots import make_subplots  # noqa: E402
 
-from parselabs.config import Demographics, LabSpecsConfig, ProfileConfig  # noqa: E402
+from parselabs.config import Demographics, LabSpecsConfig  # noqa: E402
 from parselabs.paths import get_static_dir  # noqa: E402
 from parselabs.review import (  # noqa: E402
     SOURCE_BBOX_LABEL,
@@ -34,7 +34,7 @@ from parselabs.review_state import (  # noqa: E402
     build_viewer_row_context,
     get_selected_row,
 )
-from parselabs.runtime import RuntimeContext, list_non_template_profiles  # noqa: E402
+from parselabs.runtime import RuntimeContext  # noqa: E402
 
 # Initialize module logger
 logger = logging.getLogger(__name__)
@@ -91,21 +91,6 @@ class ViewerRenderState:
             self.summary_html,
             self.banner_html,
         )
-
-def load_viewer_context(profile_name: str) -> RuntimeContext | None:
-    """Load a runtime context for the requested profile when it exists."""
-
-    # Guard: profile must exist before the UI can switch to it.
-    if not ProfileConfig.find_path(profile_name):
-        return None
-
-    return RuntimeContext.from_profile(
-        profile_name,
-        need_input=False,
-        need_output=True,
-        need_api=False,
-        setup_logs=False,
-    )
 
 
 def get_lab_name_choices(df: pd.DataFrame) -> list[str]:
@@ -1037,102 +1022,21 @@ def export_csv(filtered_df: pd.DataFrame, output_path: Path):
 def create_app(context: RuntimeContext):
     """Create and configure the Gradio app for one runtime context."""
 
-    active_context = context
-
-    def current_output_path() -> Path:
-        """Return the active output path for callback closures."""
-
-        return active_context.output_path if active_context.output_path is not None else Path("./output")
+    # Resolve the launch-selected profile once because review runs no longer switch profiles in-app.
+    output_path = context.output_path if context.output_path is not None else Path("./output")
 
     full_df, lab_name_choices = _load_output_data(
-        current_output_path(),
-        active_context.lab_specs,
-        active_context.demographics,
+        output_path,
+        context.lab_specs,
+        context.demographics,
     )
     initial_view = _render_viewer_state(
         full_df,
         full_df,
-        current_output_path(),
+        output_path,
         None,
         summary_df=full_df,
     )
-
-    available_profiles = list_non_template_profiles()
-    current_profile = active_context.profile_name
-
-    def handle_profile_change(profile_name: str):
-        """Handle profile switch - reload all data for the new profile."""
-
-        nonlocal active_context
-
-        # Guard: no profile selected
-        if not profile_name:
-            empty_df = pd.DataFrame()
-            empty_view = _build_empty_viewer_state(empty_df, empty_df, summary_df=empty_df)
-            return (
-                empty_view.display_df,
-                '<div class="summary-row"><span class="stat-card">No profile selected</span></div>',
-                empty_view.plot,
-                empty_df,
-                empty_df,
-                empty_view.current_idx,
-                empty_view.position_text,
-                empty_view.source_image_value,
-                gr.update(choices=[], value=None),
-                empty_view.details_html,
-                empty_view.status_html,
-                empty_view.banner_html,
-            )
-
-        next_context = load_viewer_context(profile_name)
-
-        # Guard: profile not found or missing an output path
-        if next_context is None or next_context.output_path is None:
-            empty_df = pd.DataFrame()
-            empty_view = _build_empty_viewer_state(empty_df, empty_df, summary_df=empty_df)
-            return (
-                empty_view.display_df,
-                f'<div class="summary-row"><span class="stat-card warning">Profile \'{profile_name}\' not found or has no output path</span></div>',
-                empty_view.plot,
-                empty_df,
-                empty_df,
-                empty_view.current_idx,
-                empty_view.position_text,
-                empty_view.source_image_value,
-                gr.update(choices=[], value=None),
-                empty_view.details_html,
-                empty_view.status_html,
-                empty_view.banner_html,
-            )
-
-        active_context = next_context
-        full_df, lab_name_choices = _load_output_data(
-            current_output_path(),
-            active_context.lab_specs,
-            active_context.demographics,
-        )
-        render_state = _render_viewer_state(
-            full_df,
-            full_df,
-            current_output_path(),
-            None,
-            summary_df=full_df,
-        )
-
-        return (
-            render_state.display_df,
-            render_state.summary_html,
-            render_state.plot,
-            full_df,
-            render_state.filtered_df,
-            render_state.current_idx,
-            render_state.position_text,
-            render_state.source_image_value,
-            gr.update(choices=lab_name_choices, value=None),
-            render_state.details_html,
-            render_state.status_html,
-            render_state.banner_html,
-        )
 
     with gr.Blocks(title="Lab Results Viewer") as demo:
         # State variables
@@ -1140,18 +1044,10 @@ def create_app(context: RuntimeContext):
         filtered_df_state = gr.State(value=full_df)
         current_idx_state = gr.State(value=0)
 
-        # Header with profile selector
+        # Header stays informational because the active profile is fixed at launch time.
         with gr.Row():
-            with gr.Column(scale=4):
+            with gr.Column():
                 gr.Markdown("# Lab Results Viewer")
-            with gr.Column(scale=1):
-                profile_selector = gr.Dropdown(
-                    choices=available_profiles,
-                    value=current_profile,
-                    label="Profile",
-                    allow_custom_value=False,
-                    interactive=True,
-                )
 
         gr.Markdown("Browse, analyze, and review extracted lab results.")
 
@@ -1254,26 +1150,6 @@ def create_app(context: RuntimeContext):
         gr.Markdown("---")
         gr.Markdown("*Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate*")
 
-        # Wire up profile selector
-        profile_selector.change(
-            fn=handle_profile_change,
-            inputs=[profile_selector],
-            outputs=[
-                data_table,
-                summary_display,
-                plot_display,
-                full_df_state,
-                filtered_df_state,
-                current_idx_state,
-                position_display,
-                source_image,
-                lab_name_filter,
-                details_display,
-                review_status_display,
-                review_reason_banner,
-            ],
-        )
-
         # Filter inputs and outputs
         filter_inputs = [
             lab_name_filter,
@@ -1300,7 +1176,7 @@ def create_app(context: RuntimeContext):
                 latest_only,
                 review_filter,
                 full_df,
-                current_output_path(),
+                output_path,
             ),
             inputs=filter_inputs,
             outputs=filter_outputs,
@@ -1311,7 +1187,7 @@ def create_app(context: RuntimeContext):
                 latest_only,
                 review_filter,
                 full_df,
-                current_output_path(),
+                output_path,
             ),
             inputs=filter_inputs,
             outputs=filter_outputs,
@@ -1322,7 +1198,7 @@ def create_app(context: RuntimeContext):
                 latest_only,
                 review_filter,
                 full_df,
-                current_output_path(),
+                output_path,
             ),
             inputs=filter_inputs,
             outputs=filter_outputs,
@@ -1335,7 +1211,7 @@ def create_app(context: RuntimeContext):
                 filtered_df,
                 full_df,
                 lab_name,
-                current_output_path(),
+                output_path,
             ),
             inputs=[filtered_df_state, full_df_state, lab_name_filter],
             outputs=[
@@ -1373,7 +1249,7 @@ def create_app(context: RuntimeContext):
                 full_df,
                 lab_name,
                 -1,
-                current_output_path(),
+                output_path,
             ),
             inputs=nav_inputs,
             outputs=nav_outputs,
@@ -1385,7 +1261,7 @@ def create_app(context: RuntimeContext):
                 full_df,
                 lab_name,
                 1,
-                current_output_path(),
+                output_path,
             ),
             inputs=nav_inputs,
             outputs=nav_outputs,
@@ -1423,7 +1299,7 @@ def create_app(context: RuntimeContext):
                 latest_only,
                 review_filter,
                 "accepted",
-                current_output_path(),
+                output_path,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
@@ -1437,7 +1313,7 @@ def create_app(context: RuntimeContext):
                 latest_only,
                 review_filter,
                 "rejected",
-                current_output_path(),
+                output_path,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
@@ -1445,7 +1321,7 @@ def create_app(context: RuntimeContext):
 
         # Export
         export_btn.click(
-            fn=lambda filtered_df: export_csv(filtered_df, current_output_path()),
+            fn=lambda filtered_df: export_csv(filtered_df, output_path),
             inputs=[filtered_df_state],
             outputs=[export_file],
         ).then(fn=lambda: gr.update(visible=True), outputs=[export_file])
