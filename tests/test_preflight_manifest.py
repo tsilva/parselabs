@@ -1,9 +1,11 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 
 from parselabs import pipeline as main
 from parselabs.config import ExtractionConfig
+from parselabs.store import build_document_ref
 
 
 def _write_valid_csv(csv_path: Path) -> None:
@@ -30,17 +32,20 @@ def test_prepare_pdf_run_hashes_each_pdf_and_builds_hashed_targets(tmp_path, mon
     pdf_b = tmp_path / "b.pdf"
     pdf_a.write_bytes(b"a")
     pdf_b.write_bytes(b"b")
-    calls: list[Path] = []
-
-    def fake_hash(path: Path) -> str:
-        calls.append(path)
-        return path.stem
-
-    monkeypatch.setattr(main, "_compute_file_hash", fake_hash)
+    monkeypatch.setattr(
+        main,
+        "plan_pdf_run",
+        lambda pdf_files, output_path: SimpleNamespace(
+            documents_to_process=[
+                build_document_ref(pdf_a, output_path, "a"),
+                build_document_ref(pdf_b, output_path, "b"),
+            ],
+            duplicates=[],
+        ),
+    )
 
     preflight = main._prepare_pdf_run([pdf_a, pdf_b], output_dir)
 
-    assert calls == [pdf_a.resolve(), pdf_b.resolve()]
     assert [task.file_hash for task in preflight.pdfs_to_process] == ["a", "b"]
     assert [task.csv_path for task in preflight.pdfs_to_process] == [
         output_dir / "a_a" / "a.csv",
@@ -56,7 +61,14 @@ def test_prepare_pdf_run_deduplicates_exact_content(tmp_path, monkeypatch):
     pdf_a.write_bytes(b"same")
     pdf_b.write_bytes(b"same")
 
-    monkeypatch.setattr(main, "_compute_file_hash", lambda path: "same-hash")
+    monkeypatch.setattr(
+        main,
+        "plan_pdf_run",
+        lambda pdf_files, output_path: SimpleNamespace(
+            documents_to_process=[build_document_ref(pdf_a, output_path, "same-hash")],
+            duplicates=[(pdf_b, pdf_a)],
+        ),
+    )
 
     preflight = main._prepare_pdf_run([pdf_a, pdf_b], output_dir)
 
@@ -69,7 +81,6 @@ def test_process_single_pdf_uses_precomputed_hash(tmp_path, monkeypatch):
     pdf_path = tmp_path / "worker.pdf"
     pdf_path.write_bytes(b"worker")
 
-    monkeypatch.setattr(main, "_compute_file_hash", lambda path: (_ for _ in ()).throw(AssertionError("hash not expected")))
     monkeypatch.setattr(main, "_copy_pdf_to_output", lambda pdf, doc_out_dir: doc_out_dir / pdf.name)
     monkeypatch.setattr(main, "_extract_data_from_pdf", lambda *args: ([{"raw_lab_name": "Lab A"}], "2024-01-01"))
     monkeypatch.setattr(main, "rebuild_document_csv", lambda doc_out_dir, lab_specs: doc_out_dir / "worker.csv")
@@ -87,7 +98,6 @@ def test_process_pdfs_or_use_cache_returns_injected_cached_csvs(tmp_path):
     preflight = main.PdfPreflightResult(
         pdfs_to_process=[],
         duplicates=[],
-        skipped_count=0,
         cached_csv_paths=[cached_csv],
     )
 

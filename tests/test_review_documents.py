@@ -6,6 +6,7 @@ import pandas as pd
 from PIL import Image
 
 from parselabs import document_reviewer as review_documents
+from parselabs import review as review_helpers
 from parselabs.rows import ProcessedDocument
 
 
@@ -137,12 +138,12 @@ def test_build_page_image_value_adds_overlay_for_current_row(tmp_path):
         }
     )
 
-    image_value = review_documents._build_page_image_value(document, row)
+    image_value = review_helpers.build_page_image_value_for_document(document.doc_dir, row)
 
     assert image_value is not None
     image_path, annotations = image_value
     assert image_path.endswith("glucose.001.jpg")
-    assert annotations == [((20, 20, 120, 80), review_documents.SOURCE_BBOX_LABEL)]
+    assert annotations == [((20, 20, 120, 80), review_helpers.SOURCE_BBOX_LABEL)]
 
 
 def test_build_inspector_html_shows_raw_and_mapped_reference_ranges():
@@ -190,10 +191,10 @@ def test_reference_formatters_render_one_sided_ranges_as_inequalities():
         }
     )
 
-    assert review_documents._format_reference_text(min_only_row) == ">4.5"
-    assert review_documents._format_reference_text(max_only_row) == "<5.9"
-    assert review_documents._format_mapped_reference_text(min_only_row) == ">4.5 10¹²/L"
-    assert review_documents._format_mapped_reference_text(max_only_row) == "<5.9 10¹²/L"
+    assert review_helpers.format_reference_text(min_only_row) == ">4.5"
+    assert review_helpers.format_reference_text(max_only_row) == "<5.9"
+    assert review_helpers.format_mapped_reference_text(min_only_row) == ">4.5 10¹²/L"
+    assert review_helpers.format_mapped_reference_text(max_only_row) == "<5.9 10¹²/L"
 
 
 def test_build_queue_display_shows_reviewed_status_as_icons():

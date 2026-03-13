@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 
 from parselabs import config as config_module
-from parselabs.profiles import add_profile_arguments, load_ui_context
+from parselabs.runtime import add_profile_arguments, load_ui_context
 from parselabs.ui import selected_tab_label
 
 

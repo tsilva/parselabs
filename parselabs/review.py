@@ -10,9 +10,11 @@ import pandas as pd
 from PIL import Image
 
 from parselabs.config import Demographics, LabSpecsConfig
-from parselabs.dataset import build_corpus_review_rows
+from parselabs.rows import build_corpus_review_rows
 from parselabs.store import (
     get_page_image_path as get_page_image_path_from_store,
+)
+from parselabs.store import (
     load_legacy_merged_review_dataframe,
     read_page_payload,
     resolve_page_path,

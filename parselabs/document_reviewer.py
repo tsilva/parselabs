@@ -16,23 +16,17 @@ from parselabs.review import (
     SOURCE_BBOX_LABEL,
     build_page_image_value_for_document,
     format_mapped_reference_text,
-    format_reference_bounds,
     format_reference_text,
     format_text,
-    get_bbox_coordinates as get_bbox_coordinates_from_review,
-    get_image_size as get_image_size_from_review,
     normalize_review_status,
-    scale_bbox_to_pixels as scale_bbox_to_pixels_from_review,
 )
+from parselabs.rows import ProcessedDocument, build_review_rows, get_document_review_summary, iter_processed_documents
 from parselabs.runtime import RuntimeContext
 from parselabs.store import apply_review_action
-from parselabs.dataset import ProcessedDocument, build_review_rows, get_document_review_summary, iter_processed_documents
 
 logger = logging.getLogger(__name__)
 
 _STATIC_DIR = get_static_dir()
-_page_image_size_cache: dict[str, tuple[int, int]] = {}
-
 KEYBOARD_SHORTCUTS_JS = (_STATIC_DIR / "review_documents.js").read_text()
 CUSTOM_CSS = (_STATIC_DIR / "review_documents.css").read_text()
 
@@ -160,23 +154,11 @@ def _matches_document_filter(
     return summary.fixture_ready
 
 
-def _normalize_status(status: object) -> str:
-    """Normalize reviewer status values into accepted, rejected, or pending."""
-
-    return normalize_review_status(status)
-
-
-def _format_text(value: object, empty: str = "-") -> str:
-    """Return a safe string for UI display, normalizing missing values."""
-
-    return format_text(value, empty=empty)
-
-
 def _format_raw_value(row: pd.Series) -> str:
     """Format the raw value and raw unit into one compact queue cell."""
 
-    value_text = _format_text(row.get("raw_value"))
-    unit_text = _format_text(row.get("raw_lab_unit"), empty="")
+    value_text = format_text(row.get("raw_value"))
+    unit_text = format_text(row.get("raw_lab_unit"), empty="")
 
     # Omit the placeholder unit suffix when the unit is genuinely absent.
     if unit_text:
@@ -188,32 +170,14 @@ def _format_raw_value(row: pd.Series) -> str:
 def _format_mapped_value(row: pd.Series) -> str:
     """Format the normalized value and unit for inspector display."""
 
-    value_text = _format_text(row.get("value"))
-    unit_text = _format_text(row.get("lab_unit"), empty="")
+    value_text = format_text(row.get("value"))
+    unit_text = format_text(row.get("lab_unit"), empty="")
 
     # Omit the placeholder unit suffix when the unit is genuinely absent.
     if unit_text:
         return f"{value_text} {unit_text}".strip()
 
     return value_text
-
-
-def _format_reference_bounds(ref_min: object, ref_max: object, *, unit: object = None) -> str:
-    """Format min/max reference bounds, including one-sided ranges."""
-
-    return format_reference_bounds(ref_min, ref_max, unit=unit)
-
-
-def _format_reference_text(row: pd.Series) -> str:
-    """Format the best available reference range for the inspector."""
-
-    return format_reference_text(row)
-
-
-def _format_mapped_reference_text(row: pd.Series) -> str:
-    """Format the normalized reference range in the standardized unit."""
-
-    return format_mapped_reference_text(row)
 
 
 def _format_queue_status_icon(status_code: object) -> str:
@@ -226,43 +190,6 @@ def _format_queue_status_icon(status_code: object) -> str:
     return ""
 
 
-def _get_bbox_coordinates(row: pd.Series) -> tuple[float, float, float, float] | None:
-    """Return viewer-usable bbox coordinates from the active review row."""
-
-    return get_bbox_coordinates_from_review(row)
-
-
-def _get_image_size(image_path: str) -> tuple[int, int] | None:
-    """Return page-image dimensions with a small in-memory cache."""
-
-    return get_image_size_from_review(image_path)
-
-
-def _scale_bbox_to_pixels(
-    bbox: tuple[float, float, float, float],
-    image_size: tuple[int, int],
-) -> tuple[int, int, int, int] | None:
-    """Scale normalized or absolute bbox coordinates into image pixels."""
-
-    return scale_bbox_to_pixels_from_review(bbox, image_size)
-
-
-def _build_page_image_value(
-    document: ProcessedDocument | None,
-    current_row: pd.Series | None,
-) -> tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None:
-    """Build the annotated-image payload for the active review row."""
-
-    if document is None or current_row is None:
-        return None
-
-    return build_page_image_value_for_document(
-        document.doc_dir,
-        current_row,
-        label=SOURCE_BBOX_LABEL,
-    )
-
-
 def _build_queue_state(review_df: pd.DataFrame, show_reviewed: bool) -> pd.DataFrame:
     """Build the visible row queue for the active document."""
 
@@ -271,7 +198,7 @@ def _build_queue_state(review_df: pd.DataFrame, show_reviewed: bool) -> pd.DataF
         return _empty_queue_state()
 
     queue_df = review_df.copy().reset_index().rename(columns={"index": "actual_index"})
-    queue_df["status_normalized"] = queue_df["review_status"].apply(_normalize_status)
+    queue_df["status_normalized"] = queue_df["review_status"].apply(normalize_review_status)
     queue_df["status_sort"] = queue_df["status_normalized"].apply(lambda status: 0 if not status else 1)
 
     # Hide accepted and rejected rows unless the reviewer explicitly asks to see them.
@@ -287,9 +214,9 @@ def _build_queue_state(review_df: pd.DataFrame, show_reviewed: bool) -> pd.DataF
     queue_df["status_code"] = queue_df["status_normalized"].map({"accepted": "A", "rejected": "R", "": "P"}).fillna("P")
     queue_df["page_label"] = queue_df["page_number"].apply(lambda value: str(int(value)) if str(value).strip() else "-")
     queue_df["row_label"] = queue_df["result_index"].apply(lambda value: str(int(value)) if str(value).strip() else "-")
-    queue_df["raw_lab_label"] = queue_df["raw_lab_name"].apply(_format_text)
+    queue_df["raw_lab_label"] = queue_df["raw_lab_name"].apply(format_text)
     queue_df["raw_value_label"] = queue_df.apply(_format_raw_value, axis=1)
-    queue_df["mapped_lab_label"] = queue_df["lab_name"].apply(_format_text)
+    queue_df["mapped_lab_label"] = queue_df["lab_name"].apply(format_text)
     return queue_df[QUEUE_STATE_COLUMNS].copy()
 
 
@@ -353,7 +280,7 @@ def _get_current_row(review_df: pd.DataFrame, current_index: int) -> pd.Series |
 def _build_reason_badges(review_reason: object) -> str:
     """Render validation reason codes as compact badges."""
 
-    reason_text = _format_text(review_reason, empty="")
+    reason_text = format_text(review_reason, empty="")
 
     # Guard: Rows without validation flags do not need badge markup.
     if not reason_text:
@@ -439,11 +366,11 @@ def _build_inspector_html(document: ProcessedDocument | None, review_df: pd.Data
     if current_row is None:
         return '<div class="review-card"><div class="review-empty-state">No row selected.</div></div>'
 
-    status = _normalize_status(current_row.get("review_status")) or "pending"
+    status = normalize_review_status(current_row.get("review_status")) or "pending"
     status_label = status.capitalize()
-    reference_text = _format_reference_text(current_row)
-    mapped_reference_text = _format_mapped_reference_text(current_row)
-    comments_text = _format_text(current_row.get("raw_comments"), empty="")
+    reference_text = format_reference_text(current_row)
+    mapped_reference_text = format_mapped_reference_text(current_row)
+    comments_text = format_text(current_row.get("raw_comments"), empty="")
     reason_badges_html = _build_reason_badges(current_row.get("review_reason"))
 
     meta_rows: list[str] = []
@@ -474,13 +401,13 @@ def _build_inspector_html(document: ProcessedDocument | None, review_df: pd.Data
         '<div class="review-compare-grid">'
         '<div class="review-compare-panel">'
         '<div class="review-panel-title">Mapped</div>'
-        f'<div class="review-field"><span>Lab</span><strong>{_format_text(current_row.get("lab_name"))}</strong></div>'
+        f'<div class="review-field"><span>Lab</span><strong>{format_text(current_row.get("lab_name"))}</strong></div>'
         f'<div class="review-field"><span>Value</span><strong>{_format_mapped_value(current_row)}</strong></div>'
         f'<div class="review-field"><span>Reference</span><strong>{mapped_reference_text}</strong></div>'
         "</div>"
         '<div class="review-compare-panel">'
         '<div class="review-panel-title">Raw</div>'
-        f'<div class="review-field"><span>Lab</span><strong>{_format_text(current_row.get("raw_lab_name"))}</strong></div>'
+        f'<div class="review-field"><span>Lab</span><strong>{format_text(current_row.get("raw_lab_name"))}</strong></div>'
         f'<div class="review-field"><span>Value</span><strong>{_format_raw_value(current_row)}</strong></div>'
         f'<div class="review-field"><span>Reference</span><strong>{reference_text}</strong></div>'
         "</div>"
@@ -506,7 +433,13 @@ def _render_document(
     current_index = _resolve_current_index(queue_state, requested_index, prefer_first_visible)
     current_row = _get_current_row(review_df, current_index)
     # Resolve the current page image and overlay only when there is an active row selection.
-    image_value = _build_page_image_value(document, current_row)
+    image_value = None
+    if document is not None and current_row is not None:
+        image_value = build_page_image_value_for_document(
+            document.doc_dir,
+            current_row,
+            label=SOURCE_BBOX_LABEL,
+        )
 
     return ReviewerView(
         current_index=current_index,
@@ -691,7 +624,7 @@ def _choose_next_pending_index(review_df: pd.DataFrame, current_index: int) -> i
     if review_df.empty:
         return -1
 
-    pending_indices = [idx for idx, status in enumerate(review_df["review_status"].tolist()) if _normalize_status(status) == ""]
+    pending_indices = [idx for idx, status in enumerate(review_df["review_status"].tolist()) if normalize_review_status(status) == ""]
 
     # Guard: Fully reviewed documents have no pending row to select.
     if not pending_indices:
