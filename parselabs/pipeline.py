@@ -44,9 +44,14 @@ from parselabs.runtime import (  # noqa: E402
     add_profile_arguments,
     get_openai_client,
 )
+from parselabs.standardization_refresh import (  # noqa: E402
+    StandardizationRefreshResult,
+    refresh_standardization_caches_from_dataframe,
+)
 from parselabs.store import (  # noqa: E402
     DocumentRef,
     discover_pdf_files,
+    get_document_csv_path,
     is_page_payload_reusable,
     plan_pdf_run,
     read_page_payload,
@@ -807,6 +812,13 @@ Examples:
         action="store_true",
         help="Compatibility flag for reviewed-truth helpers; merged all.csv exports are unaffected",
     )
+    parser.add_argument(
+        "--no-auto-standardize",
+        dest="auto_standardize",
+        action="store_false",
+        help="Skip the end-of-run cache refresh for uncached standardization mappings",
+    )
+    parser.set_defaults(auto_standardize=True)
 
     return parser.parse_args()
 
@@ -1011,8 +1023,6 @@ def _export_final_results(
     hidden_cols: list,
     widths: dict,
     output_path: Path,
-    all_failed_pages: list[dict],
-    csv_paths: list[Path],
 ) -> None:
     """Export final results to CSV and Excel formats."""
 
@@ -1027,8 +1037,170 @@ def _export_final_results(
     excel_path = output_path / "all.xlsx"
     export_excel(final_df, excel_path, hidden_cols, widths)
 
-    # Report extraction results and failures
-    _report_extraction_failures(all_failed_pages, csv_path, csv_paths)
+
+def _load_merged_review_dataframe(output_path: Path) -> pd.DataFrame:
+    """Load the merged review dataframe that was just exported for a profile."""
+
+    csv_path = output_path / "all.csv"
+
+    # Guard: Auto-refresh scans need an exported merged review CSV.
+    if not csv_path.exists():
+        raise PipelineError(f"Merged review CSV not found at {csv_path}")
+
+    return pd.read_csv(csv_path, encoding="utf-8")
+
+
+def _rebuild_review_outputs_from_processed_documents(
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
+    *,
+    allow_pending: bool,
+) -> ReviewedCorpusResult:
+    """Rebuild per-document CSVs and merged outputs from persisted page JSON."""
+
+    documents = iter_processed_documents(output_path)
+
+    # Guard: Auto-refresh rebuilds still require processed document directories.
+    if not documents:
+        raise PipelineError(f"No processed documents found in {output_path}")
+
+    return _collect_reviewed_corpus_from_document_dirs(
+        [document.doc_dir for document in documents],
+        lab_specs,
+        allow_pending=allow_pending,
+    )
+
+
+def _list_processed_document_csv_paths(output_path: Path) -> list[Path]:
+    """Return the canonical per-document CSV paths under one output root."""
+
+    return [get_document_csv_path(document.doc_dir) for document in iter_processed_documents(output_path)]
+
+
+def _log_standardization_refresh_summary(
+    result: StandardizationRefreshResult,
+    *,
+    auto_standardize: bool,
+    profile_name: str,
+) -> None:
+    """Log the end-of-run standardization refresh summary."""
+
+    manual_command = f"parselabs admin update-standardization-caches --profile {profile_name}"
+
+    # Disabled auto-refresh still gets a final scan summary for manual follow-up.
+    if not auto_standardize:
+        if not result.attempted:
+            logger.info("[standardization] Auto-refresh disabled; no uncached mappings were found.")
+            return
+
+        logger.warning(
+            f"[standardization] Auto-refresh disabled; {len(result.uncached_names)} name(s) and "
+            f"{len(result.uncached_unit_pairs)} unit pair(s) remain uncached. "
+            f"Manual fallback: {manual_command}"
+        )
+        return
+
+    # Guard: No unresolved work means the run was already fully cached.
+    if not result.attempted and not result.changed:
+        logger.info("[standardization] Auto-refresh not needed; all mappings were already cached.")
+        return
+
+    # Summarize any cache mutations before reporting unresolved leftovers.
+    logger.info(
+        f"[standardization] Auto-refresh summary: +{result.name_updates} name mapping(s), "
+        f"+{result.unit_updates} unit mapping(s)"
+    )
+
+    if result.pruned_name_entries or result.pruned_unit_entries:
+        logger.info(
+            f"[standardization] Removed {result.pruned_name_entries} stale name entr{'y' if result.pruned_name_entries == 1 else 'ies'} "
+            f"and {result.pruned_unit_entries} stale unit entr{'y' if result.pruned_unit_entries == 1 else 'ies'}"
+        )
+
+    if result.name_error:
+        logger.warning(f"[standardization] Name auto-refresh failed: {result.name_error}")
+
+    if result.unit_error:
+        logger.warning(f"[standardization] Unit auto-refresh failed: {result.unit_error}")
+
+    # Guard: Fully resolved refreshes can stop after the positive summary.
+    if not result.unresolved_names and not result.unresolved_unit_pairs:
+        logger.info("[standardization] Auto-refresh complete; no uncached mappings remain.")
+        return
+
+    logger.warning(
+        f"[standardization] Remaining uncached mappings after auto-refresh: "
+        f"{len(result.unresolved_names)} name(s), {len(result.unresolved_unit_pairs)} unit pair(s)"
+    )
+
+
+def _maybe_auto_standardize_outputs(
+    *,
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
+    hidden_cols: list,
+    widths: dict,
+    model_id: str | None,
+    base_url: str | None,
+    api_key: str | None,
+    auto_standardize: bool,
+    profile_name: str,
+    allow_pending: bool,
+) -> list[Path]:
+    """Refresh standardization caches after export and rebuild outputs when needed."""
+
+    merged_review_df = _load_merged_review_dataframe(output_path)
+
+    # Scan only when auto-refresh is disabled so the final summary can stay explicit.
+    if not auto_standardize:
+        result = refresh_standardization_caches_from_dataframe(
+            merged_review_df,
+            lab_specs,
+            model_id=model_id,
+            base_url=base_url,
+            api_key=api_key,
+            dry_run=True,
+        )
+        _log_standardization_refresh_summary(result, auto_standardize=False, profile_name=profile_name)
+        return _list_processed_document_csv_paths(output_path)
+
+    try:
+        result = refresh_standardization_caches_from_dataframe(
+            merged_review_df,
+            lab_specs,
+            model_id=model_id,
+            base_url=base_url,
+            api_key=api_key,
+        )
+    except Exception as exc:
+        logger.warning(f"[standardization] Auto-refresh failed before completion: {exc}")
+        return _list_processed_document_csv_paths(output_path)
+
+    updated_csv_paths = _list_processed_document_csv_paths(output_path)
+
+    # Apply successful cache updates to all persisted outputs without re-extracting PDFs.
+    if result.rebuild_required:
+        logger.info("[standardization] Rebuilding outputs from page JSON to apply refreshed caches...")
+
+        try:
+            reviewed_corpus = _rebuild_review_outputs_from_processed_documents(
+                output_path,
+                lab_specs,
+                allow_pending=allow_pending,
+            )
+        except PipelineError as exc:
+            logger.warning(f"[standardization] Output rebuild after auto-refresh failed: {exc}")
+        else:
+            _export_final_results(
+                reviewed_corpus.merged_review_df,
+                hidden_cols,
+                widths,
+                output_path,
+            )
+            updated_csv_paths = reviewed_corpus.csv_paths
+
+    _log_standardization_refresh_summary(result, auto_standardize=True, profile_name=profile_name)
+    return updated_csv_paths
 
 
 def _build_merged_review_dataframe_from_csv_paths(csv_paths: list[Path]) -> pd.DataFrame:
@@ -1226,21 +1398,14 @@ def build_final_output_dataframe_from_reviewed_json(
     )
 
 
-def _run_reviewed_json_rebuild(profile_name: str, allow_pending: bool) -> None:
+def _run_reviewed_json_rebuild(args, profile_name: str, allow_pending: bool) -> None:
     """Rebuild per-document CSVs and merged outputs from reviewed page JSON files."""
 
     profile, lab_specs = _setup_rebuild_environment(profile_name)
     _, hidden_cols, widths, _ = get_column_lists(COLUMN_SCHEMA)
-
     logger.info("Rebuilding document CSVs and merged outputs from reviewed page JSON files...")
-    documents = iter_processed_documents(profile.output_path)
-
-    # Guard: Reviewed rebuilds require at least one processed document directory.
-    if not documents:
-        raise PipelineError(f"No processed documents found in {profile.output_path}")
-
-    reviewed_corpus = _collect_reviewed_corpus_from_document_dirs(
-        [document.doc_dir for document in documents],
+    reviewed_corpus = _rebuild_review_outputs_from_processed_documents(
+        profile.output_path,
         lab_specs,
         allow_pending=allow_pending,
     )
@@ -1250,9 +1415,20 @@ def _run_reviewed_json_rebuild(profile_name: str, allow_pending: bool) -> None:
         hidden_cols,
         widths,
         profile.output_path,
-        [],
-        reviewed_corpus.csv_paths,
     )
+    final_csv_paths = _maybe_auto_standardize_outputs(
+        output_path=profile.output_path,
+        lab_specs=lab_specs,
+        hidden_cols=hidden_cols,
+        widths=widths,
+        model_id=getattr(args, "model", None) or profile.extract_model_id,
+        base_url=profile.openrouter_base_url,
+        api_key=profile.openrouter_api_key,
+        auto_standardize=bool(getattr(args, "auto_standardize", True)),
+        profile_name=profile_name,
+        allow_pending=allow_pending,
+    )
+    _report_extraction_failures([], profile.output_path / "all.csv", final_csv_paths)
 
 
 def run_for_profile(args, profile_name: str) -> None:
@@ -1292,9 +1468,20 @@ def run_for_profile(args, profile_name: str) -> None:
         hidden_cols,
         widths,
         config.output_path,
-        pipeline_result.failed_pages,
-        pipeline_result.csv_paths,
     )
+    final_csv_paths = _maybe_auto_standardize_outputs(
+        output_path=config.output_path,
+        lab_specs=lab_specs,
+        hidden_cols=hidden_cols,
+        widths=widths,
+        model_id=config.extract_model_id,
+        base_url=config.openrouter_base_url,
+        api_key=config.openrouter_api_key,
+        auto_standardize=bool(getattr(args, "auto_standardize", True)),
+        profile_name=profile_name,
+        allow_pending=True,
+    )
+    _report_extraction_failures(pipeline_result.failed_pages, config.output_path / "all.csv", final_csv_paths)
 
 
 def _report_extraction_failures(all_failed_pages: list[dict], csv_path: Path, csv_paths: list[Path]) -> None:
@@ -1365,7 +1552,7 @@ def main():
         try:
             # Route reviewed-JSON rebuilds through the JSON-only path instead of the extraction pipeline.
             if rebuild_from_json:
-                _run_reviewed_json_rebuild(profile_name, allow_pending=allow_pending)
+                _run_reviewed_json_rebuild(args, profile_name, allow_pending=allow_pending)
             else:
                 run_for_profile(args, profile_name)
             results[profile_name] = "success"

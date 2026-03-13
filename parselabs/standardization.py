@@ -82,8 +82,7 @@ def standardize_lab_names(
     """
     Map raw test names to standardized lab names using cache-only lookup.
 
-    Cache miss returns $UNKNOWN$ and logs a warning. Use utils/update_standardization_caches.py
-    to batch-process new raw names through LLM and update the cache.
+    Cache miss returns $UNKNOWN$ and logs a warning.
 
     Args:
         raw_test_names: List of raw test names from extraction
@@ -105,9 +104,9 @@ def standardize_lab_names(
     unique_raw_names = list(set(raw_test_names))
     uncached_names = [n for n in unique_raw_names if cache_key(n) not in cache]
 
-    # Log warning for cache misses
+    # Log neutral warnings so callers can decide whether to auto-refresh later.
     if uncached_names:
-        logger.warning(f"[name_standardization] {len(uncached_names)} uncached names (returning $UNKNOWN$). Run utils/update_standardization_caches.py to update cache.")
+        logger.warning(f"[name_standardization] {len(uncached_names)} uncached names (using $UNKNOWN$ for this pass).")
         for name in uncached_names[:10]:  # Log first 10 to avoid flooding
             logger.warning(f"  Cache miss: '{name}'")
         if len(uncached_names) > 10:
@@ -123,8 +122,7 @@ def standardize_lab_units(
     """
     Map raw lab units to standardized units using cache-only lookup.
 
-    Cache miss returns $UNKNOWN$ and logs a warning. Use utils/update_standardization_caches.py
-    to batch-process new raw units through LLM and update the cache.
+    Cache miss returns $UNKNOWN$ and logs a warning.
 
     Args:
         unit_contexts: List of (raw_unit, standardized_lab_name) tuples for context
@@ -159,9 +157,9 @@ def standardize_lab_units(
             uncached_pairs.append((raw_unit, lab_name))
             cached_results[(raw_unit, lab_name)] = UNKNOWN_VALUE
 
-    # Log warning for cache misses
+    # Log neutral warnings so callers can decide whether to auto-refresh later.
     if uncached_pairs:
-        logger.warning(f"[unit_standardization] {len(uncached_pairs)} uncached pairs (returning $UNKNOWN$). Run utils/update_standardization_caches.py to update cache.")
+        logger.warning(f"[unit_standardization] {len(uncached_pairs)} uncached pairs (using $UNKNOWN$ for this pass).")
         for raw_unit, lab_name in uncached_pairs[:10]:  # Log first 10
             logger.warning(f"  Cache miss: ('{raw_unit}', '{lab_name}')")
         if len(uncached_pairs) > 10:
