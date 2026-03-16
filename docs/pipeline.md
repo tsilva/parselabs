@@ -119,10 +119,12 @@ Based on the current code, not prior documentation:
 17. Cached standardization.
 - `apply_cached_standardization(...)` standardizes raw lab names using `standardize_lab_names(...)`.
 - Name standardization is now section-aware: it prefers a cache key built from `(raw_lab_name, raw_section_name)` when a section/header was extracted for the row.
-- Legacy bare-name cache keys remain as a fallback only for rows that have no extracted section name.
+- Older caches that still store contextual mappings as `section - raw_lab_name` are now read transparently alongside the newer `raw_lab_name|section` format.
+- Bare-name fallback is still guarded: it is only reused when the cache has no conflicting contextual mappings for that raw label.
 - It standardizes units using `standardize_lab_units(...)` only after the lab name is known.
 - Unknown name mappings become `$UNKNOWN$`.
 - Blank raw units are only inferred from the lab spec primary unit for a narrow safe set: `boolean`, `pH`, and `unitless`.
+- For percentage-vs-absolute sibling analytes, blank raw units can also be inferred from the report's own extracted reference ranges when those ranges clearly match one sibling variant over the other.
 - After unit mapping, the code remaps percentage-vs-absolute sibling analytes using the standardized unit as the tie-breaker.
 
 18. Deterministic normalization.

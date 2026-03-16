@@ -729,6 +729,81 @@ def test_apply_cached_standardization_remaps_absolute_units_to_non_percentage_va
     assert standardized_df["lab_unit_standardized"].tolist() == ["10⁹/L", "/mm3"]
 
 
+def test_apply_cached_standardization_infers_missing_absolute_units_from_reference_ranges(tmp_path, monkeypatch):
+    lab_specs = _make_percentage_variant_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            ("Neutrófilos", "Leucograma"): "Blood - Neutrophils (%)",
+        },
+        unit_map={
+            ("%", "Blood - Neutrophils (%)"): "%",
+            ("", "Blood - Neutrophils (%)"): "%",
+        },
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Neutrófilos",
+                "raw_section_name": "Leucograma",
+                "raw_lab_unit": "",
+                "raw_reference_min": 1.5,
+                "raw_reference_max": 6.9,
+                "raw_value": "3.6",
+            },
+            {
+                "raw_lab_name": "Neutrófilos",
+                "raw_section_name": "Leucograma",
+                "raw_lab_unit": "%",
+                "raw_reference_min": 40.0,
+                "raw_reference_max": 75.0,
+                "raw_value": "66.9",
+            },
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df["lab_name_standardized"].tolist() == [
+        "Blood - Neutrophils",
+        "Blood - Neutrophils (%)",
+    ]
+    assert standardized_df["lab_unit_standardized"].tolist() == ["10⁹/L", "%"]
+
+
+def test_flag_percentage_variant_ambiguity_ignores_single_variant_labs(tmp_path):
+    config_path = tmp_path / "lab_specs.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "Blood - Hematocrit (HCT) (%)": {
+                    "primary_unit": "%",
+                    "lab_type": "blood",
+                    "loinc_code": "4544-3",
+                    "alternatives": [{"unit": "L/L", "factor": 100.0}],
+                    "ranges": {"default": [40.0, 50.0]},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    lab_specs = LabSpecsConfig(config_path=config_path)
+
+    review_df = pd.DataFrame(
+        [
+            {
+                "lab_name_standardized": "Blood - Hematocrit (HCT) (%)",
+                "lab_unit_standardized": "L/L",
+            }
+        ]
+    )
+
+    flagged_df = rows_module._flag_percentage_variant_ambiguity(review_df, lab_specs)
+
+    assert "review_reason" not in flagged_df.columns or flagged_df.loc[0, "review_reason"] in ("", None)
+
+
 def test_apply_cached_standardization_leaves_correct_unknown_and_orphan_rows_unchanged(tmp_path, monkeypatch):
     lab_specs = _make_percentage_variant_lab_specs(tmp_path)
     _stub_standardization_maps(

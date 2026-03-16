@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 
 from parselabs.config import UNKNOWN_VALUE
 from parselabs.paths import get_cache_dir
@@ -43,6 +44,16 @@ def build_name_cache_key(raw_name, raw_section_name=None) -> str:
     return f"{normalized_name}|{normalized_section}"
 
 
+def build_legacy_section_name_cache_key(raw_name, raw_section_name) -> str:
+    """Build the legacy ``section - raw_name`` cache key still present in older caches."""
+
+    normalized_name = normalize_name_cache_key_component(raw_name)
+    normalized_section = normalize_section_cache_key_component(raw_section_name)
+    if not normalized_section:
+        return normalized_name
+    return f"{normalized_section} - {normalized_name}"
+
+
 def normalize_unit_cache_key_component(raw_unit) -> str:
     """Normalize missing and textual raw-unit values to a stable cache key token."""
 
@@ -52,7 +63,54 @@ def normalize_unit_cache_key_component(raw_unit) -> str:
     if normalized in {"", "nan", "none", "null"}:
         return "null"
 
+    # Normalize compact scientific-notation variants like x109/L and x1012/L so
+    # they share cache entries with the more explicit x10^9/L / x10^12/L forms.
+    compact_exponent_match = re.fullmatch(r"(?P<prefix>x)(?P<body>10)(?P<exp>\d{1,2})/l", normalized.replace(" ", ""))
+    if compact_exponent_match:
+        prefix = "x" if compact_exponent_match.group("prefix") else ""
+        exponent = compact_exponent_match.group("exp")
+        return f"{prefix}10^{exponent}/l"
+
     return normalized
+
+
+def _contextual_cache_values_for_name(cache: dict[str, str], normalized_name: str) -> set[str]:
+    """Collect all contextual cache values that mention a given normalized raw name."""
+
+    contextual_values: set[str] = set()
+    canonical_prefix = f"{normalized_name}|"
+    legacy_suffix = f" - {normalized_name}"
+
+    for key, value in cache.items():
+        if key.startswith(canonical_prefix) or key.endswith(legacy_suffix):
+            contextual_values.add(value)
+
+    return contextual_values
+
+
+def _safe_bare_name_fallback(cache: dict[str, str], raw_name, raw_section_name) -> str | None:
+    """Return a bare-name cache match only when contextual mappings do not conflict."""
+
+    normalized_name = normalize_name_cache_key_component(raw_name)
+    bare_value = cache.get(normalized_name)
+
+    # Guard: no bare cache entry means there is nothing to reuse.
+    if bare_value is None:
+        return None
+
+    contextual_values = _contextual_cache_values_for_name(cache, normalized_name)
+
+    # No contextual overrides exist, or every contextual mapping agrees with the bare mapping.
+    if not contextual_values or contextual_values == {bare_value}:
+        return bare_value
+
+    logger.warning(
+        "[name_standardization] Refusing bare-name fallback for ('%s', '%s') due to conflicting contextual cache values: %s",
+        raw_name,
+        raw_section_name,
+        sorted(contextual_values),
+    )
+    return None
 
 
 def _drop_unknown_standardization_entries(name: str, cache: dict) -> dict:
@@ -139,10 +197,22 @@ def standardize_lab_names(
 
     for raw_name, raw_section_name in unique_name_contexts:
         cache_key = build_name_cache_key(raw_name, raw_section_name)
+        legacy_cache_key = build_legacy_section_name_cache_key(raw_name, raw_section_name)
 
         # Section-aware rows only trust the explicit contextual key.
         if cache_key in cache:
             cached_results[(raw_name, raw_section_name)] = cache[cache_key]
+            continue
+
+        # Backward compatibility: older caches stored contextual mappings as
+        # ``section - raw_name`` instead of ``raw_name|section``.
+        if raw_section_name is not None and legacy_cache_key in cache:
+            cached_results[(raw_name, raw_section_name)] = cache[legacy_cache_key]
+            continue
+
+        fallback_value = _safe_bare_name_fallback(cache, raw_name, raw_section_name)
+        if fallback_value is not None:
+            cached_results[(raw_name, raw_section_name)] = fallback_value
             continue
 
         uncached_names.append((raw_name, raw_section_name))
