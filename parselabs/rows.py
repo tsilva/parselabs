@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -55,6 +56,24 @@ UNKNOWN_LAB_MAPPING_REASON = "UNKNOWN_LAB_MAPPING"
 UNKNOWN_UNIT_MAPPING_REASON = "UNKNOWN_UNIT_MAPPING"
 AMBIGUOUS_PERCENTAGE_VARIANT_REASON = "AMBIGUOUS_PERCENTAGE_VARIANT"
 SUSPICIOUS_REFERENCE_RANGE_REASON = "SUSPICIOUS_REFERENCE_RANGE"
+
+_INFERRED_URINE_SECTION_BY_NAME = {
+    "cor": "< TIPO II >",
+    "ph": "< TIPO II >",
+    "densidade a 15o c": "< TIPO II >",
+    "proteinas": "Elementos anormais",
+    "glicose": "Elementos anormais",
+    "corpos cetonicos": "Elementos anormais",
+    "bilirrubina": "Elementos anormais",
+    "nitritos": "Elementos anormais",
+    "sangue": "Elementos anormais",
+    "urobilinogenio": "Elementos anormais",
+    "celulas epiteliais": "EXAME MICROSCOPICO DO SEDIMENTO",
+    "leucocitos": "EXAME MICROSCOPICO DO SEDIMENTO",
+    "eritrocitos": "EXAME MICROSCOPICO DO SEDIMENTO",
+}
+
+_MIN_URINE_CONTEXT_ROWS = 3
 
 DOCUMENT_REVIEW_COLUMNS = [
     "date",
@@ -308,6 +327,51 @@ def build_review_rows(
     return prepared_df[DOCUMENT_REVIEW_COLUMNS].copy()
 
 
+def _normalize_section_inference_key(value: object) -> str:
+    """Normalize raw labels into stable keys for section backfilling."""
+
+    text = str(value or "").strip().lower()
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    text = text.replace("º", "o")
+    return re.sub(r"\s+", " ", text)
+
+
+def _backfill_missing_raw_sections(review_df: pd.DataFrame) -> pd.DataFrame:
+    """Infer urine section labels for sectionless rows when the page context is clear."""
+
+    required_columns = {"page_number", "raw_lab_name", "raw_section_name"}
+
+    # Guard: Only dataframes with row identity and raw labels can be enriched.
+    if review_df.empty or not required_columns.issubset(review_df.columns):
+        return review_df
+
+    enriched_df = review_df.copy()
+
+    for _, page_df in enriched_df.groupby("page_number", sort=False):
+        normalized_names = page_df["raw_lab_name"].fillna("").astype(str).map(_normalize_section_inference_key)
+        urine_context_count = int(normalized_names.isin(_INFERRED_URINE_SECTION_BY_NAME).sum())
+
+        # Guard: Sparse matches are too weak to infer a urine section safely.
+        if urine_context_count < _MIN_URINE_CONTEXT_ROWS:
+            continue
+
+        for idx, normalized_name in zip(page_df.index, normalized_names, strict=False):
+            current_section = enriched_df.at[idx, "raw_section_name"]
+
+            # Preserve explicit section metadata from extraction.
+            if pd.notna(current_section) and str(current_section).strip():
+                continue
+
+            inferred_section = _INFERRED_URINE_SECTION_BY_NAME.get(normalized_name)
+            if inferred_section is None:
+                continue
+
+            enriched_df.at[idx, "raw_section_name"] = inferred_section
+
+    return enriched_df
+
+
 def build_export_rows(
     source: Path | Iterable[dict],
     lab_specs: LabSpecsConfig,
@@ -420,6 +484,7 @@ def _flatten_page_payloads(
         return pd.DataFrame(columns=DOCUMENT_REVIEW_COLUMNS)
 
     flattened_df = pd.DataFrame(rows)
+    flattened_df = _backfill_missing_raw_sections(flattened_df)
     ensure_columns(flattened_df, DOCUMENT_REVIEW_COLUMNS, default=None)
     return flattened_df
 
@@ -648,6 +713,7 @@ def load_document_review_rows(
     if doc_date is not None:
         review_df["date"] = doc_date
 
+    review_df = _backfill_missing_raw_sections(review_df)
     ensure_columns(review_df, DOCUMENT_REVIEW_COLUMNS, default=None)
     return review_df
 

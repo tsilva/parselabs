@@ -20,6 +20,8 @@ CRITICAL RULES:
    - Also extract the governing header itself into `raw_section_name`
    - Use the most specific visible section/header that the row belongs to
    - If no governing section/header is visible, use null
+   - When a bare row label could belong to either blood or urine, `raw_section_name` is mandatory if the page shows the governing header
+   - Example: `Glicose`, `Proteinas`, `LEUCOCITOS`, or `Eritrocitos` under a urine block must keep that urine section in `raw_section_name`
 
 4. NUMERIC vs QUALITATIVE VALUES:
    - `raw_value`: Extract EXACTLY as shown - can be numeric OR text

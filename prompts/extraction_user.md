@@ -17,6 +17,7 @@ IMPORTANT FOR SECTION NAMES:
 - If the page has nested headers, choose the innermost visible one that governs the row
 - If no governing section/header is visible, set raw_section_name to null
 - Prefer keeping the section/header in raw_section_name instead of repeating it inside raw_lab_name
+- If a short row label like `Glicose`, `Proteinas`, `LEUCOCITOS`, or `Eritrocitos` is inside a urine section, you must copy that urine header into raw_section_name
 
 IMPORTANT FOR BOUNDING BOXES:
 - Use the full page image as the coordinate space
