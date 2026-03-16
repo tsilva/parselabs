@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from parselabs import rows as rows_module
 from parselabs import pipeline as main
 from parselabs.config import ExtractionConfig, LabSpecsConfig, ProfileConfig
 from parselabs.rows import (
@@ -131,6 +132,18 @@ def _make_mixed_section_lab_specs(tmp_path: Path) -> LabSpecsConfig:
                     "lab_type": "urine",
                     "loinc_code": "5792-7-qual",
                     "ranges": {"default": [0, 0]},
+                },
+                "Urine Type II - Color": {
+                    "primary_unit": "boolean",
+                    "lab_type": "urine",
+                    "loinc_code": "5778-1",
+                    "ranges": {"default": [0, 0]},
+                },
+                "Urine Type II - pH": {
+                    "primary_unit": "pH",
+                    "lab_type": "urine",
+                    "loinc_code": "5803-7",
+                    "ranges": {"default": [5.0, 8.0]},
                 },
                 "Urine Type II - Sediment - Leukocytes": {
                     "primary_unit": "/field",
@@ -577,6 +590,64 @@ def test_apply_cached_standardization_uses_raw_section_name_to_disambiguate_mixe
         "Blood - Glucose (Fasting)",
         "Blood - Leukocytes",
     ]
+
+
+def test_backfill_missing_raw_sections_infers_urine_page_context():
+    review_df = pd.DataFrame(
+        [
+            {"page_number": 3, "raw_lab_name": "Cor", "raw_section_name": None},
+            {"page_number": 3, "raw_lab_name": "pH", "raw_section_name": None},
+            {"page_number": 3, "raw_lab_name": "Glicose", "raw_section_name": None},
+            {"page_number": 3, "raw_lab_name": "LEUCOCITOS", "raw_section_name": None},
+            {"page_number": 3, "raw_lab_name": "Antigenio HBs", "raw_section_name": None},
+            {"page_number": 1, "raw_lab_name": "Leucocitos", "raw_section_name": None},
+        ]
+    )
+
+    enriched_df = rows_module._backfill_missing_raw_sections(review_df)
+
+    assert enriched_df.loc[0, "raw_section_name"] == "< TIPO II >"
+    assert enriched_df.loc[1, "raw_section_name"] == "< TIPO II >"
+    assert enriched_df.loc[2, "raw_section_name"] == "Elementos anormais"
+    assert enriched_df.loc[3, "raw_section_name"] == "EXAME MICROSCOPICO DO SEDIMENTO"
+    assert pd.isna(enriched_df.loc[4, "raw_section_name"])
+    assert pd.isna(enriched_df.loc[5, "raw_section_name"])
+
+
+def test_build_document_review_dataframe_infers_missing_sections_for_urine_disambiguation(tmp_path, monkeypatch):
+    lab_specs = _make_mixed_section_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            ("Cor", "< TIPO II >"): "Urine Type II - Color",
+            ("pH", "< TIPO II >"): "Urine Type II - pH",
+            ("Glicose", "Elementos anormais"): "Urine Type II - Glucose",
+            ("LEUCOCITOS", "EXAME MICROSCOPICO DO SEDIMENTO"): "Urine Type II - Sediment - Leukocytes",
+        },
+        unit_map={
+            ("", "Urine Type II - Color"): "boolean",
+            ("", "Urine Type II - pH"): "pH",
+            ("", "Urine Type II - Glucose"): "boolean",
+            ("/campo", "Urine Type II - Sediment - Leukocytes"): "/field",
+        },
+    )
+
+    doc_dir = tmp_path / "processed" / "urine_deadbeef"
+    _write_processed_document(
+        doc_dir,
+        [None, None, None, None],
+        stem="urine",
+        raw_names=["Cor", "pH", "Glicose", "LEUCOCITOS"],
+        raw_values=["AMARELA", "6.0", "NAO CONTEM", "1 a 2"],
+        raw_units=[None, None, None, "/campo"],
+    )
+
+    review_df = build_document_review_dataframe(doc_dir, lab_specs)
+
+    assert review_df.loc[2, "raw_section_name"] == "Elementos anormais"
+    assert review_df.loc[2, "lab_name_standardized"] == "Urine Type II - Glucose, Qualitative"
+    assert review_df.loc[3, "raw_section_name"] == "EXAME MICROSCOPICO DO SEDIMENTO"
+    assert review_df.loc[3, "lab_name_standardized"] == "Urine Type II - Sediment - Leukocytes"
 
 
 def test_build_document_review_dataframe_preserves_raw_section_name(tmp_path, monkeypatch):

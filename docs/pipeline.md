@@ -107,6 +107,8 @@ Based on the current code, not prior documentation:
 - It carries through raw fields, bounding boxes, `review_status`, and `review_completed_at`.
 - If a page payload has `_extraction_failed=True`, every row from that page is marked review-needed and gets `EXTRACTION_FAILED` appended to `review_reason`.
 - The document date is taken from the first usable page payload, with fallback to a `YYYY-MM-DD` token in the filename stem.
+- Before standardization, the row builder now backfills missing `raw_section_name` values for clearly urine-context pages using deterministic page-level label heuristics.
+- This protects ambiguous bare labels such as `Glicose`, `LEUCOCITOS`, and `Eritrocitos` from being misread as blood analytes when the model omitted the visible urine section header.
 
 16. Shared row preparation pipeline.
 - Both review-mode rows and export-mode rows now go through one shared function: `prepare_rows(...)` in `parselabs/rows.py`.
