@@ -47,6 +47,10 @@ def preprocess_numeric_value(value) -> str:
 
     s = str(value).strip()
 
+    # Normalize OCR spacing around decimal separators before any parsing logic.
+    # Examples: "13 .0" -> "13.0", "4 ,04" -> "4,04"
+    s = re.sub(r"(?<=\d)\s*([.,])\s*(?=\d)", r"\1", s)
+
     # Handle embedded metadata: "52.6=1946" → "52.6" (keep first number before =)
     # Must be done before stripping trailing "=" to handle both cases
     if "=" in s and not s.endswith("="):

@@ -751,13 +751,24 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
     standardized_units: list[str | None] = []
     safe_missing_unit_primary_units = {"boolean", "pH", "unitless"}
 
-    for raw_unit, standardized_name in unit_contexts:
+    for idx, (raw_unit, standardized_name) in zip(review_df.index, unit_contexts, strict=False):
         # Leave units empty when the lab name did not map.
         if (raw_unit, standardized_name) == ("", ""):
             standardized_units.append(None)
             continue
 
         standardized_unit = mapped_units.get((raw_unit, standardized_name))
+
+        # Blank raw units can still be recoverable when sibling variants have
+        # distinct reference ranges in the source report.
+        if raw_unit.strip() == "":
+            inferred_unit = _infer_missing_variant_unit_from_ranges(
+                review_df.loc[idx],
+                standardized_name,
+                lab_specs,
+            )
+            if inferred_unit is not None:
+                standardized_unit = inferred_unit
 
         # Some labs are intrinsically unitless or use a conventional implied unit.
         # When extraction omits the printed unit entirely, prefer the primary unit
@@ -772,6 +783,101 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
     review_df["lab_unit_standardized"] = standardized_units
     review_df = _remap_percentage_variant_lab_names(review_df, lab_specs)
     return review_df
+
+
+def _infer_missing_variant_unit_from_ranges(
+    row: pd.Series,
+    standardized_name: str,
+    lab_specs: LabSpecsConfig,
+) -> str | None:
+    """Infer a missing unit when percentage and absolute sibling variants have distinct ranges."""
+
+    candidate_names = [standardized_name]
+
+    percentage_variant = lab_specs.get_percentage_variant(standardized_name)
+    if percentage_variant is not None:
+        candidate_names.append(percentage_variant)
+
+    non_percentage_variant = lab_specs.get_non_percentage_variant(standardized_name)
+    if non_percentage_variant is not None:
+        candidate_names.append(non_percentage_variant)
+
+    # Guard: No sibling variants means there is no deterministic missing-unit inference path.
+    candidate_names = list(dict.fromkeys(candidate_names))
+    if len(candidate_names) < 2:
+        return None
+
+    raw_min = row.get("raw_reference_min")
+    raw_max = row.get("raw_reference_max")
+    observed_value = row.get("raw_value")
+
+    scored_candidates: list[tuple[float, str]] = []
+    for candidate_name in candidate_names:
+        score = _score_variant_range_match(candidate_name, raw_min, raw_max, observed_value, lab_specs)
+        if score is None:
+            continue
+        scored_candidates.append((score, candidate_name))
+
+    # Guard: Missing or unusable range metadata leaves the unit unresolved for review.
+    if len(scored_candidates) < 2:
+        return None
+
+    scored_candidates.sort(key=lambda item: item[0])
+    best_score, best_name = scored_candidates[0]
+    next_score = scored_candidates[1][0]
+
+    # Require a clear winner so we do not silently force ambiguous sibling variants.
+    if next_score - best_score < 0.25:
+        return None
+
+    return lab_specs.get_primary_unit(best_name)
+
+
+def _score_variant_range_match(
+    candidate_name: str,
+    raw_min: object,
+    raw_max: object,
+    observed_value: object,
+    lab_specs: LabSpecsConfig,
+) -> float | None:
+    """Score how well one candidate lab variant matches the observed report range metadata."""
+
+    expected_range = lab_specs.specs.get(candidate_name, {}).get("ranges", {}).get("default")
+    if not isinstance(expected_range, list) or len(expected_range) < 2:
+        return None
+
+    expected_min, expected_max = expected_range[0], expected_range[1]
+    score = 0.0
+    comparisons = 0
+
+    if pd.notna(raw_min) and expected_min is not None:
+        score += _scaled_range_delta(float(raw_min), float(expected_min))
+        comparisons += 1
+
+    if pd.notna(raw_max) and expected_max is not None:
+        score += _scaled_range_delta(float(raw_max), float(expected_max))
+        comparisons += 1
+
+    if comparisons == 0 and pd.notna(observed_value):
+        parsed_value = pd.to_numeric(pd.Series([observed_value]).map(lambda value: str(value).replace(",", ".")), errors="coerce").iloc[0]
+        if pd.notna(parsed_value) and expected_min is not None and expected_max is not None:
+            midpoint = (float(expected_min) + float(expected_max)) / 2
+            score += _scaled_range_delta(float(parsed_value), midpoint)
+            comparisons += 1
+
+    if comparisons == 0:
+        return None
+
+    return score / comparisons
+
+
+def _scaled_range_delta(observed: float, expected: float) -> float:
+    """Return a unit-agnostic distance score between two range bounds."""
+
+    if expected == 0:
+        return abs(observed)
+
+    return abs(observed - expected) / max(abs(expected), 1.0)
 
 
 def _remap_percentage_variant_lab_names(
@@ -934,12 +1040,12 @@ def _flag_percentage_variant_ambiguity(
             continue
 
         # Percentage units paired with non-percentage names remain ambiguous only when no sibling can fix them.
-        if std_unit == "%" and not std_name.endswith("(%)"):
+        if std_unit == "%" and not std_name.endswith("(%)") and lab_specs.get_percentage_variant(str(std_name)) is not None:
             ambiguous_indices.append(idx)
             continue
 
         # Non-percentage units paired with percentage names are also ambiguous when remapping could not resolve them.
-        if std_unit != "%" and std_name.endswith("(%)"):
+        if std_unit != "%" and std_name.endswith("(%)") and lab_specs.get_non_percentage_variant(str(std_name)) is not None:
             ambiguous_indices.append(idx)
 
     return _append_review_reason_code(
