@@ -774,6 +774,17 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
 
         standardized_unit = mapped_units.get((raw_unit, standardized_name))
 
+        # Preserve explicit conversion units when stale cache entries collapse them into
+        # the primary unit before apply_unit_conversions() can apply the factor.
+        if raw_unit.strip() != "":
+            inferred_unit = _infer_explicit_conversion_unit_from_raw_unit(
+                raw_unit,
+                standardized_name,
+                lab_specs,
+            )
+            if inferred_unit is not None:
+                standardized_unit = inferred_unit
+
         # Explicit non-percent units should force percentage-vs-absolute siblings onto the
         # absolute path even when an old cache entry still points to the (%) variant.
         if raw_unit.strip() != "":
@@ -887,6 +898,64 @@ def _normalize_optional_text(value: object) -> str:
     return str(value).strip()
 
 
+def _normalize_conversion_unit_token(value: object) -> str:
+    """Normalize unit text for explicit conversion-unit matching."""
+
+    normalized_value = unicodedata.normalize("NFKC", str(value).strip().lower())
+    normalized_value = normalized_value.replace("μ", "µ")
+    normalized_value = normalized_value.replace("ˆ", "^")
+    normalized_value = normalized_value.replace("×", "x")
+    normalized_value = re.sub(r"\s+", "", normalized_value)
+    return normalized_value
+
+
+def _iter_conversion_units_for_lab(
+    standardized_name: str,
+    lab_specs: LabSpecsConfig,
+) -> list[str]:
+    """Return the primary and alternative units that can be converted for one lab."""
+
+    candidate_units: list[str] = []
+    primary_unit = lab_specs.get_primary_unit(standardized_name)
+
+    # Include the configured primary unit first so exact raw-primary matches stay stable.
+    if isinstance(primary_unit, str) and primary_unit.strip():
+        candidate_units.append(primary_unit)
+
+    lab_config = lab_specs.specs.get(standardized_name, {})
+    for alternative in lab_config.get("alternatives", []):
+        unit = alternative.get("unit")
+
+        # Skip malformed alternative entries instead of crashing the review pipeline.
+        if not isinstance(unit, str) or not unit.strip():
+            continue
+
+        candidate_units.append(unit)
+
+    return list(dict.fromkeys(candidate_units))
+
+
+def _infer_explicit_conversion_unit_from_raw_unit(
+    raw_unit: str,
+    standardized_name: str,
+    lab_specs: LabSpecsConfig,
+) -> str | None:
+    """Preserve explicit conversion units so downstream factor application can run."""
+
+    raw_unit_token = _normalize_conversion_unit_token(raw_unit)
+
+    # Guard: Blank raw units have no explicit conversion path to preserve.
+    if not raw_unit_token:
+        return None
+
+    for candidate_unit in _iter_conversion_units_for_lab(standardized_name, lab_specs):
+        # Match directly against the canonical conversion units configured for this lab.
+        if _normalize_conversion_unit_token(candidate_unit) == raw_unit_token:
+            return candidate_unit
+
+    return None
+
+
 def _infer_missing_variant_unit_from_ranges(
     row: pd.Series,
     standardized_name: str,
@@ -960,6 +1029,16 @@ def _infer_explicit_variant_unit_from_raw_unit(
         return "%"
 
     absolute_variant = non_percentage_variant or standardized_name
+    inferred_conversion_unit = _infer_explicit_conversion_unit_from_raw_unit(
+        raw_unit_text,
+        absolute_variant,
+        lab_specs,
+    )
+
+    # Preserve explicit conversion units like /mm3 so factor application can still run.
+    if inferred_conversion_unit is not None:
+        return inferred_conversion_unit
+
     return lab_specs.get_primary_unit(absolute_variant)
 
 

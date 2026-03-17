@@ -10,6 +10,7 @@ import pytest
 from parselabs import rows as rows_module
 from parselabs import pipeline as main
 from parselabs.config import ExtractionConfig, LabSpecsConfig, ProfileConfig
+from parselabs.normalization import apply_normalizations
 from parselabs.rows import (
     ReviewStateError,
     apply_cached_standardization,
@@ -867,6 +868,54 @@ def test_apply_cached_standardization_overrides_stale_percentage_unit_cache_for_
 
     assert standardized_df["lab_name_standardized"].tolist() == ["Blood - Neutrophils"]
     assert standardized_df["lab_unit_standardized"].tolist() == ["10⁹/L"]
+
+
+def test_apply_cached_standardization_preserves_mm3_units_for_conversion(tmp_path, monkeypatch):
+    config_path = tmp_path / "lab_specs_counts.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "Blood - Lymphocytes": {
+                    "primary_unit": "10⁹/L",
+                    "lab_type": "blood",
+                    "loinc_code": "731-0",
+                    "alternatives": [
+                        {"unit": "/mm3", "factor": 0.001},
+                    ],
+                    "ranges": {"default": [1.0, 3.5]},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    lab_specs = LabSpecsConfig(config_path=config_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={"Linfócitos": "Blood - Lymphocytes"},
+        unit_map={
+            ("/mm3", "Blood - Lymphocytes"): "10⁹/L",
+        },
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Linfócitos",
+                "raw_comments": None,
+                "raw_lab_unit": "/mm3",
+                "raw_value": "1350.0",
+                "raw_reference_min": 1000.0,
+                "raw_reference_max": 3500.0,
+            }
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+    normalized_df = apply_normalizations(standardized_df, lab_specs)
+
+    assert standardized_df["lab_unit_standardized"].tolist() == ["/mm3"]
+    assert normalized_df["lab_unit_primary"].tolist() == ["10⁹/L"]
+    assert normalized_df["value_primary"].tolist() == [1.35]
 
 
 def test_flag_percentage_variant_ambiguity_ignores_single_variant_labs(tmp_path):
