@@ -12,6 +12,9 @@ from parselabs.paths import get_lab_specs_path, get_profiles_dir
 
 logger = logging.getLogger(__name__)
 
+LEGACY_QUALITATIVE_SUFFIX = ", Qualitative"
+CANONICAL_QUALITATIVE_SUFFIX = " (Qualitative)"
+
 UNKNOWN_VALUE = "$UNKNOWN$"
 
 
@@ -250,6 +253,8 @@ class LabSpecsConfig:
         self._standardized_names = []
         self._standardized_units = []
         self._lab_type_map = {}
+        self._canonical_name_map = {}
+        self._lab_name_aliases = {}
 
         # Guard: config file must exist
         if not self.config_path.exists():
@@ -260,8 +265,19 @@ class LabSpecsConfig:
         with open(self.config_path, "r", encoding="utf-8") as f:
             self._specs = json.load(f)
 
-        # Pre-compute all views (filter out meta keys starting with _)
-        self._standardized_names = sorted(key for key in self._specs.keys() if not key.startswith("_"))
+        # Pre-compute all views (filter out meta keys starting with _).
+        canonical_names = set()
+        for lab_name, spec in self._specs.items():
+            if lab_name.startswith("_") or not isinstance(spec, dict):
+                continue
+
+            canonical_name = self._build_canonical_lab_name(lab_name, spec)
+            self._canonical_name_map[lab_name] = canonical_name
+            self._lab_name_aliases[lab_name] = lab_name
+            self._lab_name_aliases[canonical_name] = lab_name
+            canonical_names.add(canonical_name)
+
+        self._standardized_names = sorted(canonical_names)
 
         # Collect unique units from primary_unit and alternatives
         all_units = set()
@@ -283,7 +299,11 @@ class LabSpecsConfig:
         self._standardized_units = sorted(all_units)
 
         # Build lab_type mapping
-        self._lab_type_map = {lab_name: spec.get("lab_type", "blood") for lab_name, spec in self._specs.items() if not lab_name.startswith("_") and isinstance(spec, dict)}
+        self._lab_type_map = {
+            self._canonical_name_map.get(lab_name, lab_name): spec.get("lab_type", "blood")
+            for lab_name, spec in self._specs.items()
+            if not lab_name.startswith("_") and isinstance(spec, dict)
+        }
 
         logger.info(f"Loaded {len(self._standardized_names)} lab specs, {len(self._standardized_units)} units")
 
@@ -311,28 +331,89 @@ class LabSpecsConfig:
 
         return self._specs
 
+    @staticmethod
+    def _looks_like_qualitative_boolean_name(lab_name: str, spec: dict) -> bool:
+        """Return whether the lab should expose a canonical qualitative suffix."""
+
+        if spec.get("primary_unit") != "boolean":
+            return False
+
+        if lab_name.endswith(LEGACY_QUALITATIVE_SUFFIX) or lab_name.endswith(CANONICAL_QUALITATIVE_SUFFIX):
+            return True
+
+        qualitative_urine_bases = {
+            "Urine Type II - Albumin",
+            "Urine Type II - Bilirubin",
+            "Urine Type II - Blood",
+            "Urine Type II - Glucose",
+            "Urine Type II - Ketones",
+            "Urine Type II - Leukocytes",
+            "Urine Type II - Nitrites",
+            "Urine Type II - Proteins",
+            "Urine Type II - Urobilinogen",
+        }
+        return lab_name in qualitative_urine_bases
+
+    def _build_canonical_lab_name(self, lab_name: str, spec: dict) -> str:
+        """Return the canonical exported/display name for one configured lab."""
+
+        if lab_name.endswith(CANONICAL_QUALITATIVE_SUFFIX):
+            return lab_name
+
+        if lab_name.endswith(LEGACY_QUALITATIVE_SUFFIX):
+            return f"{lab_name.removesuffix(LEGACY_QUALITATIVE_SUFFIX)}{CANONICAL_QUALITATIVE_SUFFIX}"
+
+        if self._looks_like_qualitative_boolean_name(lab_name, spec):
+            return f"{lab_name}{CANONICAL_QUALITATIVE_SUFFIX}"
+
+        return lab_name
+
+    def resolve_lab_name(self, lab_name: str) -> str | None:
+        """Resolve a canonical or legacy lab name to the configured spec key."""
+
+        if not isinstance(lab_name, str) or not lab_name.strip():
+            return None
+
+        if lab_name in self._specs:
+            return lab_name
+
+        return self._lab_name_aliases.get(lab_name)
+
+    def get_canonical_lab_name(self, lab_name: str) -> str:
+        """Return the canonical exported/display name for a configured lab."""
+
+        resolved_name = self.resolve_lab_name(lab_name)
+        if resolved_name is None:
+            return lab_name
+
+        return self._canonical_name_map.get(resolved_name, resolved_name)
+
     def get_lab_type(self, lab_name: str) -> str:
         """Get lab type for a given lab name."""
 
-        return self._lab_type_map.get(lab_name, "blood")
+        return self._lab_type_map.get(self.get_canonical_lab_name(lab_name), "blood")
 
     def get_primary_unit(self, lab_name: str) -> str | None:
         """Get primary unit for a lab."""
 
+        resolved_name = self.resolve_lab_name(lab_name)
+
         # Guard: lab not in specs
-        if lab_name not in self._specs:
+        if resolved_name is None:
             return None
 
-        return self._specs[lab_name].get("primary_unit")
+        return self._specs[resolved_name].get("primary_unit")
 
     def get_conversion_factor(self, lab_name: str, from_unit: str) -> float | None:
         """Get conversion factor from given unit to primary unit."""
 
+        resolved_name = self.resolve_lab_name(lab_name)
+
         # Guard: lab not in specs
-        if lab_name not in self._specs:
+        if resolved_name is None:
             return None
 
-        spec = self._specs[lab_name]
+        spec = self._specs[resolved_name]
         primary_unit = spec.get("primary_unit")
 
         # Already in primary unit
@@ -365,11 +446,13 @@ class LabSpecsConfig:
             Tuple of (min, max) or (None, None)
         """
 
+        resolved_name = self.resolve_lab_name(lab_name)
+
         # Guard: lab not in specs
-        if lab_name not in self._specs:
+        if resolved_name is None:
             return (None, None)
 
-        ranges = self._specs[lab_name].get("ranges", {})
+        ranges = self._specs[resolved_name].get("ranges", {})
 
         # Guard: no ranges configured
         if not ranges:
@@ -429,14 +512,16 @@ class LabSpecsConfig:
     def get_percentage_variant(self, lab_name: str) -> str | None:
         """Get the (%) variant of a lab name if it exists."""
 
+        lab_name = self.get_canonical_lab_name(lab_name)
+
         # Guard: already a percentage variant
         if lab_name.endswith("(%)"):
             return None
 
         # Check if percentage variant exists in specs
         percentage_variant = f"{lab_name} (%)"
-        if percentage_variant in self._specs:
-            return percentage_variant
+        if self.resolve_lab_name(percentage_variant) is not None:
+            return self.get_canonical_lab_name(percentage_variant)
 
         return None
 
@@ -446,14 +531,16 @@ class LabSpecsConfig:
         For example: "Blood - Neutrophils (%)" -> "Blood - Neutrophils"
         """
 
+        lab_name = self.get_canonical_lab_name(lab_name)
+
         # Guard: not a percentage variant
         if not lab_name.endswith("(%)"):
             return None
 
         # Remove " (%)" suffix and check if non-percentage variant exists
         non_percentage_variant = lab_name[:-4]  # Remove " (%)"
-        if non_percentage_variant in self._specs:
-            return non_percentage_variant
+        if self.resolve_lab_name(non_percentage_variant) is not None:
+            return self.get_canonical_lab_name(non_percentage_variant)
 
         return None
 
@@ -476,8 +563,10 @@ class LabSpecsConfig:
             None
         """
 
+        resolved_name = self.resolve_lab_name(lab_name)
+
         # Guard: lab not in specs
-        if lab_name not in self._specs:
+        if resolved_name is None:
             return None
 
-        return self._specs[lab_name].get("loinc_code")
+        return self._specs[resolved_name].get("loinc_code")

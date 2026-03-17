@@ -16,12 +16,12 @@ INTERVAL_VALUE_PATTERN = re.compile(
 )
 
 QUALITATIVE_VARIANT_MAP = {
-    "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA)": "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA), Qualitative",
-    "Urine Type II - Bilirubin": "Urine Type II - Bilirubin, Qualitative",
-    "Urine Type II - Glucose": "Urine Type II - Glucose, Qualitative",
-    "Urine Type II - Ketones": "Urine Type II - Ketones, Qualitative",
-    "Urine Type II - Proteins": "Urine Type II - Proteins, Qualitative",
-    "Urine Type II - Urobilinogen": "Urine Type II - Urobilinogen, Qualitative",
+    "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA)": "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA) (Qualitative)",
+    "Urine Type II - Bilirubin": "Urine Type II - Bilirubin (Qualitative)",
+    "Urine Type II - Glucose": "Urine Type II - Glucose (Qualitative)",
+    "Urine Type II - Ketones": "Urine Type II - Ketones (Qualitative)",
+    "Urine Type II - Proteins": "Urine Type II - Proteins (Qualitative)",
+    "Urine Type II - Urobilinogen": "Urine Type II - Urobilinogen (Qualitative)",
 }
 
 
@@ -399,7 +399,7 @@ def _remap_qualitative_variant_rows(
             variant_name = QUALITATIVE_VARIANT_MAP[standardized_name]
 
             # Skip variants missing from lab_specs so normalization stays internally consistent.
-            if variant_name not in lab_specs.specs:
+            if lab_specs.get_primary_unit(variant_name) is None:
                 continue
 
             remap_indices.append(idx)
@@ -413,6 +413,24 @@ def _remap_qualitative_variant_rows(
         df.loc[remap_indices, "lab_unit_standardized"] = "boolean"
         logger.info(f"[normalization] Remapped {len(remap_indices)} qualitative rows from {source_col} to boolean urine variants")
 
+    return df
+
+
+def _canonicalize_qualitative_lab_names(
+    df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+) -> pd.DataFrame:
+    """Normalize qualitative lab names onto the canonical ``(Qualitative)`` suffix."""
+
+    if df.empty or "lab_name_standardized" not in df.columns:
+        return df
+
+    canonical_names = df["lab_name_standardized"].map(
+        lambda name: lab_specs.get_canonical_lab_name(name)
+        if pd.notna(name) and name != UNKNOWN_VALUE
+        else name
+    )
+    df["lab_name_standardized"] = canonical_names
     return df
 
 
@@ -562,6 +580,9 @@ def apply_unit_conversions(
         if pd.isna(lab_name_standardized) or lab_name_standardized == UNKNOWN_VALUE:
             continue
         _apply_unit_conversions_for_lab(df, lab_name_standardized, lab_specs)
+
+    # Phase 5: Expose canonical qualitative names after conversions and remaps settle.
+    df = _canonicalize_qualitative_lab_names(df, lab_specs)
 
     return df
 
