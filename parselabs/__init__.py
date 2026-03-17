@@ -12,7 +12,6 @@ from parselabs.extraction import (
     HealthLabReport,
     LabResult,
     extract_labs_from_page_image,
-    extract_labs_from_text,
 )
 from parselabs.normalization import (
     apply_dtype_conversions,
@@ -48,7 +47,6 @@ __all__ = [
     "LabResult",
     "HealthLabReport",
     "extract_labs_from_page_image",
-    "extract_labs_from_text",
     # Validation
     "ValueValidator",
     # Standardization

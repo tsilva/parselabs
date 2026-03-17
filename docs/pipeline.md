@@ -55,11 +55,11 @@ Based on the current code, not prior documentation:
 - That copied PDF becomes the local artifact used for page conversion and later review.
 - The worker keeps track of page-level extraction failures separately from total document failure.
 
-8. PDF conversion and text extraction bootstrap.
+8. PDF conversion bootstrap.
 - The PDF is converted to PIL images with `pdf2image.convert_from_path(...)`.
-- In parallel with image-based work, the runtime runs `pdftotext -layout` once for the document.
-- The extracted text is split into page-sized chunks using form-feed boundaries.
-- If `pdftotext` fails, the page text list becomes empty strings and extraction can still continue via vision.
+- Those page images are the only extraction input now.
+- This keeps every extraction path tied to a source image so rows can carry bounding boxes.
+- There is no `pdftotext` routing or text-only extraction pass in the current pipeline.
 
 9. Per-page cached artifact setup.
 - For each page, the runtime builds canonical image paths like `{stem}.{page:03d}.jpg` and `{stem}.{page:03d}.fallback.jpg`.
@@ -75,12 +75,9 @@ Based on the current code, not prior documentation:
 - Failed or unreadable page JSON is intentionally re-extracted on the next run.
 
 11. Deterministic per-page routing.
-- The page first tries text extraction if the page text has at least 80 non-whitespace characters.
-- That uses `extract_labs_from_text(...)`.
-- If the text result is weak, failed, or empty on a likely lab page, the runtime falls back to vision.
-- Vision first uses the primary page image with `extract_labs_from_page_image(...)`.
-- If that still looks unusable, the runtime retries once with the fallback image.
-- The runtime does not compare candidates; it follows a fixed fallback chain.
+- Every page first uses the primary page image with `extract_labs_from_page_image(...)`.
+- If that result is weak, failed, or empty on a likely lab page, the runtime retries once with the fallback image.
+- The runtime does not compare candidates; it follows a fixed vision-only fallback chain.
 
 12. Extraction payload persistence.
 - After extraction, the runtime adds `source_file` programmatically because the model cannot know it.
