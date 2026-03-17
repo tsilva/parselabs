@@ -25,6 +25,13 @@ def _make_lab_specs(tmp_path):
                     "ranges": {"default": [0, 0]},
                     "loinc_code": "2888-6-qual",
                 },
+                "Urine Type II - Nitrites": {
+                    "lab_type": "urine",
+                    "primary_unit": "boolean",
+                    "alternatives": [],
+                    "ranges": {"default": [0, 0]},
+                    "loinc_code": "5802-9",
+                },
                 "Urine Type II - Color": {
                     "lab_type": "urine",
                     "primary_unit": "boolean",
@@ -65,10 +72,42 @@ def test_apply_normalizations_remaps_text_urine_result_to_boolean_variant(tmp_pa
 
     normalized_df = apply_normalizations(df, lab_specs)
 
-    assert normalized_df.loc[0, "lab_name_standardized"] == "Urine Type II - Proteins, Qualitative"
+    assert normalized_df.loc[0, "lab_name_standardized"] == "Urine Type II - Proteins (Qualitative)"
     assert normalized_df.loc[0, "lab_unit_standardized"] == "boolean"
     assert normalized_df.loc[0, "lab_unit_primary"] == "boolean"
     assert normalized_df.loc[0, "value_primary"] == 0
+
+
+def test_apply_normalizations_canonicalizes_boolean_nitrites_name(tmp_path):
+    lab_specs = _make_lab_specs(tmp_path)
+    df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Nitritos",
+                "raw_value": "NEGATIVO",
+                "raw_comments": None,
+                "raw_lab_unit": "",
+                "raw_reference_min": None,
+                "raw_reference_max": None,
+                "lab_name_standardized": "Urine Type II - Nitrites",
+                "lab_unit_standardized": "boolean",
+            }
+        ]
+    )
+
+    normalized_df = apply_normalizations(df, lab_specs)
+
+    assert normalized_df.loc[0, "lab_name_standardized"] == "Urine Type II - Nitrites (Qualitative)"
+    assert normalized_df.loc[0, "lab_unit_primary"] == "boolean"
+    assert normalized_df.loc[0, "value_primary"] == 0
+
+
+def test_lab_specs_resolves_legacy_and_canonical_qualitative_names(tmp_path):
+    lab_specs = _make_lab_specs(tmp_path)
+
+    assert lab_specs.get_primary_unit("Urine Type II - Proteins, Qualitative") == "boolean"
+    assert lab_specs.get_primary_unit("Urine Type II - Proteins (Qualitative)") == "boolean"
+    assert lab_specs.get_canonical_lab_name("Urine Type II - Proteins, Qualitative") == "Urine Type II - Proteins (Qualitative)"
 
 
 def test_apply_normalizations_keeps_numeric_urine_result_on_numeric_lab(tmp_path):

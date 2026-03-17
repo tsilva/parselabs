@@ -128,7 +128,7 @@ def _make_mixed_section_lab_specs(tmp_path: Path) -> LabSpecsConfig:
                     "loinc_code": "5792-7",
                     "ranges": {"default": [0, 0]},
                 },
-                "Urine Type II - Glucose, Qualitative": {
+                "Urine Type II - Glucose (Qualitative)": {
                     "primary_unit": "boolean",
                     "lab_type": "urine",
                     "loinc_code": "5792-7-qual",
@@ -229,7 +229,7 @@ def _make_serology_variant_lab_specs(tmp_path: Path) -> LabSpecsConfig:
                     "loinc_code": "13949-3",
                     "ranges": {"default": [0.0, 15.0]},
                 },
-                "Blood - Anti-Cytomegalovirus IgG, Qualitative": {
+                "Blood - Anti-Cytomegalovirus IgG (Qualitative)": {
                     "primary_unit": "boolean",
                     "lab_type": "blood",
                     "loinc_code": "5124-3",
@@ -626,11 +626,11 @@ def test_apply_cached_standardization_prefers_variant_specific_companion_keys(tm
         name_map={
             ("AC. ANTI-CITOMEGALOVIRUS IgG", "SEROLOGIA INFECCIOSA"): "Blood - Anti-Cytomegalovirus IgG",
             ("AC. ANTI-CITOMEGALOVIRUS IgG (quantitative)", "SEROLOGIA INFECCIOSA"): "Blood - Anti-Cytomegalovirus IgG",
-            ("AC. ANTI-CITOMEGALOVIRUS IgG (qualitative)", "SEROLOGIA INFECCIOSA"): "Blood - Anti-Cytomegalovirus IgG, Qualitative",
+            ("AC. ANTI-CITOMEGALOVIRUS IgG (qualitative)", "SEROLOGIA INFECCIOSA"): "Blood - Anti-Cytomegalovirus IgG (Qualitative)",
         },
         unit_map={
             ("UI/ml", "Blood - Anti-Cytomegalovirus IgG"): "IU/mL",
-            ("", "Blood - Anti-Cytomegalovirus IgG, Qualitative"): "boolean",
+            ("", "Blood - Anti-Cytomegalovirus IgG (Qualitative)"): "boolean",
         },
     )
 
@@ -657,7 +657,7 @@ def test_apply_cached_standardization_prefers_variant_specific_companion_keys(tm
 
     assert standardized_df["lab_name_standardized"].tolist() == [
         "Blood - Anti-Cytomegalovirus IgG",
-        "Blood - Anti-Cytomegalovirus IgG, Qualitative",
+        "Blood - Anti-Cytomegalovirus IgG (Qualitative)",
     ]
     assert standardized_df["lab_unit_standardized"].tolist() == ["IU/mL", "boolean"]
 
@@ -715,7 +715,7 @@ def test_build_document_review_dataframe_infers_missing_sections_for_urine_disam
     review_df = build_document_review_dataframe(doc_dir, lab_specs)
 
     assert review_df.loc[2, "raw_section_name"] == "Elementos anormais"
-    assert review_df.loc[2, "lab_name_standardized"] == "Urine Type II - Glucose, Qualitative"
+    assert review_df.loc[2, "lab_name_standardized"] == "Urine Type II - Glucose (Qualitative)"
     assert review_df.loc[3, "raw_section_name"] == "EXAME MICROSCOPICO DO SEDIMENTO"
     assert review_df.loc[3, "lab_name_standardized"] == "Urine Type II - Sediment - Leukocytes"
 
