@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import unicodedata
 
 from parselabs.config import UNKNOWN_VALUE
 from parselabs.paths import get_cache_dir
@@ -17,6 +18,47 @@ def normalize_name_cache_key_component(raw_name) -> str:
     """Normalize raw lab-name text into a stable cache-key token."""
 
     return str(raw_name).lower().strip()
+
+
+def _collapse_spaced_letter_tokens(text: str) -> str:
+    """Collapse headers extracted as spaced single letters into one token."""
+
+    tokens = text.split()
+
+    # Guard: Normal multi-word labels should keep their original token boundaries.
+    if len(tokens) < 3 or not all(len(token) == 1 and token.isalpha() for token in tokens):
+        return text
+
+    return "".join(tokens)
+
+
+def _normalize_lookup_cache_key_component(value: str) -> str:
+    """Fold accents and stylized spacing so lookups survive OCR/header quirks."""
+
+    text = str(value).lower().strip()
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    text = _collapse_spaced_letter_tokens(text)
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def _normalize_lookup_cache_key(key: str) -> str:
+    """Normalize cache keys component-wise so contextual separators remain meaningful."""
+
+    if "|" in key:
+        raw_name, raw_section_name = key.split("|", 1)
+        normalized_name = _normalize_lookup_cache_key_component(raw_name)
+        normalized_section = _normalize_lookup_cache_key_component(raw_section_name)
+        return f"{normalized_name}|{normalized_section}"
+
+    if " - " in key:
+        raw_section_name, raw_name = key.split(" - ", 1)
+        normalized_section = _normalize_lookup_cache_key_component(raw_section_name)
+        normalized_name = _normalize_lookup_cache_key_component(raw_name)
+        return f"{normalized_section} - {normalized_name}"
+
+    return _normalize_lookup_cache_key_component(key)
 
 
 def normalize_section_cache_key_component(raw_section_name) -> str:
@@ -88,11 +130,66 @@ def _contextual_cache_values_for_name(cache: dict[str, str], normalized_name: st
     return contextual_values
 
 
-def _safe_bare_name_fallback(cache: dict[str, str], raw_name, raw_section_name) -> str | None:
+def _build_folded_cache_index(cache: dict[str, str]) -> dict[str, str]:
+    """Build a normalized cache index for lookup-only compatibility matches."""
+
+    folded_cache: dict[str, str] = {}
+    ambiguous_keys: set[str] = set()
+
+    for key, value in cache.items():
+        folded_key = _normalize_lookup_cache_key(key)
+
+        # Guard: Once two folded keys disagree, treat that normalized form as unsafe.
+        if folded_key in ambiguous_keys:
+            continue
+
+        existing_value = folded_cache.get(folded_key)
+
+        # Keep a unique folded match only while every source key agrees on the value.
+        if existing_value is None or existing_value == value:
+            folded_cache[folded_key] = value
+            continue
+
+        ambiguous_keys.add(folded_key)
+        folded_cache.pop(folded_key, None)
+
+    return folded_cache
+
+
+def _lookup_name_cache_value(
+    cache: dict[str, str],
+    folded_cache: dict[str, str],
+    *candidate_keys: str,
+) -> str | None:
+    """Resolve a cache entry from direct keys first, then normalized compatibility keys."""
+
+    for candidate_key in candidate_keys:
+        # Prefer exact keys so newer cache entries win without normalization heuristics.
+        if candidate_key in cache:
+            return cache[candidate_key]
+
+    for candidate_key in candidate_keys:
+        folded_key = _normalize_lookup_cache_key(candidate_key)
+
+        # Guard: Skip folded keys that are absent or were marked ambiguous.
+        if folded_key not in folded_cache:
+            continue
+
+        return folded_cache[folded_key]
+
+    return None
+
+
+def _safe_bare_name_fallback(
+    cache: dict[str, str],
+    folded_cache: dict[str, str],
+    raw_name,
+    raw_section_name,
+) -> str | None:
     """Return a bare-name cache match only when contextual mappings do not conflict."""
 
     normalized_name = normalize_name_cache_key_component(raw_name)
-    bare_value = cache.get(normalized_name)
+    bare_value = _lookup_name_cache_value(cache, folded_cache, normalized_name)
 
     # Guard: no bare cache entry means there is nothing to reuse.
     if bare_value is None:
@@ -185,6 +282,7 @@ def standardize_lab_names(
 
     # Load cache
     cache = load_cache("name_standardization")
+    folded_cache = _build_folded_cache_index(cache)
 
     normalized_contexts: list[tuple[str, str | None]] = []
     for raw_name, raw_section_name in raw_test_names:
@@ -199,18 +297,19 @@ def standardize_lab_names(
         cache_key = build_name_cache_key(raw_name, raw_section_name)
         legacy_cache_key = build_legacy_section_name_cache_key(raw_name, raw_section_name)
 
-        # Section-aware rows only trust the explicit contextual key.
-        if cache_key in cache:
-            cached_results[(raw_name, raw_section_name)] = cache[cache_key]
+        cached_value = _lookup_name_cache_value(
+            cache,
+            folded_cache,
+            cache_key,
+            legacy_cache_key,
+        )
+
+        # Resolve exact or normalized contextual cache keys before any bare-name fallback.
+        if cached_value is not None:
+            cached_results[(raw_name, raw_section_name)] = cached_value
             continue
 
-        # Backward compatibility: older caches stored contextual mappings as
-        # ``section - raw_name`` instead of ``raw_name|section``.
-        if raw_section_name is not None and legacy_cache_key in cache:
-            cached_results[(raw_name, raw_section_name)] = cache[legacy_cache_key]
-            continue
-
-        fallback_value = _safe_bare_name_fallback(cache, raw_name, raw_section_name)
+        fallback_value = _safe_bare_name_fallback(cache, folded_cache, raw_name, raw_section_name)
         if fallback_value is not None:
             cached_results[(raw_name, raw_section_name)] = fallback_value
             continue

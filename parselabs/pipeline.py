@@ -1410,8 +1410,9 @@ def _run_reviewed_json_rebuild(args, profile_name: str, allow_pending: bool) -> 
         allow_pending=allow_pending,
     )
 
+    publish_df = reviewed_corpus.merged_review_df if allow_pending else reviewed_corpus.final_df
     _export_final_results(
-        reviewed_corpus.merged_review_df,
+        publish_df,
         hidden_cols,
         widths,
         profile.output_path,

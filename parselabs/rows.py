@@ -17,6 +17,7 @@ from parselabs.export_schema import COLUMN_ORDER, COLUMN_SCHEMA, get_column_list
 from parselabs.normalization import (
     apply_dtype_conversions,
     apply_normalizations,
+    classify_qualitative_value,
     deduplicate_results,
     flag_duplicate_entries,
 )
@@ -729,12 +730,26 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
     # Ensure the optional section-context column exists before building contextual cache keys.
     ensure_columns(review_df, ["raw_section_name"], default=None)
 
-    # Standardize lab names in one pass so repeated raw labels share the same cached mapping.
+    # Prefer explicit qualitative/quantitative companion mappings when the same assay is
+    # printed twice on one page as both a numeric result and an interpreted label.
     raw_names = review_df["raw_lab_name"].fillna("").astype(str).tolist()
     raw_section_names = [str(value).strip() if pd.notna(value) and str(value).strip() else None for value in review_df["raw_section_name"].tolist()]
-    name_contexts = list(zip(raw_names, raw_section_names, strict=False))
-    name_map = standardize_lab_names(name_contexts)
-    review_df["lab_name_standardized"] = [name_map.get(context, UNKNOWN_VALUE) for context in name_contexts]
+    base_name_contexts = list(zip(raw_names, raw_section_names, strict=False))
+    variant_name_contexts = _build_variant_aware_name_contexts(review_df, base_name_contexts)
+    lookup_contexts = list(dict.fromkeys(base_name_contexts + variant_name_contexts))
+    name_map = standardize_lab_names(lookup_contexts)
+
+    standardized_names: list[str] = []
+    for base_context, variant_context in zip(base_name_contexts, variant_name_contexts, strict=False):
+        standardized_name = name_map.get(variant_context, UNKNOWN_VALUE)
+
+        # Fall back to the undecorated raw label when no variant-specific cache entry exists.
+        if standardized_name == UNKNOWN_VALUE and variant_context != base_context:
+            standardized_name = name_map.get(base_context, UNKNOWN_VALUE)
+
+        standardized_names.append(standardized_name)
+
+    review_df["lab_name_standardized"] = standardized_names
 
     # Standardize units only for rows whose lab names mapped successfully.
     unit_contexts: list[tuple[str, str]] = []
@@ -759,6 +774,17 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
 
         standardized_unit = mapped_units.get((raw_unit, standardized_name))
 
+        # Explicit non-percent units should force percentage-vs-absolute siblings onto the
+        # absolute path even when an old cache entry still points to the (%) variant.
+        if raw_unit.strip() != "":
+            inferred_unit = _infer_explicit_variant_unit_from_raw_unit(
+                raw_unit,
+                standardized_name,
+                lab_specs,
+            )
+            if inferred_unit is not None:
+                standardized_unit = inferred_unit
+
         # Blank raw units can still be recoverable when sibling variants have
         # distinct reference ranges in the source report.
         if raw_unit.strip() == "":
@@ -775,7 +801,9 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
         # from lab_specs instead of forcing a cache entry for blank input.
         if standardized_unit == UNKNOWN_VALUE and raw_unit.strip() == "":
             primary_unit = lab_specs.get_primary_unit(standardized_name)
-            if primary_unit in safe_missing_unit_primary_units:
+            if primary_unit in safe_missing_unit_primary_units or (
+                primary_unit == "%" and standardized_name.endswith("(%)")
+            ):
                 standardized_unit = primary_unit
 
         standardized_units.append(standardized_unit)
@@ -783,6 +811,80 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
     review_df["lab_unit_standardized"] = standardized_units
     review_df = _remap_percentage_variant_lab_names(review_df, lab_specs)
     return review_df
+
+
+def _build_variant_aware_name_contexts(
+    review_df: pd.DataFrame,
+    base_name_contexts: list[tuple[str, str | None]],
+) -> list[tuple[str, str | None]]:
+    """Decorate row names when one page prints both qualitative and numeric assay companions."""
+
+    required_columns = {"page_number", "raw_lab_name", "raw_lab_unit", "raw_value"}
+
+    # Guard: Missing row identity means callers can only use the undecorated cache path.
+    if review_df.empty or not required_columns.issubset(review_df.columns):
+        return base_name_contexts
+
+    variant_contexts = list(base_name_contexts)
+    helper_df = review_df.copy()
+    helper_df["context_position"] = range(len(helper_df))
+    helper_df["name_key"] = helper_df["raw_lab_name"].map(_normalize_section_inference_key)
+    helper_df["section_key"] = helper_df["raw_section_name"].map(_normalize_section_inference_key)
+    helper_df["is_qualitative_companion"] = helper_df.apply(_row_is_qualitative_companion, axis=1)
+    helper_df["is_quantitative_companion"] = helper_df.apply(_row_is_quantitative_companion, axis=1)
+
+    for _, group_df in helper_df.groupby(["page_number", "name_key", "section_key"], sort=False):
+        # Guard: Companion decoration only applies when both forms are present in one source group.
+        if not group_df["is_qualitative_companion"].any() or not group_df["is_quantitative_companion"].any():
+            continue
+
+        for _, row in group_df.iterrows():
+            position = int(row["context_position"])
+            raw_name, raw_section_name = base_name_contexts[position]
+
+            if row["is_qualitative_companion"]:
+                variant_contexts[position] = (f"{raw_name} (qualitative)", raw_section_name)
+                continue
+
+            if row["is_quantitative_companion"]:
+                variant_contexts[position] = (f"{raw_name} (quantitative)", raw_section_name)
+
+    return variant_contexts
+
+
+def _row_is_qualitative_companion(row: pd.Series) -> bool:
+    """Return True when one row is a text-only interpretation of an assay result."""
+
+    raw_unit = _normalize_optional_text(row.get("raw_lab_unit"))
+    raw_value = _normalize_optional_text(row.get("raw_value"))
+
+    # Guard: Explicit units already indicate this row is the numeric companion.
+    if raw_unit:
+        return False
+
+    return classify_qualitative_value(raw_value) is not None
+
+
+def _row_is_quantitative_companion(row: pd.Series) -> bool:
+    """Return True when one row carries the numeric/unit-bearing companion result."""
+
+    raw_unit = _normalize_optional_text(row.get("raw_lab_unit"))
+
+    # Guard: Unit-bearing rows already carry the numeric assay form.
+    if raw_unit:
+        return True
+
+    raw_value = _normalize_optional_text(row.get("raw_value")).replace(",", ".")
+    return pd.notna(pd.to_numeric(pd.Series([raw_value]), errors="coerce").iloc[0])
+
+
+def _normalize_optional_text(value: object) -> str:
+    """Return a stripped text token while collapsing NaN-like values to blank."""
+
+    if pd.isna(value):
+        return ""
+
+    return str(value).strip()
 
 
 def _infer_missing_variant_unit_from_ranges(
@@ -831,6 +933,43 @@ def _infer_missing_variant_unit_from_ranges(
         return None
 
     return lab_specs.get_primary_unit(best_name)
+
+
+def _infer_explicit_variant_unit_from_raw_unit(
+    raw_unit: str,
+    standardized_name: str,
+    lab_specs: LabSpecsConfig,
+) -> str | None:
+    """Infer percentage-vs-absolute sibling units from an explicit raw unit token."""
+
+    raw_unit_text = str(raw_unit).strip()
+
+    # Guard: Blank raw units are handled by the range-based inference path instead.
+    if not raw_unit_text:
+        return None
+
+    percentage_variant = lab_specs.get_percentage_variant(standardized_name)
+    non_percentage_variant = lab_specs.get_non_percentage_variant(standardized_name)
+
+    # Guard: Labs without sibling variants do not need explicit unit correction.
+    if percentage_variant is None and non_percentage_variant is None:
+        return None
+
+    # Explicit percent markers belong to the configured percentage sibling.
+    if _raw_unit_looks_percentage(raw_unit_text):
+        return "%"
+
+    absolute_variant = non_percentage_variant or standardized_name
+    return lab_specs.get_primary_unit(absolute_variant)
+
+
+def _raw_unit_looks_percentage(raw_unit: str) -> bool:
+    """Return True when the raw unit text explicitly denotes a percentage."""
+
+    normalized_unit = str(raw_unit).strip().lower()
+
+    # Recognize literal percent units as well as common textual percentage labels.
+    return "%" in normalized_unit or "percent" in normalized_unit
 
 
 def _score_variant_range_match(
@@ -992,6 +1131,34 @@ def _append_review_reason_code(
     review_df.loc[mask, "review_needed"] = True
     current_reasons = review_df.loc[mask, "review_reason"].fillna("").astype(str)
     review_df.loc[mask, "review_reason"] = current_reasons.apply(lambda value: f"{value}{reason_code}; " if reason_code not in value else value)
+    return review_df
+
+
+def _remove_review_reason_code(
+    review_df: pd.DataFrame,
+    reason_code: str,
+) -> pd.DataFrame:
+    """Remove one review reason code and clear review_needed when no reasons remain."""
+
+    if review_df.empty or "review_reason" not in review_df.columns:
+        return review_df
+
+    updated_reasons = (
+        review_df["review_reason"]
+        .fillna("")
+        .astype(str)
+        .apply(
+            lambda value: "; ".join(
+                part for part in [piece.strip() for piece in value.split(";")] if part and part != reason_code
+            )
+        )
+        .apply(lambda value: f"{value}; " if value else "")
+    )
+    review_df["review_reason"] = updated_reasons
+
+    if "review_needed" in review_df.columns:
+        review_df["review_needed"] = updated_reasons.str.strip().ne("")
+
     return review_df
 
 
@@ -1196,6 +1363,7 @@ def prepare_rows(
         prepared_df = flag_duplicate_entries(prepared_df)
         if lab_specs.exists:
             prepared_df = deduplicate_results(prepared_df, lab_specs)
+            prepared_df = _remove_review_reason_code(prepared_df, "DUPLICATE_ENTRY")
         prepared_df = _add_export_column_aliases(prepared_df)
         validator = ValueValidator(lab_specs)
         prepared_df = validator.validate(prepared_df)

@@ -16,6 +16,7 @@ INTERVAL_VALUE_PATTERN = re.compile(
 )
 
 QUALITATIVE_VARIANT_MAP = {
+    "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA)": "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA), Qualitative",
     "Urine Type II - Bilirubin": "Urine Type II - Bilirubin, Qualitative",
     "Urine Type II - Glucose": "Urine Type II - Glucose, Qualitative",
     "Urine Type II - Ketones": "Urine Type II - Ketones, Qualitative",
@@ -596,12 +597,25 @@ def flag_duplicate_entries(df: pd.DataFrame) -> pd.DataFrame:
     # Consider only rows with usable standardized lab names for duplicate detection.
     candidate_mask = df["lab_name_standardized"].notna() & (df["lab_name_standardized"] != UNKNOWN_VALUE)
 
-    # Find all rows that are part of a duplicate group among known standardized labs.
-    dup_mask = candidate_mask & df.duplicated(subset=["date", "lab_name_standardized"], keep=False)
+    duplicate_indices: list[int] = []
 
-    if not dup_mask.any():
+    # Only conflicting duplicate groups should reach the reviewer.
+    for _, group_df in df.loc[candidate_mask].groupby(["date", "lab_name_standardized"], sort=False):
+        # Guard: Single rows are never duplicates.
+        if len(group_df) < 2:
+            continue
+
+        # Equivalent dual-unit rows are expected and should not raise review noise.
+        if _duplicate_group_is_equivalent(group_df):
+            continue
+
+        duplicate_indices.extend(group_df.index.tolist())
+
+    # Guard: Equivalent duplicate groups should not leave any review flag behind.
+    if not duplicate_indices:
         return df
 
+    dup_mask = df.index.isin(duplicate_indices)
     count = int(dup_mask.sum())
     logger.info(f"Flagging {count} rows as DUPLICATE_ENTRY")
 
@@ -609,6 +623,38 @@ def flag_duplicate_entries(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[dup_mask, "review_reason"] = df.loc[dup_mask, "review_reason"].fillna("").apply(lambda x: str(x) + "DUPLICATE_ENTRY; " if "DUPLICATE_ENTRY" not in str(x) else str(x))
 
     return df
+
+
+def _duplicate_group_is_equivalent(group_df: pd.DataFrame) -> bool:
+    """Return True when a duplicate group represents the same result in multiple units."""
+
+    required_columns = {"value_primary", "is_below_limit", "is_above_limit"}
+
+    # Guard: Missing normalized columns means the group cannot be compared safely.
+    if not required_columns.issubset(group_df.columns):
+        return False
+
+    below_limit_flags = group_df["is_below_limit"].fillna(False).astype(bool)
+    above_limit_flags = group_df["is_above_limit"].fillna(False).astype(bool)
+
+    # Distinct comparison operators represent genuinely different observations.
+    if below_limit_flags.nunique() > 1 or above_limit_flags.nunique() > 1:
+        return False
+
+    normalized_values = pd.to_numeric(group_df["value_primary"], errors="coerce")
+
+    # Keep rounded dual-unit repeats quiet when they converge after normalization.
+    if normalized_values.notna().all():
+        value_span = float(normalized_values.max() - normalized_values.min())
+        largest_value = max(1.0, float(normalized_values.abs().max()))
+        tolerance = max(0.1, largest_value * 0.01)
+        return value_span <= tolerance
+
+    raw_values = group_df["raw_value"].fillna("").astype(str).str.strip()
+    primary_units = group_df["lab_unit_primary"].fillna("").astype(str).str.strip()
+
+    # Fall back to exact text equality for non-numeric duplicate groups.
+    return raw_values.nunique() == 1 and primary_units.nunique() <= 1
 
 
 def deduplicate_results(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
