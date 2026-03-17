@@ -39,6 +39,20 @@ def _make_lab_specs(tmp_path):
                     "ranges": {"default": [0, 0]},
                     "loinc_code": "5778-1",
                 },
+                "Urine Type II - Ketones": {
+                    "lab_type": "urine",
+                    "primary_unit": "mg/dL",
+                    "alternatives": [{"unit": "mg/dl", "factor": 1.0}],
+                    "ranges": {"default": [0, 0]},
+                    "loinc_code": "2514-8",
+                },
+                "Urine Type II - Ketones, Qualitative": {
+                    "lab_type": "urine",
+                    "primary_unit": "boolean",
+                    "alternatives": [],
+                    "ranges": {"default": [0, 0]},
+                    "loinc_code": "2514-8-qual",
+                },
                 "Urine Type II - Sediment - Epithelial Cells": {
                     "lab_type": "urine",
                     "primary_unit": "/field",
@@ -118,6 +132,7 @@ def test_apply_normalizations_keeps_numeric_urine_result_on_numeric_lab(tmp_path
                 "raw_lab_name": "Proteinas",
                 "raw_value": "30",
                 "raw_comments": None,
+                "raw_section_name": "Bioquímica",
                 "raw_lab_unit": "mg/dl",
                 "raw_reference_min": 0,
                 "raw_reference_max": 15,
@@ -132,6 +147,32 @@ def test_apply_normalizations_keeps_numeric_urine_result_on_numeric_lab(tmp_path
     assert normalized_df.loc[0, "lab_name_standardized"] == "Urine Type II - Proteins"
     assert normalized_df.loc[0, "lab_unit_primary"] == "mg/dL"
     assert normalized_df.loc[0, "value_primary"] == 30
+
+
+def test_apply_normalizations_remaps_numeric_urine_strip_ketones_to_qualitative_variant(tmp_path):
+    lab_specs = _make_lab_specs(tmp_path)
+    df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Corpos Cetónicos",
+                "raw_value": "10",
+                "raw_comments": None,
+                "raw_section_name": "ANÁLISE SUMÁRIA DA URINA",
+                "raw_lab_unit": "mg/dl",
+                "raw_reference_min": None,
+                "raw_reference_max": None,
+                "lab_name_standardized": "Urine Type II - Ketones",
+                "lab_unit_standardized": "mg/dL",
+            }
+        ]
+    )
+
+    normalized_df = apply_normalizations(df, lab_specs)
+
+    assert normalized_df.loc[0, "lab_name_standardized"] == "Urine Type II - Ketones (Qualitative)"
+    assert normalized_df.loc[0, "lab_unit_standardized"] == "boolean"
+    assert normalized_df.loc[0, "lab_unit_primary"] == "boolean"
+    assert normalized_df.loc[0, "value_primary"] == 1
 
 
 def test_apply_normalizations_classifies_urine_color_as_boolean(tmp_path):
@@ -153,7 +194,7 @@ def test_apply_normalizations_classifies_urine_color_as_boolean(tmp_path):
 
     normalized_df = apply_normalizations(df, lab_specs)
 
-    assert normalized_df.loc[0, "lab_name_standardized"] == "Urine Type II - Color"
+    assert normalized_df.loc[0, "lab_name_standardized"] == "Urine Type II - Color (Qualitative)"
     assert normalized_df.loc[0, "lab_unit_standardized"] == "boolean"
     assert normalized_df.loc[0, "lab_unit_primary"] == "boolean"
     assert normalized_df.loc[0, "value_primary"] == 0

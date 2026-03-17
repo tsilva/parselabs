@@ -343,8 +343,10 @@ class LabSpecsConfig:
 
         qualitative_urine_bases = {
             "Urine Type II - Albumin",
+            "Urine Type II - Appearance",
             "Urine Type II - Bilirubin",
             "Urine Type II - Blood",
+            "Urine Type II - Color",
             "Urine Type II - Glucose",
             "Urine Type II - Ketones",
             "Urine Type II - Leukocytes",

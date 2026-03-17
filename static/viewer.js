@@ -2,6 +2,8 @@
 (function() {
     let pendingHighlightFrame = null;
     let lastAppliedSelectionSignature = "";
+    let lastObservedSelectionSignature = "";
+    let pendingSelectionScrollSignature = "";
     let boundPlotElement = null;
 
     function shouldIgnoreShortcut(event) {
@@ -157,10 +159,29 @@
             row.removeAttribute('aria-selected');
         });
 
-        if (!state || state.selectedRow === null || state.rowCount <= 0 || rows.length === 0 || !dataTable) {
+        if (!state || state.selectedRow === null || state.rowCount <= 0) {
+            lastAppliedSelectionSignature = '';
+            lastObservedSelectionSignature = '';
+            pendingSelectionScrollSignature = '';
+            return;
+        }
+
+        if (!dataTable || rows.length === 0) {
             lastAppliedSelectionSignature = '';
             return;
         }
+
+        const selectionSignature = `${state.selectedRow}:${state.rowCount}:${state.selectedToken}`;
+        const selectionChanged = selectionSignature !== lastObservedSelectionSignature;
+        if (selectionChanged) {
+            lastObservedSelectionSignature = selectionSignature;
+            pendingSelectionScrollSignature = selectionSignature;
+            lastAppliedSelectionSignature = '';
+        }
+        if (forceScroll) {
+            pendingSelectionScrollSignature = selectionSignature;
+        }
+        const shouldAutoScroll = pendingSelectionScrollSignature === selectionSignature;
 
         const matchedByIndex = rows.find((row) => getVisibleRowIndex(row) === state.selectedRow) ?? null;
         const matchedRow = matchedByIndex ?? (
@@ -183,7 +204,7 @@
         const windowStart = exactWindowStart ?? estimatedWindowStart;
         const windowEnd = exactWindowEnd ?? (windowStart + rows.length - 1);
 
-        if (maxScrollTop > 0 && (forceScroll || state.selectedRow < windowStart || state.selectedRow > windowEnd)) {
+        if (shouldAutoScroll && maxScrollTop > 0 && (forceScroll || state.selectedRow < windowStart || state.selectedRow > windowEnd)) {
             if (exactWindowStart !== null && exactWindowEnd !== null && rows.length > 0) {
                 const firstVisibleRow = rows[0];
                 const lastVisibleRow = rows[rows.length - 1];
@@ -222,7 +243,7 @@
         );
         const localIndex = state.selectedRow - resolvedWindowStart;
         const clampedIndex = Math.max(0, Math.min(localIndex, rows.length - 1));
-        if (!matchedRow && exactWindowStart === null && state.selectedDisplay.length > 0 && rows.length > 0) {
+        if (shouldAutoScroll && !matchedRow && exactWindowStart === null && state.selectedDisplay.length > 0 && rows.length > 0) {
             const firstVisibleRow = getVisibleRowCells(rows[0]);
             const lastVisibleRow = getVisibleRowCells(rows[rows.length - 1]);
             const stepSize = Math.max(dataTable.clientHeight * 0.8, estimatedRowHeight * Math.max(rows.length / 2, 1));
@@ -244,13 +265,13 @@
             }
         }
 
-        if (!matchedRow && exactWindowStart !== null && exactWindowEnd !== null && state.selectedRow >= exactWindowStart && state.selectedRow <= exactWindowEnd) {
+        if (shouldAutoScroll && !matchedRow && exactWindowStart !== null && exactWindowEnd !== null && state.selectedRow >= exactWindowStart && state.selectedRow <= exactWindowEnd) {
             lastAppliedSelectionSignature = '';
             scheduleSelectedRowSync(false);
             return;
         }
 
-        const selectedRow = matchedRow ?? rows[clampedIndex];
+        const selectedRow = matchedRow ?? (shouldAutoScroll ? rows[clampedIndex] : null);
 
         if (!selectedRow) {
             lastAppliedSelectionSignature = '';
@@ -260,10 +281,13 @@
         selectedRow.classList.add('selected');
         selectedRow.setAttribute('aria-selected', 'true');
 
-        const nextSignature = `${state.selectedRow}:${state.rowCount}:${resolvedWindowStart}:${rows.length}:${selectedRow.textContent?.trim() ?? ''}`;
-        const shouldScroll = forceScroll || nextSignature !== lastAppliedSelectionSignature;
+        const nextSignature = `${selectionSignature}:${selectedRow.textContent?.trim() ?? ''}`;
+        const shouldScroll = shouldAutoScroll && (forceScroll || nextSignature !== lastAppliedSelectionSignature);
 
         lastAppliedSelectionSignature = nextSignature;
+        if (matchedByIndex) {
+            pendingSelectionScrollSignature = '';
+        }
 
         if (shouldScroll) {
             selectedRow.scrollIntoView({ block: 'nearest', inline: 'nearest' });
