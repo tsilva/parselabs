@@ -76,6 +76,7 @@ Based on the current code, not prior documentation:
 
 11. Deterministic per-page routing.
 - Every page first uses the primary page image with `extract_labs_from_page_image(...)`.
+- Any extracted payload that contains lab rows but lacks a complete four-value bbox on even one row is treated as malformed output.
 - If that result is weak, failed, or empty on a likely lab page, the runtime retries once with the fallback image.
 - The runtime does not compare candidates; it follows a fixed vision-only fallback chain.
 

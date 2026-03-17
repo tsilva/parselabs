@@ -23,7 +23,8 @@ IMPORTANT FOR BOUNDING BOXES:
 - Use the full page image as the coordinate space
 - 0 means the top/left edge, 1000 means the bottom/right edge
 - The box should cover the visible region for that extracted result
-- If you are not confident about the location, set all four bbox fields to null
+- Every extracted result must include all four bbox fields
+- If you are not confident about the location, re-check the page and find the supporting row before returning that result
 
 CRITICAL: Extract EVERY lab test you see, including:
 - Numeric results → Put in raw_value (examples: "5.2", "14.8", "0.75")
@@ -43,4 +44,5 @@ BEFORE OUTPUTTING EACH RESULT, VERIFY:
 ✓ raw_value contains ONLY the result (no test names or units)
 ✓ raw_lab_unit contains ONLY the unit (no values)
 ✓ No field contains text like "raw_value:", "raw_lab_unit:", etc.
-✓ Bounding boxes use the normalized 0-1000 page coordinate system or are all null
+✓ Bounding boxes use the normalized 0-1000 page coordinate system
+✓ Every extracted result has bbox_left, bbox_top, bbox_right, and bbox_bottom filled in
