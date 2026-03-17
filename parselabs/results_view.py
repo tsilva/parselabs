@@ -13,6 +13,8 @@ Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate
 
 from __future__ import annotations
 
+import html
+import json
 import logging  # noqa: E402
 from dataclasses import dataclass  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -136,6 +138,40 @@ COLUMN_LABELS = {
     "is_out_of_reference": "Abn",
     "review_status": "Review",
 }
+
+
+def _build_row_token(source_file: object, page_number: object, result_index: object) -> str:
+    """Build a stable UI token for one merged results row."""
+
+    normalized_values = []
+    for value in (source_file, page_number, result_index):
+        normalized_values.append(value.item() if hasattr(value, "item") else value)
+
+    return json.dumps(normalized_values, separators=(",", ":"))
+
+
+def _build_row_token_for_entry(entry: pd.Series | dict) -> str:
+    """Build the stable UI token for a dataframe row or dict entry."""
+
+    return _build_row_token(
+        entry.get("source_file"),
+        entry.get("page_number"),
+        entry.get("result_index"),
+    )
+
+
+def _build_display_row_match_values(entry: pd.Series | dict) -> list[str]:
+    """Build the formatted visible table cells for one row."""
+
+    entry_df = pd.DataFrame([dict(entry)])
+    if "date" in entry_df.columns:
+        entry_df["date"] = pd.to_datetime(entry_df["date"], errors="coerce")
+
+    display_df = prepare_display_df(entry_df)
+    if display_df.empty:
+        return []
+
+    return [str(value).strip() for value in display_df.iloc[0].tolist()]
 
 
 # =============================================================================
@@ -425,12 +461,14 @@ def create_single_lab_plot(
             unit = str(units.iloc[0])
 
     fig = go.Figure()
+    point_customdata = lab_df.apply(_build_row_token_for_entry, axis=1).tolist()
 
     # Add data trace
     fig.add_trace(
         go.Scatter(
             x=lab_df["date"],
             y=lab_df["value"],
+            customdata=point_customdata,
             mode="lines+markers",
             name="Values",
             marker=dict(size=10, color="#1f77b4"),
@@ -681,11 +719,13 @@ def create_interactive_plot(
                 unit = str(units.iloc[0])
 
         color = colors[i % len(colors)]
+        point_customdata = lab_df.apply(_build_row_token_for_entry, axis=1).tolist()
 
         fig.add_trace(
             go.Scatter(
                 x=lab_df["date"],
                 y=lab_df["value"],
+                customdata=point_customdata,
                 mode="lines+markers",
                 name="Values",
                 marker=dict(size=8, color=color),
@@ -809,14 +849,23 @@ def _build_empty_viewer_state(
     )
 
 
-def _build_selection_state_html(selected_row_index: int | None, row_count: int) -> str:
+def _build_selection_state_html(
+    selected_row_index: int | None,
+    row_count: int,
+    selected_row_token: str | None = None,
+    selected_display_values: list[str] | None = None,
+) -> str:
     """Return a hidden DOM marker that frontend code can use to sync row highlighting."""
 
     selected_value = "" if selected_row_index is None else str(int(selected_row_index))
+    selected_token = "" if not selected_row_token else html.escape(selected_row_token, quote=True)
+    selected_display = html.escape(json.dumps(selected_display_values or [], separators=(",", ":")), quote=True)
     return (
         '<div id="viewer-selection-state" '
         f'data-selected-row="{selected_value}" '
         f'data-row-count="{int(row_count)}" '
+        f"data-selected-token='{selected_token}' "
+        f"data-selected-display='{selected_display}' "
         'aria-hidden="true"></div>'
     )
 
@@ -908,7 +957,12 @@ def _render_viewer_state(
         details_html=row_context.details_html,
         status_html=row_context.status_html,
         banner_html=row_context.banner_html,
-        selection_html=_build_selection_state_html(row_context.row_index, len(filtered_df)),
+        selection_html=_build_selection_state_html(
+            row_context.row_index,
+            len(filtered_df),
+            _build_row_token_for_entry(selected_row),
+            _build_display_row_match_values(selected_row),
+        ),
         prev_button_props=prev_button_props,
         next_button_props=next_button_props,
     )
@@ -989,6 +1043,38 @@ def _dispatch_row_select(
     )
 
 
+def _resolve_plot_point_row_index(filtered_df: pd.DataFrame, point_token: str | None) -> int | None:
+    """Resolve a Plotly point token back to a filtered dataframe row index."""
+
+    if filtered_df.empty or not point_token:
+        return None
+
+    try:
+        token_data = json.loads(point_token)
+    except (TypeError, json.JSONDecodeError):
+        return None
+
+    if isinstance(token_data, str):
+        selected_token = token_data
+    elif isinstance(token_data, dict):
+        source_file = token_data.get("source_file")
+        page_number = token_data.get("page_number")
+        result_index = token_data.get("result_index")
+        selected_token = _build_row_token(source_file, page_number, result_index)
+    elif isinstance(token_data, list | tuple) and len(token_data) >= 3:
+        source_file, page_number, result_index = token_data[:3]
+        selected_token = _build_row_token(source_file, page_number, result_index)
+    else:
+        return None
+
+    row_tokens = filtered_df.apply(_build_row_token_for_entry, axis=1)
+    matches = row_tokens.index[row_tokens == selected_token]
+    if len(matches) == 0:
+        return None
+
+    return int(matches[0])
+
+
 def handle_navigation(
     current_idx: int,
     filtered_df: pd.DataFrame,
@@ -1011,6 +1097,44 @@ def handle_navigation(
             output_path,
             lab_names,
             row_index=next_idx,
+            summary_df=filtered_df,
+        )
+
+    return (
+        render_state.plot,
+        render_state.current_idx,
+        render_state.position_text,
+        render_state.source_image_value,
+        render_state.details_html,
+        render_state.status_html,
+        render_state.banner_html,
+        render_state.selection_html,
+        render_state.prev_button_props,
+        render_state.next_button_props,
+    )
+
+
+def handle_plot_point_select(
+    point_token: str | None,
+    current_idx: int,
+    filtered_df: pd.DataFrame,
+    full_df: pd.DataFrame,
+    lab_names: str | None,
+    output_path: Path,
+) -> tuple:
+    """Handle a plotly point click by selecting the matching table row when visible."""
+
+    if filtered_df.empty:
+        render_state = _build_empty_viewer_state(full_df, filtered_df, summary_df=filtered_df)
+    else:
+        fallback_idx = max(0, min(int(current_idx), len(filtered_df) - 1))
+        matched_idx = _resolve_plot_point_row_index(filtered_df, point_token)
+        render_state = _render_viewer_state(
+            full_df,
+            filtered_df,
+            output_path,
+            lab_names,
+            row_index=fallback_idx if matched_idx is None else matched_idx,
             summary_df=filtered_df,
         )
 
@@ -1198,6 +1322,16 @@ def create_app(context: RuntimeContext):
                         plot_display = gr.Plot(
                             value=initial_view.plot,
                             label="",
+                            elem_id="viewer-plot",
+                        )
+                        plot_point_selection = gr.Textbox(
+                            value="",
+                            container=False,
+                            elem_id="plot-point-selection",
+                        )
+                        plot_point_select_btn = gr.Button(
+                            "Select Plot Point",
+                            elem_id="plot-point-select-btn",
                         )
                     with gr.TabItem("Source"):
                         source_image = gr.AnnotatedImage(
@@ -1337,6 +1471,25 @@ def create_app(context: RuntimeContext):
             prev_btn,
             next_btn,
         ]
+
+        plot_point_select_btn.click(
+            fn=lambda point_token, current_idx, filtered_df, full_df, lab_name: handle_plot_point_select(
+                point_token,
+                current_idx,
+                filtered_df,
+                full_df,
+                lab_name,
+                output_path,
+            ),
+            inputs=[
+                plot_point_selection,
+                current_idx_state,
+                filtered_df_state,
+                full_df_state,
+                lab_name_filter,
+            ],
+            outputs=nav_outputs,
+        )
 
         prev_btn.click(
             fn=lambda current_idx, filtered_df, full_df, lab_name: handle_navigation(
