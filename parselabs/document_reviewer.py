@@ -537,6 +537,26 @@ def _handle_queue_select(
     return _render_document(document, actual_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False).as_outputs()
 
 
+def _dispatch_queue_select(
+    doc_id: str | None,
+    queue_state: pd.DataFrame,
+    evt: gr.SelectData,
+    show_reviewed: bool,
+    output_path: Path,
+    lab_specs: LabSpecsConfig,
+) -> tuple[int, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame]:
+    """Adapt Gradio's input-first select callback order to the queue-select handler."""
+
+    return _handle_queue_select(
+        doc_id,
+        queue_state,
+        show_reviewed,
+        evt,
+        output_path,
+        lab_specs,
+    )
+
+
 def _move_row(
     doc_id: str | None,
     current_index: int,
@@ -793,15 +813,24 @@ def build_app(context: RuntimeContext) -> gr.Blocks:
             *view_outputs,
         ]
 
-        queue_table.select(
-            fn=lambda doc_id, queue_state, evt: _handle_queue_select(
+        def _handle_queue_table_select(
+            doc_id: str | None,
+            queue_state: pd.DataFrame,
+            evt: gr.SelectData,
+        ) -> tuple[int, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame]:
+            """Route typed queue-select event data into the shared reviewer handler."""
+
+            return _dispatch_queue_select(
                 doc_id,
                 queue_state,
-                initial_show_reviewed,
                 evt,
+                initial_show_reviewed,
                 output_path,
                 lab_specs,
-            ),
+            )
+
+        queue_table.select(
+            fn=_handle_queue_table_select,
             inputs=[current_document_id, queue_state],
             outputs=view_outputs,
         )

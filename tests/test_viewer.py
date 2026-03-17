@@ -167,6 +167,30 @@ def test_handle_review_action_uses_shared_entry_persistence(monkeypatch, tmp_pat
     assert result[0].loc[0, "review_status"] == "accepted"
 
 
+def test_dispatch_row_select_preserves_gradio_select_argument_order(monkeypatch, tmp_path):
+    filtered_df = pd.DataFrame([{"lab_name": "Blood - Glucose"}])
+    full_df = filtered_df.copy()
+    evt = types.SimpleNamespace(index=(0, 0))
+    calls: list[tuple[object, object, object, object, object]] = []
+
+    monkeypatch.setattr(
+        viewer,
+        "handle_row_select",
+        lambda evt_arg, filtered_arg, full_arg, lab_arg, output_arg: (
+            calls.append((evt_arg, filtered_arg, full_arg, lab_arg, output_arg)) or ("ok",)
+        ),
+    )
+
+    result = viewer._dispatch_row_select(filtered_df, full_df, "Blood - Glucose", evt, tmp_path)
+
+    assert result == ("ok",)
+    assert calls[0][0] is evt
+    assert calls[0][1].equals(filtered_df)
+    assert calls[0][2].equals(full_df)
+    assert calls[0][3] == "Blood - Glucose"
+    assert calls[0][4] == tmp_path
+
+
 def test_create_app_does_not_render_profile_selector(monkeypatch, tmp_path):
     empty_df = pd.DataFrame()
     empty_state = viewer.ViewerRenderState(
@@ -195,14 +219,15 @@ def test_create_app_does_not_render_profile_selector(monkeypatch, tmp_path):
         demographics=None,
     )
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message="Expected 4 arguments for function.*", category=UserWarning)
-        warnings.filterwarnings("ignore", message="Expected at least 4 arguments for function.*", category=UserWarning)
+    with warnings.catch_warnings(record=True) as caught:
         demo = viewer.create_app(context)
 
     labels = [getattr(component, "label", None) for component in demo.blocks.values()]
     values = [value for value in (getattr(component, "value", None) for component in demo.blocks.values()) if isinstance(value, str)]
+    warning_messages = [str(item.message) for item in caught]
 
     assert "Profile" not in labels
     assert "# Lab Results Viewer" not in values
     assert "Browse, analyze, and review extracted lab results." not in values
+    assert not any("Expected 4 arguments for function" in message for message in warning_messages)
+    assert not any("Expected at least 4 arguments for function" in message for message in warning_messages)

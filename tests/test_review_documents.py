@@ -304,6 +304,36 @@ def test_build_dropdown_state_advances_to_next_document_when_current_has_no_pend
     assert state.selected_id == beta.doc_dir.name
 
 
+def test_dispatch_queue_select_preserves_gradio_select_argument_order(monkeypatch):
+    queue_state = pd.DataFrame([{"actual_index": 3}])
+    evt = types.SimpleNamespace(index=(0, 0))
+    calls: list[tuple[object, object, object, object, object, object]] = []
+
+    monkeypatch.setattr(
+        review_documents,
+        "_handle_queue_select",
+        lambda doc_id, queue_state_arg, show_reviewed, evt_arg, output_path, lab_specs: (
+            calls.append((doc_id, queue_state_arg, show_reviewed, evt_arg, output_path, lab_specs)) or ("ok",)
+        ),
+    )
+
+    result = review_documents._dispatch_queue_select(
+        "alpha_deadbeef",
+        queue_state,
+        evt,
+        True,
+        Path("/tmp/output"),
+        object(),
+    )
+
+    assert result == ("ok",)
+    assert calls[0][0] == "alpha_deadbeef"
+    assert calls[0][1].equals(queue_state)
+    assert calls[0][2] is True
+    assert calls[0][3] is evt
+    assert calls[0][4] == Path("/tmp/output")
+
+
 def test_build_app_hides_review_toolbar_and_defaults_to_showing_reviewed(monkeypatch, tmp_path):
     recorded_show_reviewed: list[bool] = []
     empty_df = pd.DataFrame(columns=review_documents.QUEUE_DISPLAY_COLUMNS)
@@ -338,12 +368,12 @@ def test_build_app_hides_review_toolbar_and_defaults_to_showing_reviewed(monkeyp
         lab_specs=None,
     )
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=UserWarning)
+    with warnings.catch_warnings(record=True) as caught:
         demo = review_documents.build_app(context)
 
     labels = [getattr(component, "label", None) for component in demo.blocks.values()]
     values = [value for value in (getattr(component, "value", None) for component in demo.blocks.values()) if isinstance(value, str)]
+    warning_messages = [str(item.message) for item in caught]
 
     assert recorded_show_reviewed == [True]
     assert "Document Filter" not in labels
@@ -351,3 +381,5 @@ def test_build_app_hides_review_toolbar_and_defaults_to_showing_reviewed(monkeyp
     assert "Show reviewed" not in labels
     assert "Refresh" not in values
     assert "# Processed Document Reviewer" not in values
+    assert not any("Expected 3 arguments for function" in message for message in warning_messages)
+    assert not any("Expected at least 3 arguments for function" in message for message in warning_messages)
