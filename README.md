@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.png" alt="parselabs" width="512"/>
+  <img src="https://raw.githubusercontent.com/tsilva/parselabs/main/logo.png" alt="parselabs" width="512"/>
 
   # parselabs
 

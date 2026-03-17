@@ -58,6 +58,7 @@ class ViewerRenderState:
     details_html: str
     status_html: str
     banner_html: str
+    selection_html: str
 
     def as_filter_outputs(self) -> tuple:
         """Return outputs for filter-driven viewer updates."""
@@ -73,6 +74,7 @@ class ViewerRenderState:
             self.details_html,
             self.status_html,
             self.banner_html,
+            self.selection_html,
         )
 
     def as_review_outputs(self, full_df: pd.DataFrame) -> tuple:
@@ -90,6 +92,7 @@ class ViewerRenderState:
             self.status_html,
             self.summary_html,
             self.banner_html,
+            self.selection_html,
         )
 
 
@@ -793,6 +796,19 @@ def _build_empty_viewer_state(
         details_html=details_html,
         status_html=build_review_status_html("Pending"),
         banner_html="",
+        selection_html=_build_selection_state_html(None, len(filtered_df)),
+    )
+
+
+def _build_selection_state_html(selected_row_index: int | None, row_count: int) -> str:
+    """Return a hidden DOM marker that frontend code can use to sync row highlighting."""
+
+    selected_value = "" if selected_row_index is None else str(int(selected_row_index))
+    return (
+        '<div id="viewer-selection-state" '
+        f'data-selected-row="{selected_value}" '
+        f'data-row-count="{int(row_count)}" '
+        'aria-hidden="true"></div>'
     )
 
 
@@ -866,6 +882,7 @@ def _render_viewer_state(
         details_html=row_context.details_html,
         status_html=row_context.status_html,
         banner_html=row_context.banner_html,
+        selection_html=_build_selection_state_html(row_context.row_index, len(filtered_df)),
     )
 
 
@@ -920,6 +937,7 @@ def handle_row_select(
         render_state.details_html,
         render_state.status_html,
         render_state.banner_html,
+        render_state.selection_html,
     )
 
 
@@ -973,6 +991,7 @@ def handle_navigation(
         render_state.details_html,
         render_state.status_html,
         render_state.banner_html,
+        render_state.selection_html,
     )
 
 
@@ -1113,6 +1132,10 @@ def create_app(context: RuntimeContext):
                     max_height=500,
                     elem_id="lab-data-table",
                 )
+                selection_state = gr.HTML(
+                    value=initial_view.selection_html,
+                    elem_id="viewer-selection-state-host",
+                )
 
                 with gr.Row():
                     export_btn = gr.Button("Export Filtered CSV", size="sm")
@@ -1179,6 +1202,7 @@ def create_app(context: RuntimeContext):
             details_display,
             review_status_display,
             review_reason_banner,
+            selection_state,
         ]
 
         def _handle_data_table_select(
@@ -1243,6 +1267,7 @@ def create_app(context: RuntimeContext):
                 details_display,
                 review_status_display,
                 review_reason_banner,
+                selection_state,
             ],
         )
 
@@ -1261,6 +1286,7 @@ def create_app(context: RuntimeContext):
             details_display,
             review_status_display,
             review_reason_banner,
+            selection_state,
         ]
 
         prev_btn.click(
@@ -1309,6 +1335,7 @@ def create_app(context: RuntimeContext):
             review_status_display,
             summary_display,
             review_reason_banner,
+            selection_state,
         ]
 
         accept_btn.click(

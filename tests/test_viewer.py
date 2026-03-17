@@ -133,6 +133,16 @@ def test_handle_navigation_wraps_between_first_and_last_rows(tmp_path):
 
     assert result[1] == 1
     assert result[2] == "**Row 2 of 2**"
+    assert 'data-selected-row="1"' in result[7]
+    assert 'data-row-count="2"' in result[7]
+
+
+def test_build_selection_state_html_tracks_selected_row_and_row_count():
+    html = viewer._build_selection_state_html(3, 12)
+
+    assert 'id="viewer-selection-state"' in html
+    assert 'data-selected-row="3"' in html
+    assert 'data-row-count="12"' in html
 
 
 def test_handle_review_action_uses_shared_entry_persistence(monkeypatch, tmp_path):
@@ -204,6 +214,7 @@ def test_create_app_does_not_render_profile_selector(monkeypatch, tmp_path):
         details_html="",
         status_html="",
         banner_html="",
+        selection_html=viewer._build_selection_state_html(None, 0),
     )
 
     monkeypatch.setattr(viewer, "_load_output_data", lambda output_path, lab_specs, demographics: (empty_df, []))
