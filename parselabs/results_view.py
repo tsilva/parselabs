@@ -24,6 +24,7 @@ from parselabs.review import (  # noqa: E402
     format_raw_value,
     format_reference_text,
     format_text,
+    get_bbox_coordinates,
     load_results_dataframe,
     normalize_review_status,
 )
@@ -115,25 +116,85 @@ def _format_document_label(source_file: object) -> str:
     return source_text.rsplit(".", 1)[0]
 
 
-def get_document_choices(df: pd.DataFrame) -> list[tuple[str, str]]:
-    """Return readable document dropdown choices keyed by source file."""
+def _build_document_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """Build per-document summary rows used for dropdown ordering and defaults."""
 
     if df.empty or "source_file" not in df.columns:
-        return []
+        return pd.DataFrame(columns=["source_file", "result_count", "bbox_count", "needs_review_count", "unreviewed_count"])
 
-    document_counts = (
-        df["source_file"]
-        .dropna()
-        .astype(str)
-        .value_counts(sort=False)
-        .sort_index()
+    summary_df = df[df["source_file"].notna()].copy()
+    if summary_df.empty:
+        return pd.DataFrame(columns=["source_file", "result_count", "bbox_count", "needs_review_count", "unreviewed_count"])
+
+    bbox_columns = ["bbox_left", "bbox_top", "bbox_right", "bbox_bottom"]
+    has_bbox = (
+        summary_df[bbox_columns].notna().all(axis=1)
+        if set(bbox_columns).issubset(summary_df.columns)
+        else pd.Series(False, index=summary_df.index)
+    )
+    review_status = summary_df["review_status"] if "review_status" in summary_df.columns else pd.Series("", index=summary_df.index)
+    review_needed = summary_df["review_needed"] if "review_needed" in summary_df.columns else pd.Series(False, index=summary_df.index)
+    is_unreviewed = review_status.isna() | review_status.astype(str).str.strip().eq("")
+
+    summary_df = summary_df.assign(
+        has_bbox=has_bbox,
+        needs_review_unresolved=review_needed.fillna(False) & is_unreviewed,
+        is_unreviewed=is_unreviewed,
     )
 
+    return (
+        summary_df.groupby("source_file", dropna=True)
+        .agg(
+            result_count=("source_file", "size"),
+            bbox_count=("has_bbox", "sum"),
+            needs_review_count=("needs_review_unresolved", "sum"),
+            unreviewed_count=("is_unreviewed", "sum"),
+        )
+        .reset_index()
+    )
+
+
+def get_document_choices(df: pd.DataFrame, *, prioritize_review_sources: bool = False) -> list[tuple[str, str]]:
+    """Return readable document dropdown choices keyed by source file."""
+
+    document_summary = _build_document_summary(df)
+    if document_summary.empty:
+        return []
+
+    if prioritize_review_sources:
+        document_summary = document_summary.sort_values(
+            ["bbox_count", "needs_review_count", "unreviewed_count", "result_count", "source_file"],
+            ascending=[False, False, False, False, True],
+            na_position="last",
+        )
+    else:
+        document_summary = document_summary.sort_values("source_file", ascending=True, na_position="last")
+
     return [
-        (f"{_format_document_label(source_file)} ({count})", source_file)
-        for source_file, count in document_counts.items()
-        if source_file.strip()
+        (f"{_format_document_label(row.source_file)} ({int(row.result_count)})", str(row.source_file))
+        for row in document_summary.itertuples()
+        if str(row.source_file).strip()
     ]
+
+
+def get_initial_document(df: pd.DataFrame, *, prioritize_review_sources: bool) -> str | None:
+    """Pick the default document for the current workspace launch mode."""
+
+    if not prioritize_review_sources:
+        return None
+
+    document_summary = _build_document_summary(df)
+    if document_summary.empty:
+        return None
+
+    ranked = document_summary.sort_values(
+        ["bbox_count", "needs_review_count", "unreviewed_count", "result_count", "source_file"],
+        ascending=[False, False, False, False, True],
+        na_position="last",
+    )
+    top_row = ranked.iloc[0]
+    source_file = str(top_row.get("source_file") or "").strip()
+    return source_file or None
 
 
 # =============================================================================
@@ -339,6 +400,7 @@ def build_selection_inspector_html(entry: dict | pd.Series | None) -> str:
     status_badge = build_review_status_badge(row)
     reason_badges_html = build_reason_badges(row.get("review_reason"))
     comments_text = format_text(row.get("raw_comments"), empty="")
+    source_bbox = get_bbox_coordinates(row)
     date_value = row.get("date")
     if date_value is not None and pd.notna(date_value):
         try:
@@ -362,6 +424,12 @@ def build_selection_inspector_html(entry: dict | pd.Series | None) -> str:
             f"<strong>{comments_text}</strong>"
             "</div>"
         )
+
+    meta_rows.append(
+        '<div class="review-meta-row"><span>Source Box</span>'
+        f"<strong>{'Available' if source_bbox is not None else 'Not stored for this row'}</strong>"
+        "</div>"
+    )
 
     context_chips = [
         f'<span class="review-progress-chip compact"><span class="label">Date</span>{date_text}</span>',
@@ -1354,28 +1422,38 @@ def export_csv(filtered_df: pd.DataFrame, output_path: Path):
 # =============================================================================
 
 
-def create_app(context: RuntimeContext):
+def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"):
     """Create and configure the unified review workspace for one runtime context."""
 
     output_path = context.output_path if context.output_path is not None else Path("./output")
+    prioritize_review_sources = str(launch_mode).strip().lower() == "review-queue"
     full_df, lab_name_choices = _load_output_data(
         output_path,
         context.lab_specs,
         context.demographics,
     )
-    document_choices = get_document_choices(full_df)
+    document_choices = get_document_choices(full_df, prioritize_review_sources=prioritize_review_sources)
+    initial_document = get_initial_document(full_df, prioritize_review_sources=prioritize_review_sources)
+    initial_filtered_df = apply_filters(
+        full_df,
+        None,
+        False,
+        "All",
+        document_name=initial_document,
+    )
     initial_view = _render_viewer_state(
         full_df,
-        full_df,
+        initial_filtered_df,
         output_path,
         None,
-        summary_df=full_df,
+        summary_df=initial_filtered_df,
+        document_name=initial_document,
     )
 
     with gr.Blocks(title="Parselabs Review Workspace") as demo:
         full_df_state = gr.State(value=full_df)
-        filtered_df_state = gr.State(value=full_df)
-        current_idx_state = gr.State(value=0)
+        filtered_df_state = gr.State(value=initial_view.filtered_df)
+        current_idx_state = gr.State(value=initial_view.current_idx)
 
         with gr.Column(elem_id="workspace-shell"):
             with gr.Row(elem_id="workspace-filter-row", elem_classes="filter-row"):
@@ -1383,7 +1461,7 @@ def create_app(context: RuntimeContext):
                     document_filter = gr.Dropdown(
                         choices=document_choices,
                         multiselect=False,
-                        value=None,
+                        value=initial_document,
                         label="Document",
                         allow_custom_value=False,
                     )

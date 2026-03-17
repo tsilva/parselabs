@@ -97,6 +97,66 @@ def test_build_page_image_value_for_entry_returns_plain_image_when_bbox_missing(
     assert annotations == []
 
 
+def test_get_document_choices_prioritizes_bbox_docs_for_review_mode():
+    df = pd.DataFrame(
+        [
+            {
+                "source_file": "beta.csv",
+                "review_status": "",
+                "review_needed": True,
+                "bbox_left": None,
+                "bbox_top": None,
+                "bbox_right": None,
+                "bbox_bottom": None,
+            },
+            {
+                "source_file": "alpha.csv",
+                "review_status": "",
+                "review_needed": False,
+                "bbox_left": 1,
+                "bbox_top": 2,
+                "bbox_right": 3,
+                "bbox_bottom": 4,
+            },
+        ]
+    )
+
+    choices = viewer.get_document_choices(df, prioritize_review_sources=True)
+
+    assert choices == [
+        ("alpha (1)", "alpha.csv"),
+        ("beta (1)", "beta.csv"),
+    ]
+
+
+def test_get_initial_document_prefers_bbox_backed_review_document():
+    df = pd.DataFrame(
+        [
+            {
+                "source_file": "beta.csv",
+                "review_status": "",
+                "review_needed": True,
+                "bbox_left": None,
+                "bbox_top": None,
+                "bbox_right": None,
+                "bbox_bottom": None,
+            },
+            {
+                "source_file": "alpha.csv",
+                "review_status": "",
+                "review_needed": False,
+                "bbox_left": 1,
+                "bbox_top": 2,
+                "bbox_right": 3,
+                "bbox_bottom": 4,
+            },
+        ]
+    )
+
+    assert viewer.get_initial_document(df, prioritize_review_sources=True) == "alpha.csv"
+    assert viewer.get_initial_document(df, prioritize_review_sources=False) is None
+
+
 def test_handle_navigation_stays_on_first_row_when_moving_backward(tmp_path):
     df = pd.DataFrame(
         [
@@ -440,3 +500,18 @@ def test_create_app_does_not_render_profile_selector(monkeypatch, tmp_path):
     assert "Browse, analyze, and review extracted lab results." not in values
     assert not any("Expected 4 arguments for function" in message for message in warning_messages)
     assert not any("Expected at least 4 arguments for function" in message for message in warning_messages)
+
+
+def test_build_selection_inspector_html_surfaces_missing_source_box():
+    html = viewer.build_selection_inspector_html(
+        {
+            "lab_name": "Blood - Glucose",
+            "review_status": "",
+            "source_file": "glucose.csv",
+            "page_number": 1,
+            "result_index": 0,
+        }
+    )
+
+    assert "Source Box" in html
+    assert "Not stored for this row" in html
