@@ -166,6 +166,11 @@
 }
 
 /* Compact table display - dark mode compatible */
+#viewer-selection-state-host,
+#viewer-selection-state {
+    display: none !important;
+}
+
 #lab-data-table table {
     font-size: 0.85em;
 }
@@ -179,7 +184,10 @@
 #lab-data-table tr:hover {
     background-color: rgba(75, 85, 99, 0.5) !important;
 }
-#lab-data-table tr.selected {
-    background-color: rgba(59, 130, 246, 0.3) !important;
-    border-left: 3px solid #3b82f6;
+#lab-data-table tr.selected,
+#lab-data-table tr.selected td {
+    background-color: rgba(59, 130, 246, 0.25) !important;
+}
+#lab-data-table tr.selected td:first-child {
+    box-shadow: inset 3px 0 0 0 #3b82f6;
 }
