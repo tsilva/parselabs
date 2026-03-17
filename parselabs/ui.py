@@ -17,8 +17,10 @@ REVIEW_TAB_ID = "review-queue"
 def build_app(context: RuntimeContext, default_tab: str) -> gr.Blocks:
     """Build the single review workspace."""
 
-    _ = default_tab
-    return results_view.create_app(context)
+    return results_view.create_app(
+        context,
+        launch_mode=_normalize_default_tab(default_tab),
+    )
 
 
 def launch_app(context: RuntimeContext, default_tab: str) -> None:
