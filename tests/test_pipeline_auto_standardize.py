@@ -202,3 +202,27 @@ def test_run_reviewed_json_rebuild_uses_auto_standardize_setting(tmp_path, monke
     main._run_reviewed_json_rebuild(Namespace(auto_standardize=False, model=None), "tsilva", allow_pending=True)
 
     assert auto_calls == [False]
+
+
+def test_run_reviewed_json_rebuild_exports_final_rows_only_when_fixture_ready(tmp_path, monkeypatch):
+    output_path = tmp_path / "output"
+    output_path.mkdir(parents=True, exist_ok=True)
+    exported_frames = []
+    reviewed_corpus = SimpleNamespace(
+        merged_review_df=pd.DataFrame([{"kind": "review"}]),
+        final_df=pd.DataFrame([{"kind": "final"}]),
+        csv_paths=[],
+    )
+
+    monkeypatch.setattr(main, "_setup_rebuild_environment", lambda profile_name: (SimpleNamespace(output_path=output_path, openrouter_base_url=None, openrouter_api_key=None, extract_model_id="model"), SimpleNamespace()))
+    monkeypatch.setattr(main, "get_column_lists", lambda schema: ([], [], {}, {}))
+    monkeypatch.setattr(main, "_rebuild_review_outputs_from_processed_documents", lambda *args, **kwargs: reviewed_corpus)
+    monkeypatch.setattr(main, "_export_final_results", lambda df, *args, **kwargs: exported_frames.append(df.copy()))
+    monkeypatch.setattr(main, "_maybe_auto_standardize_outputs", lambda **kwargs: [])
+    monkeypatch.setattr(main, "_report_extraction_failures", lambda *args, **kwargs: None)
+
+    main._run_reviewed_json_rebuild(Namespace(auto_standardize=False, model=None), "tsilva", allow_pending=True)
+    main._run_reviewed_json_rebuild(Namespace(auto_standardize=False, model=None), "tsilva", allow_pending=False)
+
+    assert exported_frames[0].to_dict("records") == [{"kind": "review"}]
+    assert exported_frames[1].to_dict("records") == [{"kind": "final"}]

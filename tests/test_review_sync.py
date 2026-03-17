@@ -215,6 +215,32 @@ def _make_percentage_variant_lab_specs(tmp_path: Path) -> LabSpecsConfig:
     return LabSpecsConfig(config_path=config_path)
 
 
+def _make_serology_variant_lab_specs(tmp_path: Path) -> LabSpecsConfig:
+    """Create lab specs for assays that expose quantitative and qualitative companions."""
+
+    config_path = tmp_path / "lab_specs_serology.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "Blood - Anti-Cytomegalovirus IgG": {
+                    "primary_unit": "IU/mL",
+                    "lab_type": "blood",
+                    "loinc_code": "13949-3",
+                    "ranges": {"default": [0.0, 15.0]},
+                },
+                "Blood - Anti-Cytomegalovirus IgG, Qualitative": {
+                    "primary_unit": "boolean",
+                    "lab_type": "blood",
+                    "loinc_code": "5124-3",
+                    "ranges": {"default": [0, 0]},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return LabSpecsConfig(config_path=config_path)
+
+
 def _stub_standardization(monkeypatch) -> None:
     """Stub cache-backed standardization so tests stay self-contained."""
 
@@ -592,6 +618,49 @@ def test_apply_cached_standardization_uses_raw_section_name_to_disambiguate_mixe
     ]
 
 
+def test_apply_cached_standardization_prefers_variant_specific_companion_keys(tmp_path, monkeypatch):
+    lab_specs = _make_serology_variant_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            ("AC. ANTI-CITOMEGALOVIRUS IgG", "SEROLOGIA INFECCIOSA"): "Blood - Anti-Cytomegalovirus IgG",
+            ("AC. ANTI-CITOMEGALOVIRUS IgG (quantitative)", "SEROLOGIA INFECCIOSA"): "Blood - Anti-Cytomegalovirus IgG",
+            ("AC. ANTI-CITOMEGALOVIRUS IgG (qualitative)", "SEROLOGIA INFECCIOSA"): "Blood - Anti-Cytomegalovirus IgG, Qualitative",
+        },
+        unit_map={
+            ("UI/ml", "Blood - Anti-Cytomegalovirus IgG"): "IU/mL",
+            ("", "Blood - Anti-Cytomegalovirus IgG, Qualitative"): "boolean",
+        },
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {
+                "page_number": 3,
+                "raw_lab_name": "AC. ANTI-CITOMEGALOVIRUS IgG",
+                "raw_section_name": "SEROLOGIA INFECCIOSA",
+                "raw_value": "0,4",
+                "raw_lab_unit": "UI/ml",
+            },
+            {
+                "page_number": 3,
+                "raw_lab_name": "AC. ANTI-CITOMEGALOVIRUS IgG",
+                "raw_section_name": "SEROLOGIA INFECCIOSA",
+                "raw_value": "Negativo",
+                "raw_lab_unit": None,
+            },
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df["lab_name_standardized"].tolist() == [
+        "Blood - Anti-Cytomegalovirus IgG",
+        "Blood - Anti-Cytomegalovirus IgG, Qualitative",
+    ]
+    assert standardized_df["lab_unit_standardized"].tolist() == ["IU/mL", "boolean"]
+
+
 def test_backfill_missing_raw_sections_infers_urine_page_context():
     review_df = pd.DataFrame(
         [
@@ -726,7 +795,7 @@ def test_apply_cached_standardization_remaps_absolute_units_to_non_percentage_va
         "Blood - Monocytes",
         "Blood - Lymphocytes",
     ]
-    assert standardized_df["lab_unit_standardized"].tolist() == ["10⁹/L", "/mm3"]
+    assert standardized_df["lab_unit_standardized"].tolist() == ["10⁹/L", "10⁹/L"]
 
 
 def test_apply_cached_standardization_infers_missing_absolute_units_from_reference_ranges(tmp_path, monkeypatch):
@@ -770,6 +839,34 @@ def test_apply_cached_standardization_infers_missing_absolute_units_from_referen
         "Blood - Neutrophils (%)",
     ]
     assert standardized_df["lab_unit_standardized"].tolist() == ["10⁹/L", "%"]
+
+
+def test_apply_cached_standardization_overrides_stale_percentage_unit_cache_for_absolute_units(tmp_path, monkeypatch):
+    lab_specs = _make_percentage_variant_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            ("Neutrófilos", "Fórmula Leucocitária"): "Blood - Neutrophils (%)",
+        },
+        unit_map={
+            ("x10E3/µl", "Blood - Neutrophils (%)"): "%",
+        },
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Neutrófilos",
+                "raw_section_name": "Fórmula Leucocitária",
+                "raw_lab_unit": "x10E3/µl",
+            }
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df["lab_name_standardized"].tolist() == ["Blood - Neutrophils"]
+    assert standardized_df["lab_unit_standardized"].tolist() == ["10⁹/L"]
 
 
 def test_flag_percentage_variant_ambiguity_ignores_single_variant_labs(tmp_path):

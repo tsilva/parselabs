@@ -120,10 +120,13 @@ Based on the current code, not prior documentation:
 - `apply_cached_standardization(...)` standardizes raw lab names using `standardize_lab_names(...)`.
 - Name standardization is now section-aware: it prefers a cache key built from `(raw_lab_name, raw_section_name)` when a section/header was extracted for the row.
 - Older caches that still store contextual mappings as `section - raw_lab_name` are now read transparently alongside the newer `raw_lab_name|section` format.
+- Contextual lookup now also uses a folded compatibility pass that collapses stylized spaced-letter headers and accent/OCR variants before giving up on the cache.
 - Bare-name fallback is still guarded: it is only reused when the cache has no conflicting contextual mappings for that raw label.
+- When the same raw assay appears on one page as both a numeric result and a qualitative interpretation, the row builder now probes explicit `(quantitative)` / `(qualitative)` cache keys first before falling back to the undecorated raw name.
 - It standardizes units using `standardize_lab_units(...)` only after the lab name is known.
 - Unknown name mappings become `$UNKNOWN$`.
 - Blank raw units are only inferred from the lab spec primary unit for a narrow safe set: `boolean`, `pH`, and `unitless`.
+- For percentage-vs-absolute sibling analytes, explicit non-percent raw units now override stale `%` cache entries so absolute differential counts do not stay pinned to percentage variants.
 - For percentage-vs-absolute sibling analytes, blank raw units can also be inferred from the report's own extracted reference ranges when those ranges clearly match one sibling variant over the other.
 - After unit mapping, the code remaps percentage-vs-absolute sibling analytes using the standardized unit as the tie-breaker.
 
@@ -142,7 +145,7 @@ Based on the current code, not prior documentation:
 
 20. Review-mode behavior.
 - In `mode="review"`, every row remains visible.
-- The code flags duplicates with `flag_duplicate_entries(...)`, but does not deduplicate them away.
+- The code flags duplicates with `flag_duplicate_entries(...)`, but only when same-date same-lab rows still disagree after normalization; equivalent dual-unit repeats stay quiet.
 - It adds export-style alias columns so the UI and CSV have a stable shape.
 - It then runs `ValueValidator.validate(...)`.
 - The result becomes the per-document review CSV and the basis for the reviewer UI.
@@ -185,17 +188,19 @@ Based on the current code, not prior documentation:
 
 26. Reviewed-JSON rebuild mode.
 - If `--rebuild-from-json` is passed, extraction is skipped entirely.
-- `_run_reviewed_json_rebuild(...)` rebuilds every per-document CSV from page JSON, writes merged `all.csv` and `all.xlsx`, and then runs the same optional post-export auto-refresh step.
+- `_run_reviewed_json_rebuild(...)` rebuilds every per-document CSV from page JSON, then writes either the in-progress merged review ledger or the accepted-only final export depending on review completeness.
+- With `--allow-pending`, it writes the merged review-state dataframe so reviewers can refresh the live queue without requiring a fully reviewed corpus.
+- Without `--allow-pending`, it writes the accepted-only deduplicated final export dataframe, so fixture-ready reviewed corpora publish clean `all.csv` and `all.xlsx` outputs.
 - This path regenerates review outputs from existing reviewed JSON state while keeping the auto-refresh behavior consistent with normal extraction runs.
 
 27. Strict reviewed-truth helpers still exist separately.
 - `build_final_output_dataframe_from_reviewed_json(...)` and related helpers build accepted-row export data from reviewed JSON.
 - In strict mode, `ensure_document_fixture_ready(...)` blocks promotion if any rows are still pending or any missing-row markers remain unresolved.
 - `--allow-pending` affects those reviewed-truth helpers.
-- It does not change what the normal merged `all.csv` export contains.
+- It only changes whether reviewed rebuild mode publishes the review ledger or the accepted final export.
 
 28. Canonical source of truth.
 - The canonical persisted intermediate is the per-page JSON in each hashed document directory.
 - Per-document CSVs are derived review snapshots.
-- Top-level `all.csv` and `all.xlsx` are merged review-state outputs, potentially rebuilt once more after automatic standardization refresh.
-- Accepted-only final export data is computed through a separate export path and returned by helpers, but not written by the normal extraction run.
+- Normal extraction-mode `all.csv` and `all.xlsx` are merged review-state outputs, potentially rebuilt once more after automatic standardization refresh.
+- Strict reviewed rebuild mode writes the accepted-only final export instead of the review ledger.

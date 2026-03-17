@@ -99,6 +99,27 @@ def test_standardize_lab_names_blocks_bare_fallback_when_contextual_values_confl
     assert result[("Glicose", "Bioquímica")] == "$UNKNOWN$"
 
 
+def test_standardize_lab_names_matches_folded_contextual_keys(monkeypatch):
+    monkeypatch.setattr(
+        standardization,
+        "load_cache",
+        lambda name: {
+            "resistencia osmotica dos eritrocitos (apos incubacao) - hemolise inicial": "Blood - Osmotic Resistance Initial (After Incubation)",
+            "imunologia - atc anti-transglutaminase (iga)": "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA)",
+        },
+    )
+
+    result = standardization.standardize_lab_names(
+        [
+            ("Hemolise Inicial", "Resistencia Osmotica dos Eritrocitos (após incubaçao)"),
+            ("ATC ANTI-TRANSGLUTAMINASE (IgA)", "I M U N O L O G I A"),
+        ]
+    )
+
+    assert result[("Hemolise Inicial", "Resistencia Osmotica dos Eritrocitos (após incubaçao)")] == "Blood - Osmotic Resistance Initial (After Incubation)"
+    assert result[("ATC ANTI-TRANSGLUTAMINASE (IgA)", "I M U N O L O G I A")] == "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA)"
+
+
 def test_standardize_lab_names_does_not_fallback_to_legacy_key_when_section_is_present(monkeypatch):
     monkeypatch.setattr(
         standardization,
