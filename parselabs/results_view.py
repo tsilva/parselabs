@@ -17,7 +17,6 @@ from parselabs.config import Demographics, LabSpecsConfig  # noqa: E402
 from parselabs.paths import get_static_dir  # noqa: E402
 from parselabs.review import (  # noqa: E402
     SOURCE_BBOX_LABEL,
-    build_reason_badges,
     build_review_status_badge,
     format_mapped_reference_text,
     format_mapped_value,
@@ -55,7 +54,6 @@ class ViewerRenderState:
     position_text: str
     source_image_value: tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None
     inspector_html: str
-    details_html: str
     selection_html: str
     prev_button_props: dict
     next_button_props: dict
@@ -72,7 +70,6 @@ class ViewerRenderState:
             self.inspector_html,
             self.source_image_value,
             self.plot,
-            self.details_html,
             self.selection_html,
             self.prev_button_props,
             self.next_button_props,
@@ -90,7 +87,6 @@ class ViewerRenderState:
             self.inspector_html,
             self.source_image_value,
             self.plot,
-            self.details_html,
             self.summary_html,
             self.selection_html,
             self.prev_button_props,
@@ -270,7 +266,7 @@ def build_summary_cards(df: pd.DataFrame) -> str:
 
     # Guard: no data
     if df.empty:
-        return '<div class="summary-row"><span class="stat-card">No data loaded</span></div>'
+        return '<div class="summary-line"><span class="summary-item">No data loaded</span></div>'
 
     total = len(df)
     unique_tests = df["lab_name"].nunique() if "lab_name" in df.columns else 0
@@ -306,25 +302,25 @@ def build_summary_cards(df: pd.DataFrame) -> str:
 
     # Build HTML cards
     cards = []
-    cards.append(f'<span class="stat-card">{total:,} results</span>')
-    cards.append(f'<span class="stat-card">{unique_tests} tests</span>')
+    cards.append(f'<span class="summary-item"><strong>{total:,}</strong> results</span>')
+    cards.append(f'<span class="summary-item"><strong>{unique_tests}</strong> tests</span>')
 
     if date_range:
-        cards.append(f'<span class="stat-card">{date_range}</span>')
+        cards.append(f'<span class="summary-item"><strong>{date_range}</strong></span>')
 
     if needs_review_count > 0:
-        cards.append(f'<span class="stat-card warning">{needs_review_count} need review</span>')
+        cards.append(f'<span class="summary-item warning"><strong>{needs_review_count}</strong> need review</span>')
 
     if abnormal_count > 0:
-        cards.append(f'<span class="stat-card danger">{abnormal_count} abnormal</span>')
+        cards.append(f'<span class="summary-item danger"><strong>{abnormal_count}</strong> abnormal</span>')
 
     if unhealthy_count > 0:
-        cards.append(f'<span class="stat-card warning">{unhealthy_count} unhealthy</span>')
+        cards.append(f'<span class="summary-item warning"><strong>{unhealthy_count}</strong> unhealthy</span>')
 
     if reviewed_count > 0:
-        cards.append(f'<span class="stat-card success">{reviewed_count} reviewed</span>')
+        cards.append(f'<span class="summary-item success"><strong>{reviewed_count}</strong> reviewed</span>')
 
-    return f'<div class="summary-row">{" ".join(cards)}</div>'
+    return f'<div class="summary-line">{"".join(cards)}</div>'
 
 
 # Human-readable descriptions for validation reason codes
@@ -398,7 +394,7 @@ def build_selection_inspector_html(entry: dict | pd.Series | None) -> str:
 
     row = entry if isinstance(entry, pd.Series) else pd.Series(entry)
     status_badge = build_review_status_badge(row)
-    reason_badges_html = build_reason_badges(row.get("review_reason"))
+    reason_text = format_text(row.get("review_reason"), empty="")
     comments_text = format_text(row.get("raw_comments"), empty="")
     source_bbox = get_bbox_coordinates(row)
     date_value = row.get("date")
@@ -411,52 +407,52 @@ def build_selection_inspector_html(entry: dict | pd.Series | None) -> str:
         date_text = "-"
     meta_rows: list[str] = []
 
-    if reason_badges_html != '<span class="review-inline-muted">None</span>':
+    if reason_text:
         meta_rows.append(
-            '<div class="review-meta-row"><span>Validation</span>'
-            f'<div class="review-badge-row">{reason_badges_html}</div>'
+            '<div class="review-meta-row compact"><span>Validation</span>'
+            f'<strong>{reason_text}</strong>'
             "</div>"
         )
 
     if comments_text:
         meta_rows.append(
-            '<div class="review-meta-row"><span>Comments</span>'
+            '<div class="review-meta-row compact"><span>Comments</span>'
             f"<strong>{comments_text}</strong>"
             "</div>"
         )
 
     meta_rows.append(
-        '<div class="review-meta-row"><span>Source Box</span>'
+        '<div class="review-meta-row compact"><span>Source Box</span>'
         f"<strong>{'Available' if source_bbox is not None else 'Not stored for this row'}</strong>"
         "</div>"
     )
 
-    context_chips = [
-        f'<span class="review-progress-chip compact"><span class="label">Date</span>{date_text}</span>',
-        f'<span class="review-progress-chip compact"><span class="label">Document</span>{format_text(_format_document_label(row.get("source_file")))}</span>',
-        f'<span class="review-progress-chip compact"><span class="label">Page</span>{format_text(row.get("page_number"))}</span>',
-        f'<span class="review-progress-chip compact"><span class="label">Row</span>{format_text(row.get("result_index"))}</span>',
+    context_items = [
+        f'<span class="review-inline-meta"><span class="label">Date</span>{date_text}</span>',
+        f'<span class="review-inline-meta"><span class="label">Document</span>{format_text(_format_document_label(row.get("source_file")))}</span>',
+        f'<span class="review-inline-meta"><span class="label">Page</span>{format_text(row.get("page_number"))}</span>',
+        f'<span class="review-inline-meta"><span class="label">Row</span>{format_text(row.get("result_index"))}</span>',
     ]
     meta_html = f'<div class="review-meta-list">{"".join(meta_rows)}</div>' if meta_rows else ""
 
     return (
         '<div class="review-card">'
-        '<div class="review-card-header">'
-        "<div>"
-        '<div class="review-eyebrow">Selected Result</div>'
+        '<div class="review-card-header compact">'
+        '<div class="review-header-line">'
+        '<span class="review-eyebrow">Selected Result</span>'
+        f'<span class="review-inline-status {html.escape(normalize_review_status(row.get("review_status")) or "pending")}">{status_badge.label}</span>'
+        "</div>"
         f'<div class="review-title">{format_text(row.get("lab_name"))}</div>'
         "</div>"
-        f'<span class="review-status-chip {html.escape(normalize_review_status(row.get("review_status")) or "pending")}">{status_badge.label}</span>'
-        "</div>"
-        f'<div class="review-progress-row workspace-context-row">{"".join(context_chips)}</div>'
-        '<div class="review-compare-grid">'
-        '<div class="review-compare-panel">'
+        f'<div class="review-inline-meta-row workspace-context-row">{"".join(context_items)}</div>'
+        '<div class="review-compare-grid compact">'
+        '<div class="review-compare-panel compact">'
         '<div class="review-panel-title">Mapped</div>'
         f'<div class="review-field"><span>Lab</span><strong>{format_text(row.get("lab_name"))}</strong></div>'
         f'<div class="review-field"><span>Value</span><strong>{format_mapped_value(row)}</strong></div>'
         f'<div class="review-field"><span>Reference</span><strong>{format_mapped_reference_text(row)}</strong></div>'
         "</div>"
-        '<div class="review-compare-panel">'
+        '<div class="review-compare-panel compact">'
         '<div class="review-panel-title">Raw</div>'
         f'<div class="review-field"><span>Lab</span><strong>{format_text(row.get("raw_lab_name"))}</strong></div>'
         f'<div class="review-field"><span>Value</span><strong>{format_raw_value(row)}</strong></div>'
@@ -1018,7 +1014,6 @@ def _build_empty_viewer_state(
     summary_df: pd.DataFrame,
     plot_labs: list[str] | None = None,
     position_text: str = "No results",
-    details_html: str = "<p>No entry selected</p>",
 ) -> ViewerRenderState:
     """Build the stable empty-state payload for viewer callbacks."""
 
@@ -1032,7 +1027,6 @@ def _build_empty_viewer_state(
         position_text=position_text,
         source_image_value=None,
         inspector_html=build_selection_inspector_html(None),
-        details_html=details_html,
         selection_html=_build_selection_state_html(None, len(filtered_df)),
         prev_button_props=prev_button_props,
         next_button_props=next_button_props,
@@ -1085,7 +1079,6 @@ def _render_viewer_state(
     row_index: int = 0,
     summary_df: pd.DataFrame | None = None,
     empty_position_text: str = "No results",
-    empty_details_html: str = "<p>No entry selected</p>",
     document_name: str | None = None,
 ) -> ViewerRenderState:
     """Build the unified viewer render payload for the current filtered dataframe."""
@@ -1100,7 +1093,6 @@ def _render_viewer_state(
             summary_df=resolved_summary_df,
             plot_labs=[lab_names] if lab_names else [],
             position_text=empty_position_text,
-            details_html=empty_details_html,
         )
 
     resolved_row_index = max(0, min(int(row_index), len(filtered_df) - 1))
@@ -1114,7 +1106,6 @@ def _render_viewer_state(
             summary_df=resolved_summary_df,
             plot_labs=[lab_names] if lab_names else [],
             position_text=empty_position_text,
-            details_html=empty_details_html,
         )
 
     row_context = build_viewer_row_context(
@@ -1133,7 +1124,6 @@ def _render_viewer_state(
             summary_df=resolved_summary_df,
             plot_labs=[lab_names] if lab_names else [],
             position_text=empty_position_text,
-            details_html=empty_details_html,
         )
 
     prev_button_props, next_button_props = _build_navigation_button_props(row_context.row_index, len(filtered_df))
@@ -1150,7 +1140,6 @@ def _render_viewer_state(
         ),
         source_image_value=row_context.source_image_value,
         inspector_html=build_selection_inspector_html(selected_row),
-        details_html=row_context.details_html,
         selection_html=_build_selection_state_html(
             row_context.row_index,
             len(filtered_df),
@@ -1215,7 +1204,6 @@ def handle_row_select(
         render_state.inspector_html,
         render_state.source_image_value,
         render_state.plot,
-        render_state.details_html,
         render_state.selection_html,
         render_state.prev_button_props,
         render_state.next_button_props,
@@ -1307,7 +1295,6 @@ def handle_navigation(
         render_state.inspector_html,
         render_state.source_image_value,
         render_state.plot,
-        render_state.details_html,
         render_state.selection_html,
         render_state.prev_button_props,
         render_state.next_button_props,
@@ -1346,7 +1333,6 @@ def handle_plot_point_select(
         render_state.inspector_html,
         render_state.source_image_value,
         render_state.plot,
-        render_state.details_html,
         render_state.selection_html,
         render_state.prev_button_props,
         render_state.next_button_props,
@@ -1399,22 +1385,9 @@ def handle_review_action(
         row_index=min(resolved_index, max(0, len(filtered_df) - 1)) if not filtered_df.empty else 0,
         summary_df=full_df,
         empty_position_text="All done!",
-        empty_details_html="<p>All entries reviewed in this filter!</p>",
         document_name=document_name,
     )
     return render_state.as_review_outputs(full_df)
-
-
-def export_csv(filtered_df: pd.DataFrame, output_path: Path):
-    """Export filtered data to CSV file."""
-
-    # Guard: no data to export
-    if filtered_df.empty:
-        return None
-
-    export_path = output_path / "filtered_export.csv"
-    filtered_df.to_csv(export_path, index=False)
-    return str(export_path)
 
 
 # =============================================================================
@@ -1500,37 +1473,14 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
 
             with gr.Row(elem_id="workspace-main-row"):
                 with gr.Column(scale=5, min_width=460, elem_id="workspace-document-col"):
-                    with gr.Row(elem_id="workspace-nav-row"):
-                        prev_btn = gr.Button("< Prev [k]", elem_id="prev-btn", size="sm", interactive=False)
-                        position_display = gr.Markdown(initial_view.position_text, elem_id="position-display")
-                        next_btn = gr.Button("Next [j] >", elem_id="next-btn", size="sm", interactive=len(initial_view.filtered_df) > 1)
-
                     source_image = gr.AnnotatedImage(
                         value=initial_view.source_image_value,
                         label="Source Document Page",
                         color_map={SOURCE_BBOX_LABEL: "#dc2626"},
                         show_legend=False,
                         show_label=False,
-                        height=620,
                         elem_id="workspace-source-image",
                     )
-
-                with gr.Column(scale=4, min_width=360, elem_id="workspace-results-col"):
-                    data_table = gr.DataFrame(
-                        value=initial_view.display_df,
-                        interactive=False,
-                        wrap=True,
-                        max_height=620,
-                        elem_id="lab-data-table",
-                    )
-                    selection_state = gr.HTML(
-                        value=initial_view.selection_html,
-                        elem_id="viewer-selection-state-host",
-                    )
-
-                    with gr.Row(elem_id="workspace-export-row"):
-                        export_btn = gr.Button("Export Filtered CSV", size="sm")
-                        export_file = gr.File(label="Download", visible=False)
 
                 with gr.Column(scale=3, min_width=260, elem_id="workspace-analysis-col"):
                     inspector_display = gr.HTML(value=initial_view.inspector_html, elem_id="workspace-inspector-card")
@@ -1543,15 +1493,28 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                     plot_point_selection = gr.Textbox(value="", container=False, elem_id="plot-point-selection")
                     plot_point_select_btn = gr.Button("Select Plot Point", elem_id="plot-point-select-btn")
 
-                    with gr.Accordion("Raw / metadata", open=False, elem_id="workspace-details-panel"):
-                        details_display = gr.HTML(value=initial_view.details_html, elem_id="workspace-details-content")
-
                     with gr.Column(elem_id="workspace-action-bar"):
-                        with gr.Row():
+                        with gr.Row(elem_id="workspace-primary-controls"):
+                            prev_btn = gr.Button("< Prev [k]", elem_id="prev-btn", size="sm", interactive=False)
+                            position_display = gr.Markdown(initial_view.position_text, elem_id="position-display")
+                            next_btn = gr.Button("Next [j] >", elem_id="next-btn", size="sm", interactive=len(initial_view.filtered_df) > 1)
                             accept_btn = gr.Button("Accept [y]", elem_id="accept-btn", variant="primary")
                             reject_btn = gr.Button("Reject [n]", elem_id="reject-btn", variant="stop")
+                        with gr.Row(elem_id="workspace-secondary-controls"):
                             undo_btn = gr.Button("Undo [u]", elem_id="undo-btn", size="sm")
                             missing_btn = gr.Button("Missing [m]", elem_id="missing-btn", size="sm")
+
+                with gr.Column(scale=4, min_width=360, elem_id="workspace-results-col"):
+                    data_table = gr.DataFrame(
+                        value=initial_view.display_df,
+                        interactive=False,
+                        wrap=True,
+                        elem_id="lab-data-table",
+                    )
+                    selection_state = gr.HTML(
+                        value=initial_view.selection_html,
+                        elem_id="viewer-selection-state-host",
+                    )
 
             gr.Markdown(
                 "*Keyboard: Y=Accept, N=Reject, U=Undo, M=Missing, Arrow keys/J/K=Navigate*",
@@ -1574,7 +1537,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             inspector_display,
             source_image,
             plot_display,
-            details_display,
             selection_state,
             prev_btn,
             next_btn,
@@ -1619,7 +1581,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 inspector_display,
                 source_image,
                 plot_display,
-                details_display,
                 selection_state,
                 prev_btn,
                 next_btn,
@@ -1639,7 +1600,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             inspector_display,
             source_image,
             plot_display,
-            details_display,
             selection_state,
             prev_btn,
             next_btn,
@@ -1711,7 +1671,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             inspector_display,
             source_image,
             plot_display,
-            details_display,
             summary_display,
             selection_state,
             prev_btn,
@@ -1778,11 +1737,5 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
-
-        export_btn.click(
-            fn=lambda filtered_df: export_csv(filtered_df, output_path),
-            inputs=[filtered_df_state],
-            outputs=[export_file],
-        ).then(fn=lambda: gr.update(visible=True), outputs=[export_file])
 
     return demo

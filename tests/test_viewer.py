@@ -193,10 +193,10 @@ def test_handle_navigation_stays_on_first_row_when_moving_backward(tmp_path):
 
     assert result[0] == 0
     assert result[1] == "**Result 1 of 2**"
-    assert 'data-selected-row="0"' in result[6]
-    assert 'data-row-count="2"' in result[6]
-    assert result[7]["interactive"] is False
-    assert result[8]["interactive"] is True
+    assert 'data-selected-row="0"' in result[5]
+    assert 'data-row-count="2"' in result[5]
+    assert result[6]["interactive"] is False
+    assert result[7]["interactive"] is True
 
 
 def test_handle_navigation_stays_on_last_row_when_moving_forward(tmp_path):
@@ -235,9 +235,9 @@ def test_handle_navigation_stays_on_last_row_when_moving_forward(tmp_path):
 
     assert result[0] == 1
     assert result[1] == "**Result 2 of 2**"
-    assert 'data-selected-row="1"' in result[6]
-    assert result[7]["interactive"] is True
-    assert result[8]["interactive"] is False
+    assert 'data-selected-row="1"' in result[5]
+    assert result[6]["interactive"] is True
+    assert result[7]["interactive"] is False
 
 
 def test_build_selection_state_html_tracks_selected_row_and_row_count():
@@ -305,9 +305,9 @@ def test_handle_plot_point_select_updates_selection_from_token(tmp_path):
 
     assert result[0] == 1
     assert result[1] == "**Result 2 of 2**"
-    assert 'data-selected-row="1"' in result[6]
-    assert result[7]["interactive"] is True
-    assert result[8]["interactive"] is False
+    assert 'data-selected-row="1"' in result[5]
+    assert result[6]["interactive"] is True
+    assert result[7]["interactive"] is False
 
 
 def test_handle_plot_point_select_keeps_current_selection_when_token_missing(tmp_path):
@@ -346,7 +346,7 @@ def test_handle_plot_point_select_keeps_current_selection_when_token_missing(tmp
 
     assert result[0] == 1
     assert result[1] == "**Result 2 of 2**"
-    assert 'data-selected-row="1"' in result[6]
+    assert 'data-selected-row="1"' in result[5]
 
 
 def test_handle_review_action_uses_shared_entry_persistence(monkeypatch, tmp_path):
@@ -381,8 +381,8 @@ def test_handle_review_action_uses_shared_entry_persistence(monkeypatch, tmp_pat
     assert result[0].loc[0, "review_status"] == "accepted"
     assert result[3] == 0
     assert result[4] == "**Result 1 of 1**"
+    assert result[10]["interactive"] is False
     assert result[11]["interactive"] is False
-    assert result[12]["interactive"] is False
 
 
 def test_handle_review_action_keeps_last_row_selected(monkeypatch, tmp_path):
@@ -429,9 +429,9 @@ def test_handle_review_action_keeps_last_row_selected(monkeypatch, tmp_path):
     assert calls == ["accept"]
     assert result[3] == 1
     assert result[4] == "**Result 2 of 2**"
-    assert 'data-selected-row="1"' in result[10]
-    assert result[11]["interactive"] is True
-    assert result[12]["interactive"] is False
+    assert 'data-selected-row="1"' in result[9]
+    assert result[10]["interactive"] is True
+    assert result[11]["interactive"] is False
 
 
 def test_dispatch_row_select_preserves_gradio_select_argument_order(monkeypatch, tmp_path):
@@ -469,7 +469,6 @@ def test_create_app_does_not_render_profile_selector(monkeypatch, tmp_path):
         position_text="",
         source_image_value=None,
         inspector_html="",
-        details_html="",
         selection_html=viewer._build_selection_state_html(None, 0),
         prev_button_props=viewer.gr.update(interactive=False),
         next_button_props=viewer.gr.update(interactive=False),
