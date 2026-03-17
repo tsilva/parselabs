@@ -714,6 +714,8 @@ def test_build_document_review_dataframe_infers_missing_sections_for_urine_disam
 
     review_df = build_document_review_dataframe(doc_dir, lab_specs)
 
+    assert review_df.loc[0, "raw_section_name"] == "< TIPO II >"
+    assert review_df.loc[0, "lab_name_standardized"] == "Urine Type II - Color (Qualitative)"
     assert review_df.loc[2, "raw_section_name"] == "Elementos anormais"
     assert review_df.loc[2, "lab_name_standardized"] == "Urine Type II - Glucose (Qualitative)"
     assert review_df.loc[3, "raw_section_name"] == "EXAME MICROSCOPICO DO SEDIMENTO"

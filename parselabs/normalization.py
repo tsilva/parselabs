@@ -416,6 +416,71 @@ def _remap_qualitative_variant_rows(
     return df
 
 
+def _is_urine_strip_section(section_name: object) -> bool:
+    """Return whether a raw section label indicates a urine strip context."""
+
+    if pd.isna(section_name):
+        return False
+
+    normalized = str(section_name).strip().lower()
+    if not normalized:
+        return False
+
+    return any(
+        marker in normalized
+        for marker in (
+            "sumária da urina",
+            "sumaria da urina",
+            "tipo ii",
+            "elementos anormais",
+            "avaliação bioquímica",
+            "avaliacao bioquimica",
+        )
+    )
+
+
+def _remap_numeric_urine_strip_variants(
+    df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+) -> pd.DataFrame:
+    """Collapse numeric urine-strip semi-quantitative values onto qualitative boolean variants."""
+
+    if df.empty or "lab_name_standardized" not in df.columns or "raw_section_name" not in df.columns:
+        return df
+
+    remap_indices: list[int] = []
+
+    for idx in df.index:
+        standardized_name = df.at[idx, "lab_name_standardized"]
+
+        if standardized_name not in QUALITATIVE_VARIANT_MAP:
+            continue
+
+        if not _is_urine_strip_section(df.at[idx, "raw_section_name"]):
+            continue
+
+        numeric_value = df.at[idx, "value_primary"]
+        if pd.isna(numeric_value):
+            continue
+
+        variant_name = QUALITATIVE_VARIANT_MAP[standardized_name]
+        if lab_specs.get_primary_unit(variant_name) != "boolean":
+            continue
+
+        df.at[idx, "value_primary"] = 0 if float(numeric_value) <= 0 else 1
+        df.at[idx, "lab_name_standardized"] = variant_name
+        df.at[idx, "lab_unit_standardized"] = "boolean"
+        remap_indices.append(idx)
+
+    if remap_indices:
+        logger.info(
+            "[normalization] Remapped %s numeric urine-strip row(s) to qualitative boolean variants",
+            len(remap_indices),
+        )
+
+    return df
+
+
 def _canonicalize_qualitative_lab_names(
     df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
@@ -571,17 +636,20 @@ def apply_unit_conversions(
     # Phase 2: Remap text-only urine strip analytes onto boolean qualitative variants.
     df = _remap_qualitative_variant_rows(df, lab_specs)
 
-    # Phase 3: Convert qualitative text values to 0/1 for boolean-style labs.
+    # Phase 3: Collapse numeric urine-strip semi-quantitative values onto qualitative variants.
+    df = _remap_numeric_urine_strip_variants(df, lab_specs)
+
+    # Phase 4: Convert qualitative text values to 0/1 for boolean-style labs.
     df = _convert_qualitative_values(df, lab_specs)
 
-    # Phase 4: Apply exact unit conversion factors for each lab type.
+    # Phase 5: Apply exact unit conversion factors for each lab type.
     for lab_name_standardized in df["lab_name_standardized"].unique():
         # Skip unknown or missing lab names
         if pd.isna(lab_name_standardized) or lab_name_standardized == UNKNOWN_VALUE:
             continue
         _apply_unit_conversions_for_lab(df, lab_name_standardized, lab_specs)
 
-    # Phase 5: Expose canonical qualitative names after conversions and remaps settle.
+    # Phase 6: Expose canonical qualitative names after conversions and remaps settle.
     df = _canonicalize_qualitative_lab_names(df, lab_specs)
 
     return df
