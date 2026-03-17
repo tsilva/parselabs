@@ -59,6 +59,8 @@ class ViewerRenderState:
     status_html: str
     banner_html: str
     selection_html: str
+    prev_button_props: dict
+    next_button_props: dict
 
     def as_filter_outputs(self) -> tuple:
         """Return outputs for filter-driven viewer updates."""
@@ -75,6 +77,8 @@ class ViewerRenderState:
             self.status_html,
             self.banner_html,
             self.selection_html,
+            self.prev_button_props,
+            self.next_button_props,
         )
 
     def as_review_outputs(self, full_df: pd.DataFrame) -> tuple:
@@ -93,6 +97,8 @@ class ViewerRenderState:
             self.summary_html,
             self.banner_html,
             self.selection_html,
+            self.prev_button_props,
+            self.next_button_props,
         )
 
 
@@ -785,6 +791,7 @@ def _build_empty_viewer_state(
 ) -> ViewerRenderState:
     """Build the stable empty-state payload for viewer callbacks."""
 
+    prev_button_props, next_button_props = _build_navigation_button_props(None, len(filtered_df))
     return ViewerRenderState(
         display_df=prepare_display_df(filtered_df),
         summary_html=build_summary_cards(summary_df),
@@ -797,6 +804,8 @@ def _build_empty_viewer_state(
         status_html=build_review_status_html("Pending"),
         banner_html="",
         selection_html=_build_selection_state_html(None, len(filtered_df)),
+        prev_button_props=prev_button_props,
+        next_button_props=next_button_props,
     )
 
 
@@ -809,6 +818,22 @@ def _build_selection_state_html(selected_row_index: int | None, row_count: int) 
         f'data-selected-row="{selected_value}" '
         f'data-row-count="{int(row_count)}" '
         'aria-hidden="true"></div>'
+    )
+
+
+def _build_navigation_button_props(selected_row_index: int | None, row_count: int) -> tuple[dict, dict]:
+    """Return Gradio button updates for the current selection boundaries."""
+
+    if selected_row_index is None or row_count <= 0:
+        return (
+            gr.update(interactive=False),
+            gr.update(interactive=False),
+        )
+
+    resolved_index = max(0, min(int(selected_row_index), row_count - 1))
+    return (
+        gr.update(interactive=resolved_index > 0),
+        gr.update(interactive=resolved_index < row_count - 1),
     )
 
 
@@ -871,6 +896,7 @@ def _render_viewer_state(
             details_html=empty_details_html,
         )
 
+    prev_button_props, next_button_props = _build_navigation_button_props(row_context.row_index, len(filtered_df))
     return ViewerRenderState(
         display_df=prepare_display_df(filtered_df),
         summary_html=build_summary_cards(resolved_summary_df),
@@ -883,6 +909,8 @@ def _render_viewer_state(
         status_html=row_context.status_html,
         banner_html=row_context.banner_html,
         selection_html=_build_selection_state_html(row_context.row_index, len(filtered_df)),
+        prev_button_props=prev_button_props,
+        next_button_props=next_button_props,
     )
 
 
@@ -938,6 +966,8 @@ def handle_row_select(
         render_state.status_html,
         render_state.banner_html,
         render_state.selection_html,
+        render_state.prev_button_props,
+        render_state.next_button_props,
     )
 
 
@@ -973,7 +1003,8 @@ def handle_navigation(
     if filtered_df.empty:
         render_state = _build_empty_viewer_state(full_df, filtered_df, summary_df=filtered_df)
     else:
-        next_idx = (int(current_idx) + delta) % len(filtered_df)
+        resolved_index = max(0, min(int(current_idx), len(filtered_df) - 1))
+        next_idx = max(0, min(resolved_index + delta, len(filtered_df) - 1))
         render_state = _render_viewer_state(
             full_df,
             filtered_df,
@@ -992,6 +1023,8 @@ def handle_navigation(
         render_state.status_html,
         render_state.banner_html,
         render_state.selection_html,
+        render_state.prev_button_props,
+        render_state.next_button_props,
     )
 
 
@@ -1145,9 +1178,19 @@ def create_app(context: RuntimeContext):
             with gr.Column(scale=2):
                 # Navigation controls
                 with gr.Row():
-                    prev_btn = gr.Button("< Prev [k]", elem_id="prev-btn", size="sm")
+                    prev_btn = gr.Button(
+                        "< Prev [k]",
+                        elem_id="prev-btn",
+                        size="sm",
+                        interactive=False,
+                    )
                     position_display = gr.Markdown(initial_view.position_text, elem_id="position-display")
-                    next_btn = gr.Button("Next [j] >", elem_id="next-btn", size="sm")
+                    next_btn = gr.Button(
+                        "Next [j] >",
+                        elem_id="next-btn",
+                        size="sm",
+                        interactive=len(initial_view.filtered_df) > 1,
+                    )
 
                 # Tabs for Plot, Source Image, and Details
                 with gr.Tabs():
@@ -1203,6 +1246,8 @@ def create_app(context: RuntimeContext):
             review_status_display,
             review_reason_banner,
             selection_state,
+            prev_btn,
+            next_btn,
         ]
 
         def _handle_data_table_select(
@@ -1268,6 +1313,8 @@ def create_app(context: RuntimeContext):
                 review_status_display,
                 review_reason_banner,
                 selection_state,
+                prev_btn,
+                next_btn,
             ],
         )
 
@@ -1287,6 +1334,8 @@ def create_app(context: RuntimeContext):
             review_status_display,
             review_reason_banner,
             selection_state,
+            prev_btn,
+            next_btn,
         ]
 
         prev_btn.click(
@@ -1336,6 +1385,8 @@ def create_app(context: RuntimeContext):
             summary_display,
             review_reason_banner,
             selection_state,
+            prev_btn,
+            next_btn,
         ]
 
         accept_btn.click(
