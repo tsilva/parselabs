@@ -78,7 +78,6 @@ def test_extract_or_load_page_data_reuses_valid_cached_json(tmp_path, monkeypatc
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(main, "_extract_page_data_from_text", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("text extraction not expected")))
     monkeypatch.setattr(main, "_extract_page_data_from_image", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("image extraction not expected")))
 
     page_data = main._extract_or_load_page_data(
@@ -89,7 +88,6 @@ def test_extract_or_load_page_data_reuses_valid_cached_json(tmp_path, monkeypatc
         "glucose",
         0,
         [],
-        "",
     )
 
     assert page_data["lab_results"][0]["raw_lab_name"] == "Glucose"
@@ -131,8 +129,45 @@ def test_extract_or_load_page_data_retries_failed_cached_json(tmp_path, monkeypa
         "glucose",
         0,
         [],
-        "",
     )
 
     assert page_data.get("_extraction_failed") is not True
+    assert page_data["lab_results"][0]["raw_lab_name"] == "Glucose"
+
+
+def test_extract_or_load_page_data_uses_fallback_image_when_primary_is_weak(tmp_path, monkeypatch):
+    config = _build_config(tmp_path)
+    attempts: list[Path] = []
+
+    def _fake_extract(image_path, *_args, **_kwargs):
+        attempts.append(image_path)
+
+        # Force the pipeline to try the second image variant.
+        if image_path.name == "primary.jpg":
+            return {"page_has_lab_data": True, "lab_results": []}
+
+        # Accept the fallback payload once it returns a reviewable row.
+        return {
+            "page_has_lab_data": True,
+            "lab_results": [
+                {
+                    "raw_lab_name": "Glucose",
+                    "raw_value": "92",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(main, "_extract_page_data_from_image", _fake_extract)
+
+    page_data = main._extract_or_load_page_data(
+        {"primary": tmp_path / "primary.jpg", "fallback": tmp_path / "fallback.jpg"},
+        tmp_path / "glucose.001.json",
+        "glucose.001",
+        config,
+        "glucose",
+        0,
+        [],
+    )
+
+    assert [path.name for path in attempts] == ["primary.jpg", "fallback.jpg"]
     assert page_data["lab_results"][0]["raw_lab_name"] == "Glucose"

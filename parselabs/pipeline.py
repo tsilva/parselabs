@@ -5,7 +5,6 @@ import json  # noqa: E402
 import logging  # noqa: E402
 import re  # noqa: E402
 import shutil  # noqa: E402
-import subprocess  # noqa: E402
 import sys  # noqa: E402
 from dataclasses import dataclass, field  # noqa: E402
 from multiprocessing import Pool  # noqa: E402
@@ -27,7 +26,6 @@ from parselabs.exceptions import ConfigurationError, PipelineError  # noqa: E402
 from parselabs.export_schema import COLUMN_SCHEMA, get_column_lists  # noqa: E402
 from parselabs.extraction import (  # noqa: E402
     extract_labs_from_page_image,
-    extract_labs_from_text,
 )
 from parselabs.paths import get_profiles_dir  # noqa: E402
 from parselabs.rows import (  # noqa: E402
@@ -65,73 +63,6 @@ from parselabs.utils import (  # noqa: E402
 logger = logging.getLogger(__name__)
 PROFILES_DIR = get_profiles_dir()
 EXTRACTION_FAILURE_RAW_NAME = "[EXTRACTION FAILED]"
-
-
-# ========================================
-# PDF Text Extraction (Cost Optimization)
-# ========================================
-
-
-def extract_text_from_pdf(pdf_path: Path) -> tuple[str, bool]:
-    """
-    Extract text from PDF using pdftotext (from poppler).
-
-    Returns:
-        Tuple of (extracted_text, success). Returns ("", False) on non-zero exit code.
-        May raise subprocess.TimeoutExpired on timeout.
-    """
-
-    # Execute pdftotext command with layout preservation and 30s timeout
-    result = subprocess.run(
-        ["pdftotext", "-layout", str(pdf_path), "-"],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-    # Check if command succeeded
-    if result.returncode != 0:
-        logger.debug(f"pdftotext returned non-zero exit code: {result.returncode}")
-        return "", False
-
-    return result.stdout, True
-
-
-_MIN_TEXT_CHARS = 200  # Minimum non-whitespace characters to attempt text extraction
-_MIN_PAGE_TEXT_CHARS = 80  # Lower threshold for page-level text routing
-
-
-def _text_has_enough_content(text: str, min_chars: int = _MIN_TEXT_CHARS) -> bool:
-    """Check if extracted text has enough content to attempt LLM extraction."""
-    clean_text = text.replace(" ", "").replace("\n", "").replace("\t", "")
-    return len(clean_text) >= min_chars
-
-
-def _split_pdf_text_into_pages(text: str) -> list[str]:
-    """Split pdftotext output into per-page chunks."""
-
-    return [page.strip() for page in text.split("\f")]
-
-
-def _extract_page_texts_from_pdf(pdf_path: Path, expected_pages: int) -> list[str]:
-    """Extract PDF text once and return one text chunk per page."""
-
-    pdf_text, pdftotext_success = extract_text_from_pdf(pdf_path)
-    if not pdftotext_success:
-        return [""] * expected_pages
-
-    page_texts = _split_pdf_text_into_pages(pdf_text)
-
-    # pdftotext often emits a trailing empty page after the final form-feed.
-    while page_texts and page_texts[-1] == "":
-        page_texts.pop()
-
-    if len(page_texts) < expected_pages:
-        page_texts.extend([""] * (expected_pages - len(page_texts)))
-    elif len(page_texts) > expected_pages:
-        page_texts = page_texts[:expected_pages]
-
-    return page_texts
 
 
 # ========================================
@@ -248,13 +179,6 @@ def _ensure_extraction_failure_placeholder(page_data: dict) -> dict:
     return page_data
 
 
-def _extract_page_data_from_text(page_text: str, config: ExtractionConfig, page_name: str) -> dict:
-    """Extract a single page from pdftotext output."""
-
-    logger.info(f"[{page_name}] Attempting TEXT extraction")
-    return extract_labs_from_text(page_text, config.extract_model_id, get_openai_client(config))
-
-
 def _extract_page_data_from_image(
     image_path: Path,
     config: ExtractionConfig,
@@ -279,7 +203,6 @@ def _extract_or_load_page_data(
     pdf_stem: str,
     page_idx: int,
     failed_pages: list,
-    page_text: str,
 ) -> dict:
     """Extract data from image or load from cache."""
 
@@ -299,10 +222,6 @@ def _extract_or_load_page_data(
         logger.info(f"[{page_name}] Re-running extraction because cached JSON is missing, invalid, or failed")
 
     attempts: list[tuple[str, Callable[[], dict]]] = []
-
-    # Prefer text extraction only when the embedded page text is substantial enough.
-    if _text_has_enough_content(page_text, min_chars=_MIN_PAGE_TEXT_CHARS):
-        attempts.append(("TEXT extraction", lambda: _extract_page_data_from_text(page_text, config, page_name)))
 
     # Fall back through the primary image and then the alternate image.
     attempts.extend(
@@ -418,7 +337,6 @@ def _process_single_page(
     doc_out_dir: Path,
     config: ExtractionConfig,
     failed_pages: list,
-    page_text: str,
 ) -> tuple[list, dict | None]:
     """Process a single PDF page: preprocess, extract, and return results with metadata.
 
@@ -434,7 +352,7 @@ def _process_single_page(
     # Preprocess and cache page image variants
     image_paths = _prepare_page_images(page_image, page_name, doc_out_dir)
 
-    # Extract data using page-level text/vision routing or load from cache
+    # Extract data using page-level vision routing or load from cache.
     page_data = _extract_or_load_page_data(
         image_paths,
         json_path,
@@ -443,7 +361,6 @@ def _process_single_page(
         pdf_stem,
         page_idx,
         failed_pages,
-        page_text,
     )
 
     # Add page metadata to results
@@ -459,7 +376,7 @@ def _extract_via_pages(
     pdf_stem: str,
     failed_pages: list,
 ) -> tuple[list, str | None]:
-    """Extract lab results using per-page hybrid text/vision routing."""
+    """Extract lab results using per-page vision extraction."""
 
     # Convert PDF pages to PIL images
     pil_pages = _convert_pdf_to_images(copied_pdf, pdf_stem)
@@ -468,10 +385,7 @@ def _extract_via_pages(
     if pil_pages is None:
         return [], None
 
-    logger.info(f"[{pdf_stem}] Processing {len(pil_pages)} page(s) with hybrid extraction...")
-
-    # Extract page text once so each page can be routed independently.
-    page_texts = _extract_page_texts_from_pdf(copied_pdf, len(pil_pages))
+    logger.info(f"[{pdf_stem}] Processing {len(pil_pages)} page(s) with vision extraction...")
 
     # Initialize collection for all extracted results
     all_results = []
@@ -488,7 +402,6 @@ def _extract_via_pages(
             doc_out_dir,
             config,
             failed_pages,
-            page_texts[page_idx],
         )
 
         # Extract document date from first page only
@@ -508,7 +421,7 @@ def _extract_data_from_pdf(
     pdf_stem: str,
     failed_pages: list,
 ) -> tuple[list, str | None]:
-    """Extract lab data from PDF using per-page hybrid extraction.
+    """Extract lab data from PDF using per-page vision extraction.
 
     Returns tuple of (all_results, doc_date) or raises exception on failure.
     """
@@ -547,7 +460,7 @@ def process_single_pdf(
         # Copy source PDF to output directory for archival
         copied_pdf = _copy_pdf_to_output(pdf_path, doc_out_dir)
 
-        # Extract page JSON using the simplified text-first strategy with one image fallback.
+        # Extract page JSON using the primary image with one fallback variant.
         all_results, _ = _extract_data_from_pdf(
             copied_pdf,
             config,

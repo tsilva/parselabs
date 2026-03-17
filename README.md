@@ -6,7 +6,7 @@
   [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
   [![Python](https://img.shields.io/badge/Python-≥3.8-3776ab.svg)](https://python.org)
 
-  **🔬 Extract lab results from medical PDFs with hybrid text/vision extraction and reviewed JSON fixtures 📊**
+  **🔬 Extract lab results from medical PDFs with vision extraction and reviewed JSON fixtures 📊**
 
   [Documentation](docs/pipeline.md) · [Issues](https://github.com/tsilva/parselabs/issues)
 </div>
@@ -23,7 +23,7 @@ parselabs uses AI vision models to extract laboratory test results from PDF docu
 
 - **AI-Powered Extraction** — Vision models extract lab names, values, units, and reference ranges directly from PDF pages
 - **Smart Validation** — Detects extraction errors across 5 categories: biological plausibility, inter-lab relationships, temporal consistency, format artifacts, and reference range deviations
-- **Cost-Optimized** — Text-first extraction uses cheaper LLM calls when PDF text is parseable, falling back to vision only when needed
+- **BBox-Backed Results** — The pipeline stays vision-only so extracted rows can retain source-page bounding boxes for review
 - **Profile-Based Workflow** — Configure multiple profiles for different users or data sources with simple YAML files in `~/.config/parselabs/profiles/`
 - **Gradio Review UI** — Side-by-side comparison of source documents and extracted data with keyboard shortcuts
 - **335+ Standardized Labs** — Comprehensive lab specifications with unit conversions and reference ranges
@@ -236,8 +236,8 @@ For each PDF, the tool generates:
 
 The extraction pipeline has 5 stages:
 
-1. **PDF Processing** — Text extraction or page-to-image conversion
-2. **Extraction** — Vision/text LLM extracts structured `LabResult` objects
+1. **PDF Processing** — Page-to-image conversion and preprocessing
+2. **Extraction** — Vision LLM extracts structured `LabResult` objects with bounding boxes when available
 3. **Standardization** — Maps to standardized names and units
 4. **Normalization** — Converts values to primary units
 5. **Validation** — Flags suspicious values for review
