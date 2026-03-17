@@ -90,7 +90,8 @@ CRITICAL RULES:
      * unit
      * reference range, if it sits in the same row/region
    - If two extracted results come from the same visible row, they may share the same bounding box
-   - If you cannot locate the result confidently, set all four bbox fields to null
+   - Never return null bbox fields for an extracted result
+   - If you cannot locate the result confidently, re-check the page and find the supporting row before returning the result
 
 8. DATES: Format as YYYY-MM-DD or leave null
 

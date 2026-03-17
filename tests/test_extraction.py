@@ -1,8 +1,16 @@
 import warnings
+from pathlib import Path
 
 from pydantic.warnings import PydanticDeprecatedSince211
 
-from parselabs.extraction import TOOLS, HealthLabReport, HealthLabReportExtraction, LabResult, _fix_lab_results_format
+from parselabs.extraction import (
+    TOOLS,
+    HealthLabReport,
+    HealthLabReportExtraction,
+    LabResult,
+    _fix_lab_results_format,
+    _validate_extraction_result,
+)
 
 
 def test_fix_lab_results_format_recovers_stringified_json_items():
@@ -166,3 +174,59 @@ def test_llm_tool_schema_field_shape_remains_stable():
         "bbox_bottom",
     ]
     assert "pattern" not in schema["properties"]["collection_date"]
+
+
+def test_validate_extraction_result_retries_when_any_bbox_coordinate_is_missing():
+    payload = {
+        "collection_date": "2024-01-01",
+        "lab_results": [
+            {
+                "raw_lab_name": "Glucose",
+                "raw_value": "92",
+                "raw_lab_unit": "mg/dL",
+                "bbox_left": 100,
+                "bbox_top": 200,
+                "bbox_right": 400,
+                "bbox_bottom": None,
+            }
+        ],
+    }
+
+    result = _validate_extraction_result(
+        tool_result_dict=payload,
+        image_path=Path("page.jpg"),
+        attempt=0,
+        current_temp=0.0,
+    )
+
+    assert result["success"] is False
+    assert result["should_retry"] is True
+    assert "bounding boxes" in result["error_msg"]
+
+
+def test_validate_extraction_result_accepts_rows_with_complete_bboxes():
+    payload = {
+        "collection_date": "2024-01-01",
+        "lab_results": [
+            {
+                "raw_lab_name": "Glucose",
+                "raw_value": "92",
+                "raw_lab_unit": "mg/dL",
+                "bbox_left": 100,
+                "bbox_top": 200,
+                "bbox_right": 400,
+                "bbox_bottom": 320,
+            }
+        ],
+    }
+
+    result = _validate_extraction_result(
+        tool_result_dict=payload,
+        image_path=Path("page.jpg"),
+        attempt=0,
+        current_temp=0.0,
+    )
+
+    assert result["success"] is True
+    assert result["should_retry"] is False
+    assert result["data"]["lab_results"][0]["bbox_bottom"] == 320.0

@@ -858,13 +858,13 @@ def create_interactive_plot(
             showarrow=False,
             font=dict(size=16, color="gray"),
         )
-        fig.update_layout(template="plotly_white", height=400)
+        fig.update_layout(template="plotly_white", height=220)
         return fig
 
     # Single lab — delegate to dedicated single-lab plot
     if len(lab_names) == 1:
         fig, _ = create_single_lab_plot(df, lab_names[0], selected_ref=selected_ref)
-        fig.update_layout(height=400)
+        fig.update_layout(height=240)
         return fig
 
     # Multiple labs — create stacked subplots
@@ -979,7 +979,7 @@ def create_interactive_plot(
 
         fig.update_yaxes(title_text=unit if unit else "Value", row=i + 1, col=1)
 
-    height_per_chart = 250
+    height_per_chart = 200
     fig.update_layout(
         template="plotly_white",
         height=height_per_chart * n_labs,
@@ -1499,7 +1499,23 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             summary_display = gr.HTML(initial_view.summary_html, elem_id="workspace-summary")
 
             with gr.Row(elem_id="workspace-main-row"):
-                with gr.Column(scale=3, min_width=760, elem_id="workspace-list-col"):
+                with gr.Column(scale=5, min_width=460, elem_id="workspace-document-col"):
+                    with gr.Row(elem_id="workspace-nav-row"):
+                        prev_btn = gr.Button("< Prev [k]", elem_id="prev-btn", size="sm", interactive=False)
+                        position_display = gr.Markdown(initial_view.position_text, elem_id="position-display")
+                        next_btn = gr.Button("Next [j] >", elem_id="next-btn", size="sm", interactive=len(initial_view.filtered_df) > 1)
+
+                    source_image = gr.AnnotatedImage(
+                        value=initial_view.source_image_value,
+                        label="Source Document Page",
+                        color_map={SOURCE_BBOX_LABEL: "#dc2626"},
+                        show_legend=False,
+                        show_label=False,
+                        height=620,
+                        elem_id="workspace-source-image",
+                    )
+
+                with gr.Column(scale=4, min_width=360, elem_id="workspace-results-col"):
                     data_table = gr.DataFrame(
                         value=initial_view.display_df,
                         interactive=False,
@@ -1516,44 +1532,31 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                         export_btn = gr.Button("Export Filtered CSV", size="sm")
                         export_file = gr.File(label="Download", visible=False)
 
-                with gr.Column(scale=2, min_width=360, elem_id="workspace-inspector-col"):
-                    with gr.Row(elem_id="workspace-nav-row"):
-                        prev_btn = gr.Button("< Prev [k]", elem_id="prev-btn", size="sm", interactive=False)
-                        position_display = gr.Markdown(initial_view.position_text, elem_id="position-display")
-                        next_btn = gr.Button("Next [j] >", elem_id="next-btn", size="sm", interactive=len(initial_view.filtered_df) > 1)
-
+                with gr.Column(scale=3, min_width=260, elem_id="workspace-analysis-col"):
                     inspector_display = gr.HTML(value=initial_view.inspector_html, elem_id="workspace-inspector-card")
 
-                    with gr.Tabs(elem_id="workspace-detail-tabs"):
-                        with gr.TabItem("Source"):
-                            source_image = gr.AnnotatedImage(
-                                value=initial_view.source_image_value,
-                                label="Source Document Page",
-                                color_map={SOURCE_BBOX_LABEL: "#dc2626"},
-                                show_legend=False,
-                                show_label=False,
-                                height=440,
-                            )
-                        with gr.TabItem("Trend"):
-                            plot_display = gr.Plot(
-                                value=initial_view.plot,
-                                label="",
-                                elem_id="viewer-plot",
-                            )
-                            plot_point_selection = gr.Textbox(value="", container=False, elem_id="plot-point-selection")
-                            plot_point_select_btn = gr.Button("Select Plot Point", elem_id="plot-point-select-btn")
-                        with gr.TabItem("Details"):
-                            details_display = gr.HTML(value=initial_view.details_html)
+                    plot_display = gr.Plot(
+                        value=initial_view.plot,
+                        label="",
+                        elem_id="viewer-plot",
+                    )
+                    plot_point_selection = gr.Textbox(value="", container=False, elem_id="plot-point-selection")
+                    plot_point_select_btn = gr.Button("Select Plot Point", elem_id="plot-point-select-btn")
+
+                    with gr.Accordion("Raw / metadata", open=False, elem_id="workspace-details-panel"):
+                        details_display = gr.HTML(value=initial_view.details_html, elem_id="workspace-details-content")
 
                     with gr.Column(elem_id="workspace-action-bar"):
                         with gr.Row():
                             accept_btn = gr.Button("Accept [y]", elem_id="accept-btn", variant="primary")
                             reject_btn = gr.Button("Reject [n]", elem_id="reject-btn", variant="stop")
-                        with gr.Row():
                             undo_btn = gr.Button("Undo [u]", elem_id="undo-btn", size="sm")
                             missing_btn = gr.Button("Missing [m]", elem_id="missing-btn", size="sm")
 
-            gr.Markdown("*Keyboard: Y=Accept, N=Reject, U=Undo, M=Missing, Arrow keys/J/K=Navigate*")
+            gr.Markdown(
+                "*Keyboard: Y=Accept, N=Reject, U=Undo, M=Missing, Arrow keys/J/K=Navigate*",
+                elem_id="workspace-keyboard-hint",
+            )
 
         filter_inputs = [
             document_filter,

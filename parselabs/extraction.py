@@ -551,6 +551,7 @@ def _validate_extraction_result(
     try:
         report_model = HealthLabReport(**tool_result_dict)
         report_model.normalize_empty_optionals()
+        _assert_complete_result_bboxes(report_model)
 
         # Check extraction quality and log warnings
         _log_extraction_quality(report_model, image_path)
@@ -582,6 +583,30 @@ def _validate_extraction_result(
         num_results = len(tool_result_dict.get("lab_results", []))
         logger.error(f"Model validation error for report with {num_results} lab_results: {e}")
         return {"success": False, "data": _salvage_lab_results(tool_result_dict), "should_retry": False, "error_msg": str(e)}
+
+
+def _assert_complete_result_bboxes(report_model: HealthLabReport) -> None:
+    """Reject extraction payloads that omit any bbox coordinate for extracted rows."""
+
+    # Pages without extracted rows are validated by the existing no-results path.
+    if not report_model.lab_results:
+        return
+
+    missing_bbox_count = 0
+
+    # Count rows that do not carry all four coordinates so the retry path stays explicit.
+    for result in report_model.lab_results:
+        if any(getattr(result, field_name) is None for field_name in BBOX_FIELDS):
+            missing_bbox_count += 1
+
+    # Guard: Fully boxed payloads can continue through normal quality checks.
+    if missing_bbox_count == 0:
+        return
+
+    raise ValueError(
+        "MALFORMED OUTPUT: extracted lab results missing complete bounding boxes. "
+        f"Rows without full bbox data: {missing_bbox_count}/{len(report_model.lab_results)}."
+    )
 
 
 def _log_extraction_quality(report_model: HealthLabReport, image_path: Path) -> None:
