@@ -167,7 +167,9 @@
 
 /* Compact table display - dark mode compatible */
 #viewer-selection-state-host,
-#viewer-selection-state {
+#viewer-selection-state,
+#plot-point-selection,
+#plot-point-select-btn {
     display: none !important;
 }
 

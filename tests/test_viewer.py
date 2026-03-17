@@ -188,6 +188,107 @@ def test_build_selection_state_html_tracks_selected_row_and_row_count():
     assert 'data-row-count="12"' in html
 
 
+def test_resolve_plot_point_row_index_matches_filtered_row():
+    df = pd.DataFrame(
+        [
+            {
+                "source_file": "alpha.csv",
+                "page_number": 1,
+                "result_index": 0,
+            },
+            {
+                "source_file": "beta.csv",
+                "page_number": 2,
+                "result_index": 3,
+            },
+        ]
+    )
+
+    resolved_idx = viewer._resolve_plot_point_row_index(df, '["beta.csv", 2, 3]')
+
+    assert resolved_idx == 1
+
+
+def test_handle_plot_point_select_updates_selection_from_token(tmp_path):
+    df = pd.DataFrame(
+        [
+            {
+                "date": pd.Timestamp("2024-01-02"),
+                "lab_name": "Blood - Glucose",
+                "value": 91.0,
+                "lab_unit": "mg/dL",
+                "reference_min": 70.0,
+                "reference_max": 99.0,
+                "review_status": "",
+                "review_reason": "",
+                "source_file": "glucose.csv",
+                "page_number": 1,
+                "result_index": 0,
+            },
+            {
+                "date": pd.Timestamp("2024-01-01"),
+                "lab_name": "Blood - Glucose",
+                "value": 92.0,
+                "lab_unit": "mg/dL",
+                "reference_min": 70.0,
+                "reference_max": 99.0,
+                "review_status": "",
+                "review_reason": "",
+                "source_file": "glucose.csv",
+                "page_number": 1,
+                "result_index": 1,
+            },
+        ]
+    )
+
+    result = viewer.handle_plot_point_select('["glucose.csv", 1, 1]', 0, df, df, None, tmp_path)
+
+    assert result[1] == 1
+    assert result[2] == "**Row 2 of 2**"
+    assert 'data-selected-row="1"' in result[7]
+    assert result[8]["interactive"] is True
+    assert result[9]["interactive"] is False
+
+
+def test_handle_plot_point_select_keeps_current_selection_when_token_missing(tmp_path):
+    df = pd.DataFrame(
+        [
+            {
+                "date": pd.Timestamp("2024-01-02"),
+                "lab_name": "Blood - Glucose",
+                "value": 91.0,
+                "lab_unit": "mg/dL",
+                "reference_min": 70.0,
+                "reference_max": 99.0,
+                "review_status": "",
+                "review_reason": "",
+                "source_file": "glucose.csv",
+                "page_number": 1,
+                "result_index": 0,
+            },
+            {
+                "date": pd.Timestamp("2024-01-01"),
+                "lab_name": "Blood - Glucose",
+                "value": 92.0,
+                "lab_unit": "mg/dL",
+                "reference_min": 70.0,
+                "reference_max": 99.0,
+                "review_status": "",
+                "review_reason": "",
+                "source_file": "glucose.csv",
+                "page_number": 1,
+                "result_index": 1,
+            },
+        ]
+    )
+
+    result = viewer.handle_plot_point_select('["missing.csv", 9, 9]', 1, df, df, None, tmp_path)
+
+    assert result[1] == 1
+    assert result[2] == "**Row 2 of 2**"
+    assert 'data-selected-row="1"' in result[7]
+
+
 def test_handle_review_action_uses_shared_entry_persistence(monkeypatch, tmp_path):
     full_df = pd.DataFrame(
         [
