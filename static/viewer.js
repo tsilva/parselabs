@@ -373,6 +373,14 @@
                 document.querySelector('#reject-btn')?.click();
                 event.preventDefault();
                 break;
+            case 'u':
+                document.querySelector('#undo-btn')?.click();
+                event.preventDefault();
+                break;
+            case 'm':
+                document.querySelector('#missing-btn')?.click();
+                event.preventDefault();
+                break;
             case 'arrowright':
             case 'j':
                 document.querySelector('#next-btn')?.click();

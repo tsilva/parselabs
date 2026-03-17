@@ -363,7 +363,7 @@ def build_details_html(entry: dict) -> str:
     paired_fields = [
         ("Lab Name", "raw_lab_name", "lab_name"),
         ("Value", "raw_value", "value"),
-        ("Unit", "raw_unit", "lab_unit"),
+        ("Unit", "raw_lab_unit", "lab_unit"),
         ("Ref Min", "reference_min", "reference_min"),
         ("Ref Max", "reference_max", "reference_max"),
     ]

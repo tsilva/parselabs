@@ -1,15 +1,4 @@
-"""
-Lab Results Viewer
-
-Interactive UI for browsing and reviewing extracted lab results.
-Shows data table with interactive plots and review actions side-by-side.
-
-Usage:
-  parselabs review --profile tiago
-  parselabs review --list-profiles
-
-Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate
-"""
+"""Unified review workspace for exploring and reviewing extracted lab results."""
 
 from __future__ import annotations
 
@@ -28,8 +17,15 @@ from parselabs.config import Demographics, LabSpecsConfig  # noqa: E402
 from parselabs.paths import get_static_dir  # noqa: E402
 from parselabs.review import (  # noqa: E402
     SOURCE_BBOX_LABEL,
-    build_review_status_html,
+    build_reason_badges,
+    build_review_status_badge,
+    format_mapped_reference_text,
+    format_mapped_value,
+    format_raw_value,
+    format_reference_text,
+    format_text,
     load_results_dataframe,
+    normalize_review_status,
 )
 from parselabs.review_state import (  # noqa: E402
     apply_review_action_for_entry,
@@ -57,9 +53,8 @@ class ViewerRenderState:
     current_idx: int
     position_text: str
     source_image_value: tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None
+    inspector_html: str
     details_html: str
-    status_html: str
-    banner_html: str
     selection_html: str
     prev_button_props: dict
     next_button_props: dict
@@ -70,14 +65,13 @@ class ViewerRenderState:
         return (
             self.display_df,
             self.summary_html,
-            self.plot,
             self.filtered_df,
             self.current_idx,
             self.position_text,
+            self.inspector_html,
             self.source_image_value,
+            self.plot,
             self.details_html,
-            self.status_html,
-            self.banner_html,
             self.selection_html,
             self.prev_button_props,
             self.next_button_props,
@@ -90,14 +84,13 @@ class ViewerRenderState:
             full_df,
             self.filtered_df,
             self.display_df,
-            self.plot,
             self.current_idx,
             self.position_text,
+            self.inspector_html,
             self.source_image_value,
+            self.plot,
             self.details_html,
-            self.status_html,
             self.summary_html,
-            self.banner_html,
             self.selection_html,
             self.prev_button_props,
             self.next_button_props,
@@ -113,6 +106,36 @@ def get_lab_name_choices(df: pd.DataFrame) -> list[str]:
     return sorted([name for name in df["lab_name"].dropna().unique() if name and not str(name).startswith("$UNKNOWN")])
 
 
+def _format_document_label(source_file: object) -> str:
+    """Return a short, readable document label for one source file."""
+
+    source_text = str(source_file or "").strip()
+    if not source_text:
+        return "-"
+    return source_text.rsplit(".", 1)[0]
+
+
+def get_document_choices(df: pd.DataFrame) -> list[tuple[str, str]]:
+    """Return readable document dropdown choices keyed by source file."""
+
+    if df.empty or "source_file" not in df.columns:
+        return []
+
+    document_counts = (
+        df["source_file"]
+        .dropna()
+        .astype(str)
+        .value_counts(sort=False)
+        .sort_index()
+    )
+
+    return [
+        (f"{_format_document_label(source_file)} ({count})", source_file)
+        for source_file, count in document_counts.items()
+        if source_file.strip()
+    ]
+
+
 # =============================================================================
 # Display Configuration
 # =============================================================================
@@ -123,8 +146,9 @@ DISPLAY_COLUMNS = [
     "lab_name",
     "value",
     "lab_unit",
+    "source_document",
+    "page_number",
     "reference_range",
-    "is_out_of_reference",
     "review_status",
 ]
 
@@ -134,8 +158,9 @@ COLUMN_LABELS = {
     "lab_name": "Lab",
     "value": "Value",
     "lab_unit": "Unit",
+    "source_document": "Document",
+    "page_number": "Page",
     "reference_range": "Ref",
-    "is_out_of_reference": "Abn",
     "review_status": "Review",
 }
 
@@ -299,6 +324,82 @@ def build_review_reason_banner(entry: dict) -> str:
     return html
 
 
+def build_selection_inspector_html(entry: dict | pd.Series | None) -> str:
+    """Render the shared selection inspector used for both exploration and review."""
+
+    if entry is None:
+        return (
+            '<div class="review-card workspace-empty-card">'
+            '<div class="review-empty-state">No result selected.</div>'
+            '<div class="review-empty-hint">Adjust filters or pick a row from the table to inspect it.</div>'
+            "</div>"
+        )
+
+    row = entry if isinstance(entry, pd.Series) else pd.Series(entry)
+    status_badge = build_review_status_badge(row)
+    reason_badges_html = build_reason_badges(row.get("review_reason"))
+    comments_text = format_text(row.get("raw_comments"), empty="")
+    date_value = row.get("date")
+    if date_value is not None and pd.notna(date_value):
+        try:
+            date_text = pd.to_datetime(date_value).strftime("%Y-%m-%d")
+        except (TypeError, ValueError):
+            date_text = format_text(date_value)
+    else:
+        date_text = "-"
+    meta_rows: list[str] = []
+
+    if reason_badges_html != '<span class="review-inline-muted">None</span>':
+        meta_rows.append(
+            '<div class="review-meta-row"><span>Validation</span>'
+            f'<div class="review-badge-row">{reason_badges_html}</div>'
+            "</div>"
+        )
+
+    if comments_text:
+        meta_rows.append(
+            '<div class="review-meta-row"><span>Comments</span>'
+            f"<strong>{comments_text}</strong>"
+            "</div>"
+        )
+
+    context_chips = [
+        f'<span class="review-progress-chip compact"><span class="label">Date</span>{date_text}</span>',
+        f'<span class="review-progress-chip compact"><span class="label">Document</span>{format_text(_format_document_label(row.get("source_file")))}</span>',
+        f'<span class="review-progress-chip compact"><span class="label">Page</span>{format_text(row.get("page_number"))}</span>',
+        f'<span class="review-progress-chip compact"><span class="label">Row</span>{format_text(row.get("result_index"))}</span>',
+    ]
+    meta_html = f'<div class="review-meta-list">{"".join(meta_rows)}</div>' if meta_rows else ""
+
+    return (
+        '<div class="review-card">'
+        '<div class="review-card-header">'
+        "<div>"
+        '<div class="review-eyebrow">Selected Result</div>'
+        f'<div class="review-title">{format_text(row.get("lab_name"))}</div>'
+        "</div>"
+        f'<span class="review-status-chip {html.escape(normalize_review_status(row.get("review_status")) or "pending")}">{status_badge.label}</span>'
+        "</div>"
+        f'<div class="review-progress-row workspace-context-row">{"".join(context_chips)}</div>'
+        '<div class="review-compare-grid">'
+        '<div class="review-compare-panel">'
+        '<div class="review-panel-title">Mapped</div>'
+        f'<div class="review-field"><span>Lab</span><strong>{format_text(row.get("lab_name"))}</strong></div>'
+        f'<div class="review-field"><span>Value</span><strong>{format_mapped_value(row)}</strong></div>'
+        f'<div class="review-field"><span>Reference</span><strong>{format_mapped_reference_text(row)}</strong></div>'
+        "</div>"
+        '<div class="review-compare-panel">'
+        '<div class="review-panel-title">Raw</div>'
+        f'<div class="review-field"><span>Lab</span><strong>{format_text(row.get("raw_lab_name"))}</strong></div>'
+        f'<div class="review-field"><span>Value</span><strong>{format_raw_value(row)}</strong></div>'
+        f'<div class="review-field"><span>Reference</span><strong>{format_reference_text(row)}</strong></div>'
+        "</div>"
+        "</div>"
+        f"{meta_html}"
+        "</div>"
+    )
+
+
 # =============================================================================
 # Filtering
 # =============================================================================
@@ -309,6 +410,7 @@ def apply_filters(
     lab_names: str | None,
     latest_only: bool,
     review_filter: str,
+    document_name: str | None = None,
 ) -> pd.DataFrame:
     """Apply all filters to DataFrame and sort by date descending.
 
@@ -325,9 +427,21 @@ def apply_filters(
 
     filtered = df.copy()
 
-    # Sort by date descending, then by lab_name ascending
-    if "date" in filtered.columns:
-        filtered = filtered.sort_values(["date", "lab_name"], ascending=[False, True], na_position="last")
+    if document_name and "source_file" in filtered.columns:
+        filtered = filtered[filtered["source_file"] == document_name]
+
+    if document_name and {"page_number", "result_index"}.issubset(filtered.columns):
+        filtered = filtered.sort_values(
+            ["page_number", "result_index", "lab_name"],
+            ascending=[True, True, True],
+            na_position="last",
+        )
+    elif "date" in filtered.columns:
+        filtered = filtered.sort_values(
+            ["date", "lab_name", "source_file", "page_number", "result_index"],
+            ascending=[False, True, True, True, True],
+            na_position="last",
+        )
 
     # Latest only: keep only the most recent value per lab test
     # This must run BEFORE status filters so we get the latest result first,
@@ -374,15 +488,19 @@ def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=[COLUMN_LABELS.get(c, c) for c in DISPLAY_COLUMNS])
 
-    display_df = df[[col for col in DISPLAY_COLUMNS if col in df.columns]].copy()
+    display_df = df.copy()
+
+    if "reference_range" not in display_df.columns:
+        display_df["reference_range"] = display_df.apply(format_reference_text, axis=1)
+
+    if "source_document" not in display_df.columns:
+        display_df["source_document"] = display_df["source_file"].apply(_format_document_label) if "source_file" in display_df.columns else "-"
+
+    display_df = display_df[[col for col in DISPLAY_COLUMNS if col in display_df.columns]].copy()
 
     # Format date column
     if "date" in display_df.columns:
         display_df["date"] = display_df["date"].dt.strftime("%Y-%m-%d")
-
-    # Format boolean columns
-    if "is_out_of_reference" in display_df.columns:
-        display_df["is_out_of_reference"] = display_df["is_out_of_reference"].map({True: "Yes", False: "No", None: ""})
 
     # Format review status
     if "review_status" in display_df.columns:
@@ -391,6 +509,11 @@ def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
     # Round numeric columns
     if "value" in display_df.columns:
         display_df["value"] = display_df["value"].round(2)
+
+    if "page_number" in display_df.columns:
+        display_df["page_number"] = display_df["page_number"].apply(
+            lambda value: "" if value is None or pd.isna(value) else str(int(value))
+        )
 
     # Rename columns to display labels
     display_df = display_df.rename(columns=COLUMN_LABELS)
@@ -840,9 +963,8 @@ def _build_empty_viewer_state(
         current_idx=0,
         position_text=position_text,
         source_image_value=None,
+        inspector_html=build_selection_inspector_html(None),
         details_html=details_html,
-        status_html=build_review_status_html("Pending"),
-        banner_html="",
         selection_html=_build_selection_state_html(None, len(filtered_df)),
         prev_button_props=prev_button_props,
         next_button_props=next_button_props,
@@ -896,6 +1018,7 @@ def _render_viewer_state(
     summary_df: pd.DataFrame | None = None,
     empty_position_text: str = "No results",
     empty_details_html: str = "<p>No entry selected</p>",
+    document_name: str | None = None,
 ) -> ViewerRenderState:
     """Build the unified viewer render payload for the current filtered dataframe."""
 
@@ -931,7 +1054,7 @@ def _render_viewer_state(
         resolved_row_index,
         output_path,
         selected_lab_name=lab_names,
-        banner_html=build_review_reason_banner(selected_row.to_dict()),
+        banner_html="",
     )
 
     # Guard: Row-context resolution failures should degrade gracefully.
@@ -952,11 +1075,14 @@ def _render_viewer_state(
         plot=create_interactive_plot(full_df, row_context.plot_labs, selected_ref=row_context.selected_ref),
         filtered_df=filtered_df,
         current_idx=row_context.row_index,
-        position_text=row_context.position_text,
+        position_text=(
+            f"**{row_context.row_index + 1} of {len(filtered_df)} in {_format_document_label(document_name)}**"
+            if document_name
+            else row_context.position_text.replace("Row", "Result")
+        ),
         source_image_value=row_context.source_image_value,
+        inspector_html=build_selection_inspector_html(selected_row),
         details_html=row_context.details_html,
-        status_html=row_context.status_html,
-        banner_html=row_context.banner_html,
         selection_html=_build_selection_state_html(
             row_context.row_index,
             len(filtered_df),
@@ -974,16 +1100,18 @@ def handle_filter_change(
     review_filter: str,
     full_df: pd.DataFrame,
     output_path: Path,
+    document_name: str | None = None,
 ) -> tuple:
     """Handle filter changes and update viewer state from the first visible row."""
 
-    filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter)
+    filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter, document_name=document_name)
     return _render_viewer_state(
         full_df,
         filtered_df,
         output_path,
         lab_names,
         summary_df=filtered_df,
+        document_name=document_name,
     ).as_filter_outputs()
 
 
@@ -993,6 +1121,7 @@ def handle_row_select(
     full_df: pd.DataFrame,
     lab_names: str | None,
     output_path: Path,
+    document_name: str | None = None,
 ) -> tuple:
     """Handle row selection to update plot, details, and current index."""
 
@@ -1009,16 +1138,16 @@ def handle_row_select(
             lab_names,
             row_index=selected_idx,
             summary_df=filtered_df,
+            document_name=document_name,
         )
 
     return (
-        render_state.plot,
         render_state.current_idx,
         render_state.position_text,
+        render_state.inspector_html,
         render_state.source_image_value,
+        render_state.plot,
         render_state.details_html,
-        render_state.status_html,
-        render_state.banner_html,
         render_state.selection_html,
         render_state.prev_button_props,
         render_state.next_button_props,
@@ -1031,6 +1160,7 @@ def _dispatch_row_select(
     lab_names: str | None,
     evt: gr.SelectData,
     output_path: Path,
+    document_name: str | None = None,
 ) -> tuple:
     """Adapt Gradio's input-first select callback order to the row-select handler."""
 
@@ -1040,6 +1170,7 @@ def _dispatch_row_select(
         full_df,
         lab_names,
         output_path,
+        document_name=document_name,
     )
 
 
@@ -1082,6 +1213,7 @@ def handle_navigation(
     lab_names: str | None,
     delta: int,
     output_path: Path,
+    document_name: str | None = None,
 ) -> tuple:
     """Move the current selection backward or forward through the filtered rows."""
 
@@ -1098,16 +1230,16 @@ def handle_navigation(
             lab_names,
             row_index=next_idx,
             summary_df=filtered_df,
+            document_name=document_name,
         )
 
     return (
-        render_state.plot,
         render_state.current_idx,
         render_state.position_text,
+        render_state.inspector_html,
         render_state.source_image_value,
+        render_state.plot,
         render_state.details_html,
-        render_state.status_html,
-        render_state.banner_html,
         render_state.selection_html,
         render_state.prev_button_props,
         render_state.next_button_props,
@@ -1121,6 +1253,7 @@ def handle_plot_point_select(
     full_df: pd.DataFrame,
     lab_names: str | None,
     output_path: Path,
+    document_name: str | None = None,
 ) -> tuple:
     """Handle a plotly point click by selecting the matching table row when visible."""
 
@@ -1136,16 +1269,16 @@ def handle_plot_point_select(
             lab_names,
             row_index=fallback_idx if matched_idx is None else matched_idx,
             summary_df=filtered_df,
+            document_name=document_name,
         )
 
     return (
-        render_state.plot,
         render_state.current_idx,
         render_state.position_text,
+        render_state.inspector_html,
         render_state.source_image_value,
+        render_state.plot,
         render_state.details_html,
-        render_state.status_html,
-        render_state.banner_html,
         render_state.selection_html,
         render_state.prev_button_props,
         render_state.next_button_props,
@@ -1161,6 +1294,7 @@ def handle_review_action(
     review_filter: str,
     status: str,
     output_path: Path,
+    document_name: str | None = None,
 ) -> tuple:
     """Handle review action (accept or reject) and rerender the current filter."""
 
@@ -1170,7 +1304,11 @@ def handle_review_action(
 
     resolved_index = max(0, min(int(current_idx), len(filtered_df) - 1))
     current_entry = filtered_df.iloc[resolved_index].to_dict()
-    action = {"accepted": "accept", "rejected": "reject"}.get(status, "clear")
+    action = {
+        "accepted": "accept",
+        "rejected": "reject",
+        "missing_row": "missing_row",
+    }.get(status, "clear")
     success, error = apply_review_action_for_entry(current_entry, output_path, action)
 
     # Surface persistence errors without mutating the local dataframe mirror.
@@ -1178,11 +1316,13 @@ def handle_review_action(
         gr.Warning(f"Failed to save review: {error}")
 
     # Mirror successful review writes into the in-memory full dataframe state.
-    else:
+    elif status in {"accepted", "rejected", "clear"}:
         mask = (full_df["source_file"] == current_entry.get("source_file")) & (full_df["page_number"] == current_entry.get("page_number")) & (full_df["result_index"] == current_entry.get("result_index"))
-        full_df.loc[mask, "review_status"] = status
+        full_df.loc[mask, "review_status"] = "" if status == "clear" else status
+    else:
+        gr.Info("Missing-row marker recorded for this page.")
 
-    filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter)
+    filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter, document_name=document_name)
     render_state = _render_viewer_state(
         full_df,
         filtered_df,
@@ -1192,6 +1332,7 @@ def handle_review_action(
         summary_df=full_df,
         empty_position_text="All done!",
         empty_details_html="<p>All entries reviewed in this filter!</p>",
+        document_name=document_name,
     )
     return render_state.as_review_outputs(full_df)
 
@@ -1214,16 +1355,15 @@ def export_csv(filtered_df: pd.DataFrame, output_path: Path):
 
 
 def create_app(context: RuntimeContext):
-    """Create and configure the Gradio app for one runtime context."""
+    """Create and configure the unified review workspace for one runtime context."""
 
-    # Resolve the launch-selected profile once because review runs no longer switch profiles in-app.
     output_path = context.output_path if context.output_path is not None else Path("./output")
-
     full_df, lab_name_choices = _load_output_data(
         output_path,
         context.lab_specs,
         context.demographics,
     )
+    document_choices = get_document_choices(full_df)
     initial_view = _render_viewer_state(
         full_df,
         full_df,
@@ -1232,137 +1372,113 @@ def create_app(context: RuntimeContext):
         summary_df=full_df,
     )
 
-    with gr.Blocks(title="Lab Results Viewer") as demo:
-        # State variables
+    with gr.Blocks(title="Parselabs Review Workspace") as demo:
         full_df_state = gr.State(value=full_df)
         filtered_df_state = gr.State(value=full_df)
         current_idx_state = gr.State(value=0)
 
-        # Unified filter row: Lab dropdown | Status pills | Latest toggle
-        with gr.Row(elem_classes="filter-row"):
-            with gr.Column(scale=1, min_width=200):
-                lab_name_filter = gr.Dropdown(
-                    choices=lab_name_choices,
-                    multiselect=False,
-                    value=None,
-                    label="Lab",
-                    allow_custom_value=False,
-                    elem_classes="lab-dropdown-compact",
-                )
-            with gr.Column(scale=2):
-                review_filter = gr.Dropdown(
-                    choices=[
-                        "All",
-                        "Needs Review",
-                        "Abnormal",
-                        "Unhealthy",
-                        "Unreviewed",
-                        "Accepted",
-                        "Rejected",
-                    ],
-                    value="All",
-                    label="Status",
-                    allow_custom_value=False,
-                )
-            with gr.Column(scale=1, min_width=120):
-                latest_filter = gr.Checkbox(
-                    label="Latest Only",
-                    value=False,
-                    elem_classes="toggle-pill",
-                )
+        with gr.Column(elem_id="workspace-shell"):
+            with gr.Row(elem_id="workspace-filter-row", elem_classes="filter-row"):
+                with gr.Column(scale=2, min_width=220):
+                    document_filter = gr.Dropdown(
+                        choices=document_choices,
+                        multiselect=False,
+                        value=None,
+                        label="Document",
+                        allow_custom_value=False,
+                    )
+                with gr.Column(scale=2, min_width=220):
+                    lab_name_filter = gr.Dropdown(
+                        choices=lab_name_choices,
+                        multiselect=False,
+                        value=None,
+                        label="Lab",
+                        allow_custom_value=False,
+                        elem_classes="lab-dropdown-compact",
+                    )
+                with gr.Column(scale=2, min_width=180):
+                    review_filter = gr.Dropdown(
+                        choices=[
+                            "All",
+                            "Needs Review",
+                            "Abnormal",
+                            "Unhealthy",
+                            "Unreviewed",
+                            "Accepted",
+                            "Rejected",
+                        ],
+                        value="All",
+                        label="Status",
+                        allow_custom_value=False,
+                    )
+                with gr.Column(scale=1, min_width=120):
+                    latest_filter = gr.Checkbox(
+                        label="Latest Only",
+                        value=False,
+                        elem_classes="toggle-pill",
+                    )
 
-        # Summary cards
-        summary_display = gr.HTML(initial_view.summary_html)
+            summary_display = gr.HTML(initial_view.summary_html, elem_id="workspace-summary")
 
-        gr.Markdown("---")
-
-        # Main content: Table + Right Panel side by side
-        with gr.Row():
-            # Left column: Data Table
-            with gr.Column(scale=3):
-                gr.Markdown("### Data Table")
-                gr.Markdown("*Click a row or use arrow keys to navigate*")
-                data_table = gr.DataFrame(
-                    value=initial_view.display_df,
-                    interactive=False,
-                    wrap=True,
-                    max_height=500,
-                    elem_id="lab-data-table",
-                )
-                selection_state = gr.HTML(
-                    value=initial_view.selection_html,
-                    elem_id="viewer-selection-state-host",
-                )
-
-                with gr.Row():
-                    export_btn = gr.Button("Export Filtered CSV", size="sm")
-                    export_file = gr.File(label="Download", visible=False)
-
-            # Right column: Navigation + Tabs + Review Actions
-            with gr.Column(scale=2):
-                # Navigation controls
-                with gr.Row():
-                    prev_btn = gr.Button(
-                        "< Prev [k]",
-                        elem_id="prev-btn",
-                        size="sm",
+            with gr.Row(elem_id="workspace-main-row"):
+                with gr.Column(scale=3, min_width=760, elem_id="workspace-list-col"):
+                    data_table = gr.DataFrame(
+                        value=initial_view.display_df,
                         interactive=False,
+                        wrap=True,
+                        max_height=620,
+                        elem_id="lab-data-table",
                     )
-                    position_display = gr.Markdown(initial_view.position_text, elem_id="position-display")
-                    next_btn = gr.Button(
-                        "Next [j] >",
-                        elem_id="next-btn",
-                        size="sm",
-                        interactive=len(initial_view.filtered_df) > 1,
+                    selection_state = gr.HTML(
+                        value=initial_view.selection_html,
+                        elem_id="viewer-selection-state-host",
                     )
 
-                # Tabs for Plot, Source Image, and Details
-                with gr.Tabs():
-                    with gr.TabItem("Plot"):
-                        plot_display = gr.Plot(
-                            value=initial_view.plot,
-                            label="",
-                            elem_id="viewer-plot",
-                        )
-                        plot_point_selection = gr.Textbox(
-                            value="",
-                            container=False,
-                            elem_id="plot-point-selection",
-                        )
-                        plot_point_select_btn = gr.Button(
-                            "Select Plot Point",
-                            elem_id="plot-point-select-btn",
-                        )
-                    with gr.TabItem("Source"):
-                        source_image = gr.AnnotatedImage(
-                            value=initial_view.source_image_value,
-                            label="Source Document Page",
-                            color_map={SOURCE_BBOX_LABEL: "#dc2626"},
-                            show_legend=False,
-                            show_label=False,
-                            height=400,
-                        )
-                    with gr.TabItem("Details"):
-                        details_display = gr.HTML(value=initial_view.details_html)
+                    with gr.Row(elem_id="workspace-export-row"):
+                        export_btn = gr.Button("Export Filtered CSV", size="sm")
+                        export_file = gr.File(label="Download", visible=False)
 
-                gr.Markdown("---")
+                with gr.Column(scale=2, min_width=360, elem_id="workspace-inspector-col"):
+                    with gr.Row(elem_id="workspace-nav-row"):
+                        prev_btn = gr.Button("< Prev [k]", elem_id="prev-btn", size="sm", interactive=False)
+                        position_display = gr.Markdown(initial_view.position_text, elem_id="position-display")
+                        next_btn = gr.Button("Next [j] >", elem_id="next-btn", size="sm", interactive=len(initial_view.filtered_df) > 1)
 
-                # Review section with reason banner
-                gr.Markdown("### Review")
+                    inspector_display = gr.HTML(value=initial_view.inspector_html, elem_id="workspace-inspector-card")
 
-                # Review reason banner (shows why item needs review)
-                review_reason_banner = gr.HTML(value=initial_view.banner_html)
+                    with gr.Tabs(elem_id="workspace-detail-tabs"):
+                        with gr.TabItem("Source"):
+                            source_image = gr.AnnotatedImage(
+                                value=initial_view.source_image_value,
+                                label="Source Document Page",
+                                color_map={SOURCE_BBOX_LABEL: "#dc2626"},
+                                show_legend=False,
+                                show_label=False,
+                                height=440,
+                            )
+                        with gr.TabItem("Trend"):
+                            plot_display = gr.Plot(
+                                value=initial_view.plot,
+                                label="",
+                                elem_id="viewer-plot",
+                            )
+                            plot_point_selection = gr.Textbox(value="", container=False, elem_id="plot-point-selection")
+                            plot_point_select_btn = gr.Button("Select Plot Point", elem_id="plot-point-select-btn")
+                        with gr.TabItem("Details"):
+                            details_display = gr.HTML(value=initial_view.details_html)
 
-                with gr.Row():
-                    accept_btn = gr.Button("Accept [y]", elem_id="accept-btn", size="sm")
-                    review_status_display = gr.HTML(value=initial_view.status_html)
-                    reject_btn = gr.Button("Reject [n]", elem_id="reject-btn", size="sm")
+                    with gr.Column(elem_id="workspace-action-bar"):
+                        with gr.Row():
+                            accept_btn = gr.Button("Accept [y]", elem_id="accept-btn", variant="primary")
+                            reject_btn = gr.Button("Reject [n]", elem_id="reject-btn", variant="stop")
+                        with gr.Row():
+                            undo_btn = gr.Button("Undo [u]", elem_id="undo-btn", size="sm")
+                            missing_btn = gr.Button("Missing [m]", elem_id="missing-btn", size="sm")
 
-        gr.Markdown("---")
-        gr.Markdown("*Keyboard: Y=Accept, N=Reject, Arrow keys/j/k=Navigate*")
+            gr.Markdown("*Keyboard: Y=Accept, N=Reject, U=Undo, M=Missing, Arrow keys/J/K=Navigate*")
 
-        # Filter inputs and outputs
         filter_inputs = [
+            document_filter,
             lab_name_filter,
             latest_filter,
             review_filter,
@@ -1371,14 +1487,13 @@ def create_app(context: RuntimeContext):
         filter_outputs = [
             data_table,
             summary_display,
-            plot_display,
             filtered_df_state,
             current_idx_state,
             position_display,
+            inspector_display,
             source_image,
+            plot_display,
             details_display,
-            review_status_display,
-            review_reason_banner,
             selection_state,
             prev_btn,
             next_btn,
@@ -1387,140 +1502,121 @@ def create_app(context: RuntimeContext):
         def _handle_data_table_select(
             filtered_df: pd.DataFrame,
             full_df: pd.DataFrame,
+            document_name: str | None,
             lab_name: str | None,
             evt: gr.SelectData,
         ) -> tuple:
-            """Route typed row-select event data into the shared viewer handler."""
-
             return _dispatch_row_select(
                 filtered_df,
                 full_df,
                 lab_name,
                 evt,
                 output_path,
+                document_name=document_name,
             )
 
-        lab_name_filter.change(
-            fn=lambda lab_names, latest_only, review_filter, full_df: handle_filter_change(
-                lab_names,
-                latest_only,
-                review_filter,
-                full_df,
-                output_path,
-            ),
-            inputs=filter_inputs,
-            outputs=filter_outputs,
-        )
-        latest_filter.change(
-            fn=lambda lab_names, latest_only, review_filter, full_df: handle_filter_change(
-                lab_names,
-                latest_only,
-                review_filter,
-                full_df,
-                output_path,
-            ),
-            inputs=filter_inputs,
-            outputs=filter_outputs,
-        )
-        review_filter.change(
-            fn=lambda lab_names, latest_only, review_filter, full_df: handle_filter_change(
-                lab_names,
-                latest_only,
-                review_filter,
-                full_df,
-                output_path,
-            ),
-            inputs=filter_inputs,
-            outputs=filter_outputs,
-        )
+        for trigger in [document_filter, lab_name_filter, latest_filter, review_filter]:
+            trigger.change(
+                fn=lambda document_name, lab_names, latest_only, review_filter, full_df: handle_filter_change(
+                    lab_names,
+                    latest_only,
+                    review_filter,
+                    full_df,
+                    output_path,
+                    document_name=document_name,
+                ),
+                inputs=filter_inputs,
+                outputs=filter_outputs,
+            )
 
-        # Row selection
         data_table.select(
             fn=_handle_data_table_select,
-            inputs=[filtered_df_state, full_df_state, lab_name_filter],
+            inputs=[filtered_df_state, full_df_state, document_filter, lab_name_filter],
             outputs=[
-                plot_display,
                 current_idx_state,
                 position_display,
+                inspector_display,
                 source_image,
+                plot_display,
                 details_display,
-                review_status_display,
-                review_reason_banner,
                 selection_state,
                 prev_btn,
                 next_btn,
             ],
         )
 
-        # Navigation buttons
         nav_inputs = [
             current_idx_state,
             filtered_df_state,
             full_df_state,
+            document_filter,
             lab_name_filter,
         ]
         nav_outputs = [
-            plot_display,
             current_idx_state,
             position_display,
+            inspector_display,
             source_image,
+            plot_display,
             details_display,
-            review_status_display,
-            review_reason_banner,
             selection_state,
             prev_btn,
             next_btn,
         ]
 
         plot_point_select_btn.click(
-            fn=lambda point_token, current_idx, filtered_df, full_df, lab_name: handle_plot_point_select(
+            fn=lambda point_token, current_idx, filtered_df, full_df, document_name, lab_name: handle_plot_point_select(
                 point_token,
                 current_idx,
                 filtered_df,
                 full_df,
                 lab_name,
                 output_path,
+                document_name=document_name,
             ),
             inputs=[
                 plot_point_selection,
                 current_idx_state,
                 filtered_df_state,
                 full_df_state,
+                document_filter,
                 lab_name_filter,
             ],
             outputs=nav_outputs,
         )
 
         prev_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name: handle_navigation(
+            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name: handle_navigation(
                 current_idx,
                 filtered_df,
                 full_df,
                 lab_name,
                 -1,
                 output_path,
+                document_name=document_name,
             ),
             inputs=nav_inputs,
             outputs=nav_outputs,
         )
         next_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name: handle_navigation(
+            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name: handle_navigation(
                 current_idx,
                 filtered_df,
                 full_df,
                 lab_name,
                 1,
                 output_path,
+                document_name=document_name,
             ),
             inputs=nav_inputs,
             outputs=nav_outputs,
         )
 
-        # Review action buttons
         review_btn_inputs = [
             current_idx_state,
             filtered_df_state,
             full_df_state,
+            document_filter,
             lab_name_filter,
             latest_filter,
             review_filter,
@@ -1529,21 +1625,20 @@ def create_app(context: RuntimeContext):
             full_df_state,
             filtered_df_state,
             data_table,
-            plot_display,
             current_idx_state,
             position_display,
+            inspector_display,
             source_image,
+            plot_display,
             details_display,
-            review_status_display,
             summary_display,
-            review_reason_banner,
             selection_state,
             prev_btn,
             next_btn,
         ]
 
         accept_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1552,12 +1647,13 @@ def create_app(context: RuntimeContext):
                 review_filter,
                 "accepted",
                 output_path,
+                document_name=document_name,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
         reject_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1566,12 +1662,42 @@ def create_app(context: RuntimeContext):
                 review_filter,
                 "rejected",
                 output_path,
+                document_name=document_name,
+            ),
+            inputs=review_btn_inputs,
+            outputs=review_outputs,
+        )
+        undo_btn.click(
+            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter: handle_review_action(
+                current_idx,
+                filtered_df,
+                full_df,
+                lab_name,
+                latest_only,
+                review_filter,
+                "clear",
+                output_path,
+                document_name=document_name,
+            ),
+            inputs=review_btn_inputs,
+            outputs=review_outputs,
+        )
+        missing_btn.click(
+            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter: handle_review_action(
+                current_idx,
+                filtered_df,
+                full_df,
+                lab_name,
+                latest_only,
+                review_filter,
+                "missing_row",
+                output_path,
+                document_name=document_name,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
 
-        # Export
         export_btn.click(
             fn=lambda filtered_df: export_csv(filtered_df, output_path),
             inputs=[filtered_df_state],
