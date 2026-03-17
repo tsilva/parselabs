@@ -923,6 +923,24 @@ def handle_row_select(
     )
 
 
+def _dispatch_row_select(
+    filtered_df: pd.DataFrame,
+    full_df: pd.DataFrame,
+    lab_names: str | None,
+    evt: gr.SelectData,
+    output_path: Path,
+) -> tuple:
+    """Adapt Gradio's input-first select callback order to the row-select handler."""
+
+    return handle_row_select(
+        evt,
+        filtered_df,
+        full_df,
+        lab_names,
+        output_path,
+    )
+
+
 def handle_navigation(
     current_idx: int,
     filtered_df: pd.DataFrame,
@@ -1163,6 +1181,22 @@ def create_app(context: RuntimeContext):
             review_reason_banner,
         ]
 
+        def _handle_data_table_select(
+            filtered_df: pd.DataFrame,
+            full_df: pd.DataFrame,
+            lab_name: str | None,
+            evt: gr.SelectData,
+        ) -> tuple:
+            """Route typed row-select event data into the shared viewer handler."""
+
+            return _dispatch_row_select(
+                filtered_df,
+                full_df,
+                lab_name,
+                evt,
+                output_path,
+            )
+
         lab_name_filter.change(
             fn=lambda lab_names, latest_only, review_filter, full_df: handle_filter_change(
                 lab_names,
@@ -1199,13 +1233,7 @@ def create_app(context: RuntimeContext):
 
         # Row selection
         data_table.select(
-            fn=lambda evt, filtered_df, full_df, lab_name: handle_row_select(
-                evt,
-                filtered_df,
-                full_df,
-                lab_name,
-                output_path,
-            ),
+            fn=_handle_data_table_select,
             inputs=[filtered_df_state, full_df_state, lab_name_filter],
             outputs=[
                 plot_display,
