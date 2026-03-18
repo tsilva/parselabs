@@ -304,6 +304,55 @@ footer,
     min-height: 0;
 }
 
+#workspace-side-tabs {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#workspace-side-tabs > div {
+    min-height: 0;
+}
+
+#workspace-side-tabs .tab-wrapper {
+    flex: 0 0 auto;
+}
+
+#workspace-side-tabs .tab-container.visually-hidden {
+    display: none !important;
+}
+
+#workspace-side-tabs > .tabitem {
+    flex: 1 1 0 !important;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#workspace-side-tabs > .tabitem > .column {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#workspace-table-tab,
+#workspace-plot-tab {
+    display: flex;
+    min-height: 0;
+}
+
+#workspace-table-tab > .column > div:first-of-type,
+#workspace-plot-tab > .column > div:first-of-type {
+    display: flex;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
 #workspace-source-image,
 #lab-data-table,
 #viewer-plot,
@@ -351,6 +400,7 @@ footer,
     max-height: none !important;
 }
 
+#workspace-table-tab #lab-data-table,
 #lab-data-table,
 #lab-data-table > .wrap,
 #lab-data-table .table-container,
@@ -380,6 +430,8 @@ footer,
     display: flex;
     flex: 1 1 0 !important;
     min-height: 0;
+    height: 100% !important;
+    max-height: none !important;
     padding: 0;
 }
 
