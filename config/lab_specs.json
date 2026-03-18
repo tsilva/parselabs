@@ -8,12 +8,7 @@
         "factor": 0.4166666667
       }
     ],
-    "ranges": {
-      "default": [
-        19.9,
-        79.3
-      ]
-    },
+    "ranges": {},
     "loinc_code": "1673-1"
   },
   "Blood - 17-OH Progesterone": {
@@ -51,8 +46,8 @@
     ],
     "ranges": {
       "default": [
-        30.0,
-        100.0
+        20.0,
+        50.0
       ]
     },
     "loinc_code": "1989-3"
@@ -826,16 +821,8 @@
     ],
     "ranges": {
       "default": [
-        60.0,
-        120.0
-      ],
-      "male": [
-        55,
-        140
-      ],
-      "female": [
-        55,
-        125
+        null,
+        99.0
       ]
     },
     "loinc_code": "1884-6"
@@ -2054,7 +2041,7 @@
     "ranges": {
       "default": [
         20.0,
-        42.0
+        38.0
       ]
     },
     "loinc_code": "59261-8"
@@ -2181,16 +2168,16 @@
     ],
     "ranges": {
       "default": [
-        40.0,
-        100.0
+        60.0,
+        null
       ],
       "male": [
-        40,
-        100
+        60,
+        null
       ],
       "female": [
-        50,
-        100
+        60,
+        null
       ]
     },
     "biological_min": 0,
@@ -2579,7 +2566,7 @@
     ],
     "ranges": {
       "default": [
-        0.0,
+        null,
         99.0
       ]
     },
@@ -3598,8 +3585,8 @@
     ],
     "ranges": {
       "default": [
-        100.0,
-        200.0
+        null,
+        199.0
       ]
     },
     "biological_min": 0,
@@ -3770,8 +3757,8 @@
     ],
     "ranges": {
       "default": [
-        30.0,
-        150.0
+        null,
+        149.0
       ]
     },
     "biological_min": 0,
@@ -3873,8 +3860,8 @@
     ],
     "ranges": {
       "default": [
-        5.0,
-        30.0
+        null,
+        34.0
       ]
     },
     "loinc_code": "13457-7"

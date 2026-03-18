@@ -498,14 +498,14 @@ def _check_out_of_reference(row) -> bool | None:
 
 
 def _get_lab_spec_range(lab_name: str, lab_specs: LabSpecsConfig, gender: str | None, age: int | None) -> pd.Series:
-    """Look up healthy range for a lab from lab_specs, adjusted for demographics."""
+    """Look up the configured optimal range for a lab, adjusted for demographics."""
 
-    range_min, range_max = lab_specs.get_healthy_range_for_demographics(lab_name, gender=gender, age=age)
+    range_min, range_max = lab_specs.get_optimal_range_for_demographics(lab_name, gender=gender, age=age)
     return pd.Series({"lab_specs_min": range_min, "lab_specs_max": range_max})
 
 
-def _check_out_of_healthy_range(row) -> bool | None:
-    """Check if a value falls outside the healthy range from lab specs."""
+def _check_out_of_optimal_range(row) -> bool | None:
+    """Check if a value falls outside the configured optimal range from lab specs."""
 
     value = row.get("value")
     if pd.isna(value):
@@ -553,7 +553,10 @@ def load_results_dataframe(
         df["lab_specs_max"] = range_df["lab_specs_max"]
 
     if "value" in df.columns and "lab_specs_min" in df.columns and "lab_specs_max" in df.columns:
-        df["is_out_of_healthy_range"] = df.apply(_check_out_of_healthy_range, axis=1)
+        optimal_mask = df.apply(_check_out_of_optimal_range, axis=1)
+        df["is_out_of_optimal_range"] = optimal_mask
+        # Preserve the legacy column name for downstream compatibility.
+        df["is_out_of_healthy_range"] = optimal_mask
 
     return df
 
