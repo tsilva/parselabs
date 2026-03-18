@@ -211,6 +211,16 @@ COLUMN_LABELS = {
     "review_status": "Review",
 }
 
+SORT_DATE_DESC = "Date (Newest First)"
+SORT_DATE_ASC = "Date (Oldest First)"
+SORT_DOCUMENT_ORDER = "Document/Page Order"
+SORT_ORDER_CHOICES = [
+    SORT_DATE_DESC,
+    SORT_DATE_ASC,
+    SORT_DOCUMENT_ORDER,
+]
+DEFAULT_SORT_ORDER = SORT_DATE_DESC
+
 
 def _build_row_token(source_file: object, page_number: object, result_index: object) -> str:
     """Build a stable UI token for one merged results row."""
@@ -324,8 +334,9 @@ def apply_filters(
     latest_only: bool,
     review_filter: str,
     document_name: str | None = None,
+    sort_order: str = DEFAULT_SORT_ORDER,
 ) -> pd.DataFrame:
-    """Apply all filters to DataFrame and sort by date descending.
+    """Apply all filters to DataFrame and return rows in one stable backend order.
 
     Args:
         df: Full DataFrame
@@ -340,21 +351,9 @@ def apply_filters(
 
     filtered = df.copy()
 
+    # Narrow to one document before sorting so page order stays local to that source.
     if document_name and "source_file" in filtered.columns:
         filtered = filtered[filtered["source_file"] == document_name]
-
-    if document_name and {"page_number", "result_index"}.issubset(filtered.columns):
-        filtered = filtered.sort_values(
-            ["page_number", "result_index", "lab_name"],
-            ascending=[True, True, True],
-            na_position="last",
-        )
-    elif "date" in filtered.columns:
-        filtered = filtered.sort_values(
-            ["date", "lab_name", "source_file", "page_number", "result_index"],
-            ascending=[False, True, True, True, True],
-            na_position="last",
-        )
 
     # Latest only: keep only the most recent value per lab test
     # This must run BEFORE status filters so we get the latest result first,
@@ -388,10 +387,76 @@ def apply_filters(
         if "review_status" in filtered.columns:
             filtered = filtered[filtered["review_status"] == "rejected"]
 
+    filtered = _sort_filtered_rows(
+        filtered,
+        document_name=document_name,
+        sort_order=sort_order,
+    )
+
     # Reset index so iloc positions match displayed row positions
     filtered = filtered.reset_index(drop=True)
 
     return filtered
+
+
+def _sort_filtered_rows(
+    filtered: pd.DataFrame,
+    *,
+    document_name: str | None,
+    sort_order: str,
+) -> pd.DataFrame:
+    """Return one stable sort order shared by the table, bbox view, and navigation."""
+
+    # Guard: Empty frames do not need sorting.
+    if filtered.empty:
+        return filtered
+
+    normalized_sort_order = sort_order if sort_order in SORT_ORDER_CHOICES else DEFAULT_SORT_ORDER
+    has_page_fields = {"page_number", "result_index"}.issubset(filtered.columns)
+
+    # Focused document views should stay in source order regardless of the global date mode.
+    if document_name and has_page_fields:
+        return filtered.sort_values(
+            ["page_number", "result_index", "lab_name"],
+            ascending=[True, True, True],
+            na_position="last",
+            kind="mergesort",
+        )
+
+    # Explicit document-order mode walks documents top-to-bottom in stored source order.
+    if normalized_sort_order == SORT_DOCUMENT_ORDER and has_page_fields:
+        return filtered.sort_values(
+            ["source_file", "page_number", "result_index", "date", "lab_name"],
+            ascending=[True, True, True, True, True],
+            na_position="last",
+            kind="mergesort",
+        )
+
+    # Date modes group by document order within each document so bbox navigation follows the page flow.
+    if "date" in filtered.columns:
+        return filtered.sort_values(
+            ["date", "source_file", "page_number", "result_index", "lab_name"],
+            ascending=[normalized_sort_order == SORT_DATE_ASC, True, True, True, True],
+            na_position="last",
+            kind="mergesort",
+        )
+
+    # Fall back to document/page ordering when date metadata is unavailable.
+    if has_page_fields:
+        return filtered.sort_values(
+            ["source_file", "page_number", "result_index", "lab_name"],
+            ascending=[True, True, True, True],
+            na_position="last",
+            kind="mergesort",
+        )
+
+    # Final fallback keeps the table deterministic even with sparse metadata.
+    return filtered.sort_values(
+        ["source_file", "lab_name"],
+        ascending=[True, True],
+        na_position="last",
+        kind="mergesort",
+    )
 
 
 def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -1005,10 +1070,11 @@ def handle_filter_change(
     full_df: pd.DataFrame,
     output_path: Path,
     document_name: str | None = None,
+    sort_order: str = DEFAULT_SORT_ORDER,
 ) -> tuple:
     """Handle filter changes and update viewer state from the first visible row."""
 
-    filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter, document_name=document_name)
+    filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter, document_name=document_name, sort_order=sort_order)
     return _render_viewer_state(
         full_df,
         filtered_df,
@@ -1193,6 +1259,7 @@ def handle_review_action(
     status: str,
     output_path: Path,
     document_name: str | None = None,
+    sort_order: str = DEFAULT_SORT_ORDER,
 ) -> tuple:
     """Handle review action (accept or reject) and rerender the current filter."""
 
@@ -1220,7 +1287,7 @@ def handle_review_action(
     else:
         gr.Info("Missing-row marker recorded for this page.")
 
-    filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter, document_name=document_name)
+    filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter, document_name=document_name, sort_order=sort_order)
     render_state = _render_viewer_state(
         full_df,
         filtered_df,
@@ -1257,6 +1324,7 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
         False,
         "All",
         document_name=initial_document,
+        sort_order=DEFAULT_SORT_ORDER,
     )
     initial_view = _render_viewer_state(
         full_df,
@@ -1308,6 +1376,13 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                         ],
                         value="All",
                         label="Status",
+                        allow_custom_value=False,
+                    )
+                with gr.Column(scale=2, min_width=200):
+                    sort_filter = gr.Dropdown(
+                        choices=SORT_ORDER_CHOICES,
+                        value=DEFAULT_SORT_ORDER,
+                        label="Sort",
                         allow_custom_value=False,
                     )
                 with gr.Column(scale=1, min_width=120):
@@ -1374,6 +1449,7 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             lab_name_filter,
             latest_filter,
             review_filter,
+            sort_filter,
             full_df_state,
         ]
         filter_outputs = [
@@ -1405,15 +1481,16 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 document_name=document_name,
             )
 
-        for trigger in [document_filter, lab_name_filter, latest_filter, review_filter]:
+        for trigger in [document_filter, lab_name_filter, latest_filter, review_filter, sort_filter]:
             trigger.change(
-                fn=lambda document_name, lab_names, latest_only, review_filter, full_df: handle_filter_change(
+                fn=lambda document_name, lab_names, latest_only, review_filter, sort_order, full_df: handle_filter_change(
                     lab_names,
                     latest_only,
                     review_filter,
                     full_df,
                     output_path,
                     document_name=document_name,
+                    sort_order=sort_order,
                 ),
                 inputs=filter_inputs,
                 outputs=filter_outputs,
@@ -1506,6 +1583,7 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             lab_name_filter,
             latest_filter,
             review_filter,
+            sort_filter,
         ]
         review_outputs = [
             full_df_state,
@@ -1522,7 +1600,7 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
         ]
 
         accept_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter, sort_order: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1532,12 +1610,13 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 "accepted",
                 output_path,
                 document_name=document_name,
+                sort_order=sort_order,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
         reject_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter, sort_order: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1547,12 +1626,13 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 "rejected",
                 output_path,
                 document_name=document_name,
+                sort_order=sort_order,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
         undo_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter, sort_order: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1562,12 +1642,13 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 "clear",
                 output_path,
                 document_name=document_name,
+                sort_order=sort_order,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
         missing_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter, sort_order: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1577,6 +1658,7 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 "missing_row",
                 output_path,
                 document_name=document_name,
+                sort_order=sort_order,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
