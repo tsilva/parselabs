@@ -1423,7 +1423,11 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
         document_name=initial_document,
     )
 
-    with gr.Blocks(title="Parselabs Review Workspace") as demo:
+    with gr.Blocks(
+        title="Parselabs Review Workspace",
+        fill_width=True,
+        fill_height=True,
+    ) as demo:
         full_df_state = gr.State(value=full_df)
         filtered_df_state = gr.State(value=initial_view.filtered_df)
         current_idx_state = gr.State(value=initial_view.current_idx)

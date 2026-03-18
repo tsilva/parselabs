@@ -756,19 +756,22 @@ def build_app(context: RuntimeContext) -> gr.Blocks:
         prefer_first_visible=True,
     )
 
-    with gr.Blocks(title="Processed Document Reviewer") as demo:
+    with gr.Blocks(
+        title="Processed Document Reviewer",
+        fill_width=True,
+        fill_height=True,
+    ) as demo:
         current_document_id = gr.State(dropdown_state.selected_id)
         current_row_index = gr.State(initial_view.current_index)
         queue_state = gr.State(initial_view.queue_state)
 
-        with gr.Row(elem_id="review-main-pane"):
+        with gr.Row(elem_id="review-main-pane", equal_height=True):
             with gr.Column(scale=7, min_width=680, elem_id="review-image-pane"):
                 page_image = gr.AnnotatedImage(
                     value=initial_view.image_value,
                     color_map={SOURCE_BBOX_LABEL: "#dc2626"},
                     show_legend=False,
                     show_label=False,
-                    height=780,
                     elem_id="review-page-image",
                 )
 

@@ -208,28 +208,34 @@ footer,
 .gradio-container .contain {
     width: 100% !important;
     max-width: none !important;
-    overflow: hidden !important;
+    box-sizing: border-box;
 }
 
 .app,
 .main {
     min-height: 100vh;
-    padding: 4px 6px !important;
+    padding: 8px 10px !important;
+    overflow: hidden !important;
 }
 
 .gradio-container .contain {
+    display: flex;
+    flex-direction: column;
     flex: 1 1 auto;
-    min-height: 100vh;
+    min-height: 0;
 }
 
 #lab-data-table table {
     font-size: 0.82rem;
+    width: 100% !important;
+    table-layout: fixed;
 }
 #lab-data-table td, #lab-data-table th {
-    white-space: nowrap;
+    white-space: normal;
     overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 180px;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    word-break: break-word;
     padding: 6px 8px !important;
 }
 #lab-data-table tr:hover {
@@ -247,11 +253,10 @@ footer,
 #workspace-shell {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
     gap: 8px;
-    height: calc(100vh - 8px);
     min-height: 0;
     overflow: hidden;
-    padding-bottom: 4px;
 }
 
 #workspace-filter-row {
@@ -353,7 +358,8 @@ footer,
 #lab-data-table button.disable_click > .table-wrap {
     display: flex;
     flex: 1 1 auto;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 #viewer-plot {
