@@ -2800,7 +2800,12 @@
   "Blood - Methylmalonic Acid": {
     "lab_type": "blood",
     "primary_unit": "nmol/L",
-    "alternatives": [],
+    "alternatives": [
+      {
+        "unit": "µmol/L",
+        "factor": 1000.0
+      }
+    ],
     "ranges": {
       "default": [
         0,

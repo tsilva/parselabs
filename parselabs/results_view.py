@@ -195,11 +195,11 @@ DISPLAY_COLUMNS = [
     "lab_unit",
     "reference_range",
     "review_status",
-    "source_document",
-    "page_number",
     "raw_value",
     "raw_lab_unit",
     "raw_reference_range",
+    "source_document",
+    "page_number",
 ]
 
 # Column display names
@@ -1381,14 +1381,11 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
         context.lab_specs,
         context.demographics,
     )
-    document_choices = get_document_choices(full_df, prioritize_review_sources=prioritize_review_sources)
-    initial_document = get_initial_document(full_df, prioritize_review_sources=prioritize_review_sources)
     initial_filtered_df = apply_filters(
         full_df,
         None,
         False,
         "All",
-        document_name=initial_document,
         sort_order=DEFAULT_SORT_ORDER,
     )
     initial_view = _render_viewer_state(
@@ -1397,7 +1394,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
         output_path,
         None,
         summary_df=initial_filtered_df,
-        document_name=initial_document,
     )
 
     with gr.Blocks(
@@ -1411,14 +1407,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
 
         with gr.Column(elem_id="workspace-shell"):
             with gr.Row(elem_id="workspace-filter-row", elem_classes="filter-row"):
-                with gr.Column(scale=2, min_width=220):
-                    document_filter = gr.Dropdown(
-                        choices=document_choices,
-                        multiselect=False,
-                        value=initial_document,
-                        label="Document",
-                        allow_custom_value=False,
-                    )
                 with gr.Column(scale=2, min_width=220):
                     lab_name_filter = gr.Dropdown(
                         choices=lab_name_choices,
@@ -1510,7 +1498,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             )
 
         filter_inputs = [
-            document_filter,
             lab_name_filter,
             latest_filter,
             review_filter,
@@ -1533,7 +1520,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
         def _handle_data_table_select(
             filtered_df: pd.DataFrame,
             full_df: pd.DataFrame,
-            document_name: str | None,
             lab_name: str | None,
             evt: gr.SelectData,
         ) -> tuple:
@@ -1543,18 +1529,16 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 lab_name,
                 evt,
                 output_path,
-                document_name=document_name,
             )
 
-        for trigger in [document_filter, lab_name_filter, latest_filter, review_filter, sort_filter]:
+        for trigger in [lab_name_filter, latest_filter, review_filter, sort_filter]:
             trigger.change(
-                fn=lambda document_name, lab_names, latest_only, review_filter, sort_order, full_df: handle_filter_change(
+                fn=lambda lab_names, latest_only, review_filter, sort_order, full_df: handle_filter_change(
                     lab_names,
                     latest_only,
                     review_filter,
                     full_df,
                     output_path,
-                    document_name=document_name,
                     sort_order=sort_order,
                 ),
                 inputs=filter_inputs,
@@ -1563,7 +1547,7 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
 
         data_table.select(
             fn=_handle_data_table_select,
-            inputs=[filtered_df_state, full_df_state, document_filter, lab_name_filter],
+            inputs=[filtered_df_state, full_df_state, lab_name_filter],
             outputs=[
                 current_idx_state,
                 position_display,
@@ -1579,7 +1563,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             current_idx_state,
             filtered_df_state,
             full_df_state,
-            document_filter,
             lab_name_filter,
         ]
         nav_outputs = [
@@ -1593,48 +1576,44 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
         ]
 
         plot_point_select_btn.click(
-            fn=lambda point_token, current_idx, filtered_df, full_df, document_name, lab_name: handle_plot_point_select(
+            fn=lambda point_token, current_idx, filtered_df, full_df, lab_name: handle_plot_point_select(
                 point_token,
                 current_idx,
                 filtered_df,
                 full_df,
                 lab_name,
                 output_path,
-                document_name=document_name,
             ),
             inputs=[
                 plot_point_selection,
                 current_idx_state,
                 filtered_df_state,
                 full_df_state,
-                document_filter,
                 lab_name_filter,
             ],
             outputs=nav_outputs,
         )
 
         prev_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name: handle_navigation(
+            fn=lambda current_idx, filtered_df, full_df, lab_name: handle_navigation(
                 current_idx,
                 filtered_df,
                 full_df,
                 lab_name,
                 -1,
                 output_path,
-                document_name=document_name,
             ),
             inputs=nav_inputs,
             outputs=nav_outputs,
         )
         next_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name: handle_navigation(
+            fn=lambda current_idx, filtered_df, full_df, lab_name: handle_navigation(
                 current_idx,
                 filtered_df,
                 full_df,
                 lab_name,
                 1,
                 output_path,
-                document_name=document_name,
             ),
             inputs=nav_inputs,
             outputs=nav_outputs,
@@ -1644,7 +1623,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             current_idx_state,
             filtered_df_state,
             full_df_state,
-            document_filter,
             lab_name_filter,
             latest_filter,
             review_filter,
@@ -1665,7 +1643,7 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
         ]
 
         accept_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter, sort_order: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, sort_order: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1674,14 +1652,13 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 review_filter,
                 "accepted",
                 output_path,
-                document_name=document_name,
                 sort_order=sort_order,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
         reject_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter, sort_order: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, sort_order: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1690,14 +1667,13 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 review_filter,
                 "rejected",
                 output_path,
-                document_name=document_name,
                 sort_order=sort_order,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
         undo_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter, sort_order: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, sort_order: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1706,14 +1682,13 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 review_filter,
                 "clear",
                 output_path,
-                document_name=document_name,
                 sort_order=sort_order,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
         missing_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, document_name, lab_name, latest_only, review_filter, sort_order: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, sort_order: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1722,7 +1697,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 review_filter,
                 "missing_row",
                 output_path,
-                document_name=document_name,
                 sort_order=sort_order,
             ),
             inputs=review_btn_inputs,
