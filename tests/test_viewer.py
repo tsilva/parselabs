@@ -157,6 +157,106 @@ def test_get_initial_document_prefers_bbox_backed_review_document():
     assert viewer.get_initial_document(df, prioritize_review_sources=False) is None
 
 
+def test_apply_filters_sorts_oldest_first_in_document_page_order():
+    df = pd.DataFrame(
+        [
+            {
+                "date": pd.Timestamp("2024-01-03"),
+                "lab_name": "Blood - Potassium",
+                "source_file": "newer.csv",
+                "page_number": 1,
+                "result_index": 0,
+                "review_status": "",
+            },
+            {
+                "date": pd.Timestamp("2024-01-01"),
+                "lab_name": "Blood - Zeta",
+                "source_file": "older.csv",
+                "page_number": 2,
+                "result_index": 0,
+                "review_status": "",
+            },
+            {
+                "date": pd.Timestamp("2024-01-01"),
+                "lab_name": "Blood - Alpha",
+                "source_file": "older.csv",
+                "page_number": 1,
+                "result_index": 1,
+                "review_status": "",
+            },
+            {
+                "date": pd.Timestamp("2024-01-01"),
+                "lab_name": "Blood - Beta",
+                "source_file": "older.csv",
+                "page_number": 1,
+                "result_index": 0,
+                "review_status": "",
+            },
+        ]
+    )
+
+    filtered = viewer.apply_filters(
+        df,
+        None,
+        False,
+        "All",
+        sort_order=viewer.SORT_DATE_ASC,
+    )
+
+    assert filtered[["source_file", "page_number", "result_index"]].to_dict("records") == [
+        {"source_file": "older.csv", "page_number": 1, "result_index": 0},
+        {"source_file": "older.csv", "page_number": 1, "result_index": 1},
+        {"source_file": "older.csv", "page_number": 2, "result_index": 0},
+        {"source_file": "newer.csv", "page_number": 1, "result_index": 0},
+    ]
+
+
+def test_apply_filters_keeps_single_document_in_page_order_for_all_sort_modes():
+    df = pd.DataFrame(
+        [
+            {
+                "date": pd.Timestamp("2024-01-01"),
+                "lab_name": "Blood - Zeta",
+                "source_file": "older.csv",
+                "page_number": 2,
+                "result_index": 0,
+                "review_status": "",
+            },
+            {
+                "date": pd.Timestamp("2024-01-01"),
+                "lab_name": "Blood - Alpha",
+                "source_file": "older.csv",
+                "page_number": 1,
+                "result_index": 1,
+                "review_status": "",
+            },
+            {
+                "date": pd.Timestamp("2024-01-01"),
+                "lab_name": "Blood - Beta",
+                "source_file": "older.csv",
+                "page_number": 1,
+                "result_index": 0,
+                "review_status": "",
+            },
+        ]
+    )
+
+    filtered = viewer.apply_filters(
+        df,
+        None,
+        False,
+        "All",
+        document_name="older.csv",
+        sort_order=viewer.SORT_DATE_ASC,
+    )
+
+    assert filtered[["page_number", "result_index"]].to_dict("records") == [
+        {"page_number": 1, "result_index": 0},
+        {"page_number": 1, "result_index": 1},
+        {"page_number": 2, "result_index": 0},
+    ]
+
+
 def test_handle_navigation_stays_on_first_row_when_moving_backward(tmp_path):
     df = pd.DataFrame(
         [
