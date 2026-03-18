@@ -283,11 +283,11 @@ def test_prepare_display_df_prioritizes_mapped_columns_before_source_columns():
         "Mapped Unit",
         "Mapped Range",
         "Review Status",
-        "Document",
-        "Page",
         "Raw Value",
         "Raw Unit",
         "Raw Range",
+        "Document",
+        "Page",
     ]
 
 
@@ -390,10 +390,10 @@ def test_handle_navigation_stays_on_first_row_when_moving_backward(tmp_path):
 
     assert result[0] == 0
     assert result[1] == "**Result 1 of 2**"
-    assert 'data-selected-row="0"' in result[5]
-    assert 'data-row-count="2"' in result[5]
-    assert result[6]["interactive"] is False
-    assert result[7]["interactive"] is True
+    assert 'data-selected-row="0"' in result[4]
+    assert 'data-row-count="2"' in result[4]
+    assert result[5]["interactive"] is False
+    assert result[6]["interactive"] is True
 
 
 def test_handle_navigation_stays_on_last_row_when_moving_forward(tmp_path):
@@ -432,9 +432,9 @@ def test_handle_navigation_stays_on_last_row_when_moving_forward(tmp_path):
 
     assert result[0] == 1
     assert result[1] == "**Result 2 of 2**"
-    assert 'data-selected-row="1"' in result[5]
-    assert result[6]["interactive"] is True
-    assert result[7]["interactive"] is False
+    assert 'data-selected-row="1"' in result[4]
+    assert result[5]["interactive"] is True
+    assert result[6]["interactive"] is False
 
 
 def test_build_selection_state_html_tracks_selected_row_and_row_count():
@@ -502,9 +502,9 @@ def test_handle_plot_point_select_updates_selection_from_token(tmp_path):
 
     assert result[0] == 1
     assert result[1] == "**Result 2 of 2**"
-    assert 'data-selected-row="1"' in result[5]
-    assert result[6]["interactive"] is True
-    assert result[7]["interactive"] is False
+    assert 'data-selected-row="1"' in result[4]
+    assert result[5]["interactive"] is True
+    assert result[6]["interactive"] is False
 
 
 def test_handle_plot_point_select_keeps_current_selection_when_token_missing(tmp_path):
@@ -543,7 +543,7 @@ def test_handle_plot_point_select_keeps_current_selection_when_token_missing(tmp
 
     assert result[0] == 1
     assert result[1] == "**Result 2 of 2**"
-    assert 'data-selected-row="1"' in result[5]
+    assert 'data-selected-row="1"' in result[4]
 
 
 def test_handle_review_action_uses_shared_entry_persistence(monkeypatch, tmp_path):
@@ -578,8 +578,8 @@ def test_handle_review_action_uses_shared_entry_persistence(monkeypatch, tmp_pat
     assert result[0].loc[0, "review_status"] == "accepted"
     assert result[3] == 0
     assert result[4] == "**Result 1 of 1**"
+    assert result[9]["interactive"] is False
     assert result[10]["interactive"] is False
-    assert result[11]["interactive"] is False
 
 
 def test_handle_review_action_keeps_last_row_selected(monkeypatch, tmp_path):
@@ -624,11 +624,11 @@ def test_handle_review_action_keeps_last_row_selected(monkeypatch, tmp_path):
     result = viewer.handle_review_action(1, full_df.copy(), full_df, None, False, "All", "accepted", tmp_path)
 
     assert calls == ["accept"]
-    assert result[3] == 1
-    assert result[4] == "**Result 2 of 2**"
-    assert 'data-selected-row="1"' in result[9]
+    assert result[3] == 0
+    assert result[4] == "**Result 1 of 2**"
+    assert 'data-selected-row="0"' in result[8]
+    assert result[9]["interactive"] is False
     assert result[10]["interactive"] is True
-    assert result[11]["interactive"] is False
 
 
 def test_dispatch_row_select_preserves_gradio_select_argument_order(monkeypatch, tmp_path):
@@ -665,7 +665,6 @@ def test_create_app_does_not_render_profile_selector(monkeypatch, tmp_path):
         current_idx=0,
         position_text="",
         source_image_value=None,
-        inspector_html="",
         selection_html=viewer._build_selection_state_html(None, 0),
         prev_button_props=viewer.gr.update(interactive=False),
         next_button_props=viewer.gr.update(interactive=False),
@@ -692,6 +691,7 @@ def test_create_app_does_not_render_profile_selector(monkeypatch, tmp_path):
     warning_messages = [str(item.message) for item in caught]
 
     assert "Profile" not in labels
+    assert not any(getattr(component, "label", None) == "Document" and component.__class__.__name__ == "Dropdown" for component in demo.blocks.values())
     assert "# Lab Results Viewer" not in values
     assert "Browse, analyze, and review extracted lab results." not in values
     assert not any("Expected 4 arguments for function" in message for message in warning_messages)
@@ -699,7 +699,7 @@ def test_create_app_does_not_render_profile_selector(monkeypatch, tmp_path):
 
 
 def test_build_selection_inspector_html_surfaces_missing_source_box():
-    html = viewer.build_selection_inspector_html(
+    html = review_helpers.build_details_html(
         {
             "lab_name": "Blood - Glucose",
             "review_status": "",
@@ -709,5 +709,4 @@ def test_build_selection_inspector_html_surfaces_missing_source_box():
         }
     )
 
-    assert "Source Box" in html
-    assert "Not stored for this row" in html
+    assert "Bounding Box" not in html
