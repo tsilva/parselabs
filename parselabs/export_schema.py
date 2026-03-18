@@ -17,6 +17,7 @@ COLUMN_SCHEMA = {
     "raw_lab_name": {"dtype": "str", "excel_width": 35},
     "raw_value": {"dtype": "str", "excel_width": 12},
     "raw_unit": {"dtype": "str", "excel_width": 15},
+    "raw_reference_range": {"dtype": "str", "excel_width": 18},
     # Review flags (from validation)
     "review_needed": {"dtype": "boolean", "excel_width": 12},
     "review_reason": {"dtype": "str", "excel_width": 30},
@@ -43,14 +44,15 @@ COLUMN_ORDER = [
     "reference_min",
     "reference_max",
     "raw_lab_name",
-    "raw_value",
-    "raw_unit",
     "review_needed",
     "review_reason",
     "is_below_limit",
     "is_above_limit",
     "lab_type",
     "result_index",
+    "raw_value",
+    "raw_unit",
+    "raw_reference_range",
 ]
 
 

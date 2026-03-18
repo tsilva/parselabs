@@ -197,6 +197,9 @@ DISPLAY_COLUMNS = [
     "review_status",
     "source_document",
     "page_number",
+    "raw_value",
+    "raw_lab_unit",
+    "raw_reference_range",
 ]
 
 # Column display names
@@ -209,6 +212,9 @@ COLUMN_LABELS = {
     "page_number": "Page",
     "reference_range": "Mapped Range",
     "review_status": "Review Status",
+    "raw_value": "Raw Value",
+    "raw_lab_unit": "Raw Unit",
+    "raw_reference_range": "Raw Range",
 }
 
 SORT_DATE_DESC = "Date (Newest First)"
@@ -292,9 +298,14 @@ def build_summary_cards(df: pd.DataFrame) -> str:
     # Review counts
     reviewed_count = 0
     needs_review_count = 0
+    accepted_count = 0
+    rejected_count = 0
 
     if "review_status" in df.columns:
-        reviewed_count = int(df["review_status"].notna().sum())
+        review_status = df["review_status"].fillna("").astype(str).str.strip().str.lower()
+        reviewed_count = int(review_status.ne("").sum())
+        accepted_count = int(review_status.eq("accepted").sum())
+        rejected_count = int(review_status.eq("rejected").sum())
 
     if "review_needed" in df.columns:
         # Only count those that need review AND haven't been reviewed yet
@@ -319,6 +330,8 @@ def build_summary_cards(df: pd.DataFrame) -> str:
 
     if reviewed_count > 0:
         cards.append(f'<span class="summary-item success"><strong>{reviewed_count}</strong> reviewed</span>')
+        cards.append(f'<span class="summary-item success"><strong>{accepted_count}</strong> accepted</span>')
+        cards.append(f'<span class="summary-item danger"><strong>{rejected_count}</strong> rejected</span>')
 
     return f'<div class="summary-line">{"".join(cards)}</div>'
 
@@ -473,6 +486,11 @@ def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
 
     if "source_document" not in display_df.columns:
         display_df["source_document"] = display_df["source_file"].apply(_format_document_label) if "source_file" in display_df.columns else "-"
+
+    # Keep the visible table schema stable even when callers provide minimal fixtures.
+    for display_column in DISPLAY_COLUMNS:
+        if display_column not in display_df.columns:
+            display_df[display_column] = ""
 
     display_df = display_df[[col for col in DISPLAY_COLUMNS if col in display_df.columns]].copy()
 

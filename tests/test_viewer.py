@@ -285,7 +285,27 @@ def test_prepare_display_df_prioritizes_mapped_columns_before_source_columns():
         "Review Status",
         "Document",
         "Page",
+        "Raw Value",
+        "Raw Unit",
+        "Raw Range",
     ]
+
+
+def test_build_summary_cards_includes_reviewed_accepted_and_rejected_counts():
+    df = pd.DataFrame(
+        [
+            {"lab_name": "Blood - Glucose", "review_status": "accepted"},
+            {"lab_name": "Blood - Sodium", "review_status": "rejected"},
+            {"lab_name": "Blood - Potassium", "review_status": ""},
+            {"lab_name": "Blood - Potassium", "review_status": None},
+        ]
+    )
+
+    summary_html = viewer.build_summary_cards(df)
+
+    assert "<strong>2</strong> reviewed" in summary_html
+    assert "<strong>1</strong> accepted" in summary_html
+    assert "<strong>1</strong> rejected" in summary_html
 
 
 def test_handle_review_action_advances_to_next_visible_row(monkeypatch, tmp_path):
