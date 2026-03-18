@@ -330,13 +330,12 @@ footer,
 
 #lab-data-table {
     display: flex;
-    flex: 1 1 0 !important;
+    flex: 1 1 auto !important;
     min-height: 0;
-    height: 100% !important;
+    height: auto !important;
     max-height: none !important;
 }
 
-#workspace-results-col > div:first-child,
 #lab-data-table > .table-container,
 #lab-data-table > .table-container > .table-wrap,
 #lab-data-table button.disable_click,
