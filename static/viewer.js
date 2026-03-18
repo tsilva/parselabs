@@ -420,17 +420,19 @@
         shell.style.height = `${shellHeight}px`;
         shell.style.minHeight = `${shellHeight}px`;
 
-        const tabsRoot = document.querySelector('#workspace-side-tabs');
-        const tabWrapper = tabsRoot?.querySelector('.tab-wrapper');
+        const resultsColumn = document.querySelector('#workspace-results-col');
+        const actionBar = document.querySelector('#workspace-action-bar');
         const dataTable = document.querySelector('#lab-data-table');
 
-        if (!tabsRoot || !tabWrapper || !dataTable) {
+        if (!resultsColumn || !actionBar || !dataTable) {
             return;
         }
 
-        const tabsRect = tabsRoot.getBoundingClientRect();
-        const tabWrapperRect = tabWrapper.getBoundingClientRect();
-        const tableHeight = Math.max(240, Math.floor(tabsRect.height - tabWrapperRect.height));
+        const resultsRect = resultsColumn.getBoundingClientRect();
+        const actionRect = actionBar.getBoundingClientRect();
+        const gapValue = getComputedStyle(resultsColumn).rowGap || getComputedStyle(resultsColumn).gap || '0';
+        const gap = Number.parseFloat(gapValue) || 0;
+        const tableHeight = Math.max(240, Math.floor(resultsRect.height - actionRect.height - gap));
         document.documentElement.style.setProperty('--viewer-table-height', `${tableHeight}px`);
         const tableWrap = dataTable.querySelector('.wrap');
         const tableContainer = tableWrap?.querySelector('.table-container');

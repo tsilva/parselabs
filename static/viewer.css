@@ -339,13 +339,13 @@ footer,
     overflow: hidden;
 }
 
-#workspace-table-tab,
+#workspace-document-tab,
 #workspace-plot-tab {
     display: flex;
     min-height: 0;
 }
 
-#workspace-table-tab > .column > div:first-of-type,
+#workspace-document-tab > .column > div:first-of-type,
 #workspace-plot-tab > .column > div:first-of-type {
     display: flex;
     flex: 1 1 0;
@@ -400,7 +400,6 @@ footer,
     max-height: none !important;
 }
 
-#workspace-table-tab #lab-data-table,
 #lab-data-table,
 #lab-data-table > .wrap,
 #lab-data-table .table-container,
