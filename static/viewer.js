@@ -2,6 +2,7 @@
 (function() {
     let pendingHighlightFrame = null;
     let pendingLayoutFrame = null;
+    let pendingPlotResizeFrame = null;
     let lastAppliedSelectionSignature = "";
     let lastObservedSelectionSignature = "";
     let pendingSelectionScrollSignature = "";
@@ -351,6 +352,62 @@
         boundPlotElement = plotElement;
     }
 
+    function getActiveWorkspaceTabId() {
+        return document.querySelector('#workspace-side-tabs [role="tab"][aria-selected="true"]')?.id ?? null;
+    }
+
+    function resizePlotIfVisible() {
+        if (getActiveWorkspaceTabId() !== 'workspace-plot-tab-button') {
+            return;
+        }
+
+        const plotRoot = document.querySelector('#viewer-plot');
+        const plotElement = plotRoot?.querySelector('.js-plotly-plot');
+        const plotly = window.Plotly;
+
+        if (!plotRoot || !plotElement || !plotly?.Plots?.resize) {
+            return;
+        }
+
+        const plotRect = plotRoot.getBoundingClientRect();
+        if (plotRect.width < 50 || plotRect.height < 50) {
+            return;
+        }
+
+        plotly.Plots.resize(plotElement);
+    }
+
+    function schedulePlotResize() {
+        if (pendingPlotResizeFrame !== null) {
+            cancelAnimationFrame(pendingPlotResizeFrame);
+        }
+
+        pendingPlotResizeFrame = requestAnimationFrame(() => {
+            pendingPlotResizeFrame = requestAnimationFrame(() => {
+                pendingPlotResizeFrame = null;
+                resizePlotIfVisible();
+            });
+        });
+    }
+
+    function bindWorkspaceTabHandlers() {
+        const tabsRoot = document.querySelector('#workspace-side-tabs');
+        if (!tabsRoot || tabsRoot.dataset.viewerTabsBound === 'true') {
+            return;
+        }
+
+        tabsRoot.addEventListener('click', function(event) {
+            if (!event.target.closest('[role="tab"]')) {
+                return;
+            }
+
+            scheduleWorkspaceSizing();
+            schedulePlotResize();
+        });
+
+        tabsRoot.dataset.viewerTabsBound = 'true';
+    }
+
     function applyWorkspaceSizing() {
         const shell = document.querySelector('#workspace-shell');
         if (!shell) {
@@ -363,33 +420,41 @@
         shell.style.height = `${shellHeight}px`;
         shell.style.minHeight = `${shellHeight}px`;
 
-        const resultsCol = document.querySelector('#workspace-results-col');
+        const tabsRoot = document.querySelector('#workspace-side-tabs');
+        const tabWrapper = tabsRoot?.querySelector('.tab-wrapper');
         const actionBar = document.querySelector('#workspace-action-bar');
         const dataTable = document.querySelector('#lab-data-table');
 
-        if (!resultsCol || !actionBar || !dataTable) {
+        if (!tabsRoot || !tabWrapper || !actionBar || !dataTable) {
             return;
         }
 
-        const resultsRect = resultsCol.getBoundingClientRect();
+        const tabsRect = tabsRoot.getBoundingClientRect();
+        const tabWrapperRect = tabWrapper.getBoundingClientRect();
         const actionRect = actionBar.getBoundingClientRect();
-        const gapValue = getComputedStyle(resultsCol).rowGap || getComputedStyle(resultsCol).gap || '0';
+        const tableColumn = document.querySelector('#workspace-table-tab > .column');
+        const gapValue = tableColumn
+            ? (getComputedStyle(tableColumn).rowGap || getComputedStyle(tableColumn).gap || '0')
+            : '0';
         const gap = Number.parseFloat(gapValue) || 0;
-        const tableHeight = Math.max(240, Math.floor(resultsRect.height - actionRect.height - gap));
-        document.documentElement.style.setProperty('--viewer-table-height', `${tableHeight}px`);
-        const tableWrap = dataTable.querySelector('.wrap');
-        const tableContainer = tableWrap?.querySelector('.table-container');
-        const innerTableWrap = tableContainer?.querySelector('.table-wrap');
-        const wrappers = [
-            dataTable,
-            tableWrap,
-            tableContainer,
-            innerTableWrap,
-        ].filter(Boolean);
 
-        for (const element of wrappers) {
-            element.style.height = `${tableHeight}px`;
-            element.style.maxHeight = `${tableHeight}px`;
+        if (actionRect.height > 0) {
+            const tableHeight = Math.max(240, Math.floor(tabsRect.height - tabWrapperRect.height - actionRect.height - gap));
+            document.documentElement.style.setProperty('--viewer-table-height', `${tableHeight}px`);
+            const tableWrap = dataTable.querySelector('.wrap');
+            const tableContainer = tableWrap?.querySelector('.table-container');
+            const innerTableWrap = tableContainer?.querySelector('.table-wrap');
+            const wrappers = [
+                dataTable,
+                tableWrap,
+                tableContainer,
+                innerTableWrap,
+            ].filter(Boolean);
+
+            for (const element of wrappers) {
+                element.style.height = `${tableHeight}px`;
+                element.style.maxHeight = `${tableHeight}px`;
+            }
         }
     }
 
@@ -406,6 +471,8 @@
 
     const observer = new MutationObserver(() => {
         scheduleWorkspaceSizing();
+        schedulePlotResize();
+        bindWorkspaceTabHandlers();
         bindPlotClickHandler();
         scheduleSelectedRowSync(false);
     });
@@ -451,14 +518,21 @@
 
     window.addEventListener('load', function() {
         scheduleWorkspaceSizing();
+        schedulePlotResize();
+        bindWorkspaceTabHandlers();
         bindPlotClickHandler();
         scheduleSelectedRowSync(true);
     });
-    window.addEventListener('resize', scheduleWorkspaceSizing);
+    window.addEventListener('resize', function() {
+        scheduleWorkspaceSizing();
+        schedulePlotResize();
+    });
 
     window.__viewerSelectPlotPoint = queuePlotPointSelection;
 
     scheduleWorkspaceSizing();
+    schedulePlotResize();
+    bindWorkspaceTabHandlers();
     bindPlotClickHandler();
     scheduleSelectedRowSync(true);
 })();

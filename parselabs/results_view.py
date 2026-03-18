@@ -1330,37 +1330,39 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                         elem_id="workspace-source-image",
                     )
 
-                with gr.Column(scale=4, min_width=360, elem_id="workspace-results-col"):
-                    data_table = gr.DataFrame(
-                        value=initial_view.display_df,
-                        interactive=False,
-                        wrap=True,
-                        elem_id="lab-data-table",
-                    )
-                    selection_state = gr.HTML(
-                        value=initial_view.selection_html,
-                        elem_id="viewer-selection-state-host",
-                    )
+                with gr.Column(scale=7, min_width=620, elem_id="workspace-results-col"):
+                    with gr.Tabs(elem_id="workspace-side-tabs"):
+                        with gr.Tab("Table", elem_id="workspace-table-tab"):
+                            data_table = gr.DataFrame(
+                                value=initial_view.display_df,
+                                interactive=False,
+                                wrap=True,
+                                elem_id="lab-data-table",
+                            )
+                            selection_state = gr.HTML(
+                                value=initial_view.selection_html,
+                                elem_id="viewer-selection-state-host",
+                            )
 
-                    with gr.Column(elem_id="workspace-action-bar"):
-                        with gr.Row(elem_id="workspace-primary-controls"):
-                            prev_btn = gr.Button("< Prev [k]", elem_id="prev-btn", size="sm", interactive=False)
-                            position_display = gr.Markdown(initial_view.position_text, elem_id="position-display")
-                            next_btn = gr.Button("Next [j] >", elem_id="next-btn", size="sm", interactive=len(initial_view.filtered_df) > 1)
-                            accept_btn = gr.Button("Accept [y]", elem_id="accept-btn", variant="primary")
-                            reject_btn = gr.Button("Reject [n]", elem_id="reject-btn", variant="stop")
-                        with gr.Row(elem_id="workspace-secondary-controls"):
-                            undo_btn = gr.Button("Undo [u]", elem_id="undo-btn", size="sm")
-                            missing_btn = gr.Button("Missing [m]", elem_id="missing-btn", size="sm")
+                            with gr.Column(elem_id="workspace-action-bar"):
+                                with gr.Row(elem_id="workspace-primary-controls"):
+                                    prev_btn = gr.Button("< Prev [k]", elem_id="prev-btn", size="sm", interactive=False)
+                                    position_display = gr.Markdown(initial_view.position_text, elem_id="position-display")
+                                    next_btn = gr.Button("Next [j] >", elem_id="next-btn", size="sm", interactive=len(initial_view.filtered_df) > 1)
+                                    accept_btn = gr.Button("Accept [y]", elem_id="accept-btn", variant="primary")
+                                    reject_btn = gr.Button("Reject [n]", elem_id="reject-btn", variant="stop")
+                                with gr.Row(elem_id="workspace-secondary-controls"):
+                                    undo_btn = gr.Button("Undo [u]", elem_id="undo-btn", size="sm")
+                                    missing_btn = gr.Button("Missing [m]", elem_id="missing-btn", size="sm")
 
-                with gr.Column(scale=3, min_width=260, elem_id="workspace-analysis-col"):
-                    plot_display = gr.Plot(
-                        value=initial_view.plot,
-                        label="",
-                        elem_id="viewer-plot",
-                    )
-                    plot_point_selection = gr.Textbox(value="", container=False, elem_id="plot-point-selection")
-                    plot_point_select_btn = gr.Button("Select Plot Point", elem_id="plot-point-select-btn")
+                        with gr.Tab("Plot", elem_id="workspace-plot-tab"):
+                            plot_display = gr.Plot(
+                                value=initial_view.plot,
+                                label="",
+                                elem_id="viewer-plot",
+                            )
+                            plot_point_selection = gr.Textbox(value="", container=False, elem_id="plot-point-selection")
+                            plot_point_select_btn = gr.Button("Select Plot Point", elem_id="plot-point-select-btn")
 
             gr.Markdown(
                 "*Keyboard: Y=Accept, N=Reject, U=Undo, M=Missing, Arrow keys/J/K=Navigate*",
