@@ -1342,15 +1342,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                         elem_id="viewer-selection-state-host",
                     )
 
-                with gr.Column(scale=3, min_width=260, elem_id="workspace-analysis-col"):
-                    plot_display = gr.Plot(
-                        value=initial_view.plot,
-                        label="",
-                        elem_id="viewer-plot",
-                    )
-                    plot_point_selection = gr.Textbox(value="", container=False, elem_id="plot-point-selection")
-                    plot_point_select_btn = gr.Button("Select Plot Point", elem_id="plot-point-select-btn")
-
                     with gr.Column(elem_id="workspace-action-bar"):
                         with gr.Row(elem_id="workspace-primary-controls"):
                             prev_btn = gr.Button("< Prev [k]", elem_id="prev-btn", size="sm", interactive=False)
@@ -1361,6 +1352,15 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                         with gr.Row(elem_id="workspace-secondary-controls"):
                             undo_btn = gr.Button("Undo [u]", elem_id="undo-btn", size="sm")
                             missing_btn = gr.Button("Missing [m]", elem_id="missing-btn", size="sm")
+
+                with gr.Column(scale=3, min_width=260, elem_id="workspace-analysis-col"):
+                    plot_display = gr.Plot(
+                        value=initial_view.plot,
+                        label="",
+                        elem_id="viewer-plot",
+                    )
+                    plot_point_selection = gr.Textbox(value="", container=False, elem_id="plot-point-selection")
+                    plot_point_select_btn = gr.Button("Select Plot Point", elem_id="plot-point-select-btn")
 
             gr.Markdown(
                 "*Keyboard: Y=Accept, N=Reject, U=Undo, M=Missing, Arrow keys/J/K=Navigate*",
