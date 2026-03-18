@@ -1321,27 +1321,16 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
 
             with gr.Row(elem_id="workspace-main-row"):
                 with gr.Column(scale=7, min_width=620, elem_id="workspace-results-col"):
-                    with gr.Tabs(elem_id="workspace-side-tabs"):
-                        with gr.Tab("Table", elem_id="workspace-table-tab"):
-                            data_table = gr.DataFrame(
-                                value=initial_view.display_df,
-                                interactive=False,
-                                wrap=True,
-                                elem_id="lab-data-table",
-                            )
-                            selection_state = gr.HTML(
-                                value=initial_view.selection_html,
-                                elem_id="viewer-selection-state-host",
-                            )
-
-                        with gr.Tab("Plot", elem_id="workspace-plot-tab"):
-                            plot_display = gr.Plot(
-                                value=initial_view.plot,
-                                label="",
-                                elem_id="viewer-plot",
-                            )
-                            plot_point_selection = gr.Textbox(value="", container=False, elem_id="plot-point-selection")
-                            plot_point_select_btn = gr.Button("Select Plot Point", elem_id="plot-point-select-btn")
+                    data_table = gr.DataFrame(
+                        value=initial_view.display_df,
+                        interactive=False,
+                        wrap=True,
+                        elem_id="lab-data-table",
+                    )
+                    selection_state = gr.HTML(
+                        value=initial_view.selection_html,
+                        elem_id="viewer-selection-state-host",
+                    )
 
                     with gr.Column(elem_id="workspace-action-bar"):
                         with gr.Row(elem_id="workspace-primary-controls"):
@@ -1355,14 +1344,25 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                             missing_btn = gr.Button("Missing [m]", elem_id="missing-btn", size="sm")
 
                 with gr.Column(scale=5, min_width=460, elem_id="workspace-document-col"):
-                    source_image = gr.AnnotatedImage(
-                        value=initial_view.source_image_value,
-                        label="Source Document Page",
-                        color_map={SOURCE_BBOX_LABEL: "#dc2626"},
-                        show_legend=False,
-                        show_label=False,
-                        elem_id="workspace-source-image",
-                    )
+                    with gr.Tabs(elem_id="workspace-side-tabs"):
+                        with gr.Tab("Document", elem_id="workspace-document-tab"):
+                            source_image = gr.AnnotatedImage(
+                                value=initial_view.source_image_value,
+                                label="Source Document Page",
+                                color_map={SOURCE_BBOX_LABEL: "#dc2626"},
+                                show_legend=False,
+                                show_label=False,
+                                elem_id="workspace-source-image",
+                            )
+
+                        with gr.Tab("Plot", elem_id="workspace-plot-tab"):
+                            plot_display = gr.Plot(
+                                value=initial_view.plot,
+                                label="",
+                                elem_id="viewer-plot",
+                            )
+                            plot_point_selection = gr.Textbox(value="", container=False, elem_id="plot-point-selection")
+                            plot_point_select_btn = gr.Button("Select Plot Point", elem_id="plot-point-select-btn")
 
             gr.Markdown(
                 "*Keyboard: Y=Accept, N=Reject, U=Undo, M=Missing, Arrow keys/J/K=Navigate*",
