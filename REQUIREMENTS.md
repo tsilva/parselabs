@@ -51,13 +51,13 @@ Flagged results include one or more reason codes. Checks include:
 
 Interactive web UI for browsing, plotting, and reviewing results:
 
-- Data table filterable by lab name, review status (All, Needs Review, Abnormal, Unhealthy, Unreviewed, Accepted, Rejected), and latest-only toggle.
-- Abnormal = value outside the PDF-reported reference range. Unhealthy = value outside the lab_specs healthy range. These are distinct concepts.
-- Summary statistics: total results, unique tests, date range, review/abnormal/unhealthy/reviewed counts.
-- Time-series plots with bands for PDF-reported and configured healthy ranges; multi-lab stacked subplots.
+- Data table filterable by lab name, review status (All, Needs Review, Abnormal, Suboptimal, Unreviewed, Accepted, Rejected), and latest-only toggle.
+- Abnormal = value outside the PDF-reported reference range. Suboptimal = value outside the lab_specs optimal range. These are distinct concepts.
+- Summary statistics: total results, unique tests, date range, review/abnormal/suboptimal/reviewed counts.
+- Time-series plots with bands for PDF-reported and configured optimal ranges; multi-lab stacked subplots.
 - Source page image display for visual verification; raw vs. standardized value comparison.
 - Accept/Reject/Skip review workflow persisted across sessions; keyboard shortcuts for actions and navigation.
-- Healthy ranges adjusted by user demographics (age, gender) when provided.
+- Optimal ranges adjusted by user demographics (age, gender) when provided.
 - CSV export of filtered data.
 
 ## Output
@@ -69,7 +69,7 @@ Interactive web UI for browsing, plotting, and reviewing results:
 ## Configuration
 
 - **Profiles** (YAML/JSON): name, input path, output path, OpenRouter API credentials, extract model ID, optional base URL, optional file pattern, worker count, and demographics (gender, DOB, height, weight).
-- **Lab specs** (`lab_specs.json`): canonical lab names, types, primary units, alternative units with conversion factors, healthy ranges (with age/gender variants), biological limits, max daily change rates, inter-lab relationships, and LOINC codes (required for every lab).
+- **Lab specs** (`lab_specs.json`): canonical lab names, types, primary units, alternative units with conversion factors, evidence-based optimal ranges (with age/gender variants), biological limits, max daily change rates, inter-lab relationships, and LOINC codes (required for every lab).
 
 ## CLI
 

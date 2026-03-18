@@ -1068,17 +1068,17 @@ def _score_variant_range_match(
     score = 0.0
     comparisons = 0
 
-    if pd.notna(raw_min) and expected_min is not None:
+    if pd.notna(raw_min) and isinstance(expected_min, (int, float)):
         score += _scaled_range_delta(float(raw_min), float(expected_min))
         comparisons += 1
 
-    if pd.notna(raw_max) and expected_max is not None:
+    if pd.notna(raw_max) and isinstance(expected_max, (int, float)):
         score += _scaled_range_delta(float(raw_max), float(expected_max))
         comparisons += 1
 
     if comparisons == 0 and pd.notna(observed_value):
         parsed_value = pd.to_numeric(pd.Series([observed_value]).map(lambda value: str(value).replace(",", ".")), errors="coerce").iloc[0]
-        if pd.notna(parsed_value) and expected_min is not None and expected_max is not None:
+        if pd.notna(parsed_value) and isinstance(expected_min, (int, float)) and isinstance(expected_max, (int, float)):
             midpoint = (float(expected_min) + float(expected_max)) / 2
             score += _scaled_range_delta(float(parsed_value), midpoint)
             comparisons += 1
@@ -1343,13 +1343,13 @@ def _flag_suspicious_reference_ranges(
 
         expected_min, expected_max = expected_range[0], expected_range[1]
 
-        # Skip comparisons that would divide by zero or use missing expectations.
-        if not expected_min or not expected_max:
-            continue
+        ratios: list[float] = []
+        if isinstance(expected_min, (int, float)) and expected_min != 0:
+            ratios.append(abs(ref_min / expected_min))
+        if isinstance(expected_max, (int, float)) and expected_max != 0:
+            ratios.append(abs(ref_max / expected_max))
 
-        ratio_min = abs(ref_min / expected_min)
-        ratio_max = abs(ref_max / expected_max)
-        if (ratio_min > 10 or ratio_min < 0.1) and (ratio_max > 10 or ratio_max < 0.1):
+        if ratios and all(ratio > 10 or ratio < 0.1 for ratio in ratios):
             suspicious_indices.append(idx)
 
     return _append_review_reason_code(

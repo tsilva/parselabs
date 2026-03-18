@@ -6,7 +6,7 @@ This script combines multiple lab spec maintenance operations:
   - sort: Sort lab_specs.json alphabetically by lab name
   - fix-encoding: Convert Unicode escape sequences to UTF-8 characters
   - build-conversions: Generate unit conversion factors from extracted data
-  - build-ranges: Generate healthy reference ranges using LLM
+  - build-ranges: Generate evidence-based optimal ranges using LLM
 
 Usage:
     python utils/lab_specs_manager.py <command> [options]
@@ -15,7 +15,7 @@ Commands:
     sort                    Sort lab_specs.json alphabetically
     fix-encoding            Fix Unicode encoding in lab_specs.json
     build-conversions       Build conversion factors from output/all.csv
-    build-ranges            Build healthy ranges using LLM
+    build-ranges            Build evidence-based optimal ranges using LLM
 
 Examples:
     python utils/lab_specs_manager.py sort
@@ -164,8 +164,8 @@ def get_conversion_factor(lab_name, from_unit, to_unit, client, model_id, temper
         return None
 
 
-def get_health_range(lab_name, primary_unit, user_stats, client, model_id, temperature=0.0):
-    """Use LLM to get healthy reference range for a lab test."""
+def get_optimal_range(lab_name, primary_unit, user_stats, client, model_id, temperature=0.0):
+    """Use LLM to get an evidence-based optimal range for a lab test."""
 
     system_prompt = (_PROMPTS_DIR / "health_range_system.md").read_text(encoding="utf-8").strip()
     user_prompt = (
@@ -293,7 +293,7 @@ def cmd_build_conversions(args):
 
 
 def cmd_build_ranges(args):
-    """Build healthy reference ranges using LLM."""
+    """Build evidence-based optimal ranges using LLM."""
 
     profile = load_profile(args.profile)
     validate_profile_runtime(profile)
@@ -307,33 +307,33 @@ def cmd_build_ranges(args):
     with open(user_stats_path, "r", encoding="utf-8") as f:
         user_stats = json.load(f)
 
-    # Prepare health range tasks
-    health_range_tasks = [(lab_name, spec["primary_unit"]) for lab_name, spec in labs_specs.items()]
+    # Prepare optimal range tasks
+    optimal_range_tasks = [(lab_name, spec["primary_unit"]) for lab_name, spec in labs_specs.items()]
 
     def task_fn(args):
         lab_name, primary_unit = args
-        health_range = get_health_range(lab_name, primary_unit, user_stats, client, profile.extract_model_id)
-        parsed = parse_range_string(health_range, primary_unit)
-        logger.info(f"  {lab_name}: {health_range}")
+        optimal_range = get_optimal_range(lab_name, primary_unit, user_stats, client, profile.extract_model_id)
+        parsed = parse_range_string(optimal_range, primary_unit)
+        logger.info(f"  {lab_name}: {optimal_range}")
         return (lab_name, parsed)
 
-    max_workers = args.workers or min(10, len(health_range_tasks))
+    max_workers = args.workers or min(10, len(optimal_range_tasks))
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(task_fn, args) for args in health_range_tasks]
+        futures = [executor.submit(task_fn, args) for args in optimal_range_tasks]
         for future in concurrent.futures.as_completed(futures):
             lab_name, parsed_range = future.result()
             # Initialize ranges dict if missing
             if "ranges" not in labs_specs[lab_name]:
                 labs_specs[lab_name]["ranges"] = {}
 
-            labs_specs[lab_name]["ranges"]["healthy"] = parsed_range
+            labs_specs[lab_name]["ranges"]["default"] = parsed_range
 
     # Save results
     output_path = args.output or str(TEMP_PATH)
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(labs_specs, f, indent=2, ensure_ascii=False)
 
-    logger.info(f"✓ Generated health ranges for {len(health_range_tasks)} labs → {output_path}")
+    logger.info(f"✓ Generated optimal ranges for {len(optimal_range_tasks)} labs → {output_path}")
 
 
 def main():
@@ -347,7 +347,7 @@ Commands:
     sort                    Sort lab_specs.json alphabetically
     fix-encoding            Fix Unicode encoding issues
     build-conversions       Build unit conversion factors from CSV data
-    build-ranges            Build healthy reference ranges using LLM
+    build-ranges            Build evidence-based optimal ranges using LLM
 
 Examples:
     python utils/lab_specs_manager.py sort
@@ -389,7 +389,7 @@ Examples:
     conv_parser.add_argument("--workers", "-w", type=int, help="Number of parallel workers")
 
     # build-ranges command
-    range_parser = subparsers.add_parser("build-ranges", help="Build healthy ranges using LLM")
+    range_parser = subparsers.add_parser("build-ranges", help="Build evidence-based optimal ranges using LLM")
     range_parser.add_argument("--profile", "-p", required=True, help="Profile to use for model/API settings")
     range_parser.add_argument("--user-stats", "-u", help="User stats JSON file")
     range_parser.add_argument("--output", "-o", help="Output JSON file")

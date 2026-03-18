@@ -26,7 +26,7 @@ parselabs uses AI vision models to extract laboratory test results from PDF docu
 - **BBox-Backed Results** — The pipeline stays vision-only so extracted rows can retain source-page bounding boxes for review
 - **Profile-Based Workflow** — Configure multiple profiles for different users or data sources with simple YAML files in `~/.config/parselabs/profiles/`
 - **Gradio Review UI** — Side-by-side comparison of source documents and extracted data with keyboard shortcuts
-- **335+ Standardized Labs** — Comprehensive lab specifications with unit conversions and reference ranges
+- **335+ Standardized Labs** — Comprehensive lab specifications with unit conversions and configured optimal ranges
 
 ## Quick Start
 
@@ -110,7 +110,7 @@ models:
 processing:
   workers: 4
 
-# Optional demographics for personalized ranges
+# Optional demographics for personalized optimal ranges
 demographics:
   gender: "male"
   date_of_birth: "1990-01-15"

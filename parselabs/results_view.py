@@ -290,10 +290,12 @@ def build_summary_cards(df: pd.DataFrame) -> str:
     if "is_out_of_reference" in df.columns:
         abnormal_count = int(df["is_out_of_reference"].sum())
 
-    # Unhealthy count (outside lab specs healthy range)
-    unhealthy_count = 0
-    if "is_out_of_healthy_range" in df.columns:
-        unhealthy_count = int(df["is_out_of_healthy_range"].sum())
+    # Suboptimal count (outside lab specs optimal range)
+    suboptimal_count = 0
+    if "is_out_of_optimal_range" in df.columns:
+        suboptimal_count = int(df["is_out_of_optimal_range"].sum())
+    elif "is_out_of_healthy_range" in df.columns:
+        suboptimal_count = int(df["is_out_of_healthy_range"].sum())
 
     # Review counts
     reviewed_count = 0
@@ -325,8 +327,8 @@ def build_summary_cards(df: pd.DataFrame) -> str:
     if abnormal_count > 0:
         cards.append(f'<span class="summary-item danger"><strong>{abnormal_count}</strong> abnormal</span>')
 
-    if unhealthy_count > 0:
-        cards.append(f'<span class="summary-item warning"><strong>{unhealthy_count}</strong> unhealthy</span>')
+    if suboptimal_count > 0:
+        cards.append(f'<span class="summary-item warning"><strong>{suboptimal_count}</strong> suboptimal</span>')
 
     if reviewed_count > 0:
         cards.append(f'<span class="summary-item success"><strong>{reviewed_count}</strong> reviewed</span>')
@@ -355,7 +357,7 @@ def apply_filters(
         df: Full DataFrame
         lab_names: Lab name to filter by
         latest_only: Whether to show only latest result per lab
-        review_filter: Filter option ('All', 'Needs Review', 'Abnormal', 'Unhealthy', 'Unreviewed', 'Accepted', 'Rejected')
+        review_filter: Filter option ('All', 'Needs Review', 'Abnormal', 'Suboptimal', 'Unreviewed', 'Accepted', 'Rejected')
     """
 
     # Guard: no data to filter
@@ -389,9 +391,11 @@ def apply_filters(
         # Flagged by validation and not yet reviewed
         if "review_needed" in filtered.columns:
             filtered = filtered[(filtered["review_needed"].fillna(False)) & (filtered["review_status"].isna() | (filtered["review_status"] == ""))]
-    elif review_filter == "Unhealthy":
-        # Results outside lab_specs healthy range
-        if "is_out_of_healthy_range" in filtered.columns:
+    elif review_filter in {"Suboptimal", "Unhealthy"}:
+        # Results outside the configured lab_specs optimal range.
+        if "is_out_of_optimal_range" in filtered.columns:
+            filtered = filtered[filtered["is_out_of_optimal_range"].fillna(False)]
+        elif "is_out_of_healthy_range" in filtered.columns:
             filtered = filtered[filtered["is_out_of_healthy_range"].fillna(False)]
     elif review_filter == "Accepted":
         if "review_status" in filtered.columns:
@@ -599,32 +603,66 @@ def create_single_lab_plot(
     has_lab_specs_range = False
     has_pdf_range = False
 
-    # Add lab_specs healthy range (blue band)
+    # Add lab_specs optimal range (blue band)
     if "lab_specs_min" in lab_df.columns and "lab_specs_max" in lab_df.columns:
         min_vals = lab_df["lab_specs_min"].dropna()
         max_vals = lab_df["lab_specs_max"].dropna()
 
-        if not min_vals.empty and not max_vals.empty:
-            spec_min = float(min_vals.iloc[0])
-            spec_max = float(max_vals.iloc[0])
+        spec_min = float(min_vals.iloc[0]) if not min_vals.empty else None
+        spec_max = float(max_vals.iloc[0]) if not max_vals.empty else None
+        data_min = float(lab_df["value"].min()) if not lab_df["value"].dropna().empty else 0.0
+        data_max = float(lab_df["value"].max()) if not lab_df["value"].dropna().empty else 0.0
+
+        if spec_min is not None or spec_max is not None:
             has_lab_specs_range = True
 
-            fig.add_hrect(
-                y0=spec_min,
-                y1=spec_max,
-                fillcolor="rgba(37, 99, 235, 0.20)",
-                line_width=0,
-            )
-            fig.add_hline(
-                y=spec_min,
-                line_dash="dot",
-                line_color="rgba(37, 99, 235, 0.8)",
-            )
-            fig.add_hline(
-                y=spec_max,
-                line_dash="dot",
-                line_color="rgba(37, 99, 235, 0.8)",
-            )
+            if spec_min is not None and spec_max is not None:
+                fig.add_hrect(
+                    y0=spec_min,
+                    y1=spec_max,
+                    fillcolor="rgba(37, 99, 235, 0.20)",
+                    line_width=0,
+                )
+                fig.add_hline(
+                    y=spec_min,
+                    line_dash="dot",
+                    line_color="rgba(37, 99, 235, 0.8)",
+                )
+                fig.add_hline(
+                    y=spec_max,
+                    line_dash="dot",
+                    line_color="rgba(37, 99, 235, 0.8)",
+                )
+            elif spec_max is not None:
+                y_bottom = min(0, data_min * 0.9) if data_min > 0 else data_min * 1.1
+                fig.add_hrect(
+                    y0=y_bottom,
+                    y1=spec_max,
+                    fillcolor="rgba(37, 99, 235, 0.20)",
+                    line_width=0,
+                )
+                fig.add_hline(
+                    y=spec_max,
+                    line_dash="dot",
+                    line_color="rgba(37, 99, 235, 0.8)",
+                    annotation_text=f"< {spec_max}",
+                    annotation_position="top right",
+                )
+            else:
+                y_top = max(data_max * 1.2, spec_min * 2) if data_max > 0 else data_max * 0.8
+                fig.add_hrect(
+                    y0=spec_min,
+                    y1=y_top,
+                    fillcolor="rgba(37, 99, 235, 0.20)",
+                    line_width=0,
+                )
+                fig.add_hline(
+                    y=spec_min,
+                    line_dash="dot",
+                    line_color="rgba(37, 99, 235, 0.8)",
+                    annotation_text=f"> {spec_min}",
+                    annotation_position="bottom right",
+                )
 
     # Add PDF reference range (orange band)
     if "reference_min" in lab_df.columns and "reference_max" in lab_df.columns:
@@ -709,7 +747,7 @@ def create_single_lab_plot(
                 y=[None],
                 mode="markers",
                 marker=dict(size=10, color="rgba(37, 99, 235, 0.6)", symbol="square"),
-                name="Healthy Range",
+                name="Optimal Range",
                 showlegend=True,
             )
         )
@@ -855,20 +893,56 @@ def create_interactive_plot(
             col=1,
         )
 
-        # Add lab_specs healthy range (blue band)
+        # Add lab_specs optimal range (blue band)
         if "lab_specs_min" in lab_df.columns and "lab_specs_max" in lab_df.columns:
             min_vals = lab_df["lab_specs_min"].dropna()
             max_vals = lab_df["lab_specs_max"].dropna()
 
-            if not min_vals.empty and not max_vals.empty:
-                spec_min = float(min_vals.iloc[0])
-                spec_max = float(max_vals.iloc[0])
+            spec_min = float(min_vals.iloc[0]) if not min_vals.empty else None
+            spec_max = float(max_vals.iloc[0]) if not max_vals.empty else None
+            data_min = float(lab_df["value"].min()) if not lab_df["value"].dropna().empty else 0.0
+            data_max = float(lab_df["value"].max()) if not lab_df["value"].dropna().empty else 0.0
 
+            if spec_min is not None and spec_max is not None:
                 fig.add_hrect(
                     y0=spec_min,
                     y1=spec_max,
                     fillcolor="rgba(37, 99, 235, 0.20)",
                     line_width=0,
+                    row=i + 1,
+                    col=1,
+                )
+            elif spec_max is not None:
+                y_bottom = min(0, data_min * 0.9) if data_min > 0 else data_min * 1.1
+                fig.add_hrect(
+                    y0=y_bottom,
+                    y1=spec_max,
+                    fillcolor="rgba(37, 99, 235, 0.20)",
+                    line_width=0,
+                    row=i + 1,
+                    col=1,
+                )
+                fig.add_hline(
+                    y=spec_max,
+                    line_dash="dot",
+                    line_color="rgba(37, 99, 235, 0.8)",
+                    row=i + 1,
+                    col=1,
+                )
+            elif spec_min is not None:
+                y_top = max(data_max * 1.2, spec_min * 2) if data_max > 0 else data_max * 0.8
+                fig.add_hrect(
+                    y0=spec_min,
+                    y1=y_top,
+                    fillcolor="rgba(37, 99, 235, 0.20)",
+                    line_width=0,
+                    row=i + 1,
+                    col=1,
+                )
+                fig.add_hline(
+                    y=spec_min,
+                    line_dash="dot",
+                    line_color="rgba(37, 99, 235, 0.8)",
                     row=i + 1,
                     col=1,
                 )
@@ -1422,7 +1496,7 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                             "All",
                             "Needs Review",
                             "Abnormal",
-                            "Unhealthy",
+                            "Suboptimal",
                             "Unreviewed",
                             "Accepted",
                             "Rejected",

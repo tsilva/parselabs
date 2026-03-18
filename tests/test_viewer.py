@@ -308,6 +308,46 @@ def test_build_summary_cards_includes_reviewed_accepted_and_rejected_counts():
     assert "<strong>1</strong> rejected" in summary_html
 
 
+def test_build_summary_cards_uses_suboptimal_count_from_optimal_range_column():
+    df = pd.DataFrame(
+        [
+            {"lab_name": "Blood - ApoB", "is_out_of_optimal_range": True},
+            {"lab_name": "Blood - LDL", "is_out_of_optimal_range": False},
+        ]
+    )
+
+    summary_html = viewer.build_summary_cards(df)
+
+    assert "<strong>1</strong> suboptimal" in summary_html
+
+
+def test_apply_filters_supports_suboptimal_status_with_new_column():
+    df = pd.DataFrame(
+        [
+            {
+                "lab_name": "Blood - ApoB",
+                "review_status": "",
+                "is_out_of_optimal_range": True,
+                "source_file": "lipids.csv",
+                "page_number": 1,
+                "result_index": 0,
+            },
+            {
+                "lab_name": "Blood - LDL",
+                "review_status": "",
+                "is_out_of_optimal_range": False,
+                "source_file": "lipids.csv",
+                "page_number": 1,
+                "result_index": 1,
+            },
+        ]
+    )
+
+    filtered = viewer.apply_filters(df, None, False, "Suboptimal")
+
+    assert filtered["lab_name"].tolist() == ["Blood - ApoB"]
+
+
 def test_handle_review_action_advances_to_next_visible_row(monkeypatch, tmp_path):
     full_df = pd.DataFrame(
         [

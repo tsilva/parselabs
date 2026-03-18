@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Labs Parser is a Python tool that uses AI (via OpenRouter API) to extract laboratory test results from medical documents (PDFs/images). It converts unstructured lab reports into structured CSV/Excel data with standardized test names and units.
 
-**Design Principle:** Extraction is objective (what's on the page). Analysis is subjective (health status, custom ranges) and belongs in a separate review tool.
+**Design Principle:** Extraction is objective (what's on the page). Analysis is subjective (health status, optimal targets, custom ranges) and belongs in a separate review tool.
 
 ## Key Commands
 
@@ -35,7 +35,7 @@ parselabs-viewer --profile tsilva
 The `utils/` directory contains helper scripts for building and maintaining configuration:
 - `validate_lab_specs_schema.py` - Validate lab_specs.json schema and LOINC code presence
 - `build_lab_specs_conversions.py` - Generate unit conversion factors for lab_specs.json
-- `build_lab_specs_ranges.py` - Generate healthy ranges for lab_specs.json
+- `build_lab_specs_ranges.py` - Generate evidence-based optimal ranges for lab_specs.json
 - `sort_lab_specs.py` - Sort lab specifications alphabetically
 - `analyze_unknowns.py` - Analyze $UNKNOWN$ values in extracted results
 - `update_standardization_caches.py` - Batch-update name/unit standardization caches via LLM
@@ -48,7 +48,7 @@ Prompt templates live in `prompts/` as `.md` files and are loaded at module leve
 - `extraction_system.md`, `extraction_user.md` - vision extraction prompts
 - `name_standardization.md`, `unit_standardization.md` - standardization prompts (used by `utils/update_standardization_caches.py`)
 - `conversion_factor_system.md`, `conversion_factor_user.md` - unit conversion factor prompts (template: `{lab_name}`, `{from_unit}`, `{to_unit}`)
-- `health_range_system.md`, `health_range_user.md` - healthy range prompts (template: `{lab_name}`, `{primary_unit}`, `{user_stats_json}`)
+- `health_range_system.md`, `health_range_user.md` - optimal range prompts (template: `{lab_name}`, `{primary_unit}`, `{user_stats_json}`)
 
 ## Architecture
 
@@ -124,7 +124,7 @@ Interactive UI for browsing and reviewing extracted lab results:
 **Filters (all always visible):**
 - Lab name multi-select
 - Abnormal only / Latest only checkboxes
-- Review status dropdown (All, Needs Review, Abnormal, Unhealthy, Unreviewed)
+- Review status dropdown (All, Needs Review, Abnormal, Suboptimal, Unreviewed)
 
 **Keyboard shortcuts:**
 - `Y` = Accept, `N` = Reject, `S` = Skip
