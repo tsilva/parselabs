@@ -225,6 +225,12 @@ footer,
     min-height: 0;
 }
 
+.gradio-container .contain > .column:has(> #workspace-shell) {
+    display: flex;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+}
+
 #lab-data-table table {
     font-size: 0.82rem;
     width: 100% !important;
@@ -254,6 +260,7 @@ footer,
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
+    height: 100%;
     gap: 8px;
     min-height: 0;
     overflow: hidden;
@@ -287,6 +294,14 @@ footer,
     flex: 1 1 0;
     flex-direction: column;
     gap: 10px;
+}
+
+#workspace-results-col {
+    overflow: hidden;
+}
+
+#workspace-results-col > div {
+    min-height: 0;
 }
 
 #workspace-source-image,
@@ -330,10 +345,18 @@ footer,
 
 #lab-data-table {
     display: flex;
-    flex: 1 1 auto !important;
+    flex: 1 1 0 !important;
     min-height: 0;
     height: auto !important;
     max-height: none !important;
+}
+
+#lab-data-table,
+#lab-data-table > .wrap,
+#lab-data-table .table-container,
+#lab-data-table .table-wrap {
+    height: var(--viewer-table-height, auto) !important;
+    max-height: var(--viewer-table-height, none) !important;
 }
 
 #lab-data-table > .table-container,

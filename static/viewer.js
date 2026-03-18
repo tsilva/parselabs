@@ -1,6 +1,7 @@
 <script>
 (function() {
     let pendingHighlightFrame = null;
+    let pendingLayoutFrame = null;
     let lastAppliedSelectionSignature = "";
     let lastObservedSelectionSignature = "";
     let pendingSelectionScrollSignature = "";
@@ -350,7 +351,61 @@
         boundPlotElement = plotElement;
     }
 
+    function applyWorkspaceSizing() {
+        const shell = document.querySelector('#workspace-shell');
+        if (!shell) {
+            return;
+        }
+
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+        const shellTop = shell.getBoundingClientRect().top;
+        const shellHeight = Math.max(320, Math.floor(viewportHeight - shellTop - 8));
+        shell.style.height = `${shellHeight}px`;
+        shell.style.minHeight = `${shellHeight}px`;
+
+        const resultsCol = document.querySelector('#workspace-results-col');
+        const actionBar = document.querySelector('#workspace-action-bar');
+        const dataTable = document.querySelector('#lab-data-table');
+
+        if (!resultsCol || !actionBar || !dataTable) {
+            return;
+        }
+
+        const resultsRect = resultsCol.getBoundingClientRect();
+        const actionRect = actionBar.getBoundingClientRect();
+        const gapValue = getComputedStyle(resultsCol).rowGap || getComputedStyle(resultsCol).gap || '0';
+        const gap = Number.parseFloat(gapValue) || 0;
+        const tableHeight = Math.max(240, Math.floor(resultsRect.height - actionRect.height - gap));
+        document.documentElement.style.setProperty('--viewer-table-height', `${tableHeight}px`);
+        const tableWrap = dataTable.querySelector('.wrap');
+        const tableContainer = tableWrap?.querySelector('.table-container');
+        const innerTableWrap = tableContainer?.querySelector('.table-wrap');
+        const wrappers = [
+            dataTable,
+            tableWrap,
+            tableContainer,
+            innerTableWrap,
+        ].filter(Boolean);
+
+        for (const element of wrappers) {
+            element.style.height = `${tableHeight}px`;
+            element.style.maxHeight = `${tableHeight}px`;
+        }
+    }
+
+    function scheduleWorkspaceSizing() {
+        if (pendingLayoutFrame !== null) {
+            cancelAnimationFrame(pendingLayoutFrame);
+        }
+
+        pendingLayoutFrame = requestAnimationFrame(() => {
+            pendingLayoutFrame = null;
+            applyWorkspaceSizing();
+        });
+    }
+
     const observer = new MutationObserver(() => {
+        scheduleWorkspaceSizing();
         bindPlotClickHandler();
         scheduleSelectedRowSync(false);
     });
@@ -395,12 +450,15 @@
     });
 
     window.addEventListener('load', function() {
+        scheduleWorkspaceSizing();
         bindPlotClickHandler();
         scheduleSelectedRowSync(true);
     });
+    window.addEventListener('resize', scheduleWorkspaceSizing);
 
     window.__viewerSelectPlotPoint = queuePlotPointSelection;
 
+    scheduleWorkspaceSizing();
     bindPlotClickHandler();
     scheduleSelectedRowSync(true);
 })();
