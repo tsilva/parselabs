@@ -257,6 +257,83 @@ def test_apply_filters_keeps_single_document_in_page_order_for_all_sort_modes():
     ]
 
 
+def test_prepare_display_df_prioritizes_mapped_columns_before_source_columns():
+    df = pd.DataFrame(
+        [
+            {
+                "date": pd.Timestamp("2024-01-01"),
+                "lab_name": "Blood - Glucose",
+                "value": 91.0,
+                "lab_unit": "mg/dL",
+                "reference_min": 70.0,
+                "reference_max": 99.0,
+                "review_status": "accepted",
+                "source_file": "glucose.csv",
+                "page_number": 2,
+            }
+        ]
+    )
+
+    display_df = viewer.prepare_display_df(df)
+
+    assert display_df.columns.tolist() == [
+        "Date",
+        "Mapped Lab",
+        "Mapped Value",
+        "Mapped Unit",
+        "Mapped Range",
+        "Review Status",
+        "Document",
+        "Page",
+    ]
+
+
+def test_handle_review_action_advances_to_next_visible_row(monkeypatch, tmp_path):
+    full_df = pd.DataFrame(
+        [
+            {
+                "date": pd.Timestamp("2024-01-02"),
+                "lab_name": "Blood - Glucose",
+                "value": 91.0,
+                "lab_unit": "mg/dL",
+                "reference_min": 70.0,
+                "reference_max": 99.0,
+                "review_status": "",
+                "review_reason": "",
+                "source_file": "glucose.csv",
+                "page_number": 1,
+                "result_index": 0,
+            },
+            {
+                "date": pd.Timestamp("2024-01-01"),
+                "lab_name": "Blood - Glucose",
+                "value": 92.0,
+                "lab_unit": "mg/dL",
+                "reference_min": 70.0,
+                "reference_max": 99.0,
+                "review_status": "",
+                "review_reason": "",
+                "source_file": "glucose.csv",
+                "page_number": 1,
+                "result_index": 1,
+            },
+        ]
+    )
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        viewer,
+        "apply_review_action_for_entry",
+        lambda entry, output_path, action: (calls.append(action) or True, ""),
+    )
+
+    result = viewer.handle_review_action(0, full_df.copy(), full_df, None, False, "All", "accepted", tmp_path)
+
+    assert calls == ["accept"]
+    assert result[3] == 1
+    assert result[4] == "**Result 2 of 2**"
+
+
 def test_handle_navigation_stays_on_first_row_when_moving_backward(tmp_path):
     df = pd.DataFrame(
         [
