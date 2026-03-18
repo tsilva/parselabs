@@ -14,7 +14,7 @@ Consolidated utility for managing lab_specs.json operations.
 | `sort` | Sort lab_specs.json alphabetically by lab name |
 | `fix-encoding` | Convert Unicode escape sequences to UTF-8 characters |
 | `build-conversions` | Generate unit conversion factors from extracted CSV data |
-| `build-ranges` | Generate healthy reference ranges using LLM |
+| `build-ranges` | Generate evidence-based optimal ranges using LLM |
 
 Usage:
 ```bash
@@ -27,7 +27,7 @@ parselabs admin lab-specs fix-encoding
 # Build conversion factors from extracted data
 parselabs admin lab-specs build-conversions --input output/all.csv
 
-# Build healthy ranges using LLM
+# Build evidence-based optimal ranges using LLM
 parselabs admin lab-specs build-ranges --user-stats user_stats.json
 ```
 

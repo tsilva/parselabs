@@ -324,13 +324,23 @@ class LabSpecsValidator:
 
             min_val, max_val = range_val
 
-            # Both values must be numeric
-            if not isinstance(min_val, (int, float)) or not isinstance(max_val, (int, float)):
-                self.errors.append(f"Lab '{lab_name}': Range '{range_key}' values must be numbers")
+            min_is_numeric = isinstance(min_val, (int, float))
+            max_is_numeric = isinstance(max_val, (int, float))
+            min_is_missing = min_val is None
+            max_is_missing = max_val is None
+
+            # Each bound may be numeric or null to support one-sided optimal ranges.
+            if not (min_is_numeric or min_is_missing) or not (max_is_numeric or max_is_missing):
+                self.errors.append(f"Lab '{lab_name}': Range '{range_key}' values must be numbers or null")
                 continue
 
-            # Min must not exceed max
-            if min_val > max_val:
+            # At least one side must be defined.
+            if min_is_missing and max_is_missing:
+                self.errors.append(f"Lab '{lab_name}': Range '{range_key}' must define at least one bound")
+                continue
+
+            # Min must not exceed max when both are present.
+            if min_is_numeric and max_is_numeric and min_val > max_val:
                 self.errors.append(f"Lab '{lab_name}': Range '{range_key}' min ({min_val}) > max ({max_val})")
 
     def _validate_loinc_code(self, lab_name: str, spec: dict) -> bool:

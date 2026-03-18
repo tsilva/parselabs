@@ -55,7 +55,7 @@ class ProfileConfig:
     extract_model_id: str | None = None
     workers: int | None = None
 
-    # Demographics for personalized healthy ranges
+    # Demographics for personalized optimal ranges
     demographics: Demographics | None = None
 
     @staticmethod
@@ -133,7 +133,7 @@ class ProfileConfig:
         # Extract optional overrides
         workers = cls._first_value(processing.get("workers"), data.get("workers"))
 
-        # Extract demographics (for personalized healthy ranges)
+        # Extract demographics (for personalized optimal ranges)
         demographics = None
         demo_data = data.get("demographics", {})
 
@@ -430,8 +430,8 @@ class LabSpecsConfig:
         # No conversion available for this unit
         return None
 
-    def get_healthy_range_for_demographics(self, lab_name: str, gender: str | None = None, age: int | None = None) -> tuple[float | None, float | None]:
-        """Get healthy range for a lab, considering demographics.
+    def get_optimal_range_for_demographics(self, lab_name: str, gender: str | None = None, age: int | None = None) -> tuple[float | None, float | None]:
+        """Get the configured optimal range for a lab, considering demographics.
 
         Selection priority:
         1. Gender + age-specific (e.g., "male:0-17", "female:65+")
@@ -483,6 +483,11 @@ class LabSpecsConfig:
 
         # No applicable range found
         return (None, None)
+
+    def get_healthy_range_for_demographics(self, lab_name: str, gender: str | None = None, age: int | None = None) -> tuple[float | None, float | None]:
+        """Backward-compatible alias for callers using the older terminology."""
+
+        return self.get_optimal_range_for_demographics(lab_name, gender=gender, age=age)
 
     def _age_matches_range(self, age: int, age_spec: str) -> bool:
         """Check if age matches an age specification.
