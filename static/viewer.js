@@ -437,16 +437,29 @@
         const tableWrap = dataTable.querySelector('.wrap');
         const tableContainer = tableWrap?.querySelector('.table-container');
         const innerTableWrap = tableContainer?.querySelector('.table-wrap');
+        const disableClickButton = dataTable.querySelector('button.disable_click');
+        const virtualTableWrap = disableClickButton?.querySelector('.table-wrap');
+        const virtualViewport = virtualTableWrap?.querySelector('svelte-virtual-table-viewport');
+        const virtualViewportInner = virtualViewport?.firstElementChild;
+        const virtualTable = virtualViewportInner?.querySelector('table.table');
         const wrappers = [
             dataTable,
             tableWrap,
             tableContainer,
             innerTableWrap,
+            disableClickButton,
+            virtualTableWrap,
+            virtualViewport,
+            virtualViewportInner,
         ].filter(Boolean);
 
         for (const element of wrappers) {
             element.style.height = `${tableHeight}px`;
             element.style.maxHeight = `${tableHeight}px`;
+        }
+
+        if (virtualTable) {
+            virtualTable.style.setProperty('--max-height', `${tableHeight}px`);
         }
     }
 
