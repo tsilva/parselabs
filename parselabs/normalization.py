@@ -511,10 +511,10 @@ def _convert_qualitative_values(
     with negative-like values.
     """
 
-    # Find labs with boolean primary unit
+    # Find labs with boolean primary unit.
     boolean_labs = [lab_name for lab_name in df["lab_name_standardized"].unique() if pd.notna(lab_name) and lab_name != UNKNOWN_VALUE and lab_specs.get_primary_unit(lab_name) == "boolean"]
 
-    # Boolean labs: convert qualitative text to 0/1 from raw_value, then comments
+    # Boolean labs: convert qualitative text to 0/1 from raw_value, then comments.
     if boolean_labs:
         for source_col, needs_raw_value_isna in [
             ("raw_value", False),
@@ -522,21 +522,29 @@ def _convert_qualitative_values(
         ]:
             mask = df["lab_name_standardized"].isin(boolean_labs) & df["value_primary"].isna() & df[source_col].notna()
 
-            # For raw_comments source, only use when raw_value is also missing
+            # For raw_comments source, only use when raw_value is also missing.
             if needs_raw_value_isna:
                 mask &= df["raw_value"].isna()
 
-            # No qualifying rows for this source
+            # Guard: Skip sources with no rows left to classify.
             if not mask.any():
                 continue
 
             qual_map = _classify_qualitative_batch(df.loc[mask, source_col].tolist())
-            df.loc[mask, "value_primary"] = df.loc[mask, source_col].map(lambda v: qual_map.get(v))
-            df.loc[mask, "lab_unit_standardized"] = "boolean"
-            df.loc[mask, "lab_unit_primary"] = "boolean"
-            logger.info(f"[normalization] Converted {mask.sum()} qualitative values from {source_col} (boolean labs)")
+            mapped_values = df.loc[mask, source_col].map(lambda v: qual_map.get(v))
+            matched_mask = mapped_values.notna()
 
-    # Non-boolean labs: convert only negative-like values to 0 from raw_value, then comments
+            # Guard: Leave unrecognized qualitative strings untouched for later review.
+            if not matched_mask.any():
+                continue
+
+            matched_index = mapped_values.index[matched_mask]
+            df.loc[matched_index, "value_primary"] = mapped_values.loc[matched_mask].astype(float)
+            df.loc[matched_index, "lab_unit_standardized"] = "boolean"
+            df.loc[matched_index, "lab_unit_primary"] = "boolean"
+            logger.info(f"[normalization] Converted {len(matched_index)} qualitative values from {source_col} (boolean labs)")
+
+    # Non-boolean labs: convert only negative-like values to 0 from raw_value, then comments.
     non_boolean_exclude = boolean_labs if boolean_labs else []
 
     for source_col, needs_raw_value_isna in [
@@ -545,11 +553,11 @@ def _convert_qualitative_values(
     ]:
         mask = df["value_primary"].isna() & df[source_col].notna() & ~df["lab_name_standardized"].isin(non_boolean_exclude)
 
-        # For raw_comments source, only use when raw_value is also missing
+        # For raw_comments source, only use when raw_value is also missing.
         if needs_raw_value_isna:
             mask &= df["raw_value"].isna()
 
-        # No qualifying rows for this source
+        # Guard: Skip sources with no rows left to classify.
         if not mask.any():
             continue
 
