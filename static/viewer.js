@@ -422,39 +422,29 @@
 
         const tabsRoot = document.querySelector('#workspace-side-tabs');
         const tabWrapper = tabsRoot?.querySelector('.tab-wrapper');
-        const actionBar = document.querySelector('#workspace-action-bar');
         const dataTable = document.querySelector('#lab-data-table');
 
-        if (!tabsRoot || !tabWrapper || !actionBar || !dataTable) {
+        if (!tabsRoot || !tabWrapper || !dataTable) {
             return;
         }
 
         const tabsRect = tabsRoot.getBoundingClientRect();
         const tabWrapperRect = tabWrapper.getBoundingClientRect();
-        const actionRect = actionBar.getBoundingClientRect();
-        const tableColumn = document.querySelector('#workspace-table-tab > .column');
-        const gapValue = tableColumn
-            ? (getComputedStyle(tableColumn).rowGap || getComputedStyle(tableColumn).gap || '0')
-            : '0';
-        const gap = Number.parseFloat(gapValue) || 0;
+        const tableHeight = Math.max(240, Math.floor(tabsRect.height - tabWrapperRect.height));
+        document.documentElement.style.setProperty('--viewer-table-height', `${tableHeight}px`);
+        const tableWrap = dataTable.querySelector('.wrap');
+        const tableContainer = tableWrap?.querySelector('.table-container');
+        const innerTableWrap = tableContainer?.querySelector('.table-wrap');
+        const wrappers = [
+            dataTable,
+            tableWrap,
+            tableContainer,
+            innerTableWrap,
+        ].filter(Boolean);
 
-        if (actionRect.height > 0) {
-            const tableHeight = Math.max(240, Math.floor(tabsRect.height - tabWrapperRect.height - actionRect.height - gap));
-            document.documentElement.style.setProperty('--viewer-table-height', `${tableHeight}px`);
-            const tableWrap = dataTable.querySelector('.wrap');
-            const tableContainer = tableWrap?.querySelector('.table-container');
-            const innerTableWrap = tableContainer?.querySelector('.table-wrap');
-            const wrappers = [
-                dataTable,
-                tableWrap,
-                tableContainer,
-                innerTableWrap,
-            ].filter(Boolean);
-
-            for (const element of wrappers) {
-                element.style.height = `${tableHeight}px`;
-                element.style.maxHeight = `${tableHeight}px`;
-            }
+        for (const element of wrappers) {
+            element.style.height = `${tableHeight}px`;
+            element.style.maxHeight = `${tableHeight}px`;
         }
     }
 
