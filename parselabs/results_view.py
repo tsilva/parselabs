@@ -193,22 +193,22 @@ DISPLAY_COLUMNS = [
     "lab_name",
     "value",
     "lab_unit",
-    "source_document",
-    "page_number",
     "reference_range",
     "review_status",
+    "source_document",
+    "page_number",
 ]
 
 # Column display names
 COLUMN_LABELS = {
     "date": "Date",
-    "lab_name": "Lab",
-    "value": "Value",
-    "lab_unit": "Unit",
+    "lab_name": "Mapped Lab",
+    "value": "Mapped Value",
+    "lab_unit": "Mapped Unit",
     "source_document": "Document",
     "page_number": "Page",
-    "reference_range": "Ref",
-    "review_status": "Review",
+    "reference_range": "Mapped Range",
+    "review_status": "Review Status",
 }
 
 SORT_DATE_DESC = "Date (Newest First)"
@@ -1174,6 +1174,33 @@ def _resolve_plot_point_row_index(filtered_df: pd.DataFrame, point_token: str | 
     return int(matches[0])
 
 
+def _resolve_row_index_from_tokens(
+    filtered_df: pd.DataFrame,
+    candidate_tokens: list[str | None],
+    *,
+    fallback_index: int,
+) -> int:
+    """Resolve the best visible row index from ordered identity-token candidates."""
+
+    # Guard: Empty result sets have no selectable row.
+    if filtered_df.empty:
+        return 0
+
+    row_tokens = filtered_df.apply(_build_row_token_for_entry, axis=1)
+
+    # Prefer the first candidate row that is still visible after the rerender.
+    for token in candidate_tokens:
+        if not token:
+            continue
+
+        matches = row_tokens.index[row_tokens == token]
+        if len(matches) > 0:
+            return int(matches[0])
+
+    # Fall back to the nearest valid position when none of the identities survived.
+    return max(0, min(int(fallback_index), len(filtered_df) - 1))
+
+
 def handle_navigation(
     current_idx: int,
     filtered_df: pd.DataFrame,
@@ -1269,6 +1296,9 @@ def handle_review_action(
 
     resolved_index = max(0, min(int(current_idx), len(filtered_df) - 1))
     current_entry = filtered_df.iloc[resolved_index].to_dict()
+    current_row_token = _build_row_token_for_entry(current_entry)
+    next_row_token = _build_row_token_for_entry(filtered_df.iloc[resolved_index + 1]) if resolved_index + 1 < len(filtered_df) else None
+    previous_row_token = _build_row_token_for_entry(filtered_df.iloc[resolved_index - 1]) if resolved_index > 0 else None
     action = {
         "accepted": "accept",
         "rejected": "reject",
@@ -1288,12 +1318,29 @@ def handle_review_action(
         gr.Info("Missing-row marker recorded for this page.")
 
     filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter, document_name=document_name, sort_order=sort_order)
+
+    # Undo and missing-row actions should keep the current row in view when it remains visible.
+    if status not in {"accepted", "rejected"}:
+        next_index = _resolve_row_index_from_tokens(
+            filtered_df,
+            [current_row_token, next_row_token, previous_row_token],
+            fallback_index=resolved_index,
+        )
+
+    # Accept and reject should advance to the next visible row when possible.
+    else:
+        next_index = _resolve_row_index_from_tokens(
+            filtered_df,
+            [next_row_token, previous_row_token, current_row_token],
+            fallback_index=resolved_index,
+        )
+
     render_state = _render_viewer_state(
         full_df,
         filtered_df,
         output_path,
         lab_names,
-        row_index=min(resolved_index, max(0, len(filtered_df) - 1)) if not filtered_df.empty else 0,
+        row_index=next_index if not filtered_df.empty else 0,
         summary_df=full_df,
         empty_position_text="All done!",
         document_name=document_name,
