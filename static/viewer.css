@@ -291,7 +291,6 @@ footer,
 
 #workspace-source-image,
 #lab-data-table,
-#workspace-inspector-card,
 #viewer-plot,
 #workspace-action-bar {
     border: 1px solid rgba(107, 114, 128, 0.28);
@@ -306,13 +305,6 @@ footer,
     margin: 0;
     font-size: 0.82rem;
     white-space: nowrap;
-}
-
-#workspace-inspector-card {
-    flex: 0 0 auto;
-    padding: 0;
-    max-height: 240px;
-    overflow: auto;
 }
 
 #workspace-source-image {
@@ -596,10 +588,6 @@ footer,
 
     #workspace-source-image {
         max-height: 360px;
-    }
-
-    #workspace-inspector-card {
-        max-height: none;
     }
 
     #workspace-nav-row,

@@ -17,15 +17,8 @@ from parselabs.config import Demographics, LabSpecsConfig  # noqa: E402
 from parselabs.paths import get_static_dir  # noqa: E402
 from parselabs.review import (  # noqa: E402
     SOURCE_BBOX_LABEL,
-    build_review_status_badge,
-    format_mapped_reference_text,
-    format_mapped_value,
-    format_raw_value,
     format_reference_text,
-    format_text,
-    get_bbox_coordinates,
     load_results_dataframe,
-    normalize_review_status,
 )
 from parselabs.review_state import (  # noqa: E402
     apply_review_action_for_entry,
@@ -53,7 +46,6 @@ class ViewerRenderState:
     current_idx: int
     position_text: str
     source_image_value: tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None
-    inspector_html: str
     selection_html: str
     prev_button_props: dict
     next_button_props: dict
@@ -67,7 +59,6 @@ class ViewerRenderState:
             self.filtered_df,
             self.current_idx,
             self.position_text,
-            self.inspector_html,
             self.source_image_value,
             self.plot,
             self.selection_html,
@@ -84,7 +75,6 @@ class ViewerRenderState:
             self.display_df,
             self.current_idx,
             self.position_text,
-            self.inspector_html,
             self.source_image_value,
             self.plot,
             self.summary_html,
@@ -321,147 +311,6 @@ def build_summary_cards(df: pd.DataFrame) -> str:
         cards.append(f'<span class="summary-item success"><strong>{reviewed_count}</strong> reviewed</span>')
 
     return f'<div class="summary-line">{"".join(cards)}</div>'
-
-
-# Human-readable descriptions for validation reason codes
-REASON_DESCRIPTIONS = {
-    "EXTRACTION_FAILED": "Extraction failed on this page",
-    "UNKNOWN_LAB_MAPPING": "Lab name did not map to a known standardized test",
-    "UNKNOWN_UNIT_MAPPING": "Unit did not map to a publishable standardized unit",
-    "AMBIGUOUS_PERCENTAGE_VARIANT": "Unit and standardized test variant disagree (% vs absolute)",
-    "SUSPICIOUS_REFERENCE_RANGE": "Reference range looks incompatible with the standardized lab",
-    "IMPOSSIBLE_VALUE": "Biologically impossible value detected",
-    "RELATIONSHIP_MISMATCH": "Calculated value doesn't match related labs",
-    "TEMPORAL_ANOMALY": "Implausible change between consecutive tests",
-    "FORMAT_ARTIFACT": "Possible extraction/formatting error",
-    "RANGE_INCONSISTENCY": "Reference range appears invalid",
-    "PERCENTAGE_BOUNDS": "Percentage value outside 0-100%",
-    "NEGATIVE_VALUE": "Unexpected negative value",
-    "EXTREME_DEVIATION": "Value extremely far outside reference range",
-    "DUPLICATE_ENTRY": "Possible duplicate result for the same date and lab",
-}
-
-
-def build_review_reason_banner(entry: dict) -> str:
-    """Build HTML banner showing why a result needs review."""
-
-    # Guard: no entry
-    if not entry:
-        return ""
-
-    review_reason = entry.get("review_reason")
-
-    # Guard: no review reason
-    if not review_reason or not pd.notna(review_reason):
-        return ""
-
-    # Parse reason codes (semicolon-separated)
-    reasons = []
-    reason_str = str(review_reason).strip()
-    for code in reason_str.split(";"):
-        code = code.strip()
-        # Known reason code — use human-readable description
-        if code and code in REASON_DESCRIPTIONS:
-            reasons.append(REASON_DESCRIPTIONS[code])
-        # Unknown reason code — show as-is
-        elif code:
-            reasons.append(code)
-
-    # Guard: no reasons after parsing
-    if not reasons:
-        return ""
-
-    # Build banner HTML
-    html = '<div class="review-banner warning">'
-    html += '<div class="review-banner-title">⚠️ Review Needed</div>'
-    html += '<div class="review-banner-reasons">'
-    html += "<br>".join(f"• {r}" for r in reasons)
-    html += "</div>"
-    html += "</div>"
-    return html
-
-
-def build_selection_inspector_html(entry: dict | pd.Series | None) -> str:
-    """Render the shared selection inspector used for both exploration and review."""
-
-    if entry is None:
-        return (
-            '<div class="review-card workspace-empty-card">'
-            '<div class="review-empty-state">No result selected.</div>'
-            '<div class="review-empty-hint">Adjust filters or pick a row from the table to inspect it.</div>'
-            "</div>"
-        )
-
-    row = entry if isinstance(entry, pd.Series) else pd.Series(entry)
-    status_badge = build_review_status_badge(row)
-    reason_text = format_text(row.get("review_reason"), empty="")
-    comments_text = format_text(row.get("raw_comments"), empty="")
-    source_bbox = get_bbox_coordinates(row)
-    date_value = row.get("date")
-    if date_value is not None and pd.notna(date_value):
-        try:
-            date_text = pd.to_datetime(date_value).strftime("%Y-%m-%d")
-        except (TypeError, ValueError):
-            date_text = format_text(date_value)
-    else:
-        date_text = "-"
-    meta_rows: list[str] = []
-
-    if reason_text:
-        meta_rows.append(
-            '<div class="review-meta-row compact"><span>Validation</span>'
-            f'<strong>{reason_text}</strong>'
-            "</div>"
-        )
-
-    if comments_text:
-        meta_rows.append(
-            '<div class="review-meta-row compact"><span>Comments</span>'
-            f"<strong>{comments_text}</strong>"
-            "</div>"
-        )
-
-    meta_rows.append(
-        '<div class="review-meta-row compact"><span>Source Box</span>'
-        f"<strong>{'Available' if source_bbox is not None else 'Not stored for this row'}</strong>"
-        "</div>"
-    )
-
-    context_items = [
-        f'<span class="review-inline-meta"><span class="label">Date</span>{date_text}</span>',
-        f'<span class="review-inline-meta"><span class="label">Document</span>{format_text(_format_document_label(row.get("source_file")))}</span>',
-        f'<span class="review-inline-meta"><span class="label">Page</span>{format_text(row.get("page_number"))}</span>',
-        f'<span class="review-inline-meta"><span class="label">Row</span>{format_text(row.get("result_index"))}</span>',
-    ]
-    meta_html = f'<div class="review-meta-list">{"".join(meta_rows)}</div>' if meta_rows else ""
-
-    return (
-        '<div class="review-card">'
-        '<div class="review-card-header compact">'
-        '<div class="review-header-line">'
-        '<span class="review-eyebrow">Selected Result</span>'
-        f'<span class="review-inline-status {html.escape(normalize_review_status(row.get("review_status")) or "pending")}">{status_badge.label}</span>'
-        "</div>"
-        f'<div class="review-title">{format_text(row.get("lab_name"))}</div>'
-        "</div>"
-        f'<div class="review-inline-meta-row workspace-context-row">{"".join(context_items)}</div>'
-        '<div class="review-compare-grid compact">'
-        '<div class="review-compare-panel compact">'
-        '<div class="review-panel-title">Mapped</div>'
-        f'<div class="review-field"><span>Lab</span><strong>{format_text(row.get("lab_name"))}</strong></div>'
-        f'<div class="review-field"><span>Value</span><strong>{format_mapped_value(row)}</strong></div>'
-        f'<div class="review-field"><span>Reference</span><strong>{format_mapped_reference_text(row)}</strong></div>'
-        "</div>"
-        '<div class="review-compare-panel compact">'
-        '<div class="review-panel-title">Raw</div>'
-        f'<div class="review-field"><span>Lab</span><strong>{format_text(row.get("raw_lab_name"))}</strong></div>'
-        f'<div class="review-field"><span>Value</span><strong>{format_raw_value(row)}</strong></div>'
-        f'<div class="review-field"><span>Reference</span><strong>{format_reference_text(row)}</strong></div>'
-        "</div>"
-        "</div>"
-        f"{meta_html}"
-        "</div>"
-    )
 
 
 # =============================================================================
@@ -1026,7 +875,6 @@ def _build_empty_viewer_state(
         current_idx=0,
         position_text=position_text,
         source_image_value=None,
-        inspector_html=build_selection_inspector_html(None),
         selection_html=_build_selection_state_html(None, len(filtered_df)),
         prev_button_props=prev_button_props,
         next_button_props=next_button_props,
@@ -1139,7 +987,6 @@ def _render_viewer_state(
             else row_context.position_text.replace("Row", "Result")
         ),
         source_image_value=row_context.source_image_value,
-        inspector_html=build_selection_inspector_html(selected_row),
         selection_html=_build_selection_state_html(
             row_context.row_index,
             len(filtered_df),
@@ -1201,7 +1048,6 @@ def handle_row_select(
     return (
         render_state.current_idx,
         render_state.position_text,
-        render_state.inspector_html,
         render_state.source_image_value,
         render_state.plot,
         render_state.selection_html,
@@ -1292,7 +1138,6 @@ def handle_navigation(
     return (
         render_state.current_idx,
         render_state.position_text,
-        render_state.inspector_html,
         render_state.source_image_value,
         render_state.plot,
         render_state.selection_html,
@@ -1330,7 +1175,6 @@ def handle_plot_point_select(
     return (
         render_state.current_idx,
         render_state.position_text,
-        render_state.inspector_html,
         render_state.source_image_value,
         render_state.plot,
         render_state.selection_html,
@@ -1486,9 +1330,19 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                         elem_id="workspace-source-image",
                     )
 
-                with gr.Column(scale=3, min_width=260, elem_id="workspace-analysis-col"):
-                    inspector_display = gr.HTML(value=initial_view.inspector_html, elem_id="workspace-inspector-card")
+                with gr.Column(scale=4, min_width=360, elem_id="workspace-results-col"):
+                    data_table = gr.DataFrame(
+                        value=initial_view.display_df,
+                        interactive=False,
+                        wrap=True,
+                        elem_id="lab-data-table",
+                    )
+                    selection_state = gr.HTML(
+                        value=initial_view.selection_html,
+                        elem_id="viewer-selection-state-host",
+                    )
 
+                with gr.Column(scale=3, min_width=260, elem_id="workspace-analysis-col"):
                     plot_display = gr.Plot(
                         value=initial_view.plot,
                         label="",
@@ -1508,18 +1362,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                             undo_btn = gr.Button("Undo [u]", elem_id="undo-btn", size="sm")
                             missing_btn = gr.Button("Missing [m]", elem_id="missing-btn", size="sm")
 
-                with gr.Column(scale=4, min_width=360, elem_id="workspace-results-col"):
-                    data_table = gr.DataFrame(
-                        value=initial_view.display_df,
-                        interactive=False,
-                        wrap=True,
-                        elem_id="lab-data-table",
-                    )
-                    selection_state = gr.HTML(
-                        value=initial_view.selection_html,
-                        elem_id="viewer-selection-state-host",
-                    )
-
             gr.Markdown(
                 "*Keyboard: Y=Accept, N=Reject, U=Undo, M=Missing, Arrow keys/J/K=Navigate*",
                 elem_id="workspace-keyboard-hint",
@@ -1538,7 +1380,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             filtered_df_state,
             current_idx_state,
             position_display,
-            inspector_display,
             source_image,
             plot_display,
             selection_state,
@@ -1582,7 +1423,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             outputs=[
                 current_idx_state,
                 position_display,
-                inspector_display,
                 source_image,
                 plot_display,
                 selection_state,
@@ -1601,7 +1441,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
         nav_outputs = [
             current_idx_state,
             position_display,
-            inspector_display,
             source_image,
             plot_display,
             selection_state,
@@ -1672,7 +1511,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             data_table,
             current_idx_state,
             position_display,
-            inspector_display,
             source_image,
             plot_display,
             summary_display,
