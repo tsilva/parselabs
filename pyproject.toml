@@ -31,6 +31,7 @@ dependencies = [
     "tqdm",
     "gradio>=5.0.0",
     "pyyaml",
+    "mcp>=1.26.0",
 ]
 
 [project.optional-dependencies]
@@ -48,6 +49,7 @@ Issues = "https://github.com/tsilva/parselabs/issues"
 
 [project.scripts]
 parselabs = "parselabs.cli:main"
+parselabs-review-mcp = "parselabs.review_mcp:main"
 
 [build-system]
 requires = ["hatchling"]
