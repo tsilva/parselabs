@@ -10,6 +10,7 @@ UTILITY_MODULES = {
     "analyze-unknowns": "utils.analyze_unknowns",
     "update-standardization-caches": "utils.update_standardization_caches",
     "regression": "utils.regression_cases",
+    "review-artifacts": "utils.review_artifacts",
     "migrate-output-dirs": "utils.migrate_output_dirs",
     "migrate-raw-columns": "utils.migrate_raw_columns",
     "cleanup-removed-fields": "utils.cleanup_removed_fields",

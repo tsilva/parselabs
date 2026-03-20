@@ -153,9 +153,14 @@ parselabs --profile myname --pattern "2024-*.pdf"
 ```bash
 parselabs review --profile myname
 parselabs review --list-profiles
+parselabs-review-mcp
 ```
 
 `parselabs review` requires an explicit `--profile` and launches the combined Gradio app for that profile only. Use the default Results Explorer tab for browsing results, or pass `--tab review` to open the Review Queue directly.
+
+`parselabs-review-mcp` runs a stdio MCP server for deterministic row-by-row review without the browser UI. The server exposes:
+- `next_pending_row` — returns the next unresolved row plus the full page image and deterministic bbox crop as MCP image content
+- `decide_row` — persists `accept`, `reject`, or `clear` for a previously returned `row_id`
 
 The combined review UI provides:
 - **Results Explorer** — Filtered table, summary cards, plots, and source-page inspection
