@@ -93,25 +93,17 @@
     }
 
     function compareDisplayRows(targetCells, rowCells) {
-        if (!Array.isArray(targetCells) || !Array.isArray(rowCells) || targetCells.length < 2 || rowCells.length < 2) {
+        if (!Array.isArray(targetCells) || !Array.isArray(rowCells) || targetCells.length === 0 || rowCells.length === 0) {
             return 0;
         }
 
-        const targetDate = targetCells[0];
-        const rowDate = rowCells[0];
-        const targetLab = targetCells[1];
-        const rowLab = rowCells[1];
+        const targetValue = targetCells.join('\u0001');
+        const rowValue = rowCells.join('\u0001');
 
-        if (targetDate > rowDate) {
+        if (targetValue > rowValue) {
             return -1;
         }
-        if (targetDate < rowDate) {
-            return 1;
-        }
-        if (targetLab < rowLab) {
-            return -1;
-        }
-        if (targetLab > rowLab) {
+        if (targetValue < rowValue) {
             return 1;
         }
 
@@ -133,22 +125,27 @@
     }
 
     function rowMatchesSelectedDisplay(rowCells, selectedDisplay) {
-        if (!Array.isArray(rowCells) || !Array.isArray(selectedDisplay) || rowCells.length < 4 || selectedDisplay.length < 4) {
+        if (!Array.isArray(rowCells) || !Array.isArray(selectedDisplay) || rowCells.length === 0 || rowCells.length !== selectedDisplay.length) {
             return false;
         }
 
-        if (rowCells[0] !== selectedDisplay[0] || rowCells[1] !== selectedDisplay[1] || rowCells[3] !== selectedDisplay[3]) {
-            return false;
+        for (let index = 0; index < rowCells.length; index += 1) {
+            const rowValue = parseNumericCell(rowCells[index]);
+            const selectedValue = parseNumericCell(selectedDisplay[index]);
+
+            if (rowValue !== null && selectedValue !== null) {
+                if (Math.abs(rowValue - selectedValue) >= 1e-9) {
+                    return false;
+                }
+                continue;
+            }
+
+            if (rowCells[index] !== selectedDisplay[index]) {
+                return false;
+            }
         }
 
-        const rowValue = parseNumericCell(rowCells[2]);
-        const selectedValue = parseNumericCell(selectedDisplay[2]);
-
-        if (rowValue !== null && selectedValue !== null) {
-            return Math.abs(rowValue - selectedValue) < 1e-9;
-        }
-
-        return rowCells[2] === selectedDisplay[2];
+        return true;
     }
 
     function syncSelectedRow(forceScroll) {

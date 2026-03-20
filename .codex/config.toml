@@ -1,0 +1,4 @@
+[mcp_servers.parselabs-review-mcp]
+command = "uv"
+args = ["run", "parselabs-review-mcp"]
+cwd = "/Users/tsilva/repos/tsilva/parselabs"

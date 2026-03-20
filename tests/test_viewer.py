@@ -291,6 +291,28 @@ def test_prepare_display_df_prioritizes_mapped_columns_before_source_columns():
     ]
 
 
+def test_prepare_display_df_respects_visible_column_subset():
+    df = pd.DataFrame(
+        [
+            {
+                "date": pd.Timestamp("2024-01-01"),
+                "lab_name": "Blood - Glucose",
+                "value": 91.0,
+                "lab_unit": "mg/dL",
+                "source_file": "glucose.csv",
+            }
+        ]
+    )
+
+    display_df = viewer.prepare_display_df(df, visible_columns=["lab_name", "value", "source_document"])
+
+    assert display_df.columns.tolist() == [
+        "Mapped Lab",
+        "Mapped Value",
+        "Document",
+    ]
+
+
 def test_build_summary_cards_includes_reviewed_accepted_and_rejected_counts():
     df = pd.DataFrame(
         [
@@ -346,6 +368,56 @@ def test_apply_filters_supports_suboptimal_status_with_new_column():
     filtered = viewer.apply_filters(df, None, False, "Suboptimal")
 
     assert filtered["lab_name"].tolist() == ["Blood - ApoB"]
+
+
+def test_apply_filters_supports_stable_table_sort_by_selected_column():
+    df = pd.DataFrame(
+        [
+            {
+                "date": pd.Timestamp("2024-01-03"),
+                "lab_name": "Blood - Potassium",
+                "value": 4.7,
+                "source_file": "panel.csv",
+                "page_number": 1,
+                "result_index": 0,
+                "review_status": "",
+            },
+            {
+                "date": pd.Timestamp("2024-01-02"),
+                "lab_name": "Blood - Glucose",
+                "value": 91.0,
+                "source_file": "panel.csv",
+                "page_number": 1,
+                "result_index": 1,
+                "review_status": "",
+            },
+            {
+                "date": pd.Timestamp("2024-01-01"),
+                "lab_name": "Blood - Sodium",
+                "value": 138.0,
+                "source_file": "panel.csv",
+                "page_number": 1,
+                "result_index": 2,
+                "review_status": "",
+            },
+        ]
+    )
+
+    filtered = viewer.apply_filters(
+        df,
+        None,
+        False,
+        "All",
+        sort_order=viewer.SORT_DATE_DESC,
+        table_sort_column="value",
+        table_sort_direction=viewer.SORT_DIRECTION_ASC,
+    )
+
+    assert filtered["lab_name"].tolist() == [
+        "Blood - Potassium",
+        "Blood - Glucose",
+        "Blood - Sodium",
+    ]
 
 
 def test_handle_review_action_advances_to_next_visible_row(monkeypatch, tmp_path):

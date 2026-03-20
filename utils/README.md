@@ -77,6 +77,28 @@ Usage:
 parselabs admin analyze-unknowns
 ```
 
+## Review Artifacts
+
+### review_artifacts.py
+Return one pending stored extraction row plus deterministic visual artifacts for native row-by-row auditing without the Gradio reviewer.
+
+Usage:
+```bash
+# Fetch the next pending row, page image path, and bbox crop
+parselabs admin review-artifacts next --profile cristina
+
+# Restrict the queue to rows flagged by validation
+parselabs admin review-artifacts next --profile cristina --review-needed-only
+
+# Persist a review decision using the returned row_id
+parselabs admin review-artifacts decide --profile cristina --row-id <ROW_ID> --decision accept
+parselabs admin review-artifacts decide --profile cristina --row-id <ROW_ID> --decision reject
+```
+
+Output:
+- `next` prints one JSON payload with `row_id`, `stored_result`, `page_image_path`, `bbox_clip_path`, and bbox metadata.
+- `decide` prints one JSON payload confirming whether the persisted action succeeded.
+
 ## Migration
 
 ### migrate_output_dirs.py

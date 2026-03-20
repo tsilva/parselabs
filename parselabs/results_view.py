@@ -201,6 +201,7 @@ DISPLAY_COLUMNS = [
     "source_document",
     "page_number",
 ]
+DEFAULT_VISIBLE_COLUMNS = DISPLAY_COLUMNS.copy()
 
 # Column display names
 COLUMN_LABELS = {
@@ -217,6 +218,15 @@ COLUMN_LABELS = {
     "raw_reference_range": "Raw Range",
 }
 
+VISIBLE_COLUMN_CHOICES = [(COLUMN_LABELS.get(column, column), column) for column in DISPLAY_COLUMNS]
+TABLE_SORT_NONE = "__default__"
+TABLE_SORT_CHOICES = [("Default Sort", TABLE_SORT_NONE), *VISIBLE_COLUMN_CHOICES]
+SORT_DIRECTION_ASC = "Ascending"
+SORT_DIRECTION_DESC = "Descending"
+SORT_DIRECTION_CHOICES = [SORT_DIRECTION_ASC, SORT_DIRECTION_DESC]
+DEFAULT_TABLE_SORT_COLUMN = TABLE_SORT_NONE
+DEFAULT_TABLE_SORT_DIRECTION = SORT_DIRECTION_ASC
+
 SORT_DATE_DESC = "Date (Newest First)"
 SORT_DATE_ASC = "Date (Oldest First)"
 SORT_DOCUMENT_ORDER = "Document/Page Order"
@@ -226,6 +236,34 @@ SORT_ORDER_CHOICES = [
     SORT_DOCUMENT_ORDER,
 ]
 DEFAULT_SORT_ORDER = SORT_DATE_DESC
+
+
+def normalize_visible_columns(visible_columns: list[str] | None) -> list[str]:
+    """Return the ordered visible-column subset while preserving the default schema order."""
+
+    selected_columns = set(visible_columns or [])
+    normalized_columns = [column for column in DISPLAY_COLUMNS if column in selected_columns]
+
+    if normalized_columns:
+        return normalized_columns
+
+    return [DISPLAY_COLUMNS[0]]
+
+
+def _normalize_table_sort_column(table_sort_column: str | None) -> str:
+    """Return a valid table-sort column identifier."""
+
+    if table_sort_column in set(DISPLAY_COLUMNS):
+        return str(table_sort_column)
+    return TABLE_SORT_NONE
+
+
+def _normalize_table_sort_direction(table_sort_direction: str | None) -> str:
+    """Return a valid table-sort direction."""
+
+    if table_sort_direction == SORT_DIRECTION_DESC:
+        return SORT_DIRECTION_DESC
+    return SORT_DIRECTION_ASC
 
 
 def _build_row_token(source_file: object, page_number: object, result_index: object) -> str:
@@ -248,14 +286,14 @@ def _build_row_token_for_entry(entry: pd.Series | dict) -> str:
     )
 
 
-def _build_display_row_match_values(entry: pd.Series | dict) -> list[str]:
+def _build_display_row_match_values(entry: pd.Series | dict, visible_columns: list[str] | None = None) -> list[str]:
     """Build the formatted visible table cells for one row."""
 
     entry_df = pd.DataFrame([dict(entry)])
     if "date" in entry_df.columns:
         entry_df["date"] = pd.to_datetime(entry_df["date"], errors="coerce")
 
-    display_df = prepare_display_df(entry_df)
+    display_df = prepare_display_df(entry_df, visible_columns=visible_columns)
     if display_df.empty:
         return []
 
@@ -350,6 +388,8 @@ def apply_filters(
     review_filter: str,
     document_name: str | None = None,
     sort_order: str = DEFAULT_SORT_ORDER,
+    table_sort_column: str = DEFAULT_TABLE_SORT_COLUMN,
+    table_sort_direction: str = DEFAULT_TABLE_SORT_DIRECTION,
 ) -> pd.DataFrame:
     """Apply all filters to DataFrame and return rows in one stable backend order.
 
@@ -409,11 +449,74 @@ def apply_filters(
         document_name=document_name,
         sort_order=sort_order,
     )
+    filtered = _sort_filtered_rows_by_column(
+        filtered,
+        table_sort_column=table_sort_column,
+        table_sort_direction=table_sort_direction,
+    )
 
     # Reset index so iloc positions match displayed row positions
     filtered = filtered.reset_index(drop=True)
 
     return filtered
+
+
+def _build_table_sort_series(filtered: pd.DataFrame, table_sort_column: str) -> pd.Series | None:
+    """Build the normalized series used for one optional table-column sort."""
+
+    if table_sort_column == "date" and "date" in filtered.columns:
+        return pd.to_datetime(filtered["date"], errors="coerce")
+
+    if table_sort_column == "value" and "value" in filtered.columns:
+        return pd.to_numeric(filtered["value"], errors="coerce")
+
+    if table_sort_column == "page_number" and "page_number" in filtered.columns:
+        return pd.to_numeric(filtered["page_number"], errors="coerce")
+
+    if table_sort_column == "source_document":
+        source_series = filtered["source_document"] if "source_document" in filtered.columns else filtered.get("source_file")
+        if source_series is None:
+            return None
+        return source_series.fillna("").astype(str).map(_format_document_label).str.casefold()
+
+    if table_sort_column == "reference_range":
+        if "reference_range" in filtered.columns:
+            return filtered["reference_range"].fillna("").astype(str).str.casefold()
+        if {"reference_min", "reference_max"}.intersection(filtered.columns):
+            return filtered.apply(format_reference_text, axis=1).fillna("").astype(str).str.casefold()
+        return None
+
+    if table_sort_column in filtered.columns:
+        return filtered[table_sort_column].fillna("").astype(str).str.casefold()
+
+    return None
+
+
+def _sort_filtered_rows_by_column(
+    filtered: pd.DataFrame,
+    *,
+    table_sort_column: str,
+    table_sort_direction: str,
+) -> pd.DataFrame:
+    """Apply one stable column sort after the base viewer ordering has been resolved."""
+
+    normalized_column = _normalize_table_sort_column(table_sort_column)
+    if filtered.empty or normalized_column == TABLE_SORT_NONE:
+        return filtered
+
+    sort_series = _build_table_sort_series(filtered, normalized_column)
+    if sort_series is None:
+        return filtered
+
+    sorted_df = filtered.copy()
+    sorted_df["_table_sort_key"] = sort_series
+    sorted_df = sorted_df.sort_values(
+        "_table_sort_key",
+        ascending=_normalize_table_sort_direction(table_sort_direction) == SORT_DIRECTION_ASC,
+        na_position="last",
+        kind="mergesort",
+    ).drop(columns="_table_sort_key")
+    return sorted_df
 
 
 def _sort_filtered_rows(
@@ -476,12 +579,14 @@ def _sort_filtered_rows(
     )
 
 
-def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
+def prepare_display_df(df: pd.DataFrame, visible_columns: list[str] | None = None) -> pd.DataFrame:
     """Prepare DataFrame for display (subset and format columns)."""
+
+    normalized_visible_columns = normalize_visible_columns(visible_columns or DEFAULT_VISIBLE_COLUMNS)
 
     # Guard: no data
     if df.empty:
-        return pd.DataFrame(columns=[COLUMN_LABELS.get(c, c) for c in DISPLAY_COLUMNS])
+        return pd.DataFrame(columns=[COLUMN_LABELS.get(c, c) for c in normalized_visible_columns])
 
     display_df = df.copy()
 
@@ -512,13 +617,12 @@ def prepare_display_df(df: pd.DataFrame) -> pd.DataFrame:
 
     if "page_number" in display_df.columns:
         display_df["page_number"] = display_df["page_number"].apply(
-            lambda value: "" if value is None or pd.isna(value) else str(int(value))
+            lambda value: "" if value is None or value == "" or pd.isna(value) else str(int(value))
         )
 
     # Rename columns to display labels
     display_df = display_df.rename(columns=COLUMN_LABELS)
-
-    return display_df
+    return display_df[[COLUMN_LABELS.get(column, column) for column in normalized_visible_columns]]
 
 
 # =============================================================================
@@ -1018,6 +1122,7 @@ def _build_empty_viewer_state(
     filtered_df: pd.DataFrame,
     *,
     summary_df: pd.DataFrame,
+    visible_columns: list[str] | None = None,
     plot_labs: list[str] | None = None,
     position_text: str = "No results",
 ) -> ViewerRenderState:
@@ -1025,7 +1130,7 @@ def _build_empty_viewer_state(
 
     prev_button_props, next_button_props = _build_navigation_button_props(None, len(filtered_df))
     return ViewerRenderState(
-        display_df=prepare_display_df(filtered_df),
+        display_df=prepare_display_df(filtered_df, visible_columns=visible_columns),
         summary_html=build_summary_cards(summary_df),
         plot=create_interactive_plot(full_df, plot_labs or []),
         filtered_df=filtered_df,
@@ -1085,6 +1190,7 @@ def _render_viewer_state(
     summary_df: pd.DataFrame | None = None,
     empty_position_text: str = "No results",
     document_name: str | None = None,
+    visible_columns: list[str] | None = None,
 ) -> ViewerRenderState:
     """Build the unified viewer render payload for the current filtered dataframe."""
 
@@ -1096,6 +1202,7 @@ def _render_viewer_state(
             full_df,
             filtered_df,
             summary_df=resolved_summary_df,
+            visible_columns=visible_columns,
             plot_labs=[lab_names] if lab_names else [],
             position_text=empty_position_text,
         )
@@ -1109,6 +1216,7 @@ def _render_viewer_state(
             full_df,
             filtered_df,
             summary_df=resolved_summary_df,
+            visible_columns=visible_columns,
             plot_labs=[lab_names] if lab_names else [],
             position_text=empty_position_text,
         )
@@ -1127,13 +1235,14 @@ def _render_viewer_state(
             full_df,
             filtered_df,
             summary_df=resolved_summary_df,
+            visible_columns=visible_columns,
             plot_labs=[lab_names] if lab_names else [],
             position_text=empty_position_text,
         )
 
     prev_button_props, next_button_props = _build_navigation_button_props(row_context.row_index, len(filtered_df))
     return ViewerRenderState(
-        display_df=prepare_display_df(filtered_df),
+        display_df=prepare_display_df(filtered_df, visible_columns=visible_columns),
         summary_html=build_summary_cards(resolved_summary_df),
         plot=create_interactive_plot(full_df, row_context.plot_labs, selected_ref=row_context.selected_ref),
         filtered_df=filtered_df,
@@ -1148,7 +1257,7 @@ def _render_viewer_state(
             row_context.row_index,
             len(filtered_df),
             _build_row_token_for_entry(selected_row),
-            _build_display_row_match_values(selected_row),
+            _build_display_row_match_values(selected_row, visible_columns=visible_columns),
         ),
         prev_button_props=prev_button_props,
         next_button_props=next_button_props,
@@ -1163,10 +1272,22 @@ def handle_filter_change(
     output_path: Path,
     document_name: str | None = None,
     sort_order: str = DEFAULT_SORT_ORDER,
+    visible_columns: list[str] | None = None,
+    table_sort_column: str = DEFAULT_TABLE_SORT_COLUMN,
+    table_sort_direction: str = DEFAULT_TABLE_SORT_DIRECTION,
 ) -> tuple:
     """Handle filter changes and update viewer state from the first visible row."""
 
-    filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter, document_name=document_name, sort_order=sort_order)
+    filtered_df = apply_filters(
+        full_df,
+        lab_names,
+        latest_only,
+        review_filter,
+        document_name=document_name,
+        sort_order=sort_order,
+        table_sort_column=table_sort_column,
+        table_sort_direction=table_sort_direction,
+    )
     return _render_viewer_state(
         full_df,
         filtered_df,
@@ -1174,6 +1295,7 @@ def handle_filter_change(
         lab_names,
         summary_df=filtered_df,
         document_name=document_name,
+        visible_columns=visible_columns,
     ).as_filter_outputs()
 
 
@@ -1379,12 +1501,20 @@ def handle_review_action(
     output_path: Path,
     document_name: str | None = None,
     sort_order: str = DEFAULT_SORT_ORDER,
+    visible_columns: list[str] | None = None,
+    table_sort_column: str = DEFAULT_TABLE_SORT_COLUMN,
+    table_sort_direction: str = DEFAULT_TABLE_SORT_DIRECTION,
 ) -> tuple:
     """Handle review action (accept or reject) and rerender the current filter."""
 
     # Guard: Empty result sets render the stable placeholder state.
     if filtered_df.empty:
-        return _build_empty_viewer_state(full_df, filtered_df, summary_df=full_df).as_review_outputs(full_df)
+        return _build_empty_viewer_state(
+            full_df,
+            filtered_df,
+            summary_df=full_df,
+            visible_columns=visible_columns,
+        ).as_review_outputs(full_df)
 
     resolved_index = max(0, min(int(current_idx), len(filtered_df) - 1))
     current_entry = filtered_df.iloc[resolved_index].to_dict()
@@ -1409,7 +1539,16 @@ def handle_review_action(
     else:
         gr.Info("Missing-row marker recorded for this page.")
 
-    filtered_df = apply_filters(full_df, lab_names, latest_only, review_filter, document_name=document_name, sort_order=sort_order)
+    filtered_df = apply_filters(
+        full_df,
+        lab_names,
+        latest_only,
+        review_filter,
+        document_name=document_name,
+        sort_order=sort_order,
+        table_sort_column=table_sort_column,
+        table_sort_direction=table_sort_direction,
+    )
 
     # Undo and missing-row actions should keep the current row in view when it remains visible.
     if status not in {"accepted", "rejected"}:
@@ -1436,6 +1575,7 @@ def handle_review_action(
         summary_df=full_df,
         empty_position_text="All done!",
         document_name=document_name,
+        visible_columns=visible_columns,
     )
     return render_state.as_review_outputs(full_df)
 
@@ -1449,7 +1589,6 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
     """Create and configure the unified review workspace for one runtime context."""
 
     output_path = context.output_path if context.output_path is not None else Path("./output")
-    prioritize_review_sources = str(launch_mode).strip().lower() == "review-queue"
     full_df, lab_name_choices = _load_output_data(
         output_path,
         context.lab_specs,
@@ -1461,6 +1600,8 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
         False,
         "All",
         sort_order=DEFAULT_SORT_ORDER,
+        table_sort_column=DEFAULT_TABLE_SORT_COLUMN,
+        table_sort_direction=DEFAULT_TABLE_SORT_DIRECTION,
     )
     initial_view = _render_viewer_state(
         full_df,
@@ -1468,6 +1609,7 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
         output_path,
         None,
         summary_df=initial_filtered_df,
+        visible_columns=DEFAULT_VISIBLE_COLUMNS,
     )
 
     with gr.Blocks(
@@ -1519,6 +1661,30 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                         elem_classes="toggle-pill",
                     )
 
+            with gr.Row(elem_id="workspace-column-row", elem_classes="filter-row"):
+                with gr.Column(scale=4, min_width=320):
+                    visible_columns_filter = gr.Dropdown(
+                        choices=VISIBLE_COLUMN_CHOICES,
+                        value=DEFAULT_VISIBLE_COLUMNS,
+                        multiselect=True,
+                        label="Columns",
+                        allow_custom_value=False,
+                    )
+                with gr.Column(scale=2, min_width=180):
+                    table_sort_filter = gr.Dropdown(
+                        choices=TABLE_SORT_CHOICES,
+                        value=DEFAULT_TABLE_SORT_COLUMN,
+                        label="Table Sort",
+                        allow_custom_value=False,
+                    )
+                with gr.Column(scale=1, min_width=140):
+                    table_sort_direction_filter = gr.Dropdown(
+                        choices=SORT_DIRECTION_CHOICES,
+                        value=DEFAULT_TABLE_SORT_DIRECTION,
+                        label="Direction",
+                        allow_custom_value=False,
+                    )
+
             summary_display = gr.HTML(initial_view.summary_html, elem_id="workspace-summary")
 
             with gr.Row(elem_id="workspace-main-row"):
@@ -1527,6 +1693,7 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                         value=initial_view.display_df,
                         interactive=False,
                         wrap=True,
+                        show_search="filter",
                         elem_id="lab-data-table",
                     )
                     selection_state = gr.HTML(
@@ -1575,6 +1742,9 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             lab_name_filter,
             latest_filter,
             review_filter,
+            visible_columns_filter,
+            table_sort_filter,
+            table_sort_direction_filter,
             sort_filter,
             full_df_state,
         ]
@@ -1605,15 +1775,26 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 output_path,
             )
 
-        for trigger in [lab_name_filter, latest_filter, review_filter, sort_filter]:
+        for trigger in [
+            lab_name_filter,
+            latest_filter,
+            review_filter,
+            visible_columns_filter,
+            table_sort_filter,
+            table_sort_direction_filter,
+            sort_filter,
+        ]:
             trigger.change(
-                fn=lambda lab_names, latest_only, review_filter, sort_order, full_df: handle_filter_change(
+                fn=lambda lab_names, latest_only, review_filter, visible_columns, table_sort_column, table_sort_direction, sort_order, full_df: handle_filter_change(
                     lab_names,
                     latest_only,
                     review_filter,
                     full_df,
                     output_path,
                     sort_order=sort_order,
+                    visible_columns=visible_columns,
+                    table_sort_column=table_sort_column,
+                    table_sort_direction=table_sort_direction,
                 ),
                 inputs=filter_inputs,
                 outputs=filter_outputs,
@@ -1700,6 +1881,9 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             lab_name_filter,
             latest_filter,
             review_filter,
+            visible_columns_filter,
+            table_sort_filter,
+            table_sort_direction_filter,
             sort_filter,
         ]
         review_outputs = [
@@ -1717,7 +1901,7 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
         ]
 
         accept_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, sort_order: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, visible_columns, table_sort_column, table_sort_direction, sort_order: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1727,12 +1911,15 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 "accepted",
                 output_path,
                 sort_order=sort_order,
+                visible_columns=visible_columns,
+                table_sort_column=table_sort_column,
+                table_sort_direction=table_sort_direction,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
         reject_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, sort_order: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, visible_columns, table_sort_column, table_sort_direction, sort_order: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1742,12 +1929,15 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 "rejected",
                 output_path,
                 sort_order=sort_order,
+                visible_columns=visible_columns,
+                table_sort_column=table_sort_column,
+                table_sort_direction=table_sort_direction,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
         undo_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, sort_order: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, visible_columns, table_sort_column, table_sort_direction, sort_order: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1757,12 +1947,15 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 "clear",
                 output_path,
                 sort_order=sort_order,
+                visible_columns=visible_columns,
+                table_sort_column=table_sort_column,
+                table_sort_direction=table_sort_direction,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
         missing_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, sort_order: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, visible_columns, table_sort_column, table_sort_direction, sort_order: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1772,6 +1965,9 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 "missing_row",
                 output_path,
                 sort_order=sort_order,
+                visible_columns=visible_columns,
+                table_sort_column=table_sort_column,
+                table_sort_direction=table_sort_direction,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,

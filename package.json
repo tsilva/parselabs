@@ -1,0 +1,24 @@
+{
+  "name": "parselabs",
+  "version": "1.0.0",
+  "description": "<div align=\"center\">   <img src=\"https://raw.githubusercontent.com/tsilva/parselabs/main/logo.png\" alt=\"parselabs\" width=\"512\"/>",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tsilva/parselabs.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tsilva/parselabs/issues"
+  },
+  "homepage": "https://github.com/tsilva/parselabs#readme"
+}

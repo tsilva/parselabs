@@ -185,7 +185,11 @@
 #workspace-filter-row input,
 #workspace-filter-row button,
 #workspace-filter-row [role="combobox"],
-#workspace-filter-row [role="listbox"] {
+#workspace-filter-row [role="listbox"],
+#workspace-column-row input,
+#workspace-column-row button,
+#workspace-column-row [role="combobox"],
+#workspace-column-row [role="listbox"] {
     min-height: 36px !important;
 }
 
@@ -273,6 +277,12 @@ footer,
 }
 
 #workspace-filter-row {
+    align-items: end;
+    gap: 8px;
+    margin-bottom: 0;
+}
+
+#workspace-column-row {
     align-items: end;
     gap: 8px;
     margin-bottom: 0;
