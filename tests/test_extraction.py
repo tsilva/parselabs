@@ -1,6 +1,7 @@
 import warnings
 from pathlib import Path
 
+from PIL import Image
 from pydantic.warnings import PydanticDeprecatedSince211
 
 from parselabs.extraction import (
@@ -11,6 +12,7 @@ from parselabs.extraction import (
     _fix_lab_results_format,
     _validate_extraction_result,
 )
+from parselabs.utils import create_page_image_variants
 
 
 def test_fix_lab_results_format_recovers_stringified_json_items():
@@ -230,3 +232,88 @@ def test_validate_extraction_result_accepts_rows_with_complete_bboxes():
     assert result["success"] is True
     assert result["should_retry"] is False
     assert result["data"]["lab_results"][0]["bbox_bottom"] == 320.0
+
+
+def test_validate_extraction_result_retries_for_column_like_bbox():
+    payload = {
+        "collection_date": "2024-01-01",
+        "lab_results": [
+            {
+                "raw_lab_name": "Eritrócitos",
+                "raw_value": "3.5",
+                "raw_lab_unit": "10¹²/L",
+                "bbox_left": 390,
+                "bbox_top": 90,
+                "bbox_right": 405,
+                "bbox_bottom": 755,
+            }
+        ],
+    }
+
+    result = _validate_extraction_result(
+        tool_result_dict=payload,
+        image_path=Path("page.jpg"),
+        attempt=0,
+        current_temp=0.0,
+    )
+
+    assert result["success"] is False
+    assert result["should_retry"] is True
+    assert "column-like bounding box" in result["error_msg"]
+
+
+def test_validate_extraction_result_retries_for_clustered_column_like_bboxes():
+    payload = {
+        "collection_date": "2024-01-01",
+        "lab_results": [
+            {
+                "raw_lab_name": "Eritrócitos",
+                "raw_value": "3.5",
+                "raw_lab_unit": "10¹²/L",
+                "bbox_left": 390,
+                "bbox_top": 90,
+                "bbox_right": 405,
+                "bbox_bottom": 755,
+            },
+            {
+                "raw_lab_name": "Hemoglobina",
+                "raw_value": "10.6",
+                "raw_lab_unit": "g/dL",
+                "bbox_left": 405,
+                "bbox_top": 90,
+                "bbox_right": 420,
+                "bbox_bottom": 755,
+            },
+            {
+                "raw_lab_name": "Hematócrito",
+                "raw_value": "31.8",
+                "raw_lab_unit": "%",
+                "bbox_left": 420,
+                "bbox_top": 90,
+                "bbox_right": 435,
+                "bbox_bottom": 755,
+            },
+        ],
+    }
+
+    result = _validate_extraction_result(
+        tool_result_dict=payload,
+        image_path=Path("page.jpg"),
+        attempt=0,
+        current_temp=0.0,
+    )
+
+    assert result["success"] is False
+    assert result["should_retry"] is True
+    assert "clustered column-like bounding boxes" in result["error_msg"]
+
+
+def test_create_page_image_variants_adds_padding_before_processing():
+    image = Image.new("RGB", (100, 50), "black")
+
+    variants = create_page_image_variants(image)
+
+    assert variants["primary"].size == (228, 178)
+    assert variants["fallback"].size == (228, 178)
+    assert variants["primary"].getpixel((0, 0)) == (255, 255, 255)
+    assert variants["fallback"].getpixel((0, 0)) == 255

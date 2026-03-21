@@ -23,7 +23,11 @@ IMPORTANT FOR BOUNDING BOXES:
 - Use the full page image as the coordinate space
 - 0 means the top/left edge, 1000 means the bottom/right edge
 - The box should cover the visible region for that extracted result
+- The box must cover the horizontal row region, not a narrow vertical value column
 - Every extracted result must include all four bbox fields
+- Ignore historical/previous-result columns; only box the current-result row
+- If one printed row yields multiple current-result entries, those entries may share the same row bbox
+- If the first letter is clipped by the scan edge or partly occluded, copy only the visible text exactly as shown but still box the full visible row
 - If you are not confident about the location, re-check the page and find the supporting row before returning that result
 
 CRITICAL: Extract EVERY lab test you see, including:

@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 _PRIMARY_IMAGE_MAX_WIDTH = 1800
 _FALLBACK_IMAGE_MAX_WIDTH = 1800
+_PAGE_BORDER_PADDING_PX = 64
 
 
 def _resize_image(image: Image.Image, max_width: int) -> Image.Image:
@@ -28,6 +29,16 @@ def _resize_image(image: Image.Image, max_width: int) -> Image.Image:
     return image.resize((max_width, new_height), Image.Resampling.LANCZOS)
 
 
+def _add_page_padding(image: Image.Image, padding_px: int = _PAGE_BORDER_PADDING_PX) -> Image.Image:
+    """Add a uniform white border around a page image before extraction."""
+
+    if padding_px <= 0:
+        return image
+
+    fill = 255 if image.mode == "L" else (255, 255, 255)
+    return ImageOps.expand(image, border=padding_px, fill=fill)
+
+
 def create_page_image_variants(image: Image.Image) -> dict[str, Image.Image]:
     """Create image variants for extraction.
 
@@ -36,12 +47,14 @@ def create_page_image_variants(image: Image.Image) -> dict[str, Image.Image]:
     """
 
     base_image = ImageOps.exif_transpose(image)
+    padded_rgb = _add_page_padding(base_image.convert("RGB"))
+    padded_gray = _add_page_padding(base_image.convert("L"))
 
-    primary = _resize_image(base_image.convert("RGB"), _PRIMARY_IMAGE_MAX_WIDTH)
+    primary = _resize_image(padded_rgb, _PRIMARY_IMAGE_MAX_WIDTH)
     primary = ImageOps.autocontrast(primary, cutoff=1)
     primary = ImageEnhance.Sharpness(primary).enhance(1.15)
 
-    fallback = _resize_image(base_image.convert("L"), _FALLBACK_IMAGE_MAX_WIDTH)
+    fallback = _resize_image(padded_gray, _FALLBACK_IMAGE_MAX_WIDTH)
     fallback = ImageOps.autocontrast(fallback, cutoff=1)
     fallback = ImageEnhance.Contrast(fallback).enhance(2.2)
     fallback = fallback.filter(ImageFilter.SHARPEN)

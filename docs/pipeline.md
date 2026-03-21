@@ -64,6 +64,7 @@ Based on the current code, not prior documentation:
 9. Per-page cached artifact setup.
 - For each page, the runtime builds canonical image paths like `{stem}.{page:03d}.jpg` and `{stem}.{page:03d}.fallback.jpg`.
 - It generates the primary and fallback page image variants only if they do not already exist.
+- Both variants now add a uniform white page border before resize/contrast adjustments so edge-clipped scan text gets margin for vision extraction.
 - Primary and fallback images are cached on disk in the document folder.
 - This means page images are reused on reruns even when extraction is retried.
 
@@ -77,6 +78,7 @@ Based on the current code, not prior documentation:
 11. Deterministic per-page routing.
 - Every page first uses the primary page image with `extract_labs_from_page_image(...)`.
 - Any extracted payload that contains lab rows but lacks a complete four-value bbox on even one row is treated as malformed output.
+- Any extracted payload whose bbox geometry looks like a narrow table-value column instead of a horizontal row region is also treated as malformed output.
 - If that result is weak, failed, or empty on a likely lab page, the runtime retries once with the fallback image.
 - The runtime does not compare candidates; it follows a fixed vision-only fallback chain.
 
