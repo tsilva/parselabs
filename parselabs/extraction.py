@@ -21,6 +21,11 @@ BBOX_FIELDS = [
     "bbox_right",
     "bbox_bottom",
 ]
+_COLUMN_BBOX_MAX_WIDTH = 40.0
+_COLUMN_BBOX_MIN_HEIGHT = 250.0
+_COLUMN_BBOX_ASPECT_RATIO = 4.0
+_COLUMN_BBOX_CLUSTER_GAP = 30.0
+_COLUMN_BBOX_CLUSTER_MIN_COUNT = 3
 
 RAW_LAB_NAME_FIELD = Annotated[
     str,
@@ -552,6 +557,7 @@ def _validate_extraction_result(
         report_model = HealthLabReport(**tool_result_dict)
         report_model.normalize_empty_optionals()
         _assert_complete_result_bboxes(report_model)
+        _assert_row_like_result_bboxes(report_model)
 
         # Check extraction quality and log warnings
         _log_extraction_quality(report_model, image_path)
@@ -607,6 +613,52 @@ def _assert_complete_result_bboxes(report_model: HealthLabReport) -> None:
         "MALFORMED OUTPUT: extracted lab results missing complete bounding boxes. "
         f"Rows without full bbox data: {missing_bbox_count}/{len(report_model.lab_results)}."
     )
+
+
+def _is_column_like_bbox(result: LabResult) -> bool:
+    """Return whether one bbox looks like a value-column slice instead of a row box."""
+
+    width = float(result.bbox_right - result.bbox_left)
+    height = float(result.bbox_bottom - result.bbox_top)
+
+    return (
+        width <= _COLUMN_BBOX_MAX_WIDTH
+        and height >= _COLUMN_BBOX_MIN_HEIGHT
+        and height >= (width * _COLUMN_BBOX_ASPECT_RATIO)
+    )
+
+
+def _assert_row_like_result_bboxes(report_model: HealthLabReport) -> None:
+    """Reject payloads whose bbox geometry points to table columns instead of rows."""
+
+    if not report_model.lab_results:
+        return
+
+    column_like_results = [result for result in report_model.lab_results if _is_column_like_bbox(result)]
+
+    if not column_like_results:
+        return
+
+    if len(column_like_results) == 1:
+        result = column_like_results[0]
+        raise ValueError(
+            "MALFORMED OUTPUT: extracted lab result uses a column-like bounding box instead of a row region. "
+            f"raw_lab_name='{result.raw_lab_name}', "
+            f"bbox=({result.bbox_left}, {result.bbox_top}, {result.bbox_right}, {result.bbox_bottom})."
+        )
+
+    left_positions = sorted(float(result.bbox_left) for result in column_like_results)
+    adjacent_column_slices = sum(
+        1
+        for idx in range(1, len(left_positions))
+        if (left_positions[idx] - left_positions[idx - 1]) <= _COLUMN_BBOX_CLUSTER_GAP
+    )
+
+    if len(column_like_results) >= _COLUMN_BBOX_CLUSTER_MIN_COUNT or adjacent_column_slices > 0:
+        raise ValueError(
+            "MALFORMED OUTPUT: extracted lab results use clustered column-like bounding boxes instead of row regions. "
+            f"Column-like rows: {len(column_like_results)}/{len(report_model.lab_results)}."
+        )
 
 
 def _log_extraction_quality(report_model: HealthLabReport, image_path: Path) -> None:

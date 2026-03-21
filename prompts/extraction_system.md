@@ -89,7 +89,11 @@ CRITICAL RULES:
      * result value
      * unit
      * reference range, if it sits in the same row/region
+   - Bounding boxes must be HORIZONTAL row regions. Never return a narrow vertical slice that only covers one value column or one historical-results column.
    - If two extracted results come from the same visible row, they may share the same bounding box
+   - If one printed row contains multiple current-result values, emit separate LabResult entries and let them share the same row bbox when needed
+   - Ignore historical/previous-result columns. Anchor the bbox only to the current-result row on the current page
+   - If the row text touches the page edge or part of the first letter is clipped/occluded, copy only the visible text exactly as shown, but still anchor the bbox to the full visible row region
    - Never return null bbox fields for an extracted result
    - If you cannot locate the result confidently, re-check the page and find the supporting row before returning the result
 
