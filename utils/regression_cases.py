@@ -87,7 +87,7 @@ def approve_cases(args: argparse.Namespace) -> None:
             continue
 
         expected_df = build_document_expected_dataframe(document.doc_dir, lab_specs)
-        valid_documents_by_stem[document.stem] = (document.doc_dir, document.pdf_path, expected_df)
+        valid_documents_by_stem[document.stem] = (document.doc_dir, document.source_pdf, expected_df)
 
     existing_cases = {
         case.stem: case

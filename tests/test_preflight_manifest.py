@@ -47,7 +47,7 @@ def test_prepare_pdf_run_hashes_each_pdf_and_builds_hashed_targets(tmp_path, mon
     preflight = main._prepare_pdf_run([pdf_a, pdf_b], output_dir)
 
     assert [task.file_hash for task in preflight.pdfs_to_process] == ["a", "b"]
-    assert [task.csv_path for task in preflight.pdfs_to_process] == [
+    assert [task.doc_dir / f"{task.stem}.csv" for task in preflight.pdfs_to_process] == [
         output_dir / "a_a" / "a.csv",
         output_dir / "b_b" / "b.csv",
     ]

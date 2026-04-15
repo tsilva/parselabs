@@ -42,44 +42,22 @@ class DocumentRef:
         *,
         doc_dir: Path,
         stem: str,
-        source_pdf: Path | None = None,
+        source_pdf: Path,
         file_hash: str = "",
         page_count: int = 0,
-        pdf_path: Path | None = None,
-        csv_path: Path | None = None,
     ) -> None:
-        """Support both the new source_pdf shape and legacy pdf_path callers."""
-
-        resolved_source_pdf = source_pdf or pdf_path
-        if resolved_source_pdf is None:
-            raise TypeError("DocumentRef requires source_pdf or pdf_path.")
+        """Build a processed-document reference from canonical runtime fields."""
 
         resolved_doc_dir = Path(doc_dir)
         resolved_stem = str(stem)
         resolved_hash = file_hash or _extract_hash_from_dir_name(resolved_doc_dir)
         resolved_page_count = int(page_count)
 
-        # Accept legacy csv_path callers without storing redundant state.
-        if csv_path is not None:
-            Path(csv_path)
-
         object.__setattr__(self, "doc_dir", resolved_doc_dir)
         object.__setattr__(self, "stem", resolved_stem)
-        object.__setattr__(self, "source_pdf", Path(resolved_source_pdf))
+        object.__setattr__(self, "source_pdf", Path(source_pdf))
         object.__setattr__(self, "file_hash", resolved_hash)
         object.__setattr__(self, "page_count", resolved_page_count)
-
-    @property
-    def pdf_path(self) -> Path:
-        """Backward-compatible alias for legacy callers."""
-
-        return self.source_pdf
-
-    @property
-    def csv_path(self) -> Path:
-        """Return the canonical per-document review CSV path."""
-
-        return self.doc_dir / f"{self.stem}.csv"
 
 
 @dataclass(frozen=True)
@@ -117,7 +95,7 @@ def build_document_ref(pdf_path: Path, output_path: Path, file_hash: str, page_c
 def build_hashed_csv_path(pdf_path: Path, output_path: Path, file_hash: str) -> Path:
     """Return the per-document CSV path for a hashed output directory."""
 
-    return build_document_ref(pdf_path, output_path, file_hash).csv_path
+    return get_document_csv_path(build_document_ref(pdf_path, output_path, file_hash).doc_dir)
 
 
 def discover_pdf_files(input_path: Path, input_file_regex: str | None) -> list[Path]:
