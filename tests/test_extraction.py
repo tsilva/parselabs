@@ -57,7 +57,7 @@ def test_fix_lab_results_format_recovers_label_packed_string_items():
 
 def test_fix_lab_results_format_recovers_stringified_top_level_lab_results():
     payload = {
-        "lab_results": '[{"raw_lab_name": "Trigliceridos", "raw_value": "120", "raw_unit": "mg/dL"}]'
+        "lab_results": '[{"raw_lab_name": "Trigliceridos", "raw_value": "120", "raw_lab_unit": "mg/dL"}]'
     }
 
     fixed_payload = _fix_lab_results_format(payload)
@@ -71,7 +71,7 @@ def test_fix_lab_results_format_recovers_sequence_encoded_lab_result_items():
     payload = {
         "collection_date": "2024-01-01",
         "lab_results": [
-            ["raw_lab_name", "Glucose", "raw_value", "92", "raw_unit", "mg/dL"],
+            ["raw_lab_name", "Glucose", "raw_value", "92", "raw_lab_unit", "mg/dL"],
         ],
     }
 

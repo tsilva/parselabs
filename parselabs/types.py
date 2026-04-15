@@ -190,24 +190,14 @@ class RawExtractionLabResultPayload(TypedDict, total=False):
     raw_section_name: JsonValue
     raw_value: JsonValue
     raw_lab_unit: JsonValue
-    raw_unit: JsonValue
-    lab_unit_raw: JsonValue
     raw_reference_range: JsonValue
-    reference_range: JsonValue
     raw_reference_min: JsonValue
-    reference_min: JsonValue
     raw_reference_max: JsonValue
-    reference_max: JsonValue
     raw_comments: JsonValue
     bbox_left: JsonValue
     bbox_top: JsonValue
     bbox_right: JsonValue
     bbox_bottom: JsonValue
-    left: JsonValue
-    top: JsonValue
-    right: JsonValue
-    bottom: JsonValue
-    section_name: JsonValue
 
 
 class ReviewMissingRowMarker(TypedDict):
