@@ -76,6 +76,33 @@ class PageLabResultPayload(TypedDict, total=False):
     review_completed_at: str | None
 
 
+class RawExtractionLabResultPayload(TypedDict, total=False):
+    """Best-effort raw lab-result item parsed from a tool-call payload."""
+
+    raw_lab_name: JsonValue
+    raw_section_name: JsonValue
+    raw_value: JsonValue
+    raw_lab_unit: JsonValue
+    raw_unit: JsonValue
+    lab_unit_raw: JsonValue
+    raw_reference_range: JsonValue
+    reference_range: JsonValue
+    raw_reference_min: JsonValue
+    reference_min: JsonValue
+    raw_reference_max: JsonValue
+    reference_max: JsonValue
+    raw_comments: JsonValue
+    bbox_left: JsonValue
+    bbox_top: JsonValue
+    bbox_right: JsonValue
+    bbox_bottom: JsonValue
+    left: JsonValue
+    top: JsonValue
+    right: JsonValue
+    bottom: JsonValue
+    section_name: JsonValue
+
+
 class ReviewMissingRowMarker(TypedDict):
     """Persisted missing-row marker stored on one page payload."""
 
@@ -103,6 +130,25 @@ class PagePayload(TypedDict, total=False):
     _failure_reason: str
     _retry_count: int
     review_missing_rows: list[ReviewMissingRowMarker]
+
+
+class RawExtractionPayload(TypedDict, total=False):
+    """Best-effort raw tool-call payload before validation normalizes it."""
+
+    collection_date: JsonValue
+    report_date: JsonValue
+    lab_facility: JsonValue
+    page_has_lab_data: JsonValue
+    lab_results: JsonValue
+
+
+class ExtractionValidationResult(TypedDict):
+    """Validation outcome for one raw extraction payload."""
+
+    success: bool
+    data: PagePayload | None
+    should_retry: bool
+    error_msg: str | None
 
 
 class ReviewRow(RowIdentity, total=False):

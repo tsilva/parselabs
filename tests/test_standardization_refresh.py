@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import pandas as pd
 
@@ -42,6 +43,18 @@ def _install_cache_store(monkeypatch, *, name_cache=None, unit_cache=None):
     monkeypatch.setattr(refresh, "load_cache", lambda name: dict(cache_store[name]))
     monkeypatch.setattr(refresh, "save_cache", lambda name, cache: cache_store.__setitem__(name, dict(cache)))
     return cache_store
+
+
+def _make_fake_client():
+    return SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(
+                create=lambda **kwargs: SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content="[]"))]
+                )
+            )
+        )
+    )
 
 
 def test_refresh_standardization_caches_noop_when_all_cached(tmp_path, monkeypatch):
@@ -223,3 +236,52 @@ def test_refresh_standardization_caches_persists_contextual_name_keys(tmp_path, 
     assert result.unresolved_names == ()
     assert cache_store["name_standardization"]["glicose"] == "Blood - Glucose"
     assert cache_store["name_standardization"]["glicose|elementos anormais"] == "Urine Type II - Glucose"
+
+
+def test_standardize_names_with_llm_ignores_malformed_items(tmp_path, monkeypatch):
+    lab_specs = _make_lab_specs(tmp_path)
+    monkeypatch.setattr(refresh, "load_prompt_template", lambda _: "prompt")
+    monkeypatch.setattr(
+        refresh,
+        "parse_llm_json_response",
+        lambda *args, **kwargs: [
+            {"raw_lab_name": "Glucose", "raw_section_name": None, "standardized_name": "Blood - Glucose"},
+            {"raw_lab_name": 1, "standardized_name": "Blood - Glucose"},
+            {"raw_lab_name": "Glucose", "standardized_name": 123},
+            {"raw_lab_name": "Glucose", "raw_section_name": [], "standardized_name": "Blood - Glucose"},
+        ],
+    )
+
+    result = refresh._standardize_names_with_llm(
+        [("Glucose", None)],
+        lab_specs.standardized_names,
+        _make_fake_client(),
+        "test-model",
+    )
+
+    assert result == {("Glucose", None): "Blood - Glucose"}
+
+
+def test_standardize_units_with_llm_ignores_malformed_items(tmp_path, monkeypatch):
+    lab_specs = _make_lab_specs(tmp_path)
+    monkeypatch.setattr(refresh, "load_prompt_template", lambda _: "prompt")
+    monkeypatch.setattr(
+        refresh,
+        "parse_llm_json_response",
+        lambda *args, **kwargs: [
+            {"raw_unit": "mg/dL", "lab_name": "Blood - Glucose", "standardized_unit": "mg/dL"},
+            {"raw_unit": None, "lab_name": "Blood - Glucose", "standardized_unit": "mg/dL"},
+            {"raw_unit": "mg/dL", "lab_name": 1, "standardized_unit": "mg/dL"},
+            {"raw_unit": "mg/dL", "lab_name": "Blood - Glucose", "standardized_unit": 5},
+        ],
+    )
+
+    result = refresh._standardize_units_with_llm(
+        [("mg/dL", "Blood - Glucose")],
+        lab_specs.standardized_units,
+        _make_fake_client(),
+        "test-model",
+        lab_specs,
+    )
+
+    assert result == {"mg/dl|blood - glucose": "mg/dL"}
