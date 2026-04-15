@@ -26,7 +26,12 @@ from parselabs.review_state import (  # noqa: E402
     get_selected_row,
 )
 from parselabs.runtime import RuntimeContext  # noqa: E402
-from parselabs.types import ReviewAction  # noqa: E402
+from parselabs.types import (  # noqa: E402
+    ReviewAction,
+    build_row_identity_token,
+    coerce_row_identity,
+    parse_row_identity_token,
+)
 
 # Initialize module logger
 logger = logging.getLogger(__name__)
@@ -309,21 +314,22 @@ def _normalize_table_sort_direction(table_sort_direction: str | None) -> str:
 def _build_row_token(source_file: object, page_number: object, result_index: object) -> str:
     """Build a stable UI token for one merged results row."""
 
-    normalized_values = []
-    for value in (source_file, page_number, result_index):
-        normalized_values.append(value.item() if hasattr(value, "item") else value)
-
-    return json.dumps(normalized_values, separators=(",", ":"))
+    return (
+        build_row_identity_token(
+            {
+                "source_file": source_file,
+                "page_number": page_number,
+                "result_index": result_index,
+            }
+        )
+        or ""
+    )
 
 
 def _build_row_token_for_entry(entry: pd.Series | dict) -> str:
     """Build the stable UI token for a dataframe row or dict entry."""
 
-    return _build_row_token(
-        entry.get("source_file"),
-        entry.get("page_number"),
-        entry.get("result_index"),
-    )
+    return build_row_identity_token(entry) or ""
 
 
 def _build_display_row_match_values(entry: pd.Series | dict, visible_columns: list[str] | None = None) -> list[str]:
@@ -1402,21 +1408,15 @@ def _resolve_plot_point_row_index(filtered_df: pd.DataFrame, point_token: str | 
         return None
 
     try:
-        token_data = json.loads(point_token)
-    except (TypeError, json.JSONDecodeError):
+        selected_identity = parse_row_identity_token(point_token)
+    except TypeError:
         return None
 
-    if isinstance(token_data, str):
-        selected_token = token_data
-    elif isinstance(token_data, dict):
-        source_file = token_data.get("source_file")
-        page_number = token_data.get("page_number")
-        result_index = token_data.get("result_index")
-        selected_token = _build_row_token(source_file, page_number, result_index)
-    elif isinstance(token_data, list | tuple) and len(token_data) >= 3:
-        source_file, page_number, result_index = token_data[:3]
-        selected_token = _build_row_token(source_file, page_number, result_index)
-    else:
+    if selected_identity is None:
+        return None
+
+    selected_token = build_row_identity_token(selected_identity)
+    if selected_token is None:
         return None
 
     row_tokens = filtered_df.apply(_build_row_token_for_entry, axis=1)
@@ -1573,8 +1573,14 @@ def handle_review_action(
 
     # Mirror successful review writes into the in-memory full dataframe state.
     elif status in {"accepted", "rejected", "clear"}:
-        mask = (full_df["source_file"] == current_entry.get("source_file")) & (full_df["page_number"] == current_entry.get("page_number")) & (full_df["result_index"] == current_entry.get("result_index"))
-        full_df.loc[mask, "review_status"] = "" if status == "clear" else status
+        current_identity = coerce_row_identity(current_entry)
+        if current_identity is not None:
+            mask = (
+                (full_df["source_file"] == current_identity["source_file"])
+                & (full_df["page_number"] == current_identity["page_number"])
+                & (full_df["result_index"] == current_identity["result_index"])
+            )
+            full_df.loc[mask, "review_status"] = "" if status == "clear" else status
     else:
         gr.Info("Missing-row marker recorded for this page.")
 
