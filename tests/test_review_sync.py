@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -9,6 +10,7 @@ import pytest
 
 from parselabs import pipeline as main
 from parselabs import rows as rows_module
+from parselabs import standardization as standardization_module
 from parselabs.config import ExtractionConfig, LabSpecsConfig, ProfileConfig
 from parselabs.normalization import apply_normalizations, flag_duplicate_entries
 from parselabs.rows import (
@@ -383,6 +385,46 @@ def _stub_standardization_maps(
         "parselabs.rows.standardize_lab_units",
         lambda unit_contexts: {context: unit_map.get(context, "$UNKNOWN$") for context in unit_contexts},
     )
+
+
+def _stub_standardization_maps_with_unit_spy(
+    monkeypatch,
+    *,
+    name_map: dict[str, str],
+    unit_map: dict[tuple[str, str], str],
+) -> list[tuple[str, str]]:
+    """Stub cache-backed standardization and capture the unit lookup contexts."""
+
+    captured_unit_contexts: list[tuple[str, str]] = []
+
+    def fake_standardize_lab_names(name_contexts):
+        results = {}
+
+        # Resolve context-aware keys first so tests can disambiguate duplicate raw names.
+        for raw_name, raw_section_name in name_contexts:
+            if (raw_name, raw_section_name) in name_map:
+                results[(raw_name, raw_section_name)] = name_map[(raw_name, raw_section_name)]
+                continue
+
+            results[(raw_name, raw_section_name)] = name_map.get(raw_name, "$UNKNOWN$")
+
+        return results
+
+    def fake_standardize_lab_units(unit_contexts):
+        # Preserve the exact order so tests can assert the pre-cache sibling routing.
+        captured_unit_contexts.extend(unit_contexts)
+        return {context: unit_map.get(context, "$UNKNOWN$") for context in unit_contexts}
+
+    monkeypatch.setattr(
+        "parselabs.rows.standardize_lab_names",
+        fake_standardize_lab_names,
+    )
+    monkeypatch.setattr(
+        "parselabs.rows.standardize_lab_units",
+        fake_standardize_lab_units,
+    )
+
+    return captured_unit_contexts
 
 
 def test_rebuild_document_csv_preserves_row_identity_and_review_status(tmp_path, monkeypatch):
@@ -953,7 +995,7 @@ def test_build_document_review_dataframe_preserves_raw_section_name(tmp_path, mo
 
 def test_apply_cached_standardization_remaps_percent_units_to_percentage_variants(tmp_path, monkeypatch):
     lab_specs = _make_percentage_variant_lab_specs(tmp_path)
-    _stub_standardization_maps(
+    captured_unit_contexts = _stub_standardization_maps_with_unit_spy(
         monkeypatch,
         name_map={
             "Monocitos": "Blood - Monocytes",
@@ -961,9 +1003,9 @@ def test_apply_cached_standardization_remaps_percent_units_to_percentage_variant
             "Neutrofilos": "Blood - Neutrophils",
         },
         unit_map={
-            ("%", "Blood - Monocytes"): "%",
-            ("%", "Blood - Lymphocytes"): "%",
-            ("%", "Blood - Neutrophils"): "%",
+            ("%", "Blood - Monocytes (%)"): "%",
+            ("%", "Blood - Lymphocytes (%)"): "%",
+            ("%", "Blood - Neutrophils (%)"): "%",
         },
     )
 
@@ -977,6 +1019,11 @@ def test_apply_cached_standardization_remaps_percent_units_to_percentage_variant
 
     standardized_df = apply_cached_standardization(review_df, lab_specs)
 
+    assert captured_unit_contexts == [
+        ("%", "Blood - Monocytes (%)"),
+        ("%", "Blood - Lymphocytes (%)"),
+        ("%", "Blood - Neutrophils (%)"),
+    ]
     assert standardized_df["lab_name_standardized"].tolist() == [
         "Blood - Monocytes (%)",
         "Blood - Lymphocytes (%)",
@@ -987,15 +1034,15 @@ def test_apply_cached_standardization_remaps_percent_units_to_percentage_variant
 
 def test_apply_cached_standardization_remaps_absolute_units_to_non_percentage_variants(tmp_path, monkeypatch):
     lab_specs = _make_percentage_variant_lab_specs(tmp_path)
-    _stub_standardization_maps(
+    captured_unit_contexts = _stub_standardization_maps_with_unit_spy(
         monkeypatch,
         name_map={
             "Monocitos (%)": "Blood - Monocytes (%)",
             "Linfocitos (%)": "Blood - Lymphocytes (%)",
         },
         unit_map={
-            ("10^9/L", "Blood - Monocytes (%)"): "10⁹/L",
-            ("/mm3", "Blood - Lymphocytes (%)"): "/mm3",
+            ("10^9/L", "Blood - Monocytes"): "10⁹/L",
+            ("/mm3", "Blood - Lymphocytes"): "/mm3",
         },
     )
 
@@ -1008,6 +1055,10 @@ def test_apply_cached_standardization_remaps_absolute_units_to_non_percentage_va
 
     standardized_df = apply_cached_standardization(review_df, lab_specs)
 
+    assert captured_unit_contexts == [
+        ("10^9/L", "Blood - Monocytes"),
+        ("/mm3", "Blood - Lymphocytes"),
+    ]
     assert standardized_df["lab_name_standardized"].tolist() == [
         "Blood - Monocytes",
         "Blood - Lymphocytes",
@@ -1088,13 +1139,15 @@ def test_apply_cached_standardization_overrides_stale_percentage_unit_cache_for_
 
 def test_apply_cached_standardization_handles_truncated_absolute_count_units(tmp_path, monkeypatch):
     lab_specs = _make_percentage_variant_lab_specs(tmp_path)
-    _stub_standardization_maps(
+    captured_unit_contexts = _stub_standardization_maps_with_unit_spy(
         monkeypatch,
         name_map={
             ("Monócitos", "Leucograma"): "Blood - Monocytes (%)",
+            ("Linfócitos", "Leucograma"): "Blood - Lymphocytes (%)",
         },
         unit_map={
-            ("x 10³/", "Blood - Monocytes (%)"): "$UNKNOWN$",
+            ("x 10³/", "Blood - Monocytes"): "$UNKNOWN$",
+            ("V.abs.", "Blood - Lymphocytes"): "$UNKNOWN$",
         },
     )
 
@@ -1105,13 +1158,67 @@ def test_apply_cached_standardization_handles_truncated_absolute_count_units(tmp
                 "raw_section_name": "Leucograma",
                 "raw_lab_unit": "x 10³/",
                 "raw_value": "0.4",
-            }
+            },
+            {
+                "raw_lab_name": "Linfócitos",
+                "raw_section_name": "Leucograma",
+                "raw_lab_unit": "V.abs.",
+                "raw_value": "1.8",
+            },
         ]
     )
 
     standardized_df = apply_cached_standardization(review_df, lab_specs)
 
-    assert standardized_df["lab_name_standardized"].tolist() == ["Blood - Monocytes"]
+    assert captured_unit_contexts == [
+        ("x 10³/", "Blood - Monocytes"),
+        ("V.abs.", "Blood - Lymphocytes"),
+    ]
+    assert standardized_df["lab_name_standardized"].tolist() == [
+        "Blood - Monocytes",
+        "Blood - Lymphocytes",
+    ]
+    assert standardized_df["lab_unit_standardized"].tolist() == ["10⁹/L", "10⁹/L"]
+
+
+def test_apply_cached_standardization_skips_false_positive_unit_warning_for_absolute_sibling_reroute(
+    tmp_path,
+    monkeypatch,
+    caplog,
+):
+    lab_specs = _make_percentage_variant_lab_specs(tmp_path)
+
+    def fake_standardize_lab_names(name_contexts):
+        # Force the name-cache result onto the percentage sibling so the unit path must repair it.
+        return {context: "Blood - Lymphocytes (%)" for context in name_contexts}
+
+    monkeypatch.setattr(
+        "parselabs.rows.standardize_lab_names",
+        fake_standardize_lab_names,
+    )
+    monkeypatch.setattr(
+        standardization_module,
+        "load_cache",
+        lambda name: {},
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Linfócitos",
+                "raw_section_name": "Leucograma",
+                "raw_lab_unit": "x 10³/µl",
+                "raw_value": "1.8",
+            }
+        ]
+    )
+
+    with caplog.at_level(logging.WARNING, logger="parselabs.standardization"):
+        standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert "('x 10³/µl', 'Blood - Lymphocytes (%)')" not in caplog.text
+    assert "('x 10³/µl', 'Blood - Lymphocytes')" in caplog.text
+    assert standardized_df["lab_name_standardized"].tolist() == ["Blood - Lymphocytes"]
     assert standardized_df["lab_unit_standardized"].tolist() == ["10⁹/L"]
 
 

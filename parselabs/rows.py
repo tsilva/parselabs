@@ -762,7 +762,13 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
             unit_contexts.append(("", ""))
             continue
 
-        unit_contexts.append((raw_unit, standardized_name))
+        # Route explicit percent-vs-absolute units onto the correct sibling before cache lookup.
+        effective_name = _infer_effective_lab_name_for_unit_lookup(
+            raw_unit,
+            standardized_name,
+            lab_specs,
+        )
+        unit_contexts.append((raw_unit, effective_name))
 
     mapped_units = standardize_lab_units([context for context in unit_contexts if context != ("", "")])
 
@@ -1141,6 +1147,51 @@ def _infer_explicit_variant_unit_from_raw_unit(
     return lab_specs.get_primary_unit(absolute_variant)
 
 
+def _infer_effective_lab_name_for_unit_lookup(
+    raw_unit: str,
+    standardized_name: str,
+    lab_specs: LabSpecsConfig,
+) -> str:
+    """Choose the sibling analyte that should own unit-cache lookup for one row."""
+
+    raw_unit_text = str(raw_unit).strip()
+
+    # Guard: Blank raw units do not provide a decisive sibling signal before cache lookup.
+    if not raw_unit_text:
+        return standardized_name
+
+    percentage_variant = lab_specs.get_percentage_variant(standardized_name)
+    non_percentage_variant = lab_specs.get_non_percentage_variant(standardized_name)
+
+    # Guard: Labs without a sibling pair keep their original standardized name.
+    if percentage_variant is None and non_percentage_variant is None:
+        return standardized_name
+
+    # Explicit percent markers belong on the configured percentage sibling.
+    if _raw_unit_looks_percentage(raw_unit_text):
+        return percentage_variant or standardized_name
+
+    # Collapse absolute-count and conversion-unit rows onto the non-percentage sibling.
+    absolute_variant = non_percentage_variant or standardized_name
+    inferred_conversion_unit = _infer_explicit_conversion_unit_from_raw_unit(
+        raw_unit_text,
+        absolute_variant,
+        lab_specs,
+    )
+
+    # Explicit conversion units like /mm3 should query the absolute sibling cache entry.
+    if inferred_conversion_unit is not None:
+        return absolute_variant
+
+    # Incomplete OCR like ``x 10³/`` or qualitative labels like ``V.abs.`` still
+    # unambiguously point to the absolute differential-count sibling.
+    if _raw_unit_looks_absolute_cell_count(raw_unit_text):
+        return absolute_variant
+
+    # Non-decisive raw units keep the name-cache result unchanged.
+    return standardized_name
+
+
 def _raw_unit_looks_percentage(raw_unit: str) -> bool:
     """Return True when the raw unit text explicitly denotes a percentage."""
 
@@ -1156,6 +1207,10 @@ def _raw_unit_looks_absolute_cell_count(raw_unit: str) -> bool:
     normalized_unit = unicodedata.normalize("NFKC", str(raw_unit).strip().lower())
     normalized_unit = normalized_unit.replace("μ", "µ")
     compact_unit = re.sub(r"\s+", "", normalized_unit)
+
+    # Recognize explicit scientific-notation counts after OCR or NFKC folding.
+    if re.search(r"(?:^|x)10(?:\^)?(?:3|9)/", compact_unit):
+        return True
 
     return any(
         marker in compact_unit
