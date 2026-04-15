@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 
 from parselabs.store import apply_review_action, resolve_document_dir
-from parselabs.types import ReviewAction, ReviewRow, coerce_review_action
+from parselabs.types import ReviewAction, ReviewRow, coerce_review_action, coerce_row_identity
 
 
 @dataclass(frozen=True)
@@ -43,9 +44,6 @@ def get_selected_row(df: pd.DataFrame, row_index: int | None) -> pd.Series | Non
 def resolve_review_target_for_entry(entry: ReviewRow, output_path: Path) -> tuple[ReviewTarget | None, str]:
     """Resolve the persisted row target for a merged-review entry."""
 
-    source_file = entry.get("source_file", "")
-    stem = source_file.rsplit(".", 1)[0] if "." in source_file else source_file
-    doc_dir = resolve_document_dir(stem, output_path)
     result_index = entry.get("result_index")
     page_number = entry.get("page_number")
 
@@ -57,14 +55,24 @@ def resolve_review_target_for_entry(entry: ReviewRow, output_path: Path) -> tupl
     if page_number is None or pd.isna(page_number):
         return None, "Missing page_number for entry."
 
+    identity = coerce_row_identity(cast(dict[str, object], entry))
+
+    # Guard: Review writes require a stable source_file/page_number/result_index identity.
+    if identity is None:
+        return None, "Missing source_file for entry."
+
+    source_file = identity["source_file"]
+    stem = source_file.rsplit(".", 1)[0] if "." in source_file else source_file
+    doc_dir = resolve_document_dir(stem, output_path)
+
     # Guard: Review writes require the hashed document directory to exist.
     if doc_dir is None:
         return None, f"Document directory not found for '{source_file}'."
 
     return ReviewTarget(
         doc_dir=doc_dir,
-        page_number=int(page_number),
-        result_index=int(result_index),
+        page_number=identity["page_number"],
+        result_index=identity["result_index"],
     ), ""
 
 

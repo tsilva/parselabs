@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import math
+from collections.abc import Mapping
 from typing import Literal, TypeAlias, TypedDict
 
 ReviewAction = Literal["accept", "reject", "clear", "missing_row"]
@@ -35,6 +38,110 @@ def coerce_persisted_review_status(value: object) -> PersistedReviewStatus | Non
         return "accepted"
     if normalized == "rejected":
         return "rejected"
+    return None
+
+
+def _normalize_identity_scalar(value: object) -> object:
+    """Return one scalar value with numpy/pandas wrappers peeled away."""
+
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except (TypeError, ValueError):
+            return value
+    return value
+
+
+def _coerce_row_identity_int(value: object) -> int | None:
+    """Return one row-identity integer or None for invalid values."""
+
+    normalized = _normalize_identity_scalar(value)
+
+    if normalized is None or isinstance(normalized, bool):
+        return None
+
+    if isinstance(normalized, int):
+        return normalized
+
+    if isinstance(normalized, float):
+        if math.isnan(normalized) or not normalized.is_integer():
+            return None
+        return int(normalized)
+
+    if isinstance(normalized, str):
+        stripped = normalized.strip()
+        if not stripped:
+            return None
+        try:
+            return int(stripped)
+        except ValueError:
+            return None
+
+    return None
+
+
+def coerce_row_identity(entry: Mapping[str, object]) -> RowIdentity | None:
+    """Return a stable row identity or None when required fields are invalid."""
+
+    source_value = _normalize_identity_scalar(entry.get("source_file"))
+    page_number = _coerce_row_identity_int(entry.get("page_number"))
+    result_index = _coerce_row_identity_int(entry.get("result_index"))
+
+    if not isinstance(source_value, str) or not source_value.strip():
+        return None
+    if page_number is None or result_index is None:
+        return None
+
+    return {
+        "source_file": source_value.strip(),
+        "page_number": page_number,
+        "result_index": result_index,
+    }
+
+
+def build_row_identity_token(entry: Mapping[str, object]) -> str | None:
+    """Serialize one row identity into the stable viewer token format."""
+
+    identity = coerce_row_identity(entry)
+    if identity is None:
+        return None
+
+    return json.dumps(
+        [
+            identity["source_file"],
+            identity["page_number"],
+            identity["result_index"],
+        ],
+        separators=(",", ":"),
+    )
+
+
+def parse_row_identity_token(token: str) -> RowIdentity | None:
+    """Parse one viewer token back into a stable row identity."""
+
+    try:
+        token_data = json.loads(token)
+    except (TypeError, json.JSONDecodeError):
+        return None
+
+    if isinstance(token_data, str):
+        try:
+            token_data = json.loads(token_data)
+        except (TypeError, json.JSONDecodeError):
+            return None
+
+    if isinstance(token_data, Mapping):
+        return coerce_row_identity(token_data)
+
+    if isinstance(token_data, (list, tuple)) and len(token_data) >= 3:
+        return coerce_row_identity(
+            {
+                "source_file": token_data[0],
+                "page_number": token_data[1],
+                "result_index": token_data[2],
+            }
+        )
+
     return None
 
 
