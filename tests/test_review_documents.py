@@ -85,20 +85,17 @@ def test_build_dropdown_choices_prioritizes_incomplete_documents(monkeypatch):
     alpha = ProcessedDocument(
         doc_dir=Path("/tmp/alpha_deadbeef"),
         stem="alpha",
-        pdf_path=Path("/tmp/alpha_deadbeef/alpha.pdf"),
-        csv_path=Path("/tmp/alpha_deadbeef/alpha.csv"),
+        source_pdf=Path("/tmp/alpha_deadbeef/alpha.pdf"),
     )
     beta = ProcessedDocument(
         doc_dir=Path("/tmp/beta_deadbeef"),
         stem="beta",
-        pdf_path=Path("/tmp/beta_deadbeef/beta.pdf"),
-        csv_path=Path("/tmp/beta_deadbeef/beta.csv"),
+        source_pdf=Path("/tmp/beta_deadbeef/beta.pdf"),
     )
     gamma = ProcessedDocument(
         doc_dir=Path("/tmp/gamma_deadbeef"),
         stem="gamma",
-        pdf_path=Path("/tmp/gamma_deadbeef/gamma.pdf"),
-        csv_path=Path("/tmp/gamma_deadbeef/gamma.csv"),
+        source_pdf=Path("/tmp/gamma_deadbeef/gamma.pdf"),
     )
 
     review_frames = {
@@ -127,8 +124,7 @@ def test_build_page_image_value_adds_overlay_for_current_row(tmp_path):
     document = ProcessedDocument(
         doc_dir=doc_dir,
         stem="glucose",
-        pdf_path=doc_dir / "glucose.pdf",
-        csv_path=doc_dir / "glucose.csv",
+        source_pdf=doc_dir / "glucose.pdf",
     )
     row = pd.Series(
         {
@@ -219,8 +215,7 @@ def test_get_review_frame_uses_build_review_rows_even_without_csv(monkeypatch, t
     document = ProcessedDocument(
         doc_dir=doc_dir,
         stem="glucose",
-        pdf_path=doc_dir / "glucose.pdf",
-        csv_path=doc_dir / "glucose.csv",
+        source_pdf=doc_dir / "glucose.pdf",
     )
     expected_df = pd.DataFrame([{"page_number": 1, "result_index": 0, "review_status": ""}])
 
@@ -235,8 +230,7 @@ def test_apply_review_action_auto_advances_to_next_pending_row(monkeypatch):
     document = ProcessedDocument(
         doc_dir=Path("/tmp/glucose_deadbeef"),
         stem="glucose",
-        pdf_path=Path("/tmp/glucose_deadbeef/glucose.pdf"),
-        csv_path=Path("/tmp/glucose_deadbeef/glucose.csv"),
+        source_pdf=Path("/tmp/glucose_deadbeef/glucose.pdf"),
     )
     initial_df = _make_review_df(statuses=["", "", ""], pages=[1, 1, 2], rows=[0, 1, 0])
     refreshed_df = _make_review_df(statuses=["accepted", "", ""], pages=[1, 1, 2], rows=[0, 1, 0])
@@ -276,14 +270,12 @@ def test_build_dropdown_state_advances_to_next_document_when_current_has_no_pend
     alpha = ProcessedDocument(
         doc_dir=Path("/tmp/alpha_deadbeef"),
         stem="alpha",
-        pdf_path=Path("/tmp/alpha_deadbeef/alpha.pdf"),
-        csv_path=Path("/tmp/alpha_deadbeef/alpha.csv"),
+        source_pdf=Path("/tmp/alpha_deadbeef/alpha.pdf"),
     )
     beta = ProcessedDocument(
         doc_dir=Path("/tmp/beta_deadbeef"),
         stem="beta",
-        pdf_path=Path("/tmp/beta_deadbeef/beta.pdf"),
-        csv_path=Path("/tmp/beta_deadbeef/beta.csv"),
+        source_pdf=Path("/tmp/beta_deadbeef/beta.pdf"),
     )
     review_frames = {
         alpha.doc_dir.name: _make_review_df(statuses=["accepted"], pages=[1], rows=[0]),
