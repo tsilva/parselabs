@@ -19,19 +19,19 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from parselabs.config import ProfileConfig
+from parselabs.exceptions import ConfigurationError
 from parselabs.paths import get_lab_specs_path
+from parselabs.runtime import load_profile_config
 
 logger = logging.getLogger(__name__)
 
 def load_data(profile_name: str):
     """Load the main CSV file."""
 
-    profile_path = ProfileConfig.find_path(profile_name)
-    if not profile_path:
-        raise FileNotFoundError(f"Profile not found: {profile_name}")
-
-    profile = ProfileConfig.from_file(profile_path)
+    try:
+        profile = load_profile_config(profile_name)
+    except ConfigurationError as exc:
+        raise FileNotFoundError(str(exc)) from exc
     if not profile.output_path:
         raise FileNotFoundError(f"Profile '{profile_name}' has no output_path defined")
 

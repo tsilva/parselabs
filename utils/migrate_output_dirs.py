@@ -17,6 +17,8 @@ import re
 from pathlib import Path
 
 from parselabs.config import ProfileConfig  # noqa: E402
+from parselabs.exceptions import ConfigurationError  # noqa: E402
+from parselabs.runtime import load_profile_configs  # noqa: E402
 from parselabs.store import compute_file_hash  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -114,18 +116,11 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Show what would be changed without modifying files")
     args = parser.parse_args()
 
-    if args.profile:
-        profile_path = ProfileConfig.find_path(args.profile)
-        if not profile_path:
-            logger.error(f"Profile '{args.profile}' not found")
-            return 1
-        profiles = [ProfileConfig.from_file(profile_path)]
-    else:
-        profile_paths = ProfileConfig.iter_paths()
-        if not profile_paths:
-            logger.error(f"No profiles found in {ProfileConfig.get_profiles_dir()}")
-            return 1
-        profiles = [ProfileConfig.from_file(path) for path in profile_paths]
+    try:
+        profiles = load_profile_configs(args.profile)
+    except ConfigurationError as exc:
+        logger.error(str(exc))
+        return 1
 
     total_stats = {"renamed": 0, "already_migrated": 0, "pdf_not_found": 0, "target_exists": 0}
 
