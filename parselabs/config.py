@@ -80,7 +80,7 @@ class ExtractionConfig:
 class ProfileConfig:
     """Profile configuration with optional demographics.
 
-    Paths + optional setting overrides + demographics for personalized ranges.
+    Paths + local processing settings + demographics for personalized ranges.
     Supports both YAML and JSON formats.
     """
 
@@ -89,7 +89,7 @@ class ProfileConfig:
     output_path: Path | None = None
     input_file_regex: str | None = None
 
-    # Runtime settings
+    # Shared runtime settings resolved from ~/.config/parselabs/.env or shell env.
     openrouter_api_key: str | None = None
     openrouter_base_url: str | None = None
     extract_model_id: str | None = None
@@ -154,26 +154,17 @@ class ProfileConfig:
         )
 
         # Extract runtime settings
-        openrouter = data.get("openrouter", {})
-        models = data.get("models", {})
         openrouter_api_key = cls._first_value(
             os.getenv("OPENROUTER_API_KEY"),
             config_env.get("OPENROUTER_API_KEY"),
-            openrouter.get("api_key"),
-            data.get("openrouter_api_key"),
-            data.get("api_key"),
         )
         openrouter_base_url = cls._first_value(
             os.getenv("OPENROUTER_BASE_URL"),
             config_env.get("OPENROUTER_BASE_URL"),
-            openrouter.get("base_url"),
-            data.get("openrouter_base_url"),
-            data.get("base_url"),
         )
         extract_model_id = cls._first_value(
-            models.get("extract_model_id"),
-            data.get("extract_model_id"),
-            data.get("model"),
+            os.getenv("EXTRACT_MODEL_ID"),
+            config_env.get("EXTRACT_MODEL_ID"),
         )
 
         # Extract optional overrides

@@ -38,10 +38,6 @@ def test_load_ui_context_requires_explicit_profile(monkeypatch, tmp_path):
                 "paths:",
                 "  input_path: ../input",
                 "  output_path: ../output",
-                "openrouter:",
-                '  api_key: "test-key"',
-                "models:",
-                '  extract_model_id: "test-model"',
                 "",
             ]
         ),

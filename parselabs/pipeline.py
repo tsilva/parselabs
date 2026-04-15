@@ -779,7 +779,7 @@ def _classify_api_check_error(error_msg: str, timeout: int) -> tuple[bool, str]:
         return (
             False,
             f"Authentication failed - check OPENROUTER_API_KEY in {get_env_file()} "
-            f"or the profile openrouter_api_key: {error_msg}",
+            f"or the shell environment: {error_msg}",
         )
 
     # Authorization / permission failures
@@ -792,11 +792,11 @@ def _classify_api_check_error(error_msg: str, timeout: int) -> tuple[bool, str]:
 
     # Model / endpoint not found
     if "404" in error_msg:
-        return False, f"Model or endpoint not found - check extract_model_id and base_url: {error_msg}"
+        return False, f"Model or endpoint not found - check EXTRACT_MODEL_ID and OPENROUTER_BASE_URL: {error_msg}"
 
     # Invalid request / unsupported model configuration
     if "400" in error_msg or "BadRequest" in error_msg or "invalid" in error_msg.lower():
-        return False, f"API validation request was rejected - check extract_model_id and profile settings: {error_msg}"
+        return False, f"API validation request was rejected - check EXTRACT_MODEL_ID, OPENROUTER_BASE_URL, or --model: {error_msg}"
 
     # Connection failures (network issues, DNS problems, server down)
     if "Connection" in error_msg or "refused" in error_msg.lower() or "reset" in error_msg.lower() or "Name or service not known" in error_msg or "getaddrinfo" in error_msg:

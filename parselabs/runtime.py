@@ -98,10 +98,13 @@ class RuntimeContext:
         if need_api and not profile.openrouter_api_key:
             raise ConfigurationError(
                 f"Profile '{profile_name}' has no OpenRouter API key defined. "
-                f"Set OPENROUTER_API_KEY in {get_env_file()} or in the profile."
+                f"Set OPENROUTER_API_KEY in {get_env_file()} or in the shell environment."
             )
         if need_api and not profile.extract_model_id and not overrides.get("model"):
-            raise ConfigurationError(f"Profile '{profile_name}' has no extract_model_id defined.")
+            raise ConfigurationError(
+                f"Profile '{profile_name}' has no extract_model_id defined. "
+                f"Set EXTRACT_MODEL_ID in {get_env_file()}, in the shell environment, or pass --model."
+            )
 
         # Guard: Input paths must exist before processing starts.
         if need_input and input_path and not input_path.exists():

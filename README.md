@@ -37,16 +37,18 @@ uv tool install . --editable
 # Create your profile directory
 mkdir -p ~/.config/parselabs/profiles
 
-# Create ~/.config/parselabs/profiles/myname.yaml with your paths and runtime settings
+# Create ~/.config/parselabs/.env with shared runtime settings
+# Example:
+# OPENROUTER_API_KEY="your_key_here"
+# OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"
+# EXTRACT_MODEL_ID="google/gemini-3-flash-preview"
+#
+# Create ~/.config/parselabs/profiles/myname.yaml with your paths
 # Example:
 # name: "My Labs"
 # paths:
 #   input_path: "/path/to/lab/pdfs"
 #   output_path: "/path/to/output"
-# openrouter:
-#   api_key: "your_key_here"
-# models:
-#   extract_model_id: "google/gemini-3-flash-preview"
 
 # Extract lab results
 parselabs --profile myname
@@ -90,7 +92,7 @@ brew install poppler
 
 ### Profiles
 
-Profiles define paths and per-profile overrides. Put shared OpenRouter credentials in `~/.config/parselabs/.env`, then keep profile files focused on paths and model selection:
+Profiles define paths and local processing settings. Put shared runtime settings in `~/.config/parselabs/.env`:
 
 ```bash
 mkdir -p ~/.config/parselabs
@@ -98,10 +100,11 @@ cat > ~/.config/parselabs/.env <<'EOF'
 OPENROUTER_API_KEY=your_key_here
 # Optional:
 # OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+EXTRACT_MODEL_ID=google/gemini-3-flash-preview
 EOF
 ```
 
-Values in `~/.config/parselabs/.env` override matching keys stored in profiles. Shell environment variables still take highest precedence.
+Values in `~/.config/parselabs/.env` supply the default runtime settings. Shell environment variables still take highest precedence.
 
 Store profiles under `~/.config/parselabs/profiles/`, one file per user or data source:
 
@@ -112,13 +115,6 @@ paths:
   input_path: "/path/to/lab/pdfs"
   output_path: "/path/to/output"
   input_file_regex: "*.pdf"  # Optional filter
-
-openrouter:
-  api_key: "optional-profile-override"
-  base_url: "https://openrouter.ai/api/v1"  # Optional
-
-models:
-  extract_model_id: "google/gemini-3-flash-preview"
 
 processing:
   workers: 4
@@ -226,7 +222,7 @@ Notes:
 - The sync command scans the profile `output_path` and copies only fixture-ready documents: every extracted row reviewed and no unresolved `review_missing_rows` markers.
 - Expected fixture CSVs are rebuilt from reviewed JSON truth, not from a fresh extraction run.
 - The pytest command reruns the full approved corpus together, then compares each document's final CSV output against its approved `expected.csv`.
-- Each approved case uses the runtime settings from its recorded profile file.
+- Each approved case uses its recorded profile name plus the current shared runtime settings from `~/.config/parselabs/.env` or the shell environment.
 - Approved fixtures live under `tests/fixtures/approved/` and remain uncommitted/private.
 - Each case directory contains `document.pdf`, `expected.csv`, `review_state.json`, and `case.json`.
 - `sync-reviewed` also removes stale fixture cases from the same profile when the processed document is no longer fixture-ready.
