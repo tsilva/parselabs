@@ -9,14 +9,11 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 
 import pandas as pd
 
 from parselabs.config import LabSpecsConfig, ProfileConfig
 from parselabs.standardization_refresh import (
-    _prune_unknown_cache_entries,
-    _render_prompt_template,
     refresh_standardization_caches_from_dataframe,
 )
 

@@ -13,7 +13,7 @@ from typing import Callable  # noqa: E402
 
 import pandas as pd  # noqa: E402
 import pdf2image  # noqa: E402
-from openai import OpenAI  # noqa: E402
+from openai import APIError, OpenAI  # noqa: E402
 from tqdm import tqdm  # noqa: E402
 
 # Local imports
@@ -27,7 +27,10 @@ from parselabs.export_schema import COLUMN_SCHEMA, get_column_lists  # noqa: E40
 from parselabs.extraction import (  # noqa: E402
     extract_labs_from_page_image,
 )
-from parselabs.paths import get_profiles_dir  # noqa: E402
+from parselabs.paths import (
+    get_env_file,  # noqa: E402
+    get_profiles_dir,  # noqa: E402
+)
 from parselabs.rows import (  # noqa: E402
     DOCUMENT_REVIEW_COLUMNS,
     build_document_review_dataframe,
@@ -479,8 +482,7 @@ def process_single_pdf(
         logger.info(f"[{pdf_stem}] Completed successfully")
         return csv_path, failed_pages
 
-    except Exception as e:
-        # Catch-all for errors during extraction or review CSV rebuild.
+    except (OSError, PermissionError, PipelineError, RuntimeError) as e:
         logger.error(f"[{pdf_stem}] Processing failed: {e}", exc_info=True)
         return None, failed_pages
 
@@ -796,7 +798,11 @@ def _classify_api_check_error(error_msg: str, timeout: int) -> tuple[bool, str]:
 
     # Authentication errors (invalid or missing API key)
     if "401" in error_msg or "Unauthorized" in error_msg:
-        return False, f"Authentication failed - check the profile openrouter_api_key: {error_msg}"
+        return (
+            False,
+            f"Authentication failed - check OPENROUTER_API_KEY in {get_env_file()} "
+            f"or the profile openrouter_api_key: {error_msg}",
+        )
 
     # Authorization / permission failures
     if "403" in error_msg or "Forbidden" in error_msg or "permission" in error_msg.lower():
@@ -844,8 +850,7 @@ def validate_api_access(client: OpenAI, model_id: str, timeout: int = 10) -> tup
         if not completion or not getattr(completion, "choices", None):
             return False, "API validation failed: empty completion response"
         return True, "API key and model validation passed"
-    except Exception as e:
-        # Classify the error to provide helpful diagnostic messages
+    except APIError as e:
         return _classify_api_check_error(str(e), timeout)
 
 
@@ -1085,7 +1090,7 @@ def _maybe_auto_standardize_outputs(
             base_url=base_url,
             api_key=api_key,
         )
-    except Exception as exc:
+    except (APIError, OSError, ValueError) as exc:
         logger.warning(f"[standardization] Auto-refresh failed before completion: {exc}")
         return _list_processed_document_csv_paths(output_path)
 
@@ -1280,18 +1285,6 @@ def run_pipeline_for_pdf_files(
         failed_pages=all_failed_pages,
         pdfs_failed=pdfs_failed,
     )
-
-
-def build_final_output_dataframe(
-    pdf_files: list[Path],
-    config: ExtractionConfig,
-    lab_specs: LabSpecsConfig,
-) -> pd.DataFrame:
-    """Return the final post-validation export DataFrame for explicit PDFs."""
-
-    return run_pipeline_for_pdf_files(pdf_files, config, lab_specs).final_df
-
-
 def build_final_output_dataframe_from_reviewed_json(
     output_path: Path,
     lab_specs: LabSpecsConfig,
@@ -1473,11 +1466,6 @@ def main():
         except (ConfigurationError, PipelineError) as e:
             logger.error(f"\nError in profile '{profile_name}':\n{e}")
             results[profile_name] = "failed"
-            sys.exit(1)
-        # Catch-all for unexpected errors during profile processing
-        except Exception as e:
-            logger.error(f"\nUnexpected error in profile '{profile_name}': {e}")
-            results[profile_name] = f"error: {e}"
             sys.exit(1)
 
     # Print summary if multiple profiles were processed

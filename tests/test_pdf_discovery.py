@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from parselabs.pipeline import _discover_pdf_files
 from parselabs.exceptions import PipelineError
+from parselabs.pipeline import _discover_pdf_files
 
 
 def test_discover_pdf_files_matches_pattern_case_insensitively(tmp_path):

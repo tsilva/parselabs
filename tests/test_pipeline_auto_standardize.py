@@ -1,11 +1,11 @@
-from argparse import Namespace
 import sys
+from argparse import Namespace
 from types import SimpleNamespace
 
 import pandas as pd
 
-from parselabs.config import ExtractionConfig
 from parselabs import pipeline as main
+from parselabs.config import ExtractionConfig
 from parselabs.standardization_refresh import StandardizationRefreshResult
 
 

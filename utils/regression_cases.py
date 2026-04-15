@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import logging
 import os
@@ -20,6 +19,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from parselabs.config import LabSpecsConfig, ProfileConfig  # noqa: E402
+from parselabs.exceptions import ConfigurationError  # noqa: E402
 from parselabs.regression import (  # noqa: E402
     APPROVED_FIXTURES_DIR,
     REVIEW_STATE_JSON_NAME,
@@ -35,6 +35,8 @@ from parselabs.rows import (  # noqa: E402
     load_document_review_rows,
     rebuild_document_csv,
 )
+from parselabs.runtime import RuntimeContext  # noqa: E402
+from parselabs.store import compute_file_hash  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +46,6 @@ def parse_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description="Sync approved regression fixtures from reviewed processed documents")
     subparsers = parser.add_subparsers(dest="command", required=True)
-
-    # Keep the original approve command as a backward-compatible alias.
-    approve_parser = subparsers.add_parser("approve", help="Backward-compatible alias for sync-reviewed")
-    approve_parser.add_argument("--profile", "-p", required=True, help="Profile name used to locate the processed output directory")
 
     sync_parser = subparsers.add_parser("sync-reviewed", help="Copy fixture-ready processed documents into regression fixtures")
     sync_parser.add_argument("--profile", "-p", required=True, help="Profile name used to locate the processed output directory")
@@ -60,35 +58,16 @@ def parse_args() -> argparse.Namespace:
 def load_profile(profile_name: str) -> ProfileConfig:
     """Load a configured profile by name."""
 
-    profile_path = ProfileConfig.find_path(profile_name)
-
-    # Guard: The requested profile must exist.
-    if not profile_path:
-        raise SystemExit(f"Profile '{profile_name}' was not found.")
-
-    profile = ProfileConfig.from_file(profile_path)
-
-    # Guard: The fixture sync operates on processed outputs, so output_path is required.
-    if not profile.output_path:
-        raise SystemExit(f"Profile '{profile_name}' has no output_path defined.")
-
-    # Guard: The processed output directory must already exist.
-    if not profile.output_path.exists():
-        raise SystemExit(f"Output path does not exist for profile '{profile_name}': {profile.output_path}")
-
-    return profile
-
-
-def compute_file_hash(file_path: Path, hash_length: int = 8) -> str:
-    """Compute a short SHA-256 hash for a fixture case id."""
-
-    hasher = hashlib.sha256()
-    with open(file_path, "rb") as handle:
-        for chunk in iter(lambda: handle.read(8192), b""):
-            hasher.update(chunk)
-    return hasher.hexdigest()[:hash_length]
-
-
+    try:
+        return RuntimeContext.from_profile(
+            profile_name,
+            need_input=False,
+            need_output=True,
+            need_api=False,
+            setup_logs=False,
+        ).profile
+    except ConfigurationError as exc:
+        raise SystemExit(str(exc)) from exc
 def approve_cases(args: argparse.Namespace) -> None:
     """Sync reviewed processed documents into approved regression fixtures."""
 
@@ -266,7 +245,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = parse_args()
 
-    if args.command in {"approve", "sync-reviewed"}:
+    if args.command == "sync-reviewed":
         approve_cases(args)
         return
 

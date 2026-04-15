@@ -1,7 +1,6 @@
 import pandas as pd
 
 from parselabs.normalization import apply_normalizations
-
 from tests.test_urine_qualitative_variants import _make_lab_specs
 
 

@@ -346,7 +346,7 @@ class ValueValidator:
                 try:
                     pct_diff, tolerance_pct = self._evaluate_single_relationship(rel, lab_values)
                 # Evaluation error — log and skip
-                except Exception as e:
+                except (KeyError, TypeError, ValueError) as e:
                     logger.debug(f"Error evaluating relationship {rel.get('name')}: {e}")
                     continue
 
@@ -458,7 +458,7 @@ class ValueValidator:
                 return None
             return eval(result_formula)
         # Evaluation failed (division by zero, syntax error, etc.)
-        except Exception:
+        except (ZeroDivisionError, SyntaxError, NameError, TypeError, ValueError):
             return None
 
     # =========================================================================

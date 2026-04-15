@@ -28,63 +28,32 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     args = _coerce_argv(argv)
 
-    # Default to extraction mode for backward compatibility with the original CLI.
     if not args:
         _run_extract([])
         return
 
     command, *rest = args
 
-    # Surface the consolidated help text before dispatching to a subcommand parser.
     if command in {"-h", "--help", "help"}:
         print(_help_text())
         raise SystemExit(0)
 
-    # Route explicit extraction subcommands to the existing pipeline parser.
     if command == "extract":
         _run_extract(rest, program_name="parselabs extract")
         return
 
-    # Route the combined review UI and allow selecting the initial tab.
     if command == "review":
         _run_review(rest, program_name="parselabs review")
         return
 
-    # Preserve the legacy viewer alias as an undocumented subcommand.
-    if command == "viewer":
-        _run_review(rest, program_name="parselabs viewer", default_tab="results")
-        return
-
-    # Preserve the legacy review-docs alias as an undocumented subcommand.
-    if command == "review-docs":
-        _run_review(rest, program_name="parselabs review-docs", default_tab="review")
-        return
-
-    # Route maintenance utilities through the unified admin command tree.
     if command == "admin":
         _run_admin(rest)
         return
 
-    # Treat any other argv shape as the legacy extraction invocation style.
+    if command in {"viewer", "review-docs"}:
+        raise SystemExit(f"Unsupported command '{command}'. Use 'parselabs review --tab results' or '--tab review'.")
+
     _run_extract(args)
-
-
-def viewer() -> None:
-    """Run the review viewer CLI."""
-
-    _run_review(sys.argv[1:], program_name="parselabs-viewer", default_tab="results")
-
-
-def review_documents() -> None:
-    """Run the processed document reviewer CLI."""
-
-    _run_review(sys.argv[1:], program_name="parselabs-review-docs", default_tab="review")
-
-
-def admin() -> None:
-    """Run the unified admin CLI."""
-
-    _run_admin(sys.argv[1:])
 
 
 def _run_extract(argv: Sequence[str], *, program_name: str = "parselabs") -> None:

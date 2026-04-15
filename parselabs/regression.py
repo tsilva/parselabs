@@ -6,12 +6,12 @@ import json
 from dataclasses import dataclass
 from difflib import unified_diff
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 
 from parselabs.config import ProfileConfig
 from parselabs.export_schema import COLUMN_ORDER, COLUMN_SCHEMA
+from parselabs.types import ApprovedCaseMetadata
 from parselabs.utils import ensure_columns
 
 APPROVED_FIXTURES_DIR = Path("tests/fixtures/approved")
@@ -44,7 +44,7 @@ class ApprovedCase:
     file_hash: str
     original_filename: str
     profile: str | None
-    metadata: dict[str, Any]
+    metadata: ApprovedCaseMetadata
 
 
 def get_required_regression_profile(profile_name: str | None) -> ProfileConfig:
@@ -199,7 +199,7 @@ def build_case_diff(expected_df: pd.DataFrame, actual_df: pd.DataFrame, case_id:
     return f"Mismatch for approved case '{case_id}':\n{diff}"
 
 
-def _normalize_cell(value: Any, dtype_name: str) -> str:
+def _normalize_cell(value: object, dtype_name: str) -> str:
     """Normalize a single cell according to the final export schema."""
 
     if pd.isna(value):

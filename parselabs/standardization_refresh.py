@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from typing import cast
 
 import pandas as pd
-from openai import OpenAI
+from openai import APIError, OpenAI
 
 from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig
 from parselabs.extraction import load_prompt_template
@@ -19,6 +20,7 @@ from parselabs.standardization import (
     normalize_unit_cache_key_component,
     save_cache,
 )
+from parselabs.types import StandardizationNameMatch, StandardizationUnitMatch
 from parselabs.utils import parse_llm_json_response
 
 logger = logging.getLogger(__name__)
@@ -57,14 +59,7 @@ class StandardizationRefreshResult:
 
         return self.rebuild_required or bool(self.pruned_name_entries or self.pruned_unit_entries)
 
-    @property
-    def had_errors(self) -> bool:
-        """Return whether either refresh step raised an error."""
-
-        return self.name_error is not None or self.unit_error is not None
-
-
-def _render_prompt_template(template: str, **replacements: str) -> str:
+def _render_prompt_template(template: str, **replacements: object) -> str:
     """Replace only known placeholder tokens in a prompt template."""
 
     rendered = template
@@ -104,7 +99,7 @@ def _standardize_names_with_llm(
 ) -> dict[tuple[str, str | None], str]:
     """Call the LLM to standardize a batch of raw lab names."""
 
-    items = [
+    items: list[StandardizationNameMatch] = [
         {
             "raw_lab_name": raw_name,
             "raw_section_name": raw_section_name,
@@ -134,7 +129,7 @@ Return a JSON array of objects with raw_lab_name, raw_section_name, and standard
         max_tokens=4000,
     )
 
-    response_text = completion.choices[0].message.content.strip()
+    response_text = (completion.choices[0].message.content or "").strip()
     result = parse_llm_json_response(response_text, fallback=[])
 
     validated: dict[tuple[str, str | None], str] = {}
@@ -151,9 +146,13 @@ Return a JSON array of objects with raw_lab_name, raw_section_name, and standard
         return validated
 
     for item in result:
-        raw_name = item.get("raw_lab_name")
-        raw_section_name = item.get("raw_section_name")
-        standardized_name = item.get("standardized_name")
+        if not isinstance(item, dict):
+            continue
+
+        typed_item = cast(StandardizationNameMatch, item)
+        raw_name = typed_item.get("raw_lab_name")
+        raw_section_name = typed_item.get("raw_section_name")
+        standardized_name = typed_item.get("standardized_name")
 
         # Guard: Rows without the identifying inputs cannot be matched back to the request.
         if raw_name is None:
@@ -199,7 +198,7 @@ def _standardize_units_with_llm(
     if not uncached_pairs:
         return {}
 
-    items = [{"raw_unit": raw_unit, "lab_name": lab_name} for raw_unit, lab_name in uncached_pairs]
+    items: list[StandardizationUnitMatch] = [{"raw_unit": raw_unit, "lab_name": lab_name} for raw_unit, lab_name in uncached_pairs]
     primary_units_map = {}
 
     # Build primary-unit context so missing raw units can still map correctly.
@@ -240,25 +239,29 @@ Return a JSON array with the standardized values."""
         max_tokens=4000,
     )
 
-    response_text = completion.choices[0].message.content.strip()
+    response_text = (completion.choices[0].message.content or "").strip()
     result_list = parse_llm_json_response(response_text, fallback=[])
-    validated = {}
+    validated: dict[str, str] = {}
 
     # Keep only candidate units and normalize keys exactly as the runtime does.
     if isinstance(result_list, list):
         for item in result_list:
-            raw_unit = item.get("raw_unit")
-            lab_name = item.get("lab_name")
-            standardized_unit = item.get("standardized_unit")
+            if not isinstance(item, dict):
+                continue
 
-            if raw_unit is None or lab_name is None:
+            typed_item = cast(StandardizationUnitMatch, item)
+            raw_unit = typed_item.get("raw_unit")
+            item_lab_name = typed_item.get("lab_name")
+            standardized_unit = typed_item.get("standardized_unit")
+
+            if raw_unit is None or item_lab_name is None:
                 continue
 
             if standardized_unit not in standardized_units:
                 continue
 
             normalized_unit = normalize_unit_cache_key_component(raw_unit)
-            cache_key = f"{normalized_unit}|{str(lab_name).lower().strip()}"
+            cache_key = f"{normalized_unit}|{str(item_lab_name).lower().strip()}"
             validated[cache_key] = standardized_unit
 
     return validated
@@ -388,21 +391,6 @@ def _collect_uncached_unit_pairs(
     return uncached_pairs
 
 
-def scan_standardization_misses(
-    df: pd.DataFrame,
-    *,
-    name_cache: dict[str, str] | None = None,
-    unit_cache: dict[str, str] | None = None,
-) -> tuple[list[tuple[str, str | None]], list[tuple[str, str]]]:
-    """Return uncached name and unit mappings for a review/export dataframe."""
-
-    name_cache = load_cache("name_standardization") if name_cache is None else dict(name_cache)
-    unit_cache = load_cache("unit_standardization") if unit_cache is None else dict(unit_cache)
-    uncached_names = _collect_uncached_names(df, name_cache)
-    uncached_unit_pairs = _collect_uncached_unit_pairs(df, name_cache=name_cache, unit_cache=unit_cache)
-    return uncached_names, uncached_unit_pairs
-
-
 def _build_client(
     *,
     base_url: str | None,
@@ -473,13 +461,14 @@ def refresh_standardization_caches_from_dataframe(
     # Refresh uncached raw names first so unit discovery can use the newly mapped names.
     if uncached_names:
         if name_error:
-            pass
+            logger.warning(f"[standardization] Skipping name refresh: {name_error}")
         elif not model_id:
             name_error = "Standardization refresh requires an extraction model ID."
         else:
             try:
+                assert client is not None
                 refreshed_names = _standardize_names_with_llm(uncached_names, lab_specs.standardized_names, client, model_id)
-            except Exception as exc:  # pragma: no cover - exercised through pipeline warning path
+            except (APIError, OSError, ValueError) as exc:  # pragma: no cover - exercised through pipeline warning path
                 name_error = str(exc)
             else:
                 for (raw_name, raw_section_name), standardized_name in refreshed_names.items():
@@ -504,11 +493,12 @@ def refresh_standardization_caches_from_dataframe(
     # Refresh unresolved unit contexts using the post-name-refresh working cache.
     if uncached_unit_pairs:
         if unit_error:
-            pass
+            logger.warning(f"[standardization] Skipping unit refresh: {unit_error}")
         elif not model_id:
             unit_error = "Standardization refresh requires an extraction model ID."
         else:
             try:
+                assert client is not None
                 refreshed_units = _standardize_units_with_llm(
                     uncached_unit_pairs,
                     lab_specs.standardized_units,
@@ -516,7 +506,7 @@ def refresh_standardization_caches_from_dataframe(
                     model_id,
                     lab_specs,
                 )
-            except Exception as exc:  # pragma: no cover - exercised through pipeline warning path
+            except (APIError, OSError, ValueError) as exc:  # pragma: no cover - exercised through pipeline warning path
                 unit_error = str(exc)
             else:
                 for cache_key, standardized_unit in refreshed_units.items():

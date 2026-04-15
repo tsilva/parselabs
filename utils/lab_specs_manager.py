@@ -217,14 +217,14 @@ def parse_range_string(range_str, primary_unit=None):
     if match:
         try:
             return {"min": float(match.group(1)), "max": float(match.group(2))}
-        except Exception:
+        except (TypeError, ValueError):
             return None
 
     # Try single value
     try:
         val = float(range_str.strip())
         return {"min": val, "max": val}
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return None
 
 

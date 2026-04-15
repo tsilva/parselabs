@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 from dataclasses import dataclass
+from json import JSONDecodeError
 from pathlib import Path
 
 from PIL import Image
@@ -12,7 +14,8 @@ from PIL import Image
 from parselabs.review import get_bbox_coordinates, scale_bbox_to_pixels
 from parselabs.review_state import ReviewTarget, apply_review_action_for_target
 from parselabs.runtime import RuntimeContext
-from parselabs.store import iter_processed_documents, parse_page_number, read_page_payload
+from parselabs.store import get_page_image_path, iter_processed_documents, parse_page_number, read_page_payload
+from parselabs.types import BBox, PageLabResultPayload, ReviewArtifactPayload, ReviewDecisionResult
 
 DEFAULT_ARTIFACTS_DIRNAME = ".review-artifacts"
 DEFAULT_CROP_PADDING_PX = 24
@@ -30,7 +33,7 @@ class PendingReviewRow:
     page_image_path: Path | None
     page_number: int
     result_index: int
-    stored_result: dict
+    stored_result: PageLabResultPayload
 
 
 def load_review_context(profile_name: str) -> RuntimeContext:
@@ -99,7 +102,7 @@ def find_next_pending_row(output_path: Path, *, review_needed_only: bool) -> Pen
                     doc_stem=document.stem,
                     source_pdf_path=document.source_pdf,
                     page_json_path=page_json_path,
-                    page_image_path=document.doc_dir / f"{document.stem}.{page_number:03d}.jpg",
+                    page_image_path=get_page_image_path(document.doc_dir, int(page_number)),
                     page_number=int(page_number),
                     result_index=int(result_index),
                     stored_result=stored_result,
@@ -109,7 +112,7 @@ def find_next_pending_row(output_path: Path, *, review_needed_only: bool) -> Pen
     return None
 
 
-def build_next_payload(profile_name: str, row: PendingReviewRow, artifacts_dir: Path) -> dict:
+def build_next_payload(profile_name: str, row: PendingReviewRow, artifacts_dir: Path) -> ReviewArtifactPayload:
     """Build the JSON payload for one pending review row."""
 
     page_image_path = row.page_image_path if row.page_image_path and row.page_image_path.exists() else None
@@ -141,7 +144,7 @@ def get_next_review_payload(
     *,
     artifacts_dir: Path | None = None,
     review_needed_only: bool = False,
-) -> dict:
+) -> ReviewArtifactPayload:
     """Return the next pending row payload for one review profile."""
 
     context = load_review_context(profile_name)
@@ -165,7 +168,7 @@ def get_next_review_payload(
     return build_next_payload(profile_name, pending_row, resolved_artifacts_dir)
 
 
-def apply_review_decision(profile_name: str, row_id: str, decision: str) -> tuple[bool, dict]:
+def apply_review_decision(profile_name: str, row_id: str, decision: str) -> tuple[bool, ReviewDecisionResult]:
     """Persist one review decision for the requested row identifier."""
 
     context = load_review_context(profile_name)
@@ -276,7 +279,7 @@ def decode_row_id(row_id: str, output_path: Path) -> ReviewTarget:
     try:
         raw_payload = base64.urlsafe_b64decode(padded_row_id.encode("ascii"))
         token_payload = json.loads(raw_payload.decode("utf-8"))
-    except Exception as exc:  # pragma: no cover - defensive parse guard
+    except (ValueError, binascii.Error, JSONDecodeError, UnicodeDecodeError) as exc:  # pragma: no cover - defensive parse guard
         raise ValueError(f"Invalid row_id: {exc}") from exc
 
     doc_dir_name = str(token_payload.get("doc_dir_name") or "").strip()
@@ -308,7 +311,7 @@ def decode_row_id(row_id: str, output_path: Path) -> ReviewTarget:
     )
 
 
-def format_bbox_payload(bbox: tuple[int, int, int, int] | tuple[float, float, float, float] | None) -> dict | None:
+def format_bbox_payload(bbox: tuple[int, int, int, int] | tuple[float, float, float, float] | None) -> BBox | None:
     """Return bbox coordinates as a JSON-friendly object."""
 
     # Guard: Missing bbox values stay null in the response payload.
@@ -324,7 +327,7 @@ def format_bbox_payload(bbox: tuple[int, int, int, int] | tuple[float, float, fl
     }
 
 
-def format_json_text(payload: dict) -> str:
+def format_json_text(payload: ReviewArtifactPayload | ReviewDecisionResult) -> str:
     """Return one stable human-readable JSON string."""
 
     return json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True)

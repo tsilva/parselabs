@@ -7,13 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from parselabs.review import (
-    SOURCE_BBOX_LABEL,
-    build_details_html,
-    build_page_image_value_for_entry,
-    build_review_status_badge,
-)
 from parselabs.store import apply_review_action, resolve_document_dir
+from parselabs.types import ReviewRow
 
 
 @dataclass(frozen=True)
@@ -23,21 +18,6 @@ class ReviewTarget:
     doc_dir: Path
     page_number: int
     result_index: int
-
-
-@dataclass(frozen=True)
-class ViewerRowContext:
-    """Presentation payload for one selected row in the results explorer."""
-
-    row_index: int
-    position_text: str
-    source_image_value: tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None
-    details_html: str
-    status_label: str
-    status_html: str
-    banner_html: str
-    plot_labs: list[str]
-    selected_ref: tuple[float, float] | None
 
 
 def get_selected_row(df: pd.DataFrame, row_index: int | None) -> pd.Series | None:
@@ -60,43 +40,7 @@ def get_selected_row(df: pd.DataFrame, row_index: int | None) -> pd.Series | Non
     return df.iloc[resolved_index]
 
 
-def build_viewer_row_context(
-    filtered_df: pd.DataFrame,
-    row_index: int,
-    output_path: Path,
-    *,
-    selected_lab_name: str | None,
-    banner_html: str,
-) -> ViewerRowContext | None:
-    """Build the common row payload for viewer selection and navigation flows."""
-
-    row = get_selected_row(filtered_df, row_index)
-
-    # Guard: Empty selections return no row context.
-    if row is None:
-        return None
-
-    entry = row.to_dict()
-    ref_min = row.get("reference_min")
-    ref_max = row.get("reference_max")
-    selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
-    plot_labs = [selected_lab_name] if selected_lab_name else [row.get("lab_name")]
-    status_badge = build_review_status_badge(entry)
-
-    return ViewerRowContext(
-        row_index=row_index,
-        position_text=f"**Row {row_index + 1} of {len(filtered_df)}**",
-        source_image_value=build_page_image_value_for_entry(entry, output_path, label=SOURCE_BBOX_LABEL),
-        details_html=build_details_html(entry),
-        status_label=status_badge.label,
-        status_html=status_badge.html,
-        banner_html=banner_html,
-        plot_labs=plot_labs,
-        selected_ref=selected_ref,
-    )
-
-
-def resolve_review_target_for_entry(entry: dict, output_path: Path) -> tuple[ReviewTarget | None, str]:
+def resolve_review_target_for_entry(entry: ReviewRow, output_path: Path) -> tuple[ReviewTarget | None, str]:
     """Resolve the persisted row target for a merged-review entry."""
 
     source_file = entry.get("source_file", "")
@@ -130,7 +74,7 @@ def apply_review_action_for_target(target: ReviewTarget, action: str) -> tuple[b
     return apply_review_action(target.doc_dir, target.page_number, target.result_index, action)
 
 
-def apply_review_action_for_entry(entry: dict, output_path: Path, action: str) -> tuple[bool, str]:
+def apply_review_action_for_entry(entry: ReviewRow, output_path: Path, action: str) -> tuple[bool, str]:
     """Persist a review action for one merged-review row entry."""
 
     target, error = resolve_review_target_for_entry(entry, output_path)
@@ -144,10 +88,8 @@ def apply_review_action_for_entry(entry: dict, output_path: Path, action: str) -
 
 __all__ = [
     "ReviewTarget",
-    "ViewerRowContext",
     "apply_review_action_for_entry",
     "apply_review_action_for_target",
-    "build_viewer_row_context",
     "get_selected_row",
     "resolve_review_target_for_entry",
 ]

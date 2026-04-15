@@ -2,15 +2,14 @@
 
 import json
 import logging
-import re
-import unicodedata
 from pathlib import Path
-from typing import Any
+from typing import TypeVar
 
 import pandas as pd
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 logger = logging.getLogger(__name__)
+T = TypeVar("T")
 
 
 _PRIMARY_IMAGE_MAX_WIDTH = 1800
@@ -71,25 +70,6 @@ def preprocess_page_image(image: Image.Image) -> Image.Image:
     return create_page_image_variants(image)["fallback"]
 
 
-def slugify(value: Any) -> str:
-    """Create a normalized slug for mapping/debugging purposes."""
-
-    # Skip missing values
-    if pd.isna(value):
-        return ""
-
-    # Normalize unicode characters and replace special symbols
-    value = str(value).strip().lower().replace("µ", "micro").replace("μ", "micro").replace("%", "percent")
-    value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
-
-    # Strip punctuation, collapse whitespace, remove hyphens
-    value = re.sub(r"[^\w\s-]", "", value)
-    value = re.sub(r"[\s_]+", "-", value).strip("-")
-    value = value.replace("-", "")
-
-    return value
-
-
 def strip_markdown_fences(text: str) -> str:
     """Remove markdown code fences from text."""
 
@@ -110,7 +90,7 @@ def strip_markdown_fences(text: str) -> str:
     return text
 
 
-def parse_llm_json_response(text: str, fallback: Any = None) -> Any:
+def parse_llm_json_response(text: str, fallback: T) -> T | object:
     """Parse JSON from LLM response, handling markdown fences."""
 
     text = strip_markdown_fences(text)
@@ -122,7 +102,7 @@ def parse_llm_json_response(text: str, fallback: Any = None) -> Any:
         return fallback
 
 
-def ensure_columns(df: pd.DataFrame, columns: list[str], default: Any = None) -> pd.DataFrame:
+def ensure_columns(df: pd.DataFrame, columns: list[str], default: object = None) -> pd.DataFrame:
     """Ensure DataFrame has specified columns, adding them with default value if missing."""
 
     for col in columns:

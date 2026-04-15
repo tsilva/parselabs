@@ -6,9 +6,10 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
-from parselabs.paths import get_lab_specs_path, get_profiles_dir
+from parselabs.paths import get_env_file, get_lab_specs_path, get_profiles_dir
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,45 @@ LEGACY_QUALITATIVE_SUFFIX = ", Qualitative"
 CANONICAL_QUALITATIVE_SUFFIX = " (Qualitative)"
 
 UNKNOWN_VALUE = "$UNKNOWN$"
+
+
+def _parse_env_line(line: str) -> tuple[str, str] | None:
+    """Parse a single dotenv line into a key/value pair."""
+
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return None
+    if stripped.startswith("export "):
+        stripped = stripped[len("export ") :].strip()
+    if "=" not in stripped:
+        return None
+
+    key, value = stripped.split("=", 1)
+    key = key.strip()
+    value = value.strip()
+    if not key:
+        return None
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        value = value[1:-1]
+    return key, value
+
+
+@lru_cache(maxsize=1)
+def load_config_env() -> dict[str, str]:
+    """Load shared runtime environment variables from ~/.config/parselabs/.env."""
+
+    env_file = get_env_file().expanduser()
+    if not env_file.exists():
+        return {}
+
+    values: dict[str, str] = {}
+    for raw_line in env_file.read_text(encoding="utf-8").splitlines():
+        parsed = _parse_env_line(raw_line)
+        if parsed is None:
+            continue
+        key, value = parsed
+        values[key] = value
+    return values
 
 
 @dataclass
@@ -100,6 +140,8 @@ class ProfileConfig:
             # Fall back to JSON for all other extensions
             data = json.loads(content)
 
+        config_env = load_config_env()
+
         # Extract paths
         paths = data.get("paths", {})
         input_path_str = paths.get("input_path") or data.get("input_path")
@@ -115,11 +157,15 @@ class ProfileConfig:
         openrouter = data.get("openrouter", {})
         models = data.get("models", {})
         openrouter_api_key = cls._first_value(
+            os.getenv("OPENROUTER_API_KEY"),
+            config_env.get("OPENROUTER_API_KEY"),
             openrouter.get("api_key"),
             data.get("openrouter_api_key"),
             data.get("api_key"),
         )
         openrouter_base_url = cls._first_value(
+            os.getenv("OPENROUTER_BASE_URL"),
+            config_env.get("OPENROUTER_BASE_URL"),
             openrouter.get("base_url"),
             data.get("openrouter_base_url"),
             data.get("base_url"),
