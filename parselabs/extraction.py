@@ -816,7 +816,7 @@ def _normalize_lab_result_item(item) -> list[dict]:
 
     # Existing well-formed rows pass through unchanged.
     if isinstance(item, dict):
-        return [_normalize_lab_result_keys(item)]
+        return [item]
 
     # Sequence payloads can encode key/value pairs or nested rows.
     if isinstance(item, (list, tuple)):
@@ -836,7 +836,7 @@ def _normalize_sequence_item(item: list | tuple) -> list[dict]:
     # Key/value pair sequences can be turned into a single row dict.
     sequence_dict = _dict_from_sequence(item)
     if sequence_dict is not None:
-        return [_normalize_lab_result_keys(sequence_dict)]
+        return [sequence_dict]
 
     normalized_results: list[dict] = []
 
@@ -864,7 +864,7 @@ def _normalize_string_item(item: str) -> list[dict]:
     # Label-packed strings are the fallback shape produced by some tool-call failures.
     labeled_dict = _parse_labeled_lab_result(stripped_item)
     if labeled_dict is not None:
-        return [_normalize_lab_result_keys(labeled_dict)]
+        return [labeled_dict]
 
     return []
 
@@ -939,31 +939,6 @@ def _parse_labeled_lab_result(raw_value: str) -> dict | None:
         return None
 
     return parsed_dict
-
-
-def _normalize_lab_result_keys(row_dict: dict) -> dict:
-    """Map known legacy field aliases onto the canonical extraction schema."""
-
-    alias_map = {
-        "section_name": "raw_section_name",
-        "raw_unit": "raw_lab_unit",
-        "lab_unit_raw": "raw_lab_unit",
-        "reference_range": "raw_reference_range",
-        "reference_min": "raw_reference_min",
-        "reference_max": "raw_reference_max",
-        "left": "bbox_left",
-        "top": "bbox_top",
-        "right": "bbox_right",
-        "bottom": "bbox_bottom",
-    }
-    normalized_dict: dict = {}
-
-    # Copy fields into canonical keys so downstream validation sees one stable schema.
-    for key, value in row_dict.items():
-        normalized_key = alias_map.get(key, key)
-        normalized_dict[normalized_key] = value
-
-    return normalized_dict
 
 
 def _clean_numeric_reference_fields(tool_result_dict: RawExtractionPayload) -> None:
