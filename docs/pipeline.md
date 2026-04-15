@@ -178,7 +178,7 @@ Based on the current code, not prior documentation:
 
 25. End-of-run standardization auto-refresh.
 - After the first export pass, the pipeline scans merged review rows for uncached standardization names and unit pairs.
-- By default, it runs one in-process cache refresh pass using the same OpenRouter credentials and extraction model as the active profile.
+- By default, it runs one in-process cache refresh pass using the same OpenRouter credentials and extraction model resolved for the active runtime.
 - The shared refresh helper updates raw-name mappings first, using the extracted `raw_section_name` as part of the name-cache key when available, then rescans unit pairs using the newly resolved standardized names before calling the unit standardizer.
 - This means a row that was `$UNKNOWN$` on the first pass can still contribute a unit mapping in the same automatic refresh cycle.
 - If the refresh adds any cache entries, the pipeline rebuilds per-document CSVs and merged outputs from persisted page JSON only.
