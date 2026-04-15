@@ -216,6 +216,37 @@ def list_non_template_profiles() -> list[str]:
     return [name for name in ProfileConfig.list_profiles() if not name.startswith("_")]
 
 
+def load_profile_config(profile_name: str) -> ProfileConfig:
+    """Load one configured profile or raise a configuration error."""
+
+    profile_path = ProfileConfig.find_path(profile_name)
+    if not profile_path:
+        raise ConfigurationError(
+            f"Profile '{profile_name}' not found. Use --list-profiles to see available profiles."
+        )
+
+    return ProfileConfig.from_file(profile_path)
+
+
+def load_profile_configs(
+    profile_name: str | None = None,
+    *,
+    include_templates: bool = False,
+) -> list[ProfileConfig]:
+    """Load one or more configured profiles for utility-style commands."""
+
+    if profile_name is not None:
+        return [load_profile_config(profile_name)]
+
+    profile_names = ProfileConfig.list_profiles() if include_templates else list_non_template_profiles()
+    if not profile_names:
+        raise ConfigurationError(
+            f"No profiles found. Create profile files in {ProfileConfig.get_profiles_dir()}."
+        )
+
+    return [load_profile_config(name) for name in profile_names]
+
+
 def resolve_profile_name(profile_name: str | None) -> str:
     """Resolve the active profile name or raise when none is available."""
 
@@ -257,6 +288,8 @@ __all__ = [
     "get_prompts_dir",
     "get_static_dir",
     "get_user_config_dir",
+    "load_profile_config",
+    "load_profile_configs",
     "list_non_template_profiles",
     "load_ui_context",
     "resolve_profile_name",

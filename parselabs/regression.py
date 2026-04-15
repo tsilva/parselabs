@@ -10,7 +10,9 @@ from pathlib import Path
 import pandas as pd
 
 from parselabs.config import ProfileConfig
+from parselabs.exceptions import ConfigurationError
 from parselabs.export_schema import COLUMN_ORDER, COLUMN_SCHEMA
+from parselabs.runtime import load_profile_config
 from parselabs.types import ApprovedCaseMetadata
 from parselabs.utils import ensure_columns
 
@@ -53,11 +55,11 @@ def get_required_regression_profile(profile_name: str | None) -> ProfileConfig:
     if not profile_name:
         raise RuntimeError("Approved document regression cases must record the source profile.")
 
-    profile_path = ProfileConfig.find_path(profile_name)
-    if not profile_path:
-        raise RuntimeError(f"Approved document regression profile '{profile_name}' was not found.")
+    try:
+        profile = load_profile_config(profile_name)
+    except ConfigurationError as exc:
+        raise RuntimeError(f"Approved document regression profile '{profile_name}' was not found.") from exc
 
-    profile = ProfileConfig.from_file(profile_path)
     missing = []
     if not profile.openrouter_api_key:
         missing.append("openrouter_api_key")
