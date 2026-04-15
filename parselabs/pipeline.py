@@ -13,7 +13,7 @@ from typing import Callable  # noqa: E402
 
 import pandas as pd  # noqa: E402
 import pdf2image  # noqa: E402
-from openai import APIError, OpenAI  # noqa: E402
+from openai import OpenAI  # noqa: E402
 from tqdm import tqdm  # noqa: E402
 
 # Local imports
@@ -738,28 +738,6 @@ Examples:
     return parser.parse_args()
 
 
-def _load_profile_for_rebuild(profile_name: str) -> ProfileConfig:
-    """Load the minimal profile state required for a reviewed-JSON rebuild."""
-
-    profile_path = ProfileConfig.find_path(profile_name)
-
-    # Guard: The requested profile must exist before rebuild can start.
-    if not profile_path:
-        raise ConfigurationError(f"Profile '{profile_name}' not found. Use --list-profiles to see available profiles.")
-
-    profile = ProfileConfig.from_file(profile_path)
-
-    # Guard: Reviewed rebuilds operate only on processed outputs, so output_path is required.
-    if not profile.output_path:
-        raise ConfigurationError(f"Profile '{profile_name}' has no output_path defined.")
-
-    # Guard: The processed output directory must already exist.
-    if not profile.output_path.exists():
-        raise ConfigurationError(f"Output path does not exist: {profile.output_path}")
-
-    return profile
-
-
 def _setup_rebuild_environment(profile_name: str) -> tuple[ProfileConfig, LabSpecsConfig]:
     """Setup logging and lab specs for a reviewed-JSON rebuild."""
 
@@ -850,7 +828,7 @@ def validate_api_access(client: OpenAI, model_id: str, timeout: int = 10) -> tup
         if not completion or not getattr(completion, "choices", None):
             return False, "API validation failed: empty completion response"
         return True, "API key and model validation passed"
-    except APIError as e:
+    except Exception as e:
         return _classify_api_check_error(str(e), timeout)
 
 
@@ -872,6 +850,15 @@ def _merge_unique_csv_paths(csv_paths: list[Path]) -> list[Path]:
         unique_paths.append(csv_path)
 
     return unique_paths
+
+
+def _discover_pdf_files(input_path: Path, input_file_regex: str | None) -> list[Path]:
+    """Discover PDFs and translate filesystem errors into pipeline errors."""
+
+    try:
+        return discover_pdf_files(input_path, input_file_regex)
+    except (FileNotFoundError, PermissionError, OSError) as exc:
+        raise PipelineError(str(exc)) from exc
 
 
 def _process_pdfs_or_use_cache(
@@ -1090,7 +1077,7 @@ def _maybe_auto_standardize_outputs(
             base_url=base_url,
             api_key=api_key,
         )
-    except (APIError, OSError, ValueError) as exc:
+    except Exception as exc:
         logger.warning(f"[standardization] Auto-refresh failed before completion: {exc}")
         return _list_processed_document_csv_paths(output_path)
 

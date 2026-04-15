@@ -11,8 +11,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from parselabs.config import ProfileConfig
+from parselabs.exceptions import ConfigurationError
 from parselabs.paths import get_lab_specs_path
+from parselabs.runtime import list_non_template_profiles, load_profile_config
 
 logger = logging.getLogger(__name__)
 
@@ -290,19 +291,19 @@ def build_integrity_report(profile_names: list[str] | None = None) -> dict[str, 
     _check_no_critical_loinc_duplicates(report)
 
     if profile_names is None:
-        profile_names = ProfileConfig.list_profiles()
+        profile_names = list_non_template_profiles()
 
     if not profile_names:
         logger.warning("No profiles found. Only schema checks were run.")
         return report
 
     for profile_name in profile_names:
-        profile_path = ProfileConfig.find_path(profile_name)
-        if not profile_path:
-            _append_report_error(report, profile_name, f"Profile '{profile_name}' not found")
+        try:
+            profile = load_profile_config(profile_name)
+        except ConfigurationError as exc:
+            _append_report_error(report, profile_name, str(exc))
             continue
 
-        profile = ProfileConfig.from_file(profile_path)
         if not profile.output_path:
             _append_report_error(report, profile_name, f"Profile '{profile_name}' has no output_path defined")
             continue

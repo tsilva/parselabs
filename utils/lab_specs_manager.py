@@ -40,7 +40,9 @@ from openai import OpenAI
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from parselabs.config import ProfileConfig
+from parselabs.exceptions import ConfigurationError
 from parselabs.paths import get_lab_specs_path, get_prompts_dir
+from parselabs.runtime import RuntimeContext
 
 logger = logging.getLogger(__name__)
 
@@ -52,21 +54,16 @@ _PROMPTS_DIR = get_prompts_dir()
 def load_profile(profile_name: str) -> ProfileConfig:
     """Load a configured profile by name."""
 
-    profile_path = ProfileConfig.find_path(profile_name)
-    if not profile_path:
-        logger.error(f"Profile '{profile_name}' not found")
-        sys.exit(1)
-    return ProfileConfig.from_file(profile_path)
-
-
-def validate_profile_runtime(profile: ProfileConfig) -> None:
-    """Validate a profile has the LLM runtime settings required by this tool."""
-
-    if not profile.extract_model_id:
-        logger.error(f"Profile '{profile.name}' has no extract_model_id defined")
-        sys.exit(1)
-    if not profile.openrouter_api_key:
-        logger.error(f"Profile '{profile.name}' has no openrouter_api_key defined")
+    try:
+        return RuntimeContext.from_profile(
+            profile_name,
+            need_input=False,
+            need_output=False,
+            need_api=True,
+            setup_logs=False,
+        ).profile
+    except ConfigurationError as exc:
+        logger.error(str(exc))
         sys.exit(1)
 
 
@@ -232,7 +229,6 @@ def cmd_build_conversions(args):
     """Build conversion factors from extracted CSV data."""
 
     profile = load_profile(args.profile)
-    validate_profile_runtime(profile)
     client = get_openai_client(profile)
 
     input_csv = args.input or str(profile.output_path / "all.csv")
@@ -296,7 +292,6 @@ def cmd_build_ranges(args):
     """Build evidence-based optimal ranges using LLM."""
 
     profile = load_profile(args.profile)
-    validate_profile_runtime(profile)
     client = get_openai_client(profile)
 
     # Load existing specs and user stats
@@ -410,11 +405,7 @@ Examples:
         "build-ranges": cmd_build_ranges,
     }
 
-    try:
-        commands[args.command](args)
-    except Exception as e:
-        logger.error(f"✗ Error: {e}")
-        raise
+    commands[args.command](args)
 
 
 if __name__ == "__main__":
