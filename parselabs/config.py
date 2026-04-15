@@ -416,10 +416,31 @@ class LabSpecsConfig:
         if lab_name in self._specs:
             return lab_name
 
-        return self._lab_name_aliases.get(lab_name)
+        alias_match = self._lab_name_aliases.get(lab_name)
+        if alias_match is not None:
+            return alias_match
+
+        if lab_name.endswith(CANONICAL_QUALITATIVE_SUFFIX):
+            base_name = lab_name.removesuffix(CANONICAL_QUALITATIVE_SUFFIX).strip()
+            base_match = self.resolve_lab_name(base_name)
+
+            # Guard: generated qualitative aliases only apply to boolean-backed labs.
+            if base_match is not None and self._specs.get(base_match, {}).get("primary_unit") == "boolean":
+                return base_match
+
+        return None
 
     def get_canonical_lab_name(self, lab_name: str) -> str:
         """Return the canonical exported/display name for a configured lab."""
+
+        if isinstance(lab_name, str) and lab_name.endswith(CANONICAL_QUALITATIVE_SUFFIX):
+            resolved_name = self.resolve_lab_name(lab_name)
+
+            if resolved_name is not None and self._specs.get(resolved_name, {}).get("primary_unit") == "boolean":
+                base_canonical = self._canonical_name_map.get(resolved_name, resolved_name)
+                if base_canonical.endswith(CANONICAL_QUALITATIVE_SUFFIX):
+                    return base_canonical
+                return f"{base_canonical}{CANONICAL_QUALITATIVE_SUFFIX}"
 
         resolved_name = self.resolve_lab_name(lab_name)
         if resolved_name is None:
@@ -430,7 +451,11 @@ class LabSpecsConfig:
     def get_lab_type(self, lab_name: str) -> str:
         """Get lab type for a given lab name."""
 
-        return self._lab_type_map.get(self.get_canonical_lab_name(lab_name), "blood")
+        resolved_name = self.resolve_lab_name(lab_name)
+        if resolved_name is None:
+            return "blood"
+
+        return self._specs[resolved_name].get("lab_type", "blood")
 
     def get_primary_unit(self, lab_name: str) -> str | None:
         """Get primary unit for a lab."""
@@ -442,6 +467,22 @@ class LabSpecsConfig:
             return None
 
         return self._specs[resolved_name].get("primary_unit")
+
+    def get_qualitative_variant(self, lab_name: str) -> str | None:
+        """Return the canonical qualitative sibling for a boolean-backed analyte."""
+
+        canonical_name = self.get_canonical_lab_name(lab_name)
+
+        if canonical_name.endswith(CANONICAL_QUALITATIVE_SUFFIX):
+            return canonical_name
+
+        resolved_name = self.resolve_lab_name(canonical_name)
+
+        # Guard: only boolean-backed analytes can expose a qualitative companion.
+        if resolved_name is None or self._specs[resolved_name].get("primary_unit") != "boolean":
+            return None
+
+        return f"{canonical_name}{CANONICAL_QUALITATIVE_SUFFIX}"
 
     def get_conversion_factor(self, lab_name: str, from_unit: str) -> float | None:
         """Get conversion factor from given unit to primary unit."""

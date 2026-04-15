@@ -12,7 +12,7 @@ from typing import Iterable
 
 import pandas as pd
 
-from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig
+from parselabs.config import CANONICAL_QUALITATIVE_SUFFIX, UNKNOWN_VALUE, LabSpecsConfig
 from parselabs.export_schema import COLUMN_ORDER, COLUMN_SCHEMA, get_column_lists
 from parselabs.normalization import (
     apply_dtype_conversions,
@@ -751,6 +751,8 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
         standardized_names.append(standardized_name)
 
     review_df["lab_name_standardized"] = standardized_names
+    review_df = _remap_boolean_companion_lab_names(review_df, lab_specs)
+    review_df = _remap_unit_bearing_rows_off_qualitative_variants(review_df, lab_specs)
 
     # Standardize units only for rows whose lab names mapped successfully.
     unit_contexts: list[tuple[str, str]] = []
@@ -765,7 +767,7 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
     mapped_units = standardize_lab_units([context for context in unit_contexts if context != ("", "")])
 
     standardized_units: list[str | None] = []
-    safe_missing_unit_primary_units = {"boolean", "pH", "unitless"}
+    safe_missing_unit_primary_units = {"boolean", "mm/h", "pH", "unitless"}
 
     for idx, (raw_unit, standardized_name) in zip(review_df.index, unit_contexts, strict=False):
         # Leave units empty when the lab name did not map.
@@ -822,6 +824,7 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
 
     review_df["lab_unit_standardized"] = standardized_units
     review_df = _remap_percentage_variant_lab_names(review_df, lab_specs)
+    review_df = _remap_complement_variant_lab_names(review_df, lab_specs)
     return review_df
 
 
@@ -864,6 +867,50 @@ def _build_variant_aware_name_contexts(
     return variant_contexts
 
 
+def _remap_boolean_companion_lab_names(
+    review_df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+) -> pd.DataFrame:
+    """Expose qualitative boolean rows as canonical `(Qualitative)` siblings."""
+
+    required_columns = {"page_number", "raw_lab_name", "raw_section_name", "raw_lab_unit", "raw_value", "lab_name_standardized"}
+
+    # Guard: Remapping requires the raw fields needed to identify qualitative rows safely.
+    if review_df.empty or not required_columns.issubset(review_df.columns):
+        return review_df
+
+    remapped_names = review_df["lab_name_standardized"].tolist()
+    helper_df = review_df.copy()
+    helper_df["context_position"] = range(len(helper_df))
+    helper_df["name_key"] = helper_df["raw_lab_name"].map(_normalize_section_inference_key)
+    helper_df["section_key"] = helper_df["raw_section_name"].map(_normalize_section_inference_key)
+    helper_df["is_qualitative_companion"] = helper_df.apply(_row_is_qualitative_companion, axis=1)
+    remap_count = 0
+
+    for _, row in helper_df[helper_df["is_qualitative_companion"]].iterrows():
+        position = int(row["context_position"])
+        standardized_name = remapped_names[position]
+
+        # Skip rows without a usable base name.
+        if pd.isna(standardized_name) or standardized_name == UNKNOWN_VALUE or not str(standardized_name).strip():
+            continue
+
+        qualitative_variant = lab_specs.get_qualitative_variant(str(standardized_name))
+
+        # Guard: Leave rows unchanged when there is no boolean-backed sibling to expose.
+        if qualitative_variant is None or qualitative_variant == standardized_name:
+            continue
+
+        remapped_names[position] = qualitative_variant
+        remap_count += 1
+
+    if remap_count:
+        logger.info("[rows] Remapped %s qualitative boolean row(s) to qualitative siblings", remap_count)
+
+    review_df["lab_name_standardized"] = remapped_names
+    return review_df
+
+
 def _row_is_qualitative_companion(row: pd.Series) -> bool:
     """Return True when one row is a text-only interpretation of an assay result."""
 
@@ -888,6 +935,52 @@ def _row_is_quantitative_companion(row: pd.Series) -> bool:
 
     raw_value = _normalize_optional_text(row.get("raw_value")).replace(",", ".")
     return pd.notna(pd.to_numeric(pd.Series([raw_value]), errors="coerce").iloc[0])
+
+
+def _remap_unit_bearing_rows_off_qualitative_variants(
+    review_df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+) -> pd.DataFrame:
+    """Move explicit unit-bearing rows back onto the quantitative base analyte."""
+
+    required_columns = {"lab_name_standardized", "raw_lab_unit"}
+
+    # Guard: Remapping requires both the standardized name and explicit raw units.
+    if review_df.empty or not required_columns.issubset(review_df.columns):
+        return review_df
+
+    remapped_names = review_df["lab_name_standardized"].tolist()
+    remap_count = 0
+
+    for idx in review_df.index:
+        standardized_name = remapped_names[idx]
+        raw_unit = _normalize_optional_text(review_df.at[idx, "raw_lab_unit"])
+
+        if not raw_unit:
+            continue
+
+        if pd.isna(standardized_name) or standardized_name == UNKNOWN_VALUE:
+            continue
+
+        canonical_name = lab_specs.get_canonical_lab_name(str(standardized_name))
+        if not canonical_name.endswith(CANONICAL_QUALITATIVE_SUFFIX):
+            continue
+
+        base_name = canonical_name.removesuffix(CANONICAL_QUALITATIVE_SUFFIX).strip()
+        if lab_specs.resolve_lab_name(base_name) is None:
+            continue
+
+        remapped_names[idx] = base_name
+        remap_count += 1
+
+    if remap_count:
+        logger.info(
+            "[rows] Remapped %s unit-bearing row(s) off qualitative siblings",
+            remap_count,
+        )
+
+    review_df["lab_name_standardized"] = remapped_names
+    return review_df
 
 
 def _normalize_optional_text(value: object) -> str:
@@ -1040,6 +1133,11 @@ def _infer_explicit_variant_unit_from_raw_unit(
     if inferred_conversion_unit is not None:
         return inferred_conversion_unit
 
+    # Incomplete OCR like ``x 10³/`` or qualitative labels like ``V.abs.`` still
+    # unambiguously point to the absolute differential-count sibling.
+    if _raw_unit_looks_absolute_cell_count(raw_unit_text):
+        return lab_specs.get_primary_unit(absolute_variant)
+
     return lab_specs.get_primary_unit(absolute_variant)
 
 
@@ -1050,6 +1148,34 @@ def _raw_unit_looks_percentage(raw_unit: str) -> bool:
 
     # Recognize literal percent units as well as common textual percentage labels.
     return "%" in normalized_unit or "percent" in normalized_unit
+
+
+def _raw_unit_looks_absolute_cell_count(raw_unit: str) -> bool:
+    """Return True when the raw unit text clearly denotes an absolute cell count."""
+
+    normalized_unit = unicodedata.normalize("NFKC", str(raw_unit).strip().lower())
+    normalized_unit = normalized_unit.replace("μ", "µ")
+    compact_unit = re.sub(r"\s+", "", normalized_unit)
+
+    return any(
+        marker in compact_unit
+        for marker in (
+            "v.abs",
+            "vabs",
+            "10^9/",
+            "10^3/",
+            "10e3/",
+            "10³/",
+            "x10^9/",
+            "x10^3/",
+            "x10e3/",
+            "x10³/",
+            "/mm3",
+            "/mm³",
+            "/ul",
+            "/µl",
+        )
+    )
 
 
 def _score_variant_range_match(
@@ -1162,6 +1288,76 @@ def _remap_percentage_variant_lab_names(
             remap_count,
         )
 
+    return review_df
+
+
+def _remap_complement_variant_lab_names(
+    review_df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+) -> pd.DataFrame:
+    """Disambiguate CH50 placeholder mappings into C3/C4 siblings from source ranges."""
+
+    required_columns = {
+        "lab_name_standardized",
+        "raw_lab_unit",
+        "raw_reference_min",
+        "raw_reference_max",
+        "lab_unit_standardized",
+    }
+
+    # Guard: Complement disambiguation requires the full source-range context.
+    if review_df.empty or not required_columns.issubset(review_df.columns):
+        return review_df
+
+    remapped_names = review_df["lab_name_standardized"].tolist()
+    remapped_units = review_df["lab_unit_standardized"].tolist()
+    remap_count = 0
+    complement_candidates = ("Blood - Complement C3", "Blood - Complement C4")
+
+    for idx in review_df.index:
+        standardized_name = remapped_names[idx]
+        if standardized_name != "Blood - Complement CH50":
+            continue
+
+        raw_unit = _normalize_optional_text(review_df.at[idx, "raw_lab_unit"])
+        if _normalize_conversion_unit_token(raw_unit) != _normalize_conversion_unit_token("mg/dL"):
+            continue
+
+        scored_candidates: list[tuple[float, str]] = []
+        for candidate_name in complement_candidates:
+            score = _score_variant_range_match(
+                candidate_name,
+                review_df.at[idx, "raw_reference_min"],
+                review_df.at[idx, "raw_reference_max"],
+                review_df.at[idx, "raw_value"],
+                lab_specs,
+            )
+            if score is not None:
+                scored_candidates.append((score, candidate_name))
+
+        if not scored_candidates:
+            continue
+
+        scored_candidates.sort(key=lambda item: item[0])
+        best_score, best_name = scored_candidates[0]
+        next_score = scored_candidates[1][0] if len(scored_candidates) > 1 else None
+
+        # Guard: Keep ambiguous rows on CH50 so review can surface them later.
+        if next_score is not None and next_score - best_score < 0.25:
+            continue
+
+        remapped_names[idx] = best_name
+        remapped_units[idx] = lab_specs.get_primary_unit(best_name)
+        remap_count += 1
+
+    if remap_count:
+        logger.info(
+            "[rows] Remapped %s complement row(s) from CH50 placeholders to C3/C4 siblings",
+            remap_count,
+        )
+
+    review_df["lab_name_standardized"] = remapped_names
+    review_df["lab_unit_standardized"] = remapped_units
     return review_df
 
 
@@ -1336,6 +1532,12 @@ def _flag_suspicious_reference_ranges(
             suspicious_indices.append(idx)
             continue
 
+        # Absolute-unit protein fraction rows often print percentage ranges alongside the
+        # mass concentration. When the configured (%) sibling is a clearly better match,
+        # keep the row reviewable through its mapped unit rather than flagging the range.
+        if unit != "%" and _reference_range_matches_percentage_sibling_better(str(std_name), ref_min, ref_max, review_df.at[idx, "raw_value"], lab_specs):
+            continue
+
         expected_range = lab_specs._specs.get(std_name, {}).get("ranges", {}).get("default", [])
 
         # Skip labs without expected ranges to compare against.
@@ -1358,6 +1560,40 @@ def _flag_suspicious_reference_ranges(
         review_df.index.isin(suspicious_indices),
         SUSPICIOUS_REFERENCE_RANGE_REASON,
     )
+
+
+def _reference_range_matches_percentage_sibling_better(
+    standardized_name: str,
+    raw_min: object,
+    raw_max: object,
+    observed_value: object,
+    lab_specs: LabSpecsConfig,
+) -> bool:
+    """Return True when the report range aligns with the (%) sibling more than the absolute lab."""
+
+    percentage_variant = lab_specs.get_percentage_variant(standardized_name)
+
+    # Guard: No (%) sibling means there is no alternate scale to compare against.
+    if percentage_variant is None:
+        return False
+
+    # Percentage-style report ranges should stay within ordinary percentage bounds.
+    if pd.notna(raw_min) and float(raw_min) < 0:
+        return False
+    if pd.notna(raw_max) and float(raw_max) > 100:
+        return False
+
+    current_score = _score_variant_range_match(standardized_name, raw_min, raw_max, observed_value, lab_specs)
+    percentage_score = _score_variant_range_match(percentage_variant, raw_min, raw_max, observed_value, lab_specs)
+
+    # Guard: Missing comparable range metadata leaves the regular suspicious-range logic in place.
+    if percentage_score is None:
+        return False
+    if current_score is None:
+        return True
+
+    # Require a meaningful improvement so close calls still surface to review.
+    return (current_score - percentage_score) >= 0.25
 
 
 def _flag_review_ambiguities(
