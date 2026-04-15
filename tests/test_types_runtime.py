@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from parselabs import review_artifacts_backend
@@ -10,6 +11,8 @@ from parselabs.types import (
     ReviewMissingRowMarker,
     ReviewRow,
     RowIdentity,
+    build_row_identity_token,
+    parse_row_identity_token,
 )
 
 
@@ -57,6 +60,20 @@ def test_row_identity_shape_stays_stable():
     assert review_row["source_file"] == "labs.pdf"
     assert review_row["page_number"] == 3
     assert review_row["result_index"] == 7
+
+
+def test_row_identity_token_round_trip():
+    identity: RowIdentity = {
+        "source_file": "labs.pdf",
+        "page_number": 3,
+        "result_index": 7,
+    }
+
+    token = build_row_identity_token(identity)
+
+    assert token == '["labs.pdf",3,7]'
+    assert parse_row_identity_token(token) == identity
+    assert parse_row_identity_token(json.dumps(token)) == identity
 
 
 def test_review_decision_result_shape_from_backend(tmp_path):

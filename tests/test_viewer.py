@@ -694,6 +694,22 @@ def test_handle_review_action_uses_shared_entry_persistence(monkeypatch, tmp_pat
     assert result[10]["interactive"] is False
 
 
+def test_resolve_plot_point_row_index_accepts_identity_dict_token():
+    filtered_df = pd.DataFrame(
+        [
+            {"source_file": "glucose.csv", "page_number": 1, "result_index": 0},
+            {"source_file": "glucose.csv", "page_number": 1, "result_index": 1},
+        ]
+    )
+
+    row_index = viewer._resolve_plot_point_row_index(
+        filtered_df,
+        '{"source_file":"glucose.csv","page_number":1,"result_index":1}',
+    )
+
+    assert row_index == 1
+
+
 def test_handle_review_action_keeps_last_row_selected(monkeypatch, tmp_path):
     full_df = pd.DataFrame(
         [
