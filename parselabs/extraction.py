@@ -9,9 +9,10 @@ from pathlib import Path
 from typing import Annotated
 
 from openai import APIError, OpenAI
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from parselabs.paths import get_prompts_dir
+from parselabs.types import PagePayload
 
 logger = logging.getLogger(__name__)
 
@@ -130,10 +131,9 @@ LAB_FACILITY_FIELD = Annotated[
 # ========================================
 
 
-class LabResult(BaseModel):
-    """Single lab test result - optimized for extraction accuracy."""
+class BaseLabResultModel(BaseModel):
+    """Shared raw extraction fields for successful and LLM-facing result models."""
 
-    # Raw extraction (exactly as shown in PDF)
     raw_lab_name: RAW_LAB_NAME_FIELD
     raw_section_name: RAW_SECTION_NAME_FIELD
     raw_value: RAW_VALUE_FIELD
@@ -155,9 +155,6 @@ class LabResult(BaseModel):
     bbox_top: BBOX_TOP_FIELD
     bbox_right: BBOX_RIGHT_FIELD
     bbox_bottom: BBOX_BOTTOM_FIELD
-    # Internal fields (added by pipeline, not by LLM) — excluded from JSON serialization
-    lab_name_standardized: str | None = Field(default=None, exclude=True)
-    lab_unit_standardized: str | None = Field(default=None, exclude=True)
 
     @field_validator("raw_value", mode="before")
     @classmethod
@@ -215,16 +212,30 @@ class LabResult(BaseModel):
         return v_str
 
 
-class HealthLabReport(BaseModel):
-    """Document-level lab report metadata."""
+class LabResult(BaseLabResultModel):
+    """Single lab test result - optimized for extraction accuracy."""
 
-    collection_date: EXTRACTION_COLLECTION_DATE_FIELD
-    report_date: EXTRACTION_REPORT_DATE_FIELD
+    lab_name_standardized: str | None = Field(default=None, exclude=True)
+    lab_unit_standardized: str | None = Field(default=None, exclude=True)
+
+
+class BaseHealthLabReportModel(BaseModel):
+    """Shared document-level metadata for extraction payloads."""
+
+    collection_date: COLLECTION_DATE_FIELD
+    report_date: REPORT_DATE_FIELD
     lab_facility: LAB_FACILITY_FIELD
     page_has_lab_data: bool | None = Field(
         default=None,
         description="True if page contains lab test results, False if page is cover/instructions/administrative with no lab data",
     )
+
+
+class HealthLabReport(BaseHealthLabReportModel):
+    """Document-level lab report metadata."""
+
+    collection_date: EXTRACTION_COLLECTION_DATE_FIELD
+    report_date: EXTRACTION_REPORT_DATE_FIELD
     source_file: str | None = Field(default=None, description="Source PDF filename")
     lab_results: list[LabResult] = Field(
         default_factory=list,
@@ -232,22 +243,17 @@ class HealthLabReport(BaseModel):
     )
 
     @staticmethod
-    def _clear_empty_strings(model: BaseModel):
+    def _clear_empty_strings(model: BaseModel) -> None:
         """Set empty string optional fields to None on a Pydantic model."""
 
-        # Read field metadata from the model class to avoid Pydantic instance deprecation warnings.
         model_fields = type(model).model_fields
-
-        # Inspect each declared field so optional empty strings can be normalized consistently.
         for field_name in model_fields:
             value = getattr(model, field_name)
             field_info = model_fields[field_name]
-
-            # Replace empty strings with None for optional fields
             if value == "" and not field_info.is_required():
                 setattr(model, field_name, None)
 
-    def normalize_empty_optionals(self):
+    def normalize_empty_optionals(self) -> None:
         """Convert empty strings to None for optional fields."""
 
         self._clear_empty_strings(self)
@@ -255,56 +261,13 @@ class HealthLabReport(BaseModel):
             self._clear_empty_strings(lab_result)
 
 
-# ========================================
-# LLM-Facing Schema (subset of full model)
-# ========================================
+class LabResultExtraction(BaseLabResultModel):
+    """LLM-facing schema containing only model-populated fields."""
 
 
-class LabResultExtraction(BaseModel):
-    """LLM-facing schema — only fields the model should populate.
+class HealthLabReportExtraction(BaseHealthLabReportModel):
+    """LLM-facing schema for function calling."""
 
-    Excludes pipeline-internal fields (review_*, page_number, source_file,
-    result_index, lab_name_standardized, lab_unit_standardized) to reduce
-    token usage and avoid confusing the model.
-    """
-
-    raw_lab_name: RAW_LAB_NAME_FIELD
-    raw_section_name: RAW_SECTION_NAME_FIELD
-    raw_value: RAW_VALUE_FIELD
-    raw_lab_unit: RAW_LAB_UNIT_FIELD
-    raw_reference_range: RAW_REFERENCE_RANGE_FIELD
-    raw_reference_min: float | None = Field(
-        default=None,
-        description="Minimum reference value as a PLAIN NUMBER ONLY. Parse from reference_range.",
-    )
-    raw_reference_max: float | None = Field(
-        default=None,
-        description="Maximum reference value as a PLAIN NUMBER ONLY. Parse from reference_range.",
-    )
-    raw_comments: str | None = Field(
-        default=None,
-        description="Additional notes or remarks about the test (NOT the test result itself).",
-    )
-    bbox_left: BBOX_LEFT_FIELD
-    bbox_top: BBOX_TOP_FIELD
-    bbox_right: BBOX_RIGHT_FIELD
-    bbox_bottom: BBOX_BOTTOM_FIELD
-
-
-class HealthLabReportExtraction(BaseModel):
-    """LLM-facing schema for function calling.
-
-    Excludes pipeline-internal fields from HealthLabReport. Uses LabResultExtraction
-    to reduce schema size (~41% smaller) and avoid confusing the model.
-    """
-
-    collection_date: COLLECTION_DATE_FIELD
-    report_date: REPORT_DATE_FIELD
-    lab_facility: LAB_FACILITY_FIELD
-    page_has_lab_data: bool | None = Field(
-        default=None,
-        description="True if page contains lab test results, False if page is cover/instructions/administrative",
-    )
     lab_results: list[LabResultExtraction] = Field(
         default_factory=list,
         description="List of all lab test results extracted from this page/document",
@@ -341,13 +304,13 @@ EXTRACTION_SYSTEM_PROMPT = load_prompt_template("extraction_system")
 EXTRACTION_USER_PROMPT = load_prompt_template("extraction_user")
 
 
-def _empty_report() -> dict:
+def _empty_report() -> PagePayload:
     """Return a fresh empty lab report dict."""
 
     return HealthLabReport(lab_results=[]).model_dump(mode="json")
 
 
-def _failed_report(reason: str) -> dict:
+def _failed_report(reason: str) -> PagePayload:
     """Return an empty report annotated with extraction failure metadata."""
 
     result = _empty_report()
@@ -368,7 +331,7 @@ def extract_labs_from_page_image(
     temperature: float = 0.0,
     max_retries: int = 1,
     temperature_step: float = 0.2,
-) -> dict:
+) -> PagePayload:
     """
     Extract lab results from a page image using vision model.
 
@@ -418,7 +381,7 @@ def _attempt_extraction_with_retries(
     temperature: float,
     max_retries: int,
     temperature_step: float,
-) -> dict:
+) -> PagePayload:
     """Execute extraction with temperature escalation retry logic."""
 
     current_temp = temperature
@@ -545,7 +508,7 @@ def _validate_extraction_result(
     image_path: Path,
     attempt: int,
     current_temp: float,
-) -> dict:
+) -> dict[str, object]:
     """Validate extraction result with Pydantic and check quality.
 
     Returns:
@@ -570,25 +533,25 @@ def _validate_extraction_result(
             logger.info(f"[{image_path.name}] Extraction succeeded on retry {attempt} with temp={current_temp:.1f}")
         return {"success": True, "data": result, "should_retry": False, "error_msg": None}
 
-    # Validation error - check if retryable (malformed) or not
-    except ValueError as e:
+    except ValidationError as e:
         error_msg = str(e)
 
-        # Malformed output - signal for retry with higher temperature
         if "MALFORMED OUTPUT" in error_msg:
             return {"success": False, "data": None, "should_retry": True, "error_msg": error_msg}
 
-        # Non-retryable validation error - try to salvage
-        else:
-            num_results = len(tool_result_dict.get("lab_results", []))
-            logger.error(f"Model validation error for report with {num_results} lab_results: {e}")
-            return {"success": False, "data": _salvage_lab_results(tool_result_dict), "should_retry": False, "error_msg": error_msg}
-
-    # Unexpected error - salvage what we can without retrying
-    except Exception as e:
         num_results = len(tool_result_dict.get("lab_results", []))
         logger.error(f"Model validation error for report with {num_results} lab_results: {e}")
-        return {"success": False, "data": _salvage_lab_results(tool_result_dict), "should_retry": False, "error_msg": str(e)}
+        return {"success": False, "data": _salvage_lab_results(tool_result_dict), "should_retry": False, "error_msg": error_msg}
+
+    except ValueError as e:
+        num_results = len(tool_result_dict.get("lab_results", []))
+        error_msg = str(e)
+
+        if "MALFORMED OUTPUT" in error_msg:
+            return {"success": False, "data": None, "should_retry": True, "error_msg": error_msg}
+
+        logger.error(f"Model validation error for report with {num_results} lab_results: {e}")
+        return {"success": False, "data": _salvage_lab_results(tool_result_dict), "should_retry": False, "error_msg": error_msg}
 
 
 def _assert_complete_result_bboxes(report_model: HealthLabReport) -> None:
@@ -1044,7 +1007,7 @@ def _clean_bbox_fields(tool_result_dict: dict) -> None:
             item[field] = value
 
 
-def _salvage_lab_results(tool_result_dict: dict) -> dict:
+def _salvage_lab_results(tool_result_dict: dict) -> PagePayload:
     """Try to salvage valid lab results even if report validation fails."""
 
     # Guard: No lab_results to salvage
@@ -1064,7 +1027,7 @@ def _salvage_lab_results(tool_result_dict: dict) -> dict:
             lr_model = LabResult(**lr_data)
             valid_results.append(lr_model.model_dump(mode="json"))
         # Invalid result - skip and continue salvaging others
-        except Exception as e:
+        except ValidationError as e:
             logger.error(f"Failed to validate lab_result[{i}] in salvage: {e}. Data: {lr_data}")
 
     logger.warning(f"Salvaged {len(valid_results)}/{len(tool_result_dict['lab_results'])} lab results")

@@ -7,8 +7,8 @@ from pathlib import Path
 import pandas as pd
 from PIL import Image
 
-from parselabs.config import ExtractionConfig
 from parselabs import review, runtime, store
+from parselabs.config import ExtractionConfig
 
 
 def _build_config(tmp_path: Path, *, base_url: str = "https://openrouter.ai/api/v1", api_key: str = "test-key") -> ExtractionConfig:

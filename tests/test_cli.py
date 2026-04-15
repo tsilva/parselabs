@@ -54,6 +54,16 @@ def test_main_routes_admin_subcommand(monkeypatch):
     assert calls == [["validate-lab-specs"]]
 
 
+def test_main_rejects_removed_viewer_alias():
+    with pytest.raises(SystemExit, match="Unsupported command 'viewer'"):
+        cli.main(["viewer", "--profile", "tsilva"])
+
+
+def test_main_rejects_removed_review_docs_alias():
+    with pytest.raises(SystemExit, match="Unsupported command 'review-docs'"):
+        cli.main(["review-docs", "--profile", "tsilva"])
+
+
 def test_parse_review_args_supports_tab_selection():
     args = cli._parse_review_args(
         ["--profile", "tsilva", "--tab", "review"],

@@ -47,6 +47,7 @@ from parselabs.store import (
 from parselabs.store import (
     save_review_status as save_review_status_in_store,
 )
+from parselabs.types import PagePayload, ReviewRow
 from parselabs.utils import ensure_columns
 from parselabs.validation import ValueValidator
 
@@ -110,14 +111,6 @@ DOCUMENT_REVIEW_COLUMNS = [
 ]
 
 ProcessedDocument = DocumentRef
-
-
-@dataclass(frozen=True)
-class RowBuildResult:
-    """Rows plus validation stats from one row-build request."""
-
-    frame: pd.DataFrame
-    validation_stats: dict[str, int | dict[str, int]]
 
 
 @dataclass(frozen=True)
@@ -373,29 +366,6 @@ def _backfill_missing_raw_sections(review_df: pd.DataFrame) -> pd.DataFrame:
     return enriched_df
 
 
-def build_export_rows(
-    source: Path | Iterable[dict],
-    lab_specs: LabSpecsConfig,
-    *,
-    accepted_only: bool,
-    apply_standardization: bool = True,
-) -> RowBuildResult:
-    """Return canonical export rows for a document or page-payload iterable."""
-
-    if isinstance(source, Path):
-        statuses = {"accepted"} if accepted_only else None
-        rows_df = load_document_review_rows(source, include_statuses=statuses)
-    else:
-        rows_df = _flatten_page_payloads(source, accepted_only=accepted_only)
-
-    final_df, validation_stats = transform_rows_to_final_export(
-        rows_df,
-        lab_specs,
-        apply_standardization=apply_standardization,
-    )
-    return RowBuildResult(frame=final_df, validation_stats=validation_stats)
-
-
 def build_corpus_review_rows(
     output_path: Path,
     lab_specs: LabSpecsConfig,
@@ -415,13 +385,13 @@ def build_corpus_review_rows(
 
 
 def _flatten_page_payloads(
-    page_payloads: Iterable[dict],
+    page_payloads: Iterable[PagePayload],
     *,
     accepted_only: bool = False,
 ) -> pd.DataFrame:
     """Flatten canonical page payloads into the shared review-row shape."""
 
-    rows: list[dict] = []
+    rows: list[ReviewRow] = []
     document_date: str | None = None
 
     for page_idx, payload in enumerate(page_payloads, start=1):
@@ -628,7 +598,7 @@ def load_document_review_rows(
 ) -> pd.DataFrame:
     """Load one review row per extracted result from page JSON files."""
 
-    rows: list[dict] = []
+    rows: list[ReviewRow] = []
     page_json_paths = sorted(doc_dir.glob("*.json"))
     source_file = f"{get_document_stem(doc_dir)}.csv"
     doc_date: str | None = None
@@ -1449,34 +1419,3 @@ def prepare_rows(
         return prepared_df, validator.validation_stats
 
     raise ValueError(f"Unsupported row-preparation mode: {mode}")
-
-
-def _prepare_rows_for_review(
-    review_df: pd.DataFrame,
-    lab_specs: LabSpecsConfig,
-) -> pd.DataFrame:
-    """Normalize extracted rows into the review dataframe shape."""
-
-    prepared_df, _ = prepare_rows(review_df, lab_specs, mode="review")
-    return prepared_df
-
-
-def _prepare_rows_for_export(
-    rows_df: pd.DataFrame,
-    lab_specs: LabSpecsConfig,
-    apply_standardization: bool,
-) -> tuple[pd.DataFrame, dict[str, int | dict[str, int]]]:
-    """Normalize, deduplicate, and validate extracted rows for final export."""
-
-    return prepare_rows(
-        rows_df,
-        lab_specs,
-        mode="export",
-        apply_standardization=apply_standardization,
-    )
-
-
-def _is_hashed_document_dir(doc_dir: Path) -> bool:
-    """Return whether a processed document directory uses the canonical hash suffix."""
-
-    return re.match(r"^.+_[0-9a-fA-F]{8}$", doc_dir.name) is not None

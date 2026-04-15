@@ -17,12 +17,12 @@ from parselabs.config import Demographics, LabSpecsConfig  # noqa: E402
 from parselabs.paths import get_static_dir  # noqa: E402
 from parselabs.review import (  # noqa: E402
     SOURCE_BBOX_LABEL,
+    build_page_image_value_for_entry,
     format_reference_text,
-    load_results_dataframe,
 )
+from parselabs.review_data import load_results_dataframe  # noqa: E402
 from parselabs.review_state import (  # noqa: E402
     apply_review_action_for_entry,
-    build_viewer_row_context,
     get_selected_row,
 )
 from parselabs.runtime import RuntimeContext  # noqa: E402
@@ -82,6 +82,45 @@ class ViewerRenderState:
             self.prev_button_props,
             self.next_button_props,
         )
+
+
+@dataclass(frozen=True)
+class ViewerRowContext:
+    """Presentation payload for one selected row in the results explorer."""
+
+    row_index: int
+    position_text: str
+    source_image_value: tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None
+    plot_labs: list[str]
+    selected_ref: tuple[float, float] | None
+
+
+def build_viewer_row_context(
+    filtered_df: pd.DataFrame,
+    row_index: int,
+    output_path: Path,
+    *,
+    selected_lab_name: str | None,
+) -> ViewerRowContext | None:
+    """Build the common row payload for viewer selection and navigation flows."""
+
+    row = get_selected_row(filtered_df, row_index)
+    if row is None:
+        return None
+
+    entry = row.to_dict()
+    ref_min = row.get("reference_min")
+    ref_max = row.get("reference_max")
+    selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
+    plot_labs = [selected_lab_name] if selected_lab_name else [row.get("lab_name")]
+
+    return ViewerRowContext(
+        row_index=row_index,
+        position_text=f"**Row {row_index + 1} of {len(filtered_df)}**",
+        source_image_value=build_page_image_value_for_entry(entry, output_path, label=SOURCE_BBOX_LABEL),
+        plot_labs=plot_labs,
+        selected_ref=selected_ref,
+    )
 
 
 def get_lab_name_choices(df: pd.DataFrame) -> list[str]:
@@ -1226,7 +1265,6 @@ def _render_viewer_state(
         resolved_row_index,
         output_path,
         selected_lab_name=lab_names,
-        banner_html="",
     )
 
     # Guard: Row-context resolution failures should degrade gracefully.

@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 RESULTS_TAB_ID = "results-explorer"
 REVIEW_TAB_ID = "review-queue"
 
+
 def build_app(context: RuntimeContext, default_tab: str) -> gr.Blocks:
     """Build the single review workspace."""
 
@@ -55,9 +56,9 @@ def selected_tab_label(default_tab: str) -> str:
 
 
 def _normalize_default_tab(default_tab: str) -> str:
-    """Normalize legacy launch-mode values."""
+    """Normalize launch-mode values."""
 
     normalized = str(default_tab).strip().lower()
-    if normalized in {"review", "reviewer", REVIEW_TAB_ID}:
+    if normalized in {"review", REVIEW_TAB_ID}:
         return REVIEW_TAB_ID
     return RESULTS_TAB_ID

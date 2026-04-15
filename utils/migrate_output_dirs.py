@@ -25,15 +25,6 @@ logger = logging.getLogger(__name__)
 _HASH_SUFFIX_RE = re.compile(r"_[0-9a-f]{8}$")
 
 
-def _compute_file_hash(file_path: Path, hash_length: int = 8) -> str:
-    """Compute SHA-256 hash of a file, returning first `hash_length` hex chars.
-
-    Compatibility wrapper around the shared processed-document hash helper.
-    """
-
-    return compute_file_hash(file_path, hash_length=hash_length)
-
-
 def _find_matching_pdf(stem: str, input_path: Path, input_file_regex: str | None) -> Path | None:
     """Find a single PDF in input_path matching the given stem.
 
@@ -93,7 +84,7 @@ def migrate_profile(profile: ProfileConfig, dry_run: bool) -> dict:
             continue
 
         # Compute hash and build target name
-        file_hash = _compute_file_hash(pdf_path)
+        file_hash = compute_file_hash(pdf_path)
         target_name = f"{stem}_{file_hash}"
         target_dir = output_path / target_name
 

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from parselabs.config import ProfileConfig
+from parselabs.config import ProfileConfig, load_config_env
 
 
 def test_profile_config_loads_runtime_settings_and_resolves_relative_paths(tmp_path):
@@ -68,3 +68,53 @@ def test_profile_config_supports_flat_runtime_keys(tmp_path):
     assert profile.workers == 8
     assert profile.input_path == Path("/tmp/input")
     assert profile.output_path == Path("/tmp/output")
+
+
+def test_profile_config_prefers_shared_config_env_over_profile_key(tmp_path, monkeypatch):
+    home_dir = tmp_path / "home"
+    env_dir = home_dir / ".config" / "parselabs"
+    env_dir.mkdir(parents=True)
+    (env_dir / ".env").write_text(
+        'OPENROUTER_API_KEY="shared-key"\nOPENROUTER_BASE_URL="https://shared.example/v1"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home_dir))
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_BASE_URL", raising=False)
+    load_config_env.cache_clear()
+
+    profile_path = tmp_path / "env-first.yaml"
+    profile_path.write_text(
+        """
+name: "Env First"
+openrouter:
+  api_key: "stale-profile-key"
+  base_url: "https://stale.example/v1"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    profile = ProfileConfig.from_file(profile_path)
+
+    assert profile.openrouter_api_key == "shared-key"
+    assert profile.openrouter_base_url == "https://shared.example/v1"
+    load_config_env.cache_clear()
+
+
+def test_profile_config_prefers_process_env_over_shared_config_env(tmp_path, monkeypatch):
+    home_dir = tmp_path / "home"
+    env_dir = home_dir / ".config" / "parselabs"
+    env_dir.mkdir(parents=True)
+    (env_dir / ".env").write_text("OPENROUTER_API_KEY=shared-key\n", encoding="utf-8")
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home_dir))
+    monkeypatch.setenv("OPENROUTER_API_KEY", "shell-key")
+    load_config_env.cache_clear()
+
+    profile_path = tmp_path / "shell-first.yaml"
+    profile_path.write_text('name: "Shell First"\n', encoding="utf-8")
+
+    profile = ProfileConfig.from_file(profile_path)
+
+    assert profile.openrouter_api_key == "shell-key"
+    load_config_env.cache_clear()

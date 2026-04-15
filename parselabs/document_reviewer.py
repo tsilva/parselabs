@@ -464,53 +464,6 @@ def _persist_row_action(document: ProcessedDocument, current_row: pd.Series, act
     return apply_review_action_for_target(target, action)
 
 
-def _handle_document_list_refresh(
-    current_doc_id: str | None,
-    current_index: int,
-    filter_mode: str,
-    show_reviewed: bool,
-    output_path: Path,
-    lab_specs: LabSpecsConfig,
-) -> tuple:
-    """Refresh the visible document list and rerender the active document."""
-
-    return _rerender_toolbar_state(
-        current_doc_id,
-        current_index,
-        filter_mode,
-        show_reviewed,
-        output_path,
-        lab_specs,
-        rebuild_all=True,
-        prefer_first_visible=False,
-    )
-
-
-def _handle_document_change(
-    doc_id: str | None,
-    show_reviewed: bool,
-    output_path: Path,
-    lab_specs: LabSpecsConfig,
-) -> tuple[int, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame, str]:
-    """Render a newly selected document, starting from its first visible queue row."""
-
-    document = _get_document_by_id(doc_id, output_path)
-    return _render_document(document, None, show_reviewed, output_path, lab_specs, prefer_first_visible=True).as_outputs()
-
-
-def _handle_show_reviewed_change(
-    doc_id: str | None,
-    current_index: int,
-    show_reviewed: bool,
-    output_path: Path,
-    lab_specs: LabSpecsConfig,
-) -> tuple[int, tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None, str, pd.DataFrame, pd.DataFrame, str]:
-    """Toggle whether accepted and rejected rows stay visible in the queue."""
-
-    document = _get_document_by_id(doc_id, output_path)
-    return _render_document(document, current_index, show_reviewed, output_path, lab_specs, prefer_first_visible=False).as_outputs()
-
-
 def _handle_queue_select(
     doc_id: str | None,
     queue_state: pd.DataFrame,

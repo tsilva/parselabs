@@ -9,16 +9,17 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from json import JSONDecodeError
 from pathlib import Path
-from typing import Literal
 
 import pandas as pd
+
+from parselabs.types import PagePayload, ReviewAction
 
 logger = logging.getLogger(__name__)
 
 HASHED_DOCUMENT_DIR_RE = re.compile(r"^(?P<stem>.+)_(?P<file_hash>[0-9a-fA-F]{8})$")
 REVIEW_MISSING_ROWS_KEY = "review_missing_rows"
-ReviewAction = Literal["accept", "reject", "clear", "missing_row"]
 
 
 @dataclass(frozen=True, init=False)
@@ -265,20 +266,26 @@ def load_legacy_merged_review_dataframe(output_path: Path) -> pd.DataFrame:
     return pd.read_csv(csv_path)
 
 
-def read_page_payload(json_path: Path) -> dict | None:
+def read_page_payload(json_path: Path) -> PagePayload | None:
     """Read a page JSON payload, returning None for missing or invalid files."""
 
     if not json_path.exists():
         return None
 
     try:
-        return json.loads(json_path.read_text(encoding="utf-8"))
-    except Exception as exc:
+        payload = json.loads(json_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, JSONDecodeError) as exc:
         logger.warning(f"Failed to read processed page JSON {json_path}: {exc}")
         return None
 
+    if not isinstance(payload, dict):
+        logger.warning(f"Failed to read processed page JSON {json_path}: payload is not an object")
+        return None
 
-def write_page_payload(json_path: Path, payload: dict) -> None:
+    return payload
+
+
+def write_page_payload(json_path: Path, payload: PagePayload) -> None:
     """Persist a page JSON payload with stable formatting."""
 
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -324,7 +331,7 @@ def save_review_status(doc_dir: Path, page_number: int, result_index: int, statu
 
     try:
         write_page_payload(json_path, payload)
-    except Exception as exc:
+    except (OSError, PermissionError) as exc:
         return False, f"Failed to write JSON file: {exc}"
 
     return True, ""
@@ -381,7 +388,7 @@ def save_missing_row_marker(doc_dir: Path, page_number: int, anchor_result_index
 
     try:
         write_page_payload(json_path, payload)
-    except Exception as exc:
+    except (OSError, PermissionError) as exc:
         return False, f"Failed to write JSON file: {exc}"
 
     return True, ""

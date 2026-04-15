@@ -7,8 +7,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from parselabs import rows as rows_module
 from parselabs import pipeline as main
+from parselabs import rows as rows_module
 from parselabs.config import ExtractionConfig, LabSpecsConfig, ProfileConfig
 from parselabs.normalization import apply_normalizations
 from parselabs.rows import (
@@ -1074,7 +1074,7 @@ def test_regression_case_sync_copies_fixture_ready_documents_with_rejections(tmp
         lambda _: ProfileConfig(name="test", output_path=output_path),
     )
 
-    regression_cases.approve_cases(argparse.Namespace(command="approve", profile="test"))
+    regression_cases.approve_cases(argparse.Namespace(command="sync-reviewed", profile="test"))
 
     case_dirs = sorted(path.name for path in approved_dir.iterdir())
     expected_case_id = f"valid_{regression_cases.compute_file_hash(output_path / 'valid_deadbeef' / 'valid.pdf')}"

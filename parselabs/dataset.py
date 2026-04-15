@@ -227,7 +227,7 @@ def _check_loinc_critical_codes(report: dict[str, list[str]]) -> None:
                 continue
             if config[test_name].get("loinc_code") == "1975-2":
                 _append_report_error(report, file_key, f"{test_name} should not share code 1975-2 with Bilirubin")
-    except Exception as exc:
+    except (OSError, json.JSONDecodeError) as exc:
         _append_report_error(report, file_key, f"Exception: {exc}")
 
 
@@ -260,7 +260,7 @@ def _check_no_critical_loinc_duplicates(report: dict[str, list[str]]) -> None:
                 has_second = any(second in test for test in tests)
                 if has_first and has_second:
                     _append_report_error(report, file_key, f"LOINC {code} incorrectly shared between {first} and {second}: {tests}")
-    except Exception as exc:
+    except (OSError, json.JSONDecodeError) as exc:
         _append_report_error(report, file_key, f"Exception: {exc}")
 
 
@@ -276,7 +276,7 @@ def _check_lab_specs_schema(report: dict[str, list[str]]) -> None:
 
         for error in validator.errors:
             _append_report_error(report, file_key, error)
-    except Exception as exc:
+    except ImportError as exc:
         _append_report_error(report, file_key, f"Exception during schema validation: {exc}")
 
 

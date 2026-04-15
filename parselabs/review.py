@@ -4,22 +4,18 @@ from __future__ import annotations
 
 import html
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
 from PIL import Image
 
-from parselabs.config import Demographics, LabSpecsConfig
-from parselabs.rows import build_corpus_review_rows
 from parselabs.store import (
     get_page_image_path as get_page_image_path_from_store,
 )
-from parselabs.store import (
-    load_legacy_merged_review_dataframe,
-    read_page_payload,
-    resolve_page_path,
-)
+from parselabs.store import resolve_page_path
+from parselabs.types import ReviewRow
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +126,7 @@ def format_mapped_value(row: pd.Series) -> str:
     return value_text
 
 
-def get_bbox_coordinates(entry: dict | pd.Series) -> tuple[float, float, float, float] | None:
+def get_bbox_coordinates(entry: Mapping[str, object] | pd.Series) -> tuple[float, float, float, float] | None:
     """Return viewer-usable bounding-box coordinates from a row-like object."""
 
     bbox_keys = ["bbox_left", "bbox_top", "bbox_right", "bbox_bottom"]
@@ -267,7 +263,7 @@ def build_page_image_value_for_document(
 
 
 def build_page_image_value_for_entry(
-    entry: dict,
+    entry: ReviewRow,
     output_path: Path,
     *,
     label: str = SOURCE_BBOX_LABEL,
@@ -291,7 +287,7 @@ def build_page_image_value_for_entry(
     )
 
 
-def get_review_status(entry: dict) -> str | None:
+def get_review_status(entry: ReviewRow) -> str | None:
     """Get review status for a row-like entry."""
 
     status = entry.get("review_status")
@@ -353,7 +349,7 @@ def build_reason_badges(review_reason: object) -> str:
     return "".join(badges)
 
 
-def build_details_html(entry: dict) -> str:
+def build_details_html(entry: ReviewRow) -> str:
     """Build the raw-vs-standardized details table for one selected row."""
 
     # Guard: Empty selections render the stable placeholder.
@@ -414,153 +410,6 @@ def build_details_html(entry: dict) -> str:
     return "".join(html_parts)
 
 
-def _load_json_cached(json_path: Path, cache: dict[str, dict | None]) -> dict | None:
-    """Load and cache page JSON for review-status backfills."""
-
-    json_path_str = str(json_path)
-    if json_path_str in cache:
-        return cache[json_path_str]
-
-    cache[json_path_str] = read_page_payload(json_path)
-    return cache[json_path_str]
-
-
-def _sync_review_statuses(df: pd.DataFrame, output_path: Path) -> list[str | None]:
-    """Read review_status from page JSON for legacy merged review CSVs."""
-
-    json_cache: dict[str, dict | None] = {}
-    review_statuses: list[str | None] = []
-
-    for row in df.itertuples():
-        result_index = getattr(row, "result_index", None)
-        if result_index is None or pd.isna(result_index):
-            review_statuses.append(None)
-            continue
-
-        json_path = resolve_page_path(
-            output_path,
-            getattr(row, "source_file", ""),
-            getattr(row, "page_number", None),
-            ".json",
-        )
-        json_data = _load_json_cached(json_path, json_cache)
-        if json_data and "lab_results" in json_data:
-            result_idx = int(result_index)
-            if result_idx < len(json_data["lab_results"]):
-                review_statuses.append(json_data["lab_results"][result_idx].get("review_status"))
-                continue
-
-        review_statuses.append(None)
-
-    return review_statuses
-
-
-def _is_out_of_range(value: float, range_min, range_max) -> bool:
-    """Return whether a value falls outside the given numeric bounds."""
-
-    return (pd.notna(range_min) and value < range_min) or (pd.notna(range_max) and value > range_max)
-
-
-def _format_reference_range(row) -> str:
-    """Format reference_min/reference_max into a display string."""
-
-    ref_min = row["reference_min"]
-    ref_max = row["reference_max"]
-
-    if pd.isna(ref_min) and pd.isna(ref_max):
-        if row.get("lab_unit") == "boolean":
-            return "0 - 1"
-        return ""
-
-    if pd.isna(ref_min):
-        return f"< {ref_max}"
-    if pd.isna(ref_max):
-        return f"> {ref_min}"
-
-    return f"{ref_min} - {ref_max}"
-
-
-def _check_out_of_reference(row) -> bool | None:
-    """Check if a value falls outside the PDF reference range."""
-
-    value = row["value"]
-    if pd.isna(value):
-        return None
-
-    ref_min = row["reference_min"]
-    ref_max = row["reference_max"]
-    if pd.isna(ref_min) and pd.isna(ref_max):
-        if row.get("lab_unit") == "boolean":
-            return value > 0
-        return None
-
-    return _is_out_of_range(value, ref_min, ref_max)
-
-
-def _get_lab_spec_range(lab_name: str, lab_specs: LabSpecsConfig, gender: str | None, age: int | None) -> pd.Series:
-    """Look up the configured optimal range for a lab, adjusted for demographics."""
-
-    range_min, range_max = lab_specs.get_optimal_range_for_demographics(lab_name, gender=gender, age=age)
-    return pd.Series({"lab_specs_min": range_min, "lab_specs_max": range_max})
-
-
-def _check_out_of_optimal_range(row) -> bool | None:
-    """Check if a value falls outside the configured optimal range from lab specs."""
-
-    value = row.get("value")
-    if pd.isna(value):
-        return None
-
-    spec_min = row.get("lab_specs_min")
-    spec_max = row.get("lab_specs_max")
-    if pd.isna(spec_min) and pd.isna(spec_max):
-        return None
-
-    return _is_out_of_range(value, spec_min, spec_max)
-
-
-def load_results_dataframe(
-    output_path: Path,
-    lab_specs: LabSpecsConfig,
-    demographics: Demographics | None,
-) -> pd.DataFrame:
-    """Load review rows for the results explorer with one legacy fallback path."""
-
-    df = build_corpus_review_rows(output_path, lab_specs)
-    if df.empty:
-        df = load_legacy_merged_review_dataframe(output_path)
-        if df.empty:
-            return df
-
-    if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
-
-    if "review_status" not in df.columns:
-        df["review_status"] = _sync_review_statuses(df, output_path)
-
-    if "reference_min" in df.columns and "reference_max" in df.columns:
-        df["reference_range"] = df.apply(_format_reference_range, axis=1)
-
-    if "value" in df.columns and "reference_min" in df.columns and "reference_max" in df.columns:
-        df["is_out_of_reference"] = df.apply(_check_out_of_reference, axis=1)
-
-    gender = demographics.gender if demographics else None
-    age = demographics.age if demographics else None
-
-    if "lab_name" in df.columns and lab_specs.exists:
-        range_df = df["lab_name"].apply(lambda name: _get_lab_spec_range(name, lab_specs, gender, age))
-        df["lab_specs_min"] = range_df["lab_specs_min"]
-        df["lab_specs_max"] = range_df["lab_specs_max"]
-
-    if "value" in df.columns and "lab_specs_min" in df.columns and "lab_specs_max" in df.columns:
-        optimal_mask = df.apply(_check_out_of_optimal_range, axis=1)
-        df["is_out_of_optimal_range"] = optimal_mask
-        # Preserve the legacy column name for downstream compatibility.
-        df["is_out_of_healthy_range"] = optimal_mask
-
-    return df
-
-
 __all__ = [
     "ReviewStatusBadge",
     "SOURCE_BBOX_LABEL",
@@ -581,7 +430,6 @@ __all__ = [
     "get_image_size",
     "get_review_status",
     "get_review_status_label",
-    "load_results_dataframe",
     "normalize_review_status",
     "scale_bbox_to_pixels",
 ]

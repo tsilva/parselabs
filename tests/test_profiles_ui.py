@@ -56,6 +56,6 @@ def test_load_ui_context_requires_explicit_profile(monkeypatch, tmp_path):
     assert (profiles_dir / "alpha.yaml").exists()
 
 
-def test_selected_tab_label_handles_review_aliases():
+def test_selected_tab_label_handles_supported_tabs():
     assert selected_tab_label("results") == "Results Explorer"
-    assert selected_tab_label("reviewer") == "Review Queue"
+    assert selected_tab_label("review") == "Review Queue"
