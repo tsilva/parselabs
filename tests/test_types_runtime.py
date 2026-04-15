@@ -4,14 +4,25 @@ from pathlib import Path
 
 from parselabs import review_artifacts_backend
 from parselabs.store import read_page_payload, write_page_payload
-from parselabs.types import PagePayload, ReviewDecisionResult, ReviewRow, RowIdentity
+from parselabs.types import (
+    PagePayload,
+    ReviewDecisionResult,
+    ReviewMissingRowMarker,
+    ReviewRow,
+    RowIdentity,
+)
 
 
 def test_page_payload_round_trips_through_store(tmp_path):
+    missing_marker: ReviewMissingRowMarker = {
+        "anchor_result_index": 0,
+        "created_at": "2024-01-02T03:04:05Z",
+    }
     payload: PagePayload = {
         "collection_date": "2024-01-02",
         "source_file": "labs.pdf",
         "page_number": 1,
+        "review_missing_rows": [missing_marker],
         "lab_results": [
             {
                 "raw_lab_name": "Glucose",

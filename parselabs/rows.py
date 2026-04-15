@@ -47,7 +47,14 @@ from parselabs.store import (
 from parselabs.store import (
     save_review_status as save_review_status_in_store,
 )
-from parselabs.types import PagePayload, ReviewRow
+from parselabs.types import (
+    PageLabResultPayload,
+    PagePayload,
+    PersistedReviewStatus,
+    ReviewMissingRowRecord,
+    ReviewRow,
+    coerce_persisted_review_status,
+)
 from parselabs.utils import ensure_columns
 from parselabs.validation import ValueValidator
 
@@ -384,6 +391,110 @@ def build_corpus_review_rows(
     return pd.concat(review_frames, ignore_index=True, sort=False)
 
 
+def _extract_page_payload_date(page_payload: PagePayload) -> str | None:
+    """Return the canonical date stored on one page payload."""
+
+    document_date = page_payload.get("collection_date") or page_payload.get("report_date")
+    return None if document_date == "0000-00-00" else document_date
+
+
+def _format_review_reason(
+    review_reason: object,
+    *,
+    page_failed: bool,
+    include_extraction_failed_reason: bool,
+) -> str:
+    """Return the persisted review reason text for one flattened row."""
+
+    normalized_reason = str(review_reason or "").strip()
+    if not page_failed or not include_extraction_failed_reason:
+        return normalized_reason
+    if EXTRACTION_FAILED_REASON in normalized_reason:
+        return normalized_reason
+    if normalized_reason and not normalized_reason.endswith(";"):
+        normalized_reason = f"{normalized_reason}; "
+    if normalized_reason:
+        return f"{normalized_reason}{EXTRACTION_FAILED_REASON}; "
+    return f"{EXTRACTION_FAILED_REASON}; "
+
+
+def _build_flattened_review_row(
+    result: PageLabResultPayload,
+    *,
+    document_date: str | None,
+    source_file: str | None,
+    page_number: int,
+    result_index: int,
+    page_failed: bool,
+    include_extraction_failed_reason: bool,
+) -> ReviewRow:
+    """Return one flattened review-row payload from a persisted page result."""
+
+    status = coerce_persisted_review_status(result.get("review_status"))
+    return {
+        "date": document_date,
+        "source_file": source_file,
+        "page_number": page_number,
+        "result_index": result_index,
+        "raw_lab_name": result.get("raw_lab_name"),
+        "raw_section_name": result.get("raw_section_name"),
+        "raw_value": result.get("raw_value"),
+        "raw_lab_unit": result.get("raw_lab_unit"),
+        "raw_reference_range": result.get("raw_reference_range"),
+        "raw_reference_min": result.get("raw_reference_min"),
+        "raw_reference_max": result.get("raw_reference_max"),
+        "raw_comments": result.get("raw_comments"),
+        "bbox_left": result.get("bbox_left"),
+        "bbox_top": result.get("bbox_top"),
+        "bbox_right": result.get("bbox_right"),
+        "bbox_bottom": result.get("bbox_bottom"),
+        "review_needed": bool(result.get("review_needed")) or page_failed,
+        "review_reason": _format_review_reason(
+            result.get("review_reason"),
+            page_failed=page_failed,
+            include_extraction_failed_reason=include_extraction_failed_reason,
+        ),
+        "review_status": status,
+        "review_completed_at": result.get("review_completed_at"),
+    }
+
+
+def _iter_flattened_review_rows(
+    payload: PagePayload,
+    *,
+    source_file: str | None,
+    page_number: int,
+    document_date: str | None,
+    include_extraction_failed_reason: bool,
+    include_statuses: set[PersistedReviewStatus] | None = None,
+) -> Iterable[ReviewRow]:
+    """Yield flattened review rows for one persisted page payload."""
+
+    page_results = payload.get("lab_results", [])
+    if not isinstance(page_results, list):
+        return
+
+    page_failed = bool(payload.get("_extraction_failed"))
+    for result_index, result in enumerate(page_results):
+        if not isinstance(result, dict):
+            continue
+
+        typed_result: PageLabResultPayload = result
+        status = coerce_persisted_review_status(typed_result.get("review_status"))
+        if include_statuses is not None and status not in include_statuses:
+            continue
+
+        yield _build_flattened_review_row(
+            typed_result,
+            document_date=document_date,
+            source_file=source_file,
+            page_number=page_number,
+            result_index=result_index,
+            page_failed=page_failed,
+            include_extraction_failed_reason=include_extraction_failed_reason,
+        )
+
+
 def _flatten_page_payloads(
     page_payloads: Iterable[PagePayload],
     *,
@@ -400,55 +511,21 @@ def _flatten_page_payloads(
             continue
 
         page_number = int(payload.get("page_number") or page_idx)
-        page_failed = bool(payload.get("_extraction_failed"))
-        page_results = payload.get("lab_results", [])
 
         # Preserve the first usable document date across every row.
         if document_date is None:
-            document_date = payload.get("collection_date") or payload.get("report_date")
-            if document_date == "0000-00-00":
-                document_date = None
+            document_date = _extract_page_payload_date(payload)
 
-        # Skip non-list payloads so one malformed page does not poison the batch.
-        if not isinstance(page_results, list):
-            continue
-
-        for result_index, result in enumerate(page_results):
-            # Skip malformed result payloads.
-            if not isinstance(result, dict):
-                continue
-
-            status_text = str(result.get("review_status") or "").strip().lower()
-            status = status_text if status_text in {"accepted", "rejected"} else None
-
-            # Export-only callers may request just accepted reviewed rows.
-            if accepted_only and status != "accepted":
-                continue
-
-            rows.append(
-                {
-                    "date": document_date,
-                    "source_file": payload.get("source_file"),
-                    "page_number": page_number,
-                    "result_index": result_index,
-                    "raw_lab_name": result.get("raw_lab_name"),
-                    "raw_section_name": result.get("raw_section_name"),
-                    "raw_value": result.get("raw_value"),
-                    "raw_lab_unit": result.get("raw_lab_unit"),
-                    "raw_reference_range": result.get("raw_reference_range"),
-                    "raw_reference_min": result.get("raw_reference_min"),
-                    "raw_reference_max": result.get("raw_reference_max"),
-                    "raw_comments": result.get("raw_comments"),
-                    "bbox_left": result.get("bbox_left"),
-                    "bbox_top": result.get("bbox_top"),
-                    "bbox_right": result.get("bbox_right"),
-                    "bbox_bottom": result.get("bbox_bottom"),
-                    "review_needed": bool(result.get("review_needed")) or page_failed,
-                    "review_reason": str(result.get("review_reason") or "").strip(),
-                    "review_status": status,
-                    "review_completed_at": result.get("review_completed_at"),
-                }
+        rows.extend(
+            _iter_flattened_review_rows(
+                payload,
+                source_file=payload.get("source_file"),
+                page_number=page_number,
+                document_date=document_date,
+                include_extraction_failed_reason=False,
+                include_statuses={"accepted"} if accepted_only else None,
             )
+        )
 
     # Guard: Empty payload collections still return the shared schema.
     if not rows:
@@ -472,7 +549,7 @@ def save_missing_row_marker(doc_dir: Path, page_number: int, anchor_result_index
     return save_missing_row_marker_in_store(doc_dir, page_number, anchor_result_index)
 
 
-def get_review_missing_rows(doc_dir: Path, page_number: int | None = None) -> list[dict]:
+def get_review_missing_rows(doc_dir: Path, page_number: int | None = None) -> list[ReviewMissingRowRecord]:
     """Return unresolved missing-row markers for a document or page."""
 
     return get_review_missing_rows_from_store(doc_dir, page_number=page_number)
@@ -572,17 +649,13 @@ def get_page_image_path(doc_dir: Path, page_number: int) -> Path | None:
     return get_page_image_path_from_store(doc_dir, page_number)
 
 
-def _extract_document_date(page_payload: dict, doc_dir: Path) -> str | None:
+def _extract_document_date(page_payload: PagePayload, doc_dir: Path) -> str | None:
     """Extract the document date from page metadata or the filename."""
 
     # Prefer the explicit collection date captured by extraction.
-    doc_date = page_payload.get("collection_date") or page_payload.get("report_date")
+    doc_date = _extract_page_payload_date(page_payload)
 
     # Ignore the legacy placeholder date used by bad model responses.
-    if doc_date == "0000-00-00":
-        doc_date = None
-
-    # Fall back to a YYYY-MM-DD token in the document stem when metadata is absent.
     if not doc_date:
         stem = get_document_stem(doc_dir)
         match = re.search(r"(\d{4}-\d{2}-\d{2})", stem)
@@ -594,7 +667,7 @@ def _extract_document_date(page_payload: dict, doc_dir: Path) -> str | None:
 
 def load_document_review_rows(
     doc_dir: Path,
-    include_statuses: set[str] | None = None,
+    include_statuses: set[PersistedReviewStatus] | None = None,
 ) -> pd.DataFrame:
     """Load one review row per extracted result from page JSON files."""
 
@@ -621,58 +694,16 @@ def load_document_review_rows(
         if doc_date is None:
             doc_date = _extract_document_date(page_payload, doc_dir)
 
-        # Skip pages without extracted lab results.
-        results = page_payload.get("lab_results", [])
-        if not isinstance(results, list):
-            continue
-
-        page_failed = bool(page_payload.get("_extraction_failed"))
-
-        # Flatten each extracted row while preserving its original page-local index.
-        for result_index, result in enumerate(results):
-            # Skip malformed result payloads so one bad item does not poison the file.
-            if not isinstance(result, dict):
-                continue
-
-            status_text = str(result.get("review_status") or "").strip().lower()
-            status = status_text if status_text in {"accepted", "rejected"} else None
-            review_needed = bool(result.get("review_needed")) or page_failed
-            review_reason = str(result.get("review_reason") or "").strip()
-
-            # Failed extractions should stay visible to the reviewer even when salvage produced rows.
-            if page_failed and EXTRACTION_FAILED_REASON not in review_reason:
-                if review_reason and not review_reason.endswith(";"):
-                    review_reason = f"{review_reason}; "
-                review_reason = f"{review_reason}{EXTRACTION_FAILED_REASON}; " if review_reason else f"{EXTRACTION_FAILED_REASON}; "
-
-            # Skip rows outside the requested review-status subset.
-            if include_statuses is not None and status not in include_statuses:
-                continue
-
-            rows.append(
-                {
-                    "date": doc_date,
-                    "source_file": source_file,
-                    "page_number": page_number,
-                    "result_index": result_index,
-                    "raw_lab_name": result.get("raw_lab_name"),
-                    "raw_section_name": result.get("raw_section_name"),
-                    "raw_value": result.get("raw_value"),
-                    "raw_lab_unit": result.get("raw_lab_unit"),
-                    "raw_reference_range": result.get("raw_reference_range"),
-                    "raw_reference_min": result.get("raw_reference_min"),
-                    "raw_reference_max": result.get("raw_reference_max"),
-                    "raw_comments": result.get("raw_comments"),
-                    "bbox_left": result.get("bbox_left"),
-                    "bbox_top": result.get("bbox_top"),
-                    "bbox_right": result.get("bbox_right"),
-                    "bbox_bottom": result.get("bbox_bottom"),
-                    "review_needed": review_needed,
-                    "review_reason": review_reason,
-                    "review_status": status,
-                    "review_completed_at": result.get("review_completed_at"),
-                }
+        rows.extend(
+            _iter_flattened_review_rows(
+                page_payload,
+                source_file=source_file,
+                page_number=page_number,
+                document_date=doc_date,
+                include_extraction_failed_reason=True,
+                include_statuses=include_statuses,
             )
+        )
 
     # Guard: Empty results still return a dataframe with the expected columns.
     if not rows:
