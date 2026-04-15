@@ -143,15 +143,16 @@ paths:
   output_path: "/path/to/output"
   input_file_regex: "*.pdf"  # optional
 
-openrouter:
-  api_key: "your_api_key"
-  base_url: "https://openrouter.ai/api/v1"  # optional
-
-models:
-  extract_model_id: "google/gemini-2.5-pro"
-
 processing:
   workers: 4
+```
+
+**Shared runtime settings** (`~/.config/parselabs/.env`):
+```bash
+OPENROUTER_API_KEY=your_api_key
+# Optional:
+# OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+EXTRACT_MODEL_ID=google/gemini-2.5-pro
 ```
 
 **Lab Specs** (`config/lab_specs.json`):
@@ -235,14 +236,18 @@ Final outputs in the profile `output_path`:
 ## Profile Configuration
 
 Required in each extraction profile:
-- `openrouter.api_key` (or top-level `openrouter_api_key`) - API key for OpenRouter
-- `models.extract_model_id` (or top-level `extract_model_id`) - Vision model for extraction
 - `paths.input_path`
 - `paths.output_path`
 
 Optional:
-- `openrouter.base_url` - Alternate OpenRouter-compatible endpoint
 - `processing.workers` (or top-level `workers`) - Parallel workers (default: CPU count)
+
+Required in shared config (`~/.config/parselabs/.env` or shell environment):
+- `OPENROUTER_API_KEY` - API key for OpenRouter
+- `EXTRACT_MODEL_ID` - Vision model for extraction
+
+Optional in shared config:
+- `OPENROUTER_BASE_URL` - Alternate OpenRouter-compatible endpoint
 
 ## Validation (test.py)
 

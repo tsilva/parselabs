@@ -68,7 +68,7 @@ Interactive web UI for browsing, plotting, and reviewing results:
 
 ## Configuration
 
-- **Profiles** (YAML/JSON): name, input path, output path, OpenRouter API credentials, extract model ID, optional base URL, optional file pattern, worker count, and demographics (gender, DOB, height, weight).
+- **Profiles** (YAML/JSON): name, input path, output path, optional file pattern, worker count, and demographics (gender, DOB, height, weight). Shared runtime settings live in `~/.config/parselabs/.env`.
 - **Lab specs** (`lab_specs.json`): canonical lab names, types, primary units, alternative units with conversion factors, evidence-based optimal ranges (with age/gender variants), biological limits, max daily change rates, inter-lab relationships, and LOINC codes (required for every lab).
 
 ## CLI
