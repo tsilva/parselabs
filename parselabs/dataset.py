@@ -18,6 +18,9 @@ from parselabs.runtime import list_non_template_profiles, load_profile_config
 logger = logging.getLogger(__name__)
 
 LAB_SPECS_PATH = get_lab_specs_path()
+PERCENT_UPPER_BOUND_EXCEPTIONS = {
+    "Blood - Prothrombin Time (PT) (%)",
+}
 
 
 def _append_report_error(report: dict[str, list[str]], file_key: str, error: str) -> None:
@@ -91,7 +94,9 @@ def _check_lab_unit_percent_value_range(df: pd.DataFrame, report: dict[str, list
     if "lab_unit" not in df.columns or "value" not in df.columns:
         return
 
-    mask = (df["lab_unit"] == "%") & ((df["value"] < 0) | (df["value"] > 100))
+    lab_names = df["lab_name"].astype(str) if "lab_name" in df.columns else pd.Series("", index=df.index)
+    exceeds_upper_bound = (df["value"] > 100) & ~lab_names.isin(PERCENT_UPPER_BOUND_EXCEPTIONS)
+    mask = (df["lab_unit"] == "%") & ((df["value"] < 0) | exceeds_upper_bound)
     for idx in df[mask].index:
         row = df.loc[idx]
         source_file = row.get("source_file", "unknown")

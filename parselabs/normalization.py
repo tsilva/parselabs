@@ -2,6 +2,7 @@
 
 import logging
 import re
+import unicodedata
 
 import pandas as pd
 
@@ -17,12 +18,31 @@ INTERVAL_VALUE_PATTERN = re.compile(
 
 QUALITATIVE_VARIANT_MAP = {
     "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA)": "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA) (Qualitative)",
+    "Urine Type II - Blood": "Urine Type II - Blood (Qualitative)",
     "Urine Type II - Bilirubin": "Urine Type II - Bilirubin (Qualitative)",
     "Urine Type II - Glucose": "Urine Type II - Glucose (Qualitative)",
     "Urine Type II - Ketones": "Urine Type II - Ketones (Qualitative)",
     "Urine Type II - Proteins": "Urine Type II - Proteins (Qualitative)",
     "Urine Type II - Urobilinogen": "Urine Type II - Urobilinogen (Qualitative)",
 }
+
+SEDIMENT_FIELD_STYLE_LABS = {
+    "Urine Type II - Sediment - Crystals",
+    "Urine Type II - Sediment - Epithelial Cells",
+    "Urine Type II - Sediment - Erythrocytes",
+    "Urine Type II - Sediment - Leukocytes",
+    "Urine Type II - Sediment - Small Round Cells",
+    "Urine Type II - Sediment - Transitional epithelial cells",
+    "Urine Type II - Sediment - Tubular epithelial cells",
+}
+SEDIMENT_ABSOLUTE_VARIANT_MAP = {
+    "Urine Type II - Sediment - Crystals": "Urine Type II - Sediment - Crystals (Absolute)",
+    "Urine Type II - Sediment - Epithelial Cells": "Urine Type II - Sediment - Epithelial Cells (Absolute)",
+    "Urine Type II - Sediment - Erythrocytes": "Urine Type II - Sediment - Erythrocytes (Absolute)",
+    "Urine Type II - Sediment - Leukocytes": "Urine Type II - Sediment - Leukocytes (Absolute)",
+    "Urine Type II - Sediment - Small Round Cells": "Urine Type II - Sediment - Small Round Cells (Absolute)",
+}
+SEDIMENT_FIELD_STYLE_VALUE_PATTERN = re.compile(r"/\s*(?:campo|field)\b", re.IGNORECASE)
 
 
 def preprocess_numeric_value(value) -> str:
@@ -51,6 +71,10 @@ def preprocess_numeric_value(value) -> str:
     # Normalize OCR spacing around decimal separators before any parsing logic.
     # Examples: "13 .0" -> "13.0", "4 ,04" -> "4,04"
     s = re.sub(r"(?<=\d)\s*([.,])\s*(?=\d)", r"\1", s)
+
+    # Strip approximate prefixes while preserving the numeric measurement.
+    # Examples: "Ca. 15" -> "15", "aprox. 12" -> "12"
+    s = re.sub(r"^(?:ca\.?|cerca de|aprox\.?|approximately)\s*", "", s, flags=re.IGNORECASE)
 
     # Handle embedded metadata: "52.6=1946" → "52.6" (keep first number before =)
     # Must be done before stripping trailing "=" to handle both cases
@@ -243,22 +267,33 @@ def classify_qualitative_value(text: str) -> int | None:
         return None
 
     normalized = text.strip().lower()
+    normalized = unicodedata.normalize("NFKD", normalized)
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
 
     # Guard: empty after stripping
-    if not normalized or normalized in ("nan", "none", "null", "nr"):
+    if not normalized or normalized in ("nan", "none", "null"):
         return None
 
     # Positive patterns (detected/present/abnormal)
     _POSITIVE_PREFIXES = (
         "positiv",  # positivo, positiva, positive
         "detetad",  # detetado
-        "detected",
-        "détecté",
+        "detect",
+        "reagent",
+        "reactiv",
         "resultado positivo",
+        "rara",
+        "raras",
+        "raro",
+        "raros",
     )
     _POSITIVE_KEYWORDS = {
         "abundantes",
+        "anisocitose",
+        "anisocitose e anisocromia.",
+        "anisocromia",
         "levemente turvo",
+        "r",
         "trace",
         "traces",
         "traço",
@@ -274,45 +309,52 @@ def classify_qualitative_value(text: str) -> int | None:
     _NEGATIVE_PREFIXES = (
         "negativ",  # negativo, negativa, negative
         "normal",
+        "nr",
         "ausent",  # ausente, ausentes, ausência
         "ausenci",  # ausencia
-        "não det",  # não detetado, não det.
+        "nao reagente",
+        "nao det",  # nao detetado, nao det.
         "not detected",
+        "non reactive",
         "nao contem",
-        "não contem",
-        "não contém",
-        "nao contém",
         "nao se ",  # nao se isolaram, nao se observaram
-        "não se observaram ovos",
-        "não revelou",
         "nao revelou",
         "sem alterações",
+        "sem alteracoes",
         "limpid",  # límpido, límpida, limpido
         "amicrobiano",
-        "cultura estéril",
+        "cultura esteril",
+        "esteril",
+        "sterile",
         "por hplc não foram detectadas",
-        "não foram observad",
+        "por hplc nao foram detectadas",
+        "nao foram observad",
         "exame ecográfico",  # normal findings
+        "exame ecografico",
         "forma e dimensões normais",
+        "forma e dimensoes normais",
         "de normal morfologia",
         "morfologia celular: normal",
         "o estudo electroforético",
+        "o estudo electroforetico",
         "num exame químico com ausência",
+        "num exame quimico com ausencia",
+        "amarel",
+        "clar",
+        "transparen",
     )
     _NEGATIVE_KEYWORDS = {
-        "amarela",
-        "amarelo",
-        "amarela clara",
         "citrina",
-        "claro",
-        "clara",
-        "transparente",
     }
 
     # Check positive patterns
     if any(normalized.startswith(p) for p in _POSITIVE_PREFIXES):
         return 1
     if normalized in _POSITIVE_KEYWORDS:
+        return 1
+    if "gram positivo" in normalized or "gram negativo" in normalized:
+        return 1
+    if normalized in {"(*)", "*"}:
         return 1
     # "raras plaquetas gigantes" is positive (abnormal finding)
     if normalized.startswith("raras plaquetas"):
@@ -322,7 +364,7 @@ def classify_qualitative_value(text: str) -> int | None:
         return 1
     if "distendida, apresenta paredes finas" in normalized:
         return 0
-    if re.fullmatch(r"\++", normalized):
+    if re.fullmatch(r"\++", normalized) or re.fullmatch(r"\d+\+", normalized):
         return 1
 
     # Check negative patterns
@@ -431,12 +473,113 @@ def _is_urine_strip_section(section_name: object) -> bool:
         for marker in (
             "sumária da urina",
             "sumaria da urina",
+            "exame sumário",
+            "exame sumario",
             "tipo ii",
             "elementos anormais",
             "avaliação bioquímica",
             "avaliacao bioquimica",
         )
     )
+
+
+def _is_urine_sediment_section(section_name: object) -> bool:
+    """Return whether a raw section label indicates a urine sediment context."""
+
+    if pd.isna(section_name):
+        return False
+
+    normalized = str(section_name).strip().lower()
+    if not normalized:
+        return False
+
+    return any(
+        marker in normalized
+        for marker in (
+            "sedimento urin",
+            "sedimento",
+        )
+    )
+
+
+def _normalize_field_style_sediment_units(df: pd.DataFrame) -> pd.DataFrame:
+    """Coerce mislabeled sediment `/µl` units back onto the field-count normalization path."""
+
+    required_columns = {"lab_name_standardized", "lab_unit_standardized", "raw_value"}
+    if df.empty or not required_columns.issubset(df.columns):
+        return df
+
+    remap_indices: list[int] = []
+
+    for idx in df.index:
+        standardized_name = df.at[idx, "lab_name_standardized"]
+        standardized_unit = df.at[idx, "lab_unit_standardized"]
+
+        if standardized_name not in SEDIMENT_FIELD_STYLE_LABS:
+            continue
+
+        if str(standardized_unit).strip().lower() not in {"/ul", "/µl"}:
+            continue
+
+        if "raw_section_name" in df.columns and not _is_urine_sediment_section(df.at[idx, "raw_section_name"]):
+            continue
+
+        raw_value = "" if pd.isna(df.at[idx, "raw_value"]) else str(df.at[idx, "raw_value"]).strip()
+        looks_field_style = bool(SEDIMENT_FIELD_STYLE_VALUE_PATTERN.search(raw_value))
+        looks_qualitative = pd.isna(df.at[idx, "value_primary"]) and bool(raw_value)
+
+        if not looks_field_style and not looks_qualitative:
+            continue
+
+        df.at[idx, "lab_unit_standardized"] = "/campo"
+        remap_indices.append(idx)
+
+    if remap_indices:
+        logger.info(
+            "[normalization] Remapped %s urine sediment row(s) from /µl to /campo based on field-style values",
+            len(remap_indices),
+        )
+
+    return df
+
+
+def _remap_absolute_sediment_variant_names(
+    df: pd.DataFrame,
+    lab_specs: LabSpecsConfig,
+) -> pd.DataFrame:
+    """Split true `/µL` sediment counts away from microscopy-per-field analytes."""
+
+    required_columns = {"lab_name_standardized", "lab_unit_standardized"}
+    if df.empty or not required_columns.issubset(df.columns):
+        return df
+
+    remap_indices: list[int] = []
+
+    for idx in df.index:
+        standardized_name = df.at[idx, "lab_name_standardized"]
+        standardized_unit = str(df.at[idx, "lab_unit_standardized"]).strip().lower()
+
+        if standardized_name not in SEDIMENT_ABSOLUTE_VARIANT_MAP:
+            continue
+
+        if standardized_unit not in {"/ul", "/µl", "/μl"}:
+            continue
+
+        absolute_variant = SEDIMENT_ABSOLUTE_VARIANT_MAP[standardized_name]
+        if lab_specs.resolve_lab_name(absolute_variant) is None:
+            continue
+
+        df.at[idx, "lab_name_standardized"] = absolute_variant
+        df.at[idx, "lab_unit_standardized"] = lab_specs.get_primary_unit(absolute_variant)
+        remap_indices.append(idx)
+
+    if remap_indices:
+        logger.info(
+            "[normalization] Remapped %s urine sediment row(s) to absolute sibling analytes",
+            len(remap_indices),
+        )
+
+    return df
 
 
 def _remap_numeric_urine_strip_variants(
@@ -544,6 +687,25 @@ def _convert_qualitative_values(
             df.loc[matched_index, "lab_unit_primary"] = "boolean"
             logger.info(f"[normalization] Converted {len(matched_index)} qualitative values from {source_col} (boolean labs)")
 
+        # Old serology reports often pair a numeric screen value with the actual
+        # interpretation in comments (for example ``NR`` / ``R``). Prefer that
+        # qualitative interpretation when it is available.
+        if "raw_comments" in df.columns:
+            override_mask = df["lab_name_standardized"].isin(boolean_labs) & df["raw_comments"].notna()
+            override_map = _classify_qualitative_batch(df.loc[override_mask, "raw_comments"].tolist())
+            override_values = df.loc[override_mask, "raw_comments"].map(lambda value: override_map.get(value))
+            matched_override_mask = override_values.notna()
+
+            if matched_override_mask.any():
+                matched_override_index = override_values.index[matched_override_mask]
+                df.loc[matched_override_index, "value_primary"] = override_values.loc[matched_override_mask].astype(float)
+                df.loc[matched_override_index, "lab_unit_standardized"] = "boolean"
+                df.loc[matched_override_index, "lab_unit_primary"] = "boolean"
+                logger.info(
+                    "[normalization] Overrode %s boolean value(s) from raw_comments interpretations",
+                    len(matched_override_index),
+                )
+
     # Non-boolean labs: convert only negative-like values to 0 from raw_value, then comments.
     non_boolean_exclude = boolean_labs if boolean_labs else []
 
@@ -641,23 +803,29 @@ def apply_unit_conversions(
     # Phase 1: Extract comparison operators and preprocess values
     df = _preprocess_values(df)
 
-    # Phase 2: Remap text-only urine strip analytes onto boolean qualitative variants.
+    # Phase 2: Recover field-style urine sediment units when the report value contradicts /µl.
+    df = _normalize_field_style_sediment_units(df)
+
+    # Phase 2b: Remaining /µL sediment rows are distinct absolute-count analytes.
+    df = _remap_absolute_sediment_variant_names(df, lab_specs)
+
+    # Phase 3: Remap text-only urine strip analytes onto boolean qualitative variants.
     df = _remap_qualitative_variant_rows(df, lab_specs)
 
-    # Phase 3: Collapse numeric urine-strip semi-quantitative values onto qualitative variants.
+    # Phase 4: Collapse numeric urine-strip semi-quantitative values onto qualitative variants.
     df = _remap_numeric_urine_strip_variants(df, lab_specs)
 
-    # Phase 4: Convert qualitative text values to 0/1 for boolean-style labs.
+    # Phase 5: Convert qualitative text values to 0/1 for boolean-style labs.
     df = _convert_qualitative_values(df, lab_specs)
 
-    # Phase 5: Apply exact unit conversion factors for each lab type.
+    # Phase 6: Apply exact unit conversion factors for each lab type.
     for lab_name_standardized in df["lab_name_standardized"].unique():
         # Skip unknown or missing lab names
         if pd.isna(lab_name_standardized) or lab_name_standardized == UNKNOWN_VALUE:
             continue
         _apply_unit_conversions_for_lab(df, lab_name_standardized, lab_specs)
 
-    # Phase 6: Expose canonical qualitative names after conversions and remaps settle.
+    # Phase 7: Expose canonical qualitative names after conversions and remaps settle.
     df = _canonicalize_qualitative_lab_names(df, lab_specs)
 
     return df

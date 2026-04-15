@@ -1096,8 +1096,9 @@ def _maybe_auto_standardize_outputs(
         except PipelineError as exc:
             logger.warning(f"[standardization] Output rebuild after auto-refresh failed: {exc}")
         else:
+            rebuilt_publish_df = reviewed_corpus.merged_review_df if allow_pending else reviewed_corpus.final_df
             _export_final_results(
-                reviewed_corpus.merged_review_df,
+                rebuilt_publish_df,
                 hidden_cols,
                 widths,
                 output_path,

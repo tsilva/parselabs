@@ -10,7 +10,7 @@ import pytest
 from parselabs import pipeline as main
 from parselabs import rows as rows_module
 from parselabs.config import ExtractionConfig, LabSpecsConfig, ProfileConfig
-from parselabs.normalization import apply_normalizations
+from parselabs.normalization import apply_normalizations, flag_duplicate_entries
 from parselabs.rows import (
     ReviewStateError,
     apply_cached_standardization,
@@ -218,6 +218,38 @@ def _make_percentage_variant_lab_specs(tmp_path: Path) -> LabSpecsConfig:
     return LabSpecsConfig(config_path=config_path)
 
 
+def _make_complement_lab_specs(tmp_path: Path) -> LabSpecsConfig:
+    """Create lab specs that include complement siblings sharing one raw label."""
+
+    config_path = tmp_path / "lab_specs_complement.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "Blood - Complement C3": {
+                    "primary_unit": "mg/dL",
+                    "lab_type": "blood",
+                    "loinc_code": "4485-9",
+                    "ranges": {"default": [70.0, 180.0]},
+                },
+                "Blood - Complement C4": {
+                    "primary_unit": "mg/dL",
+                    "lab_type": "blood",
+                    "loinc_code": "4498-2",
+                    "ranges": {"default": [10.0, 40.0]},
+                },
+                "Blood - Complement CH50": {
+                    "primary_unit": "U/mL",
+                    "lab_type": "blood",
+                    "loinc_code": "4532-8",
+                    "alternatives": [{"unit": "U C'H 50", "factor": 1.0}],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return LabSpecsConfig(config_path=config_path)
+
+
 def _make_serology_variant_lab_specs(tmp_path: Path) -> LabSpecsConfig:
     """Create lab specs for assays that expose quantitative and qualitative companions."""
 
@@ -236,6 +268,52 @@ def _make_serology_variant_lab_specs(tmp_path: Path) -> LabSpecsConfig:
                     "lab_type": "blood",
                     "loinc_code": "5124-3",
                     "ranges": {"default": [0, 0]},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return LabSpecsConfig(config_path=config_path)
+
+
+def _make_boolean_serology_lab_specs(tmp_path: Path) -> LabSpecsConfig:
+    """Create boolean-backed serology specs that still need qualitative companion aliases."""
+
+    config_path = tmp_path / "lab_specs_boolean_serology.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "Blood - Hepatitis B Surface Antigen (HBsAg)": {
+                    "primary_unit": "boolean",
+                    "lab_type": "blood",
+                    "loinc_code": "5196-1",
+                    "ranges": {"default": [0.0, 1.0]},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    return LabSpecsConfig(config_path=config_path)
+
+
+def _make_protein_fraction_lab_specs(tmp_path: Path) -> LabSpecsConfig:
+    """Create protein fraction specs with absolute and percentage siblings."""
+
+    config_path = tmp_path / "lab_specs_protein_fractions.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "Blood - Albumin": {
+                    "primary_unit": "g/dL",
+                    "lab_type": "blood",
+                    "loinc_code": "1751-7",
+                    "ranges": {"default": [3.5, 5.0]},
+                },
+                "Blood - Albumin (%)": {
+                    "primary_unit": "%",
+                    "lab_type": "blood",
+                    "loinc_code": "2862-1",
+                    "ranges": {"default": [55.0, 65.0]},
                 },
             }
         ),
@@ -673,6 +751,131 @@ def test_apply_cached_standardization_prefers_variant_specific_companion_keys(tm
     assert standardized_df["lab_unit_standardized"].tolist() == ["IU/mL", "boolean"]
 
 
+def test_apply_cached_standardization_generates_boolean_companion_qualitative_aliases(tmp_path, monkeypatch):
+    lab_specs = _make_boolean_serology_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            ("HEPATITE B, ANTIG. HBs", "SEROLOGIA INFECCIOSA"): "Blood - Hepatitis B Surface Antigen (HBsAg)",
+            ("HEPATITE B, ANTIG. HBs (quantitative)", "SEROLOGIA INFECCIOSA"): "Blood - Hepatitis B Surface Antigen (HBsAg)",
+            ("HEPATITE B, ANTIG. HBs (qualitative)", "SEROLOGIA INFECCIOSA"): "Blood - Hepatitis B Surface Antigen (HBsAg)",
+        },
+        unit_map={
+            ("Indice", "Blood - Hepatitis B Surface Antigen (HBsAg)"): "index",
+            ("", "Blood - Hepatitis B Surface Antigen (HBsAg) (Qualitative)"): "boolean",
+        },
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {
+                "page_number": 4,
+                "raw_lab_name": "HEPATITE B, ANTIG. HBs",
+                "raw_section_name": "SEROLOGIA INFECCIOSA",
+                "raw_value": "Negativo",
+                "raw_lab_unit": None,
+            },
+            {
+                "page_number": 4,
+                "raw_lab_name": "HEPATITE B, ANTIG. HBs",
+                "raw_section_name": "SEROLOGIA INFECCIOSA",
+                "raw_value": "0,21",
+                "raw_lab_unit": "Indice",
+            },
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df["lab_name_standardized"].tolist() == [
+        "Blood - Hepatitis B Surface Antigen (HBsAg) (Qualitative)",
+        "Blood - Hepatitis B Surface Antigen (HBsAg)",
+    ]
+    assert standardized_df["lab_unit_standardized"].tolist() == ["boolean", "index"]
+
+
+def test_boolean_companion_aliases_do_not_trigger_duplicate_review_flags(tmp_path, monkeypatch):
+    lab_specs = _make_boolean_serology_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            ("HEPATITE B, ANTIG. HBs", "SEROLOGIA INFECCIOSA"): "Blood - Hepatitis B Surface Antigen (HBsAg)",
+            ("HEPATITE B, ANTIG. HBs (quantitative)", "SEROLOGIA INFECCIOSA"): "Blood - Hepatitis B Surface Antigen (HBsAg)",
+            ("HEPATITE B, ANTIG. HBs (qualitative)", "SEROLOGIA INFECCIOSA"): "Blood - Hepatitis B Surface Antigen (HBsAg)",
+        },
+        unit_map={
+            ("Indice", "Blood - Hepatitis B Surface Antigen (HBsAg)"): "index",
+            ("", "Blood - Hepatitis B Surface Antigen (HBsAg) (Qualitative)"): "boolean",
+        },
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {
+                "date": "2024-01-05",
+                "page_number": 4,
+                "raw_lab_name": "HEPATITE B, ANTIG. HBs",
+                "raw_section_name": "SEROLOGIA INFECCIOSA",
+                "raw_value": "Negativo",
+                "raw_lab_unit": None,
+                "raw_reference_min": None,
+                "raw_reference_max": None,
+                "raw_comments": None,
+            },
+            {
+                "date": "2024-01-05",
+                "page_number": 4,
+                "raw_lab_name": "HEPATITE B, ANTIG. HBs",
+                "raw_section_name": "SEROLOGIA INFECCIOSA",
+                "raw_value": "0,21",
+                "raw_lab_unit": "Indice",
+                "raw_reference_min": None,
+                "raw_reference_max": None,
+                "raw_comments": None,
+            },
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+    normalized_df = apply_normalizations(standardized_df, lab_specs)
+    flagged_df = flag_duplicate_entries(normalized_df)
+
+    assert flagged_df["review_reason"].fillna("").tolist() == ["", ""]
+    assert flagged_df["review_needed"].fillna(False).tolist() == [False, False]
+
+
+def test_apply_cached_standardization_remaps_standalone_boolean_rows_to_qualitative_aliases(tmp_path, monkeypatch):
+    lab_specs = _make_boolean_serology_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            ("HEPATITE B, ANTIG. HBs", "Exame Virulogico"): "Blood - Hepatitis B Surface Antigen (HBsAg)",
+        },
+        unit_map={
+            ("", "Blood - Hepatitis B Surface Antigen (HBsAg) (Qualitative)"): "boolean",
+        },
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {
+                "page_number": 4,
+                "raw_lab_name": "HEPATITE B, ANTIG. HBs",
+                "raw_section_name": "Exame Virulogico",
+                "raw_value": "Negativo",
+                "raw_lab_unit": None,
+            }
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df["lab_name_standardized"].tolist() == [
+        "Blood - Hepatitis B Surface Antigen (HBsAg) (Qualitative)"
+    ]
+    assert standardized_df["lab_unit_standardized"].tolist() == ["boolean"]
+
+
 def test_backfill_missing_raw_sections_infers_urine_page_context():
     review_df = pd.DataFrame(
         [
@@ -881,6 +1084,167 @@ def test_apply_cached_standardization_overrides_stale_percentage_unit_cache_for_
 
     assert standardized_df["lab_name_standardized"].tolist() == ["Blood - Neutrophils"]
     assert standardized_df["lab_unit_standardized"].tolist() == ["10⁹/L"]
+
+
+def test_apply_cached_standardization_handles_truncated_absolute_count_units(tmp_path, monkeypatch):
+    lab_specs = _make_percentage_variant_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            ("Monócitos", "Leucograma"): "Blood - Monocytes (%)",
+        },
+        unit_map={
+            ("x 10³/", "Blood - Monocytes (%)"): "$UNKNOWN$",
+        },
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Monócitos",
+                "raw_section_name": "Leucograma",
+                "raw_lab_unit": "x 10³/",
+                "raw_value": "0.4",
+            }
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df["lab_name_standardized"].tolist() == ["Blood - Monocytes"]
+    assert standardized_df["lab_unit_standardized"].tolist() == ["10⁹/L"]
+
+
+def test_apply_cached_standardization_remaps_explicit_units_off_qualitative_variants(tmp_path, monkeypatch):
+    config_path = tmp_path / "lab_specs_urobilinogen.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "Urine Type II - Urobilinogen": {
+                    "primary_unit": "mg/dL",
+                    "lab_type": "urine",
+                    "loinc_code": "20405-7",
+                    "alternatives": [{"unit": "E.U./dl", "factor": 1.0}],
+                    "ranges": {"default": [0.0, 1.0]},
+                },
+                "Urine Type II - Urobilinogen, Qualitative": {
+                    "primary_unit": "boolean",
+                    "lab_type": "urine",
+                    "loinc_code": "20405-7-qual",
+                    "ranges": {"default": [0, 0]},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    lab_specs = LabSpecsConfig(config_path=config_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            ("UROBILINOGENIO", "Elementos anormais"): "Urine Type II - Urobilinogen, Qualitative",
+        },
+        unit_map={
+            ("E.U./dl", "Urine Type II - Urobilinogen"): "mg/dL",
+            ("E.U./dl", "Urine Type II - Urobilinogen, Qualitative"): "$UNKNOWN$",
+        },
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "UROBILINOGENIO",
+                "raw_section_name": "Elementos anormais",
+                "raw_lab_unit": "E.U./dl",
+                "raw_value": "0.2",
+            }
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df["lab_name_standardized"].tolist() == ["Urine Type II - Urobilinogen"]
+    assert standardized_df["lab_unit_standardized"].tolist() == ["E.U./dl"]
+
+
+def test_apply_cached_standardization_remaps_complement_ranges_from_ch50_placeholder(tmp_path, monkeypatch):
+    lab_specs = _make_complement_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            ("TITULO DO COMPLEMENTO", "SANGUE VENOSO"): "Blood - Complement CH50",
+        },
+        unit_map={
+            ("U C'H 50", "Blood - Complement CH50"): "U C'H 50",
+            ("mg/dl", "Blood - Complement CH50"): "$UNKNOWN$",
+        },
+    )
+
+    review_df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "TITULO DO COMPLEMENTO",
+                "raw_section_name": "SANGUE VENOSO",
+                "raw_lab_unit": "U C'H 50",
+                "raw_value": "98",
+                "raw_reference_min": 74.0,
+                "raw_reference_max": 126.0,
+            },
+            {
+                "raw_lab_name": "TITULO DO COMPLEMENTO",
+                "raw_section_name": "SANGUE VENOSO",
+                "raw_lab_unit": "mg/dl",
+                "raw_value": "87",
+                "raw_reference_min": 70.0,
+                "raw_reference_max": 176.0,
+            },
+            {
+                "raw_lab_name": "TITULO DO COMPLEMENTO",
+                "raw_section_name": "SANGUE VENOSO",
+                "raw_lab_unit": "mg/dl",
+                "raw_value": "13",
+                "raw_reference_min": 16.0,
+                "raw_reference_max": 45.0,
+            },
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df["lab_name_standardized"].tolist() == [
+        "Blood - Complement CH50",
+        "Blood - Complement C3",
+        "Blood - Complement C4",
+    ]
+    assert standardized_df["lab_unit_standardized"].tolist() == ["U C'H 50", "mg/dL", "mg/dL"]
+
+
+def test_prepare_rows_skips_suspicious_range_flag_when_percentage_sibling_is_better_match(tmp_path):
+    lab_specs = _make_protein_fraction_lab_specs(tmp_path)
+    review_df = pd.DataFrame(
+        [
+            {
+                "date": "2024-01-05",
+                "raw_lab_name": "Albumina",
+                "raw_value": "4,30",
+                "raw_lab_unit": "g/dL",
+                "raw_reference_min": 59.8,
+                "raw_reference_max": 72.4,
+                "raw_comments": None,
+                "lab_name_standardized": "Blood - Albumin",
+                "lab_unit_standardized": "g/dL",
+            }
+        ]
+    )
+
+    prepared_df, _ = rows_module.prepare_rows(
+        review_df,
+        lab_specs,
+        mode="review",
+        apply_standardization=False,
+    )
+
+    assert len(prepared_df) == 1
+    assert "SUSPICIOUS_REFERENCE_RANGE" not in prepared_df.loc[0, "review_reason"]
 
 
 def test_apply_cached_standardization_preserves_mm3_units_for_conversion(tmp_path, monkeypatch):

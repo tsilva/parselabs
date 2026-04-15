@@ -750,6 +750,10 @@
       {
         "factor": 0.001,
         "unit": "IU/L"
+      },
+      {
+        "factor": 1.0,
+        "unit": "U/mL"
       }
     ],
     "lab_type": "blood",
@@ -1342,7 +1346,12 @@
     }
   },
   "Blood - Dehydroepiandrosterone (DHEA)": {
-    "alternatives": [],
+    "alternatives": [
+      {
+        "factor": 0.2884,
+        "unit": "nmol/L"
+      }
+    ],
     "lab_type": "blood",
     "loinc_code": "2666-7",
     "primary_unit": "ng/mL",
@@ -2263,8 +2272,8 @@
     "primary_unit": "%",
     "ranges": {
       "default": [
-        0,
-        1
+        1.6,
+        10.5
       ]
     }
   },
@@ -2329,6 +2338,10 @@
       {
         "factor": 6.945,
         "unit": "µUI/mL"
+      },
+      {
+        "factor": 6.945,
+        "unit": "µIU/mL"
       }
     ],
     "lab_type": "blood",
@@ -2559,7 +2572,12 @@
     }
   },
   "Blood - Lithium": {
-    "alternatives": [],
+    "alternatives": [
+      {
+        "factor": 1.0,
+        "unit": "mmol/L"
+      }
+    ],
     "lab_type": "blood",
     "loinc_code": "3719-5",
     "primary_unit": "mEq/L",
@@ -3511,8 +3529,25 @@
       ]
     }
   },
-  "Blood - Rheumatoid Factor (RF)": {
+  "Blood - Rheumatoid Factor (RF) (Qualitative)": {
     "alternatives": [],
+    "lab_type": "blood",
+    "loinc_code": "33910-1",
+    "primary_unit": "boolean",
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    }
+  },
+  "Blood - Rheumatoid Factor (RF)": {
+    "alternatives": [
+      {
+        "factor": 1.0,
+        "unit": "U/mL"
+      }
+    ],
     "lab_type": "blood",
     "loinc_code": "11572-5",
     "primary_unit": "IU/mL",
@@ -3520,6 +3555,23 @@
       "default": [
         0.0,
         14.0
+      ]
+    }
+  },
+  "Blood - Circulating Immune Complexes": {
+    "alternatives": [
+      {
+        "factor": 1.0,
+        "unit": "ug/ml eq.IgG"
+      }
+    ],
+    "lab_type": "blood",
+    "loinc_code": "5228-2",
+    "primary_unit": "µg/mL eq.IgG",
+    "ranges": {
+      "default": [
+        0.0,
+        5.0
       ]
     }
   },
@@ -3681,6 +3733,10 @@
       {
         "factor": 0.001,
         "unit": "pg/mL"
+      },
+      {
+        "factor": 0.01,
+        "unit": "ng/dL"
       }
     ],
     "lab_type": "blood",
@@ -4641,7 +4697,7 @@
     "ranges": {
       "default": [
         0.0,
-        1.0
+        0.0
       ]
     }
   },
@@ -4662,6 +4718,31 @@
       ]
     }
   },
+  "Urine Type II - Sediment - Crystals (Absolute)": {
+    "alternatives": [
+      {
+        "factor": 1.0,
+        "unit": "/ul"
+      },
+      {
+        "factor": 1.0,
+        "unit": "/µl"
+      },
+      {
+        "factor": 1.0,
+        "unit": "/μl"
+      }
+    ],
+    "lab_type": "urine",
+    "loinc_code": "5774-0-ABS",
+    "primary_unit": "/µL",
+    "ranges": {
+      "default": [
+        0.0,
+        27.0
+      ]
+    }
+  },
   "Urine Type II - Sediment - Epithelial Cells": {
     "alternatives": [
       {
@@ -4676,6 +4757,31 @@
       "default": [
         0.0,
         5.0
+      ]
+    }
+  },
+  "Urine Type II - Sediment - Epithelial Cells (Absolute)": {
+    "alternatives": [
+      {
+        "factor": 1.0,
+        "unit": "/ul"
+      },
+      {
+        "factor": 1.0,
+        "unit": "/µl"
+      },
+      {
+        "factor": 1.0,
+        "unit": "/μl"
+      }
+    ],
+    "lab_type": "urine",
+    "loinc_code": "5787-2-ABS",
+    "primary_unit": "/µL",
+    "ranges": {
+      "default": [
+        0.0,
+        40.0
       ]
     }
   },
@@ -4696,6 +4802,31 @@
       ]
     }
   },
+  "Urine Type II - Sediment - Erythrocytes (Absolute)": {
+    "alternatives": [
+      {
+        "factor": 1.0,
+        "unit": "/ul"
+      },
+      {
+        "factor": 1.0,
+        "unit": "/µl"
+      },
+      {
+        "factor": 1.0,
+        "unit": "/μl"
+      }
+    ],
+    "lab_type": "urine",
+    "loinc_code": "5807-8-ABS",
+    "primary_unit": "/µL",
+    "ranges": {
+      "default": [
+        0.0,
+        24.0
+      ]
+    }
+  },
   "Urine Type II - Sediment - Leukocytes": {
     "alternatives": [
       {
@@ -4713,6 +4844,31 @@
       ]
     }
   },
+  "Urine Type II - Sediment - Leukocytes (Absolute)": {
+    "alternatives": [
+      {
+        "factor": 1.0,
+        "unit": "/ul"
+      },
+      {
+        "factor": 1.0,
+        "unit": "/µl"
+      },
+      {
+        "factor": 1.0,
+        "unit": "/μl"
+      }
+    ],
+    "lab_type": "urine",
+    "loinc_code": "5821-9-ABS",
+    "primary_unit": "/µL",
+    "ranges": {
+      "default": [
+        0.0,
+        28.0
+      ]
+    }
+  },
   "Urine Type II - Sediment - Small Round Cells": {
     "alternatives": [
       {
@@ -4727,6 +4883,31 @@
       "default": [
         0.0,
         2.0
+      ]
+    }
+  },
+  "Urine Type II - Sediment - Small Round Cells (Absolute)": {
+    "alternatives": [
+      {
+        "factor": 1.0,
+        "unit": "/ul"
+      },
+      {
+        "factor": 1.0,
+        "unit": "/µl"
+      },
+      {
+        "factor": 1.0,
+        "unit": "/μl"
+      }
+    ],
+    "lab_type": "urine",
+    "loinc_code": "13945-1-ABS",
+    "primary_unit": "/µL",
+    "ranges": {
+      "default": [
+        0.0,
+        1.0
       ]
     }
   },
@@ -4800,6 +4981,10 @@
       {
         "factor": 1.0,
         "unit": "mg/dl"
+      },
+      {
+        "factor": 1.0,
+        "unit": "E.U./dl"
       }
     ],
     "lab_type": "urine",
