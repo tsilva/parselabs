@@ -84,6 +84,58 @@ def test_maybe_auto_standardize_outputs_rebuilds_when_refresh_changes(tmp_path, 
     assert calls[0].to_dict("records") == rebuilt_df.to_dict("records")
 
 
+def test_maybe_auto_standardize_outputs_exports_final_rows_only_in_strict_mode(tmp_path, monkeypatch):
+    output_path = tmp_path / "output"
+    rebuilt_csv = output_path / "doc.csv"
+    reviewed_corpus = SimpleNamespace(
+        merged_review_df=pd.DataFrame([{"kind": "review"}]),
+        final_df=pd.DataFrame([{"kind": "final"}]),
+        csv_paths=[rebuilt_csv],
+    )
+    exported_frames = []
+    _write_all_csv(output_path)
+
+    monkeypatch.setattr(
+        main,
+        "refresh_standardization_caches_from_dataframe",
+        lambda *args, **kwargs: StandardizationRefreshResult(
+            uncached_names=(("pH", None),),
+            uncached_unit_pairs=(),
+            name_updates=1,
+            unit_updates=0,
+            unresolved_names=(),
+            unresolved_unit_pairs=(),
+        ),
+    )
+    monkeypatch.setattr(
+        main,
+        "_rebuild_review_outputs_from_processed_documents",
+        lambda *args, **kwargs: reviewed_corpus,
+    )
+    monkeypatch.setattr(
+        main,
+        "_export_final_results",
+        lambda final_df, hidden_cols, widths, output_path: exported_frames.append(final_df.copy()),
+    )
+
+    csv_paths = main._maybe_auto_standardize_outputs(
+        output_path=output_path,
+        lab_specs=SimpleNamespace(),
+        hidden_cols=[],
+        widths={},
+        model_id="test-model",
+        base_url="https://example.com",
+        api_key="test-key",
+        auto_standardize=True,
+        profile_name="tsilva",
+        allow_pending=False,
+    )
+
+    assert csv_paths == [rebuilt_csv]
+    assert len(exported_frames) == 1
+    assert exported_frames[0].to_dict("records") == [{"kind": "final"}]
+
+
 def test_maybe_auto_standardize_outputs_skips_rebuild_when_disabled(tmp_path, monkeypatch):
     output_path = tmp_path / "output"
     _write_all_csv(output_path)
