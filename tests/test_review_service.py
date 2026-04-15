@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 
 from parselabs.store import apply_review_action
+from parselabs.types import PagePayload
 
 
 def test_apply_review_action_persists_accept_and_missing_row(tmp_path):
     doc_dir = tmp_path / "glucose_deadbeef"
     doc_dir.mkdir(parents=True)
-    payload = {
+    payload: PagePayload = {
         "lab_results": [
             {
                 "raw_lab_name": "Glucose",

@@ -5,10 +5,37 @@ from __future__ import annotations
 from typing import Literal, TypeAlias, TypedDict
 
 ReviewAction = Literal["accept", "reject", "clear", "missing_row"]
+PersistedReviewStatus = Literal["accepted", "rejected"]
 ReviewStatus = Literal["accepted", "rejected", "pending"]
 JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 BBoxTuple: TypeAlias = tuple[float, float, float, float]
 PixelBBoxTuple: TypeAlias = tuple[int, int, int, int]
+
+
+def coerce_review_action(value: object) -> ReviewAction | None:
+    """Return one supported review action or None for invalid inputs."""
+
+    normalized = str(value or "").strip().lower()
+    if normalized == "accept":
+        return "accept"
+    if normalized == "reject":
+        return "reject"
+    if normalized == "clear":
+        return "clear"
+    if normalized == "missing_row":
+        return "missing_row"
+    return None
+
+
+def coerce_persisted_review_status(value: object) -> PersistedReviewStatus | None:
+    """Return one persisted review status or None for blank/invalid values."""
+
+    normalized = str(value or "").strip().lower()
+    if normalized == "accepted":
+        return "accepted"
+    if normalized == "rejected":
+        return "rejected"
+    return None
 
 
 class RowIdentity(TypedDict):
@@ -45,8 +72,21 @@ class PageLabResultPayload(TypedDict, total=False):
     bbox_bottom: float | None
     review_needed: bool
     review_reason: str
-    review_status: Literal["accepted", "rejected"] | None
+    review_status: PersistedReviewStatus | None
     review_completed_at: str | None
+
+
+class ReviewMissingRowMarker(TypedDict):
+    """Persisted missing-row marker stored on one page payload."""
+
+    anchor_result_index: int
+    created_at: str
+
+
+class ReviewMissingRowRecord(ReviewMissingRowMarker):
+    """Missing-row marker resolved with its page number for review summaries."""
+
+    page_number: int
 
 
 class PagePayload(TypedDict, total=False):
@@ -62,7 +102,7 @@ class PagePayload(TypedDict, total=False):
     _extraction_failed: bool
     _failure_reason: str
     _retry_count: int
-    review_missing_rows: list[dict[str, JsonValue]]
+    review_missing_rows: list[ReviewMissingRowMarker]
 
 
 class ReviewRow(RowIdentity, total=False):
@@ -93,7 +133,7 @@ class ReviewRow(RowIdentity, total=False):
     is_below_limit: bool | None
     is_above_limit: bool | None
     lab_type: str | None
-    review_status: Literal["accepted", "rejected"] | None
+    review_status: PersistedReviewStatus | None
     review_completed_at: str | None
 
 

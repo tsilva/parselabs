@@ -20,10 +20,12 @@ from parselabs.rows import (
     get_document_review_summary,
     get_review_summary,
     iter_processed_documents,
+    load_document_review_rows,
     rebuild_document_csv,
     save_missing_row_marker,
     save_review_status,
 )
+from parselabs.types import ReviewMissingRowMarker
 from utils import regression_cases
 
 
@@ -38,7 +40,7 @@ def _write_processed_document(
     raw_reference_mins: list[float | None] | None = None,
     raw_reference_maxs: list[float | None] | None = None,
     bboxes: list[dict[str, float] | None] | None = None,
-    missing_markers: list[dict] | None = None,
+    missing_markers: list[ReviewMissingRowMarker] | None = None,
 ) -> None:
     """Create a minimal processed-document directory for review tests."""
 
@@ -385,6 +387,15 @@ def test_save_review_status_can_clear_existing_decision(tmp_path, monkeypatch):
     assert review_df["review_status"].fillna("").tolist() == ["", ""]
     assert summary.accepted == 0
     assert summary.pending == 2
+
+
+def test_load_document_review_rows_normalizes_whitespace_and_invalid_statuses(tmp_path):
+    doc_dir = tmp_path / "processed" / "glucose_deadbeef"
+    _write_processed_document(doc_dir, [" ACCEPTED ", "nonsense"])
+
+    review_df = load_document_review_rows(doc_dir)
+
+    assert review_df["review_status"].fillna("").tolist() == ["accepted", ""]
 
 
 def test_save_missing_row_marker_preserves_current_row_status(tmp_path, monkeypatch):
