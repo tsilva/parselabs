@@ -14,7 +14,14 @@ from pathlib import Path
 
 import pandas as pd
 
-from parselabs.types import PagePayload, ReviewAction
+from parselabs.types import (
+    PageLabResultPayload,
+    PagePayload,
+    ReviewAction,
+    ReviewMissingRowMarker,
+    ReviewMissingRowRecord,
+    coerce_persisted_review_status,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -306,8 +313,8 @@ def is_page_payload_reusable(payload: dict | None) -> bool:
 def save_review_status(doc_dir: Path, page_number: int, result_index: int, status: str | None) -> tuple[bool, str]:
     """Persist a review decision to the page JSON backing a review row."""
 
-    normalized_status = _normalize_review_status(status)
-    if normalized_status not in {"accepted", "rejected", None}:
+    normalized_status = coerce_persisted_review_status(status)
+    if status is not None and normalized_status is None:
         return False, f"Unsupported review status: {status}"
 
     json_path = get_page_json_path(doc_dir, page_number)
@@ -321,13 +328,18 @@ def save_review_status(doc_dir: Path, page_number: int, result_index: int, statu
         return False, "No lab_results in JSON file."
     if result_index < 0 or result_index >= len(results):
         return False, f"result_index {result_index} out of range."
+    if not isinstance(results[result_index], dict):
+        return False, f"lab_results[{result_index}] is not an object."
+
+    result = results[result_index]
+    typed_result: PageLabResultPayload = result
 
     if normalized_status in {"accepted", "rejected"}:
-        results[result_index]["review_status"] = normalized_status
-        results[result_index]["review_completed_at"] = datetime.now(timezone.utc).isoformat()
+        typed_result["review_status"] = normalized_status
+        typed_result["review_completed_at"] = datetime.now(timezone.utc).isoformat()
     else:
-        results[result_index].pop("review_status", None)
-        results[result_index].pop("review_completed_at", None)
+        typed_result.pop("review_status", None)
+        typed_result.pop("review_completed_at", None)
 
     try:
         write_page_payload(json_path, payload)
@@ -378,12 +390,11 @@ def save_missing_row_marker(doc_dir: Path, page_number: int, anchor_result_index
     if not isinstance(markers, list):
         return False, f"{REVIEW_MISSING_ROWS_KEY} must be a list in {json_path.name}."
 
-    markers.append(
-        {
-            "anchor_result_index": int(anchor_result_index),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-    )
+    marker: ReviewMissingRowMarker = {
+        "anchor_result_index": int(anchor_result_index),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    markers.append(marker)
     payload[REVIEW_MISSING_ROWS_KEY] = markers
 
     try:
@@ -394,10 +405,10 @@ def save_missing_row_marker(doc_dir: Path, page_number: int, anchor_result_index
     return True, ""
 
 
-def get_review_missing_rows(doc_dir: Path, page_number: int | None = None) -> list[dict]:
+def get_review_missing_rows(doc_dir: Path, page_number: int | None = None) -> list[ReviewMissingRowRecord]:
     """Return unresolved missing-row markers for one processed document."""
 
-    markers: list[dict] = []
+    markers: list[ReviewMissingRowRecord] = []
 
     for page_json_path in sorted(doc_dir.glob("*.json")):
         current_page_number = parse_page_number(page_json_path)
@@ -420,11 +431,16 @@ def get_review_missing_rows(doc_dir: Path, page_number: int | None = None) -> li
             if not isinstance(marker, dict):
                 continue
 
+            anchor_result_index = marker.get("anchor_result_index")
+            created_at = marker.get("created_at")
+            if not isinstance(anchor_result_index, int) or not isinstance(created_at, str):
+                continue
+
             markers.append(
                 {
                     "page_number": current_page_number,
-                    "anchor_result_index": marker.get("anchor_result_index"),
-                    "created_at": marker.get("created_at"),
+                    "anchor_result_index": anchor_result_index,
+                    "created_at": created_at,
                 }
             )
 
@@ -444,20 +460,6 @@ def parse_page_number(page_json_path: Path) -> int | None:
     if match is None:
         return None
     return int(match.group(1))
-
-
-def _normalize_review_status(status: object) -> str | None:
-    """Normalize persisted review statuses to supported values."""
-
-    if status is None:
-        return None
-
-    normalized = str(status).strip().lower()
-    if not normalized:
-        return None
-    if normalized in {"accepted", "rejected"}:
-        return normalized
-    return normalized
 
 
 def _extract_hash_from_dir_name(doc_dir: Path) -> str:

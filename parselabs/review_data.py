@@ -9,7 +9,7 @@ import pandas as pd
 from parselabs.config import Demographics, LabSpecsConfig
 from parselabs.rows import build_corpus_review_rows
 from parselabs.store import load_legacy_merged_review_dataframe, read_page_payload, resolve_page_path
-from parselabs.types import PagePayload
+from parselabs.types import PagePayload, PersistedReviewStatus, coerce_persisted_review_status
 
 
 def _load_json_cached(json_path: Path, cache: dict[str, PagePayload | None]) -> PagePayload | None:
@@ -23,11 +23,11 @@ def _load_json_cached(json_path: Path, cache: dict[str, PagePayload | None]) -> 
     return cache[json_path_str]
 
 
-def _sync_review_statuses(df: pd.DataFrame, output_path: Path) -> list[str | None]:
+def _sync_review_statuses(df: pd.DataFrame, output_path: Path) -> list[PersistedReviewStatus | None]:
     """Read review_status from page JSON for legacy merged review CSVs."""
 
     json_cache: dict[str, PagePayload | None] = {}
-    review_statuses: list[str | None] = []
+    review_statuses: list[PersistedReviewStatus | None] = []
 
     for row in df.itertuples():
         result_index = getattr(row, "result_index", None)
@@ -45,7 +45,11 @@ def _sync_review_statuses(df: pd.DataFrame, output_path: Path) -> list[str | Non
         if json_data and "lab_results" in json_data:
             result_idx = int(result_index)
             if result_idx < len(json_data["lab_results"]):
-                review_statuses.append(json_data["lab_results"][result_idx].get("review_status"))
+                review_statuses.append(
+                    coerce_persisted_review_status(
+                        json_data["lab_results"][result_idx].get("review_status")
+                    )
+                )
                 continue
 
         review_statuses.append(None)

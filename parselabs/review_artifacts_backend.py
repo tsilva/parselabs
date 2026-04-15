@@ -15,7 +15,13 @@ from parselabs.review import get_bbox_coordinates, scale_bbox_to_pixels
 from parselabs.review_state import ReviewTarget, apply_review_action_for_target
 from parselabs.runtime import RuntimeContext
 from parselabs.store import get_page_image_path, iter_processed_documents, parse_page_number, read_page_payload
-from parselabs.types import BBox, PageLabResultPayload, ReviewArtifactPayload, ReviewDecisionResult
+from parselabs.types import (
+    BBox,
+    PageLabResultPayload,
+    ReviewArtifactPayload,
+    ReviewDecisionResult,
+    coerce_review_action,
+)
 
 DEFAULT_ARTIFACTS_DIRNAME = ".review-artifacts"
 DEFAULT_CROP_PADDING_PX = 24
@@ -178,6 +184,16 @@ def apply_review_decision(profile_name: str, row_id: str, decision: str) -> tupl
     if output_path is None:
         raise RuntimeError(f"Profile '{profile_name}' does not define an output path.")
 
+    normalized_decision = coerce_review_action(decision)
+    if normalized_decision is None:
+        return False, {
+            "ok": False,
+            "profile": profile_name,
+            "row_id": row_id,
+            "decision": decision,
+            "error": f"Unsupported review action: {decision}",
+        }
+
     try:
         target = decode_row_id(row_id, output_path)
     except ValueError as exc:
@@ -189,7 +205,7 @@ def apply_review_decision(profile_name: str, row_id: str, decision: str) -> tupl
             "error": str(exc),
         }
 
-    success, error = apply_review_action_for_target(target, decision)
+    success, error = apply_review_action_for_target(target, normalized_decision)
 
     # Guard: Persisted review failures should surface as structured errors.
     if not success:

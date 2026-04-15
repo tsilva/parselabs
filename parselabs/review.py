@@ -15,7 +15,7 @@ from parselabs.store import (
     get_page_image_path as get_page_image_path_from_store,
 )
 from parselabs.store import resolve_page_path
-from parselabs.types import ReviewRow
+from parselabs.types import ReviewRow, coerce_persisted_review_status
 
 logger = logging.getLogger(__name__)
 
@@ -35,15 +35,7 @@ class ReviewStatusBadge:
 def normalize_review_status(status: object) -> str:
     """Normalize reviewer status values into accepted, rejected, or pending."""
 
-    if status is None:
-        return ""
-
-    normalized = str(status).strip().lower()
-    if not normalized:
-        return ""
-    if normalized in {"accepted", "rejected"}:
-        return normalized
-    return ""
+    return coerce_persisted_review_status(status) or ""
 
 
 def format_text(value: object, empty: str = "-") -> str:

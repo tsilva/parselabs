@@ -26,6 +26,7 @@ from parselabs.review_state import (  # noqa: E402
     get_selected_row,
 )
 from parselabs.runtime import RuntimeContext  # noqa: E402
+from parselabs.types import ReviewAction  # noqa: E402
 
 # Initialize module logger
 logger = logging.getLogger(__name__)
@@ -1559,7 +1560,7 @@ def handle_review_action(
     current_row_token = _build_row_token_for_entry(current_entry)
     next_row_token = _build_row_token_for_entry(filtered_df.iloc[resolved_index + 1]) if resolved_index + 1 < len(filtered_df) else None
     previous_row_token = _build_row_token_for_entry(filtered_df.iloc[resolved_index - 1]) if resolved_index > 0 else None
-    action = {
+    action: ReviewAction = {
         "accepted": "accept",
         "rejected": "reject",
         "missing_row": "missing_row",

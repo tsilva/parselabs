@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from parselabs.store import apply_review_action, resolve_document_dir
-from parselabs.types import ReviewRow
+from parselabs.types import ReviewAction, ReviewRow, coerce_review_action
 
 
 @dataclass(frozen=True)
@@ -68,14 +68,18 @@ def resolve_review_target_for_entry(entry: ReviewRow, output_path: Path) -> tupl
     ), ""
 
 
-def apply_review_action_for_target(target: ReviewTarget, action: str) -> tuple[bool, str]:
+def apply_review_action_for_target(target: ReviewTarget, action: ReviewAction) -> tuple[bool, str]:
     """Persist a supported review action for one resolved review target."""
 
     return apply_review_action(target.doc_dir, target.page_number, target.result_index, action)
 
 
-def apply_review_action_for_entry(entry: ReviewRow, output_path: Path, action: str) -> tuple[bool, str]:
+def apply_review_action_for_entry(entry: ReviewRow, output_path: Path, action: object) -> tuple[bool, str]:
     """Persist a review action for one merged-review row entry."""
+
+    normalized_action = coerce_review_action(action)
+    if normalized_action is None:
+        return False, f"Unsupported review action: {action}"
 
     target, error = resolve_review_target_for_entry(entry, output_path)
 
@@ -83,7 +87,7 @@ def apply_review_action_for_entry(entry: ReviewRow, output_path: Path, action: s
     if target is None:
         return False, error
 
-    return apply_review_action_for_target(target, action)
+    return apply_review_action_for_target(target, normalized_action)
 
 
 __all__ = [
