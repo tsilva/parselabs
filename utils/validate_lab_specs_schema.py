@@ -16,11 +16,11 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from parselabs.paths import get_lab_specs_path
+from parselabs.types import JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class LabSpecsValidator:
         self.config_path = Path(config_path).expanduser() if config_path else get_lab_specs_path()
         self.errors: list[str] = []
         self.warnings: list[str] = []
-        self.config: dict[str, Any] = {}
+        self.config: dict[str, JsonValue] = {}
 
     def validate(self) -> bool:
         """Run all validation checks.
@@ -83,8 +83,7 @@ class LabSpecsValidator:
         except json.JSONDecodeError as e:
             self.errors.append(f"Invalid JSON syntax: {e}")
             return False
-        # Any other load failure
-        except Exception as e:
+        except (OSError, UnicodeDecodeError) as e:
             self.errors.append(f"Failed to load config: {e}")
             return False
 

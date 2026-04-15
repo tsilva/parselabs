@@ -28,6 +28,12 @@ def get_profiles_dir() -> Path:
     return get_user_config_dir() / "profiles"
 
 
+def get_env_file() -> Path:
+    """Return the user-managed dotenv path for shared runtime settings."""
+
+    return get_user_config_dir() / ".env"
+
+
 def get_prompts_dir() -> Path:
     """Return the directory containing prompt templates."""
 

@@ -90,7 +90,20 @@ brew install poppler
 
 ### Profiles
 
-Profiles define both paths and runtime settings. Store them under `~/.config/parselabs/profiles/`, one file per user or data source:
+Profiles define paths and per-profile overrides. Put shared OpenRouter credentials in `~/.config/parselabs/.env`, then keep profile files focused on paths and model selection:
+
+```bash
+mkdir -p ~/.config/parselabs
+cat > ~/.config/parselabs/.env <<'EOF'
+OPENROUTER_API_KEY=your_key_here
+# Optional:
+# OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+EOF
+```
+
+Values in `~/.config/parselabs/.env` override matching keys stored in profiles. Shell environment variables still take highest precedence.
+
+Store profiles under `~/.config/parselabs/profiles/`, one file per user or data source:
 
 ```yaml
 # ~/.config/parselabs/profiles/john.yaml
@@ -101,7 +114,7 @@ paths:
   input_file_regex: "*.pdf"  # Optional filter
 
 openrouter:
-  api_key: "your_key_here"
+  api_key: "optional-profile-override"
   base_url: "https://openrouter.ai/api/v1"  # Optional
 
 models:

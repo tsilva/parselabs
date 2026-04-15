@@ -15,6 +15,7 @@ from parselabs.config import Demographics, ExtractionConfig, LabSpecsConfig, Pro
 from parselabs.exceptions import ConfigurationError
 from parselabs.paths import (
     get_cache_dir,
+    get_env_file,
     get_lab_specs_path,
     get_profiles_dir,
     get_project_root,
@@ -95,7 +96,10 @@ class RuntimeContext:
 
         # Guard: API-backed flows require both the key and extraction model.
         if need_api and not profile.openrouter_api_key:
-            raise ConfigurationError(f"Profile '{profile_name}' has no openrouter_api_key defined.")
+            raise ConfigurationError(
+                f"Profile '{profile_name}' has no OpenRouter API key defined. "
+                f"Set OPENROUTER_API_KEY in {get_env_file()} or in the profile."
+            )
         if need_api and not profile.extract_model_id and not overrides.get("model"):
             raise ConfigurationError(f"Profile '{profile_name}' has no extract_model_id defined.")
 

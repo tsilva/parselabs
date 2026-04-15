@@ -2,8 +2,8 @@ import json
 
 import pandas as pd
 
-from parselabs.config import LabSpecsConfig, UNKNOWN_VALUE
 from parselabs import standardization_refresh as refresh
+from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig
 
 
 def _make_lab_specs(tmp_path):
