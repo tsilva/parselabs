@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from typing import cast
 
 import pandas as pd
 from openai import APIError, OpenAI
@@ -58,6 +57,44 @@ class StandardizationRefreshResult:
         """Return whether the refresh changed cache contents at all."""
 
         return self.rebuild_required or bool(self.pruned_name_entries or self.pruned_unit_entries)
+
+
+def _parse_name_match_item(item: dict[object, object]) -> StandardizationNameMatch | None:
+    """Return one validated name-match item or None for malformed LLM output."""
+
+    raw_lab_name = item.get("raw_lab_name")
+    raw_section_name = item.get("raw_section_name")
+    standardized_name = item.get("standardized_name")
+
+    if not isinstance(raw_lab_name, str) or not isinstance(standardized_name, str):
+        return None
+    if raw_section_name is not None and not isinstance(raw_section_name, str):
+        return None
+
+    parsed: StandardizationNameMatch = {
+        "raw_lab_name": raw_lab_name,
+        "standardized_name": standardized_name,
+    }
+    if raw_section_name is not None:
+        parsed["raw_section_name"] = raw_section_name
+    return parsed
+
+
+def _parse_unit_match_item(item: dict[object, object]) -> StandardizationUnitMatch | None:
+    """Return one validated unit-match item or None for malformed LLM output."""
+
+    raw_unit = item.get("raw_unit")
+    lab_name = item.get("lab_name")
+    standardized_unit = item.get("standardized_unit")
+
+    if not isinstance(raw_unit, str) or not isinstance(lab_name, str) or not isinstance(standardized_unit, str):
+        return None
+
+    return {
+        "raw_unit": raw_unit,
+        "lab_name": lab_name,
+        "standardized_unit": standardized_unit,
+    }
 
 def _render_prompt_template(template: str, **replacements: object) -> str:
     """Replace only known placeholder tokens in a prompt template."""
@@ -149,14 +186,13 @@ Return a JSON array of objects with raw_lab_name, raw_section_name, and standard
         if not isinstance(item, dict):
             continue
 
-        typed_item = cast(StandardizationNameMatch, item)
-        raw_name = typed_item.get("raw_lab_name")
-        raw_section_name = typed_item.get("raw_section_name")
-        standardized_name = typed_item.get("standardized_name")
-
-        # Guard: Rows without the identifying inputs cannot be matched back to the request.
-        if raw_name is None:
+        typed_item = _parse_name_match_item(item)
+        if typed_item is None:
             continue
+
+        raw_name = typed_item["raw_lab_name"]
+        raw_section_name = typed_item.get("raw_section_name")
+        standardized_name = typed_item["standardized_name"]
 
         cache_key = build_name_cache_key(raw_name, raw_section_name)
         expected_context = expected_by_key.get(cache_key)
@@ -249,13 +285,13 @@ Return a JSON array with the standardized values."""
             if not isinstance(item, dict):
                 continue
 
-            typed_item = cast(StandardizationUnitMatch, item)
-            raw_unit = typed_item.get("raw_unit")
-            item_lab_name = typed_item.get("lab_name")
-            standardized_unit = typed_item.get("standardized_unit")
-
-            if raw_unit is None or item_lab_name is None:
+            typed_item = _parse_unit_match_item(item)
+            if typed_item is None:
                 continue
+
+            raw_unit = typed_item["raw_unit"]
+            item_lab_name = typed_item["lab_name"]
+            standardized_unit = typed_item["standardized_unit"]
 
             if standardized_unit not in standardized_units:
                 continue

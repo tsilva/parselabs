@@ -12,7 +12,7 @@ from openai import APIError, OpenAI
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from parselabs.paths import get_prompts_dir
-from parselabs.types import PagePayload
+from parselabs.types import ExtractionValidationResult, PagePayload, RawExtractionPayload
 
 logger = logging.getLogger(__name__)
 
@@ -446,7 +446,7 @@ def _execute_single_extraction(
     client: OpenAI,
     effective_system_prompt: str,
     current_temp: float,
-) -> dict | None:
+) -> RawExtractionPayload | None:
     """Execute a single extraction attempt via API.
 
     Returns:
@@ -496,19 +496,25 @@ def _execute_single_extraction(
     # Extract and parse tool arguments
     tool_args_raw = completion.choices[0].message.tool_calls[0].function.arguments
     try:
-        return json.loads(tool_args_raw)
+        parsed_tool_args = json.loads(tool_args_raw)
     # Malformed JSON from API response
     except json.JSONDecodeError as e:
         logger.error(f"JSON decode error for tool args: {e}")
         return None
 
+    if not isinstance(parsed_tool_args, dict):
+        logger.error("Tool arguments payload is not an object")
+        return None
+
+    return parsed_tool_args
+
 
 def _validate_extraction_result(
-    tool_result_dict: dict,
+    tool_result_dict: RawExtractionPayload,
     image_path: Path,
     attempt: int,
     current_temp: float,
-) -> dict[str, object]:
+) -> ExtractionValidationResult:
     """Validate extraction result with Pydantic and check quality.
 
     Returns:
@@ -726,7 +732,7 @@ def _clean_numeric_field(value) -> float | None:
     return None
 
 
-def _fix_lab_results_format(tool_result_dict: dict) -> dict:
+def _fix_lab_results_format(tool_result_dict: RawExtractionPayload) -> RawExtractionPayload:
     """Fix common LLM formatting issues in lab_results and dates."""
 
     # Fix date formats at report level
@@ -960,7 +966,7 @@ def _normalize_lab_result_keys(row_dict: dict) -> dict:
     return normalized_dict
 
 
-def _clean_numeric_reference_fields(tool_result_dict: dict) -> None:
+def _clean_numeric_reference_fields(tool_result_dict: RawExtractionPayload) -> None:
     """Clean numeric reference fields by stripping embedded metadata."""
 
     for item in tool_result_dict["lab_results"]:
@@ -971,7 +977,7 @@ def _clean_numeric_reference_fields(tool_result_dict: dict) -> None:
                 item["raw_reference_max"] = _clean_numeric_field(item["raw_reference_max"])
 
 
-def _clean_bbox_fields(tool_result_dict: dict) -> None:
+def _clean_bbox_fields(tool_result_dict: RawExtractionPayload) -> None:
     """Normalize bounding-box coordinates or drop malformed boxes entirely."""
 
     for item in tool_result_dict["lab_results"]:
@@ -1007,7 +1013,7 @@ def _clean_bbox_fields(tool_result_dict: dict) -> None:
             item[field] = value
 
 
-def _salvage_lab_results(tool_result_dict: dict) -> PagePayload:
+def _salvage_lab_results(tool_result_dict: RawExtractionPayload) -> PagePayload:
     """Try to salvage valid lab results even if report validation fails."""
 
     # Guard: No lab_results to salvage

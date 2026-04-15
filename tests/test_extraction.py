@@ -67,6 +67,22 @@ def test_fix_lab_results_format_recovers_stringified_top_level_lab_results():
     ]
 
 
+def test_fix_lab_results_format_recovers_sequence_encoded_lab_result_items():
+    payload = {
+        "collection_date": "2024-01-01",
+        "lab_results": [
+            ["raw_lab_name", "Glucose", "raw_value", "92", "raw_unit", "mg/dL"],
+        ],
+    }
+
+    fixed_payload = _fix_lab_results_format(payload)
+
+    assert fixed_payload["collection_date"] == "2024-01-01"
+    assert fixed_payload["lab_results"] == [
+        {"raw_lab_name": "Glucose", "raw_value": "92", "raw_lab_unit": "mg/dL"}
+    ]
+
+
 def test_fix_lab_results_format_cleans_partial_bbox_fields():
     payload = {
         "lab_results": [
