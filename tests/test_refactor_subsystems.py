@@ -7,8 +7,8 @@ from pathlib import Path
 import pandas as pd
 from PIL import Image
 
-from parselabs import review, runtime, store
-from parselabs.config import ExtractionConfig
+from parselabs import review, review_data, runtime
+from parselabs.config import ExtractionConfig, LabSpecsConfig
 
 
 def _build_config(tmp_path: Path, *, base_url: str = "https://openrouter.ai/api/v1", api_key: str = "test-key") -> ExtractionConfig:
@@ -46,8 +46,21 @@ def test_runtime_get_openai_client_caches_by_endpoint_and_key(monkeypatch, tmp_p
     ]
 
 
-def test_store_load_legacy_merged_review_dataframe_returns_empty_when_missing(tmp_path):
-    result = store.load_legacy_merged_review_dataframe(tmp_path)
+def test_review_data_ignores_root_all_csv_without_processed_documents(tmp_path):
+    output_path = tmp_path / "output"
+    output_path.mkdir()
+    pd.DataFrame(
+        [
+            {
+                "source_file": "legacy.csv",
+                "page_number": 1,
+                "result_index": 0,
+                "lab_name": "Blood - Glucose",
+            }
+        ]
+    ).to_csv(output_path / "all.csv", index=False)
+
+    result = review_data.load_results_dataframe(output_path, LabSpecsConfig(), demographics=None)
 
     assert isinstance(result, pd.DataFrame)
     assert result.empty

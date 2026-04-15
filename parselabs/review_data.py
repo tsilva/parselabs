@@ -8,7 +8,7 @@ import pandas as pd
 
 from parselabs.config import Demographics, LabSpecsConfig
 from parselabs.rows import build_corpus_review_rows
-from parselabs.store import load_legacy_merged_review_dataframe, read_page_payload, resolve_page_path
+from parselabs.store import read_page_payload, resolve_page_path
 from parselabs.types import PagePayload, PersistedReviewStatus, coerce_persisted_review_status
 
 
@@ -140,13 +140,11 @@ def load_results_dataframe(
     lab_specs: LabSpecsConfig,
     demographics: Demographics | None,
 ) -> pd.DataFrame:
-    """Load review rows for the results explorer with one legacy fallback path."""
+    """Load review rows for the results explorer from processed-document state."""
 
     df = build_corpus_review_rows(output_path, lab_specs)
     if df.empty:
-        df = load_legacy_merged_review_dataframe(output_path)
-        if df.empty:
-            return df
+        return df
 
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")

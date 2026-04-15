@@ -12,8 +12,6 @@ from datetime import datetime, timezone
 from json import JSONDecodeError
 from pathlib import Path
 
-import pandas as pd
-
 from parselabs.types import (
     PageLabResultPayload,
     PagePayload,
@@ -261,18 +259,6 @@ def resolve_page_path(output_path: Path, source_file: str, page_number: int | No
     return doc_dir / f"{stem}.{page_str}{suffix}"
 
 
-def load_legacy_merged_review_dataframe(output_path: Path) -> pd.DataFrame:
-    """Load the merged review CSV fallback for pre-JSON review outputs."""
-
-    csv_path = output_path / "all.csv"
-
-    # Guard: Missing fallback outputs mean there is nothing to load.
-    if not csv_path.exists():
-        return pd.DataFrame()
-
-    return pd.read_csv(csv_path)
-
-
 def read_page_payload(json_path: Path) -> PagePayload | None:
     """Read a page JSON payload, returning None for missing or invalid files."""
 
@@ -490,7 +476,6 @@ __all__ = [
     "get_review_missing_rows",
     "is_page_payload_reusable",
     "iter_processed_documents",
-    "load_legacy_merged_review_dataframe",
     "parse_page_number",
     "plan_pdf_run",
     "read_page_payload",
