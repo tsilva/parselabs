@@ -7,8 +7,10 @@ import re  # noqa: E402
 import shutil  # noqa: E402
 import sys  # noqa: E402
 from dataclasses import dataclass, field  # noqa: E402
-from multiprocessing import Pool  # noqa: E402
+from multiprocessing import Manager, Pool  # noqa: E402
 from pathlib import Path  # noqa: E402
+from queue import Empty  # noqa: E402
+from time import sleep  # noqa: E402
 from typing import Callable  # noqa: E402
 
 import pandas as pd  # noqa: E402
@@ -62,6 +64,7 @@ from parselabs.utils import (  # noqa: E402
     ConsoleLogMode,
     create_page_image_variants,
     log_user_info,
+    log_user_warning,
     setup_logging,
 )
 
@@ -70,6 +73,7 @@ logger = logging.getLogger(__name__)
 PROFILES_DIR = get_profiles_dir()
 EXTRACTION_FAILURE_RAW_NAME = "[EXTRACTION FAILED]"
 ACTIVE_CONSOLE_MODE: ConsoleLogMode = "normal"
+WORKER_PROGRESS_QUEUE = None
 
 
 # ========================================
@@ -266,7 +270,7 @@ def _extract_or_load_page_data(
 
         has_more_attempts = attempt_idx < len(attempts) - 1
         if has_more_attempts:
-            logger.warning(f"[{page_name}] {attempt_label} needs fallback; trying next route")
+            logger.info(f"[{page_name}] {attempt_label} needs fallback; trying next route")
             continue
 
         page_data = candidate
@@ -582,13 +586,20 @@ class ReviewedCorpusResult:
     final_df: pd.DataFrame
 
 
-def _prepare_pdf_run(pdf_files: list[Path], output_path: Path) -> PdfPreflightResult:
+def _console_mode_shows_detail(console_mode: str) -> bool:
+    """Return whether console output should include diagnostic progress details."""
+
+    # Verbose/debug modes are explicitly for detail; normal/quiet should stay concise.
+    return console_mode in {"verbose", "debug"}
+
+
+def _prepare_pdf_run(pdf_files: list[Path], output_path: Path, *, show_progress: bool = False) -> PdfPreflightResult:
     """Hash every PDF once, dedupe exact duplicates, and derive hashed output paths."""
 
     pdf_iterator = pdf_files
 
-    # Show hashing progress for larger explicit runs.
-    if len(pdf_files) > 1:
+    # Hashing is usually instant, so only show its progress bar in detailed console modes.
+    if show_progress and len(pdf_files) > 1:
         logger.info("Hashing PDFs for deduplication...")
         pdf_iterator = tqdm(pdf_files, desc="Hashing PDFs", unit="pdf")
     run_plan = plan_pdf_run(list(pdf_iterator), output_path)
@@ -612,6 +623,66 @@ def _log_validation_stats(validation_stats: dict) -> None:
             log_user_info(logger, "  - %s: %s", reason, count)
 
 
+def _progress_doc_label(pdf_path: Path) -> str:
+    """Return a compact document label for progress-bar display."""
+
+    # Keep long lab filenames from consuming the full terminal width.
+    label = pdf_path.stem
+    if len(label) <= 36:
+        return label
+
+    return f"{label[:33]}..."
+
+
+def _format_active_docs(active_docs: set[str], limit: int = 3) -> str:
+    """Return a concise progress-bar postfix for currently active documents."""
+
+    # Guard: no active workers means there is no useful postfix to show.
+    if not active_docs:
+        return ""
+
+    # Show a stable subset so the tqdm line stays readable with many workers.
+    active_names = sorted(active_docs)
+    visible_names = active_names[:limit]
+    suffix = f" +{len(active_names) - limit}" if len(active_names) > limit else ""
+    return f"active: {', '.join(visible_names)}{suffix}"
+
+
+def _set_active_docs_postfix(pbar, active_docs: set[str]) -> None:
+    """Update the tqdm postfix with active document names."""
+
+    # Replace the postfix in-place rather than emitting separate log lines.
+    pbar.set_postfix_str(_format_active_docs(active_docs), refresh=True)
+
+
+def _drain_worker_progress(progress_queue, active_docs: set[str], pbar) -> None:
+    """Apply all queued worker start/done events to the progress bar."""
+
+    updated = False
+
+    # Drain every pending event so the displayed active set catches up quickly.
+    while True:
+        try:
+            event, doc_label = progress_queue.get_nowait()
+        except Empty:
+            break
+
+        # Worker started a document.
+        if event == "start":
+            active_docs.add(doc_label)
+            updated = True
+            continue
+
+        # Worker finished or aborted a document.
+        if event == "done":
+            active_docs.discard(doc_label)
+            updated = True
+
+    # Refresh the tqdm postfix only when the active set changed.
+    if updated:
+        _set_active_docs_postfix(pbar, active_docs)
+
+
 def _process_pdfs_in_parallel(
     pdfs_to_process: list[DocumentRef],
     config: ExtractionConfig,
@@ -628,7 +699,7 @@ def _process_pdfs_in_parallel(
 
     # Calculate optimal worker count (don't exceed CPU count or task count)
     n_workers = min(config.max_workers, len(pdfs_to_process))
-    log_user_info(logger, "Using %s worker(s) for PDF processing", n_workers)
+    logger.info("Using %s worker(s) for PDF processing", n_workers)
 
     # Build task tuples for each PDF to process
     tasks = [(task.source_pdf, task.file_hash, config.output_path, config, lab_specs) for task in pdfs_to_process]
@@ -638,18 +709,17 @@ def _process_pdfs_in_parallel(
         results = []
         with tqdm(total=len(tasks), desc="Processing PDFs", unit="pdf") as pbar:
             for task in tasks:
+                active_docs = {_progress_doc_label(task[0])}
+                _set_active_docs_postfix(pbar, active_docs)
                 results.append(_process_pdf_wrapper(task))
+                _set_active_docs_postfix(pbar, set())
                 pbar.update(1)
     else:
-        # Execute parallel processing with progress bar
-        with Pool(n_workers, initializer=_init_worker_logging, initargs=(log_dir, console_mode)) as pool:
-            results = []
-
-            # Track progress with tqdm as tasks complete
-            with tqdm(total=len(tasks), desc="Processing PDFs", unit="pdf") as pbar:
-                for result in pool.imap(_process_pdf_wrapper, tasks):
-                    results.append(result)
-                    pbar.update(1)
+        # Execute parallel processing with live worker progress events.
+        with Manager() as manager:
+            progress_queue = manager.Queue()
+            with Pool(n_workers, initializer=_init_worker_logging, initargs=(log_dir, console_mode, progress_queue)) as pool:
+                results = _collect_parallel_pdf_results(pool, tasks, progress_queue)
 
     # Unpack results and collect statistics.
     pdfs_failed = sum(1 for csv_path, _ in results if csv_path is None)
@@ -663,8 +733,43 @@ def _process_pdfs_in_parallel(
     return csv_paths, all_failed_pages, pdfs_failed
 
 
-def _init_worker_logging(log_dir: Path, console_mode: ConsoleLogMode = "normal"):
+def _collect_parallel_pdf_results(pool: Pool, tasks: list[tuple], progress_queue) -> list[tuple[Path | None, list[ExtractionFailureRecord]]]:
+    """Collect multiprocessing results while updating active document progress."""
+
+    # Submit all tasks asynchronously so the parent can keep polling progress events.
+    pending_results = [pool.apply_async(_process_pdf_wrapper, (task,)) for task in tasks]
+    results: list[tuple[Path | None, list[ExtractionFailureRecord]] | None] = [None] * len(pending_results)
+    remaining_indices = set(range(len(pending_results)))
+    active_docs: set[str] = set()
+
+    # Track both completion count and currently active worker document labels.
+    with tqdm(total=len(tasks), desc="Processing PDFs", unit="pdf") as pbar:
+        while remaining_indices:
+            _drain_worker_progress(progress_queue, active_docs, pbar)
+
+            # Collect any completed tasks without blocking progress updates.
+            completed_indices = [idx for idx in remaining_indices if pending_results[idx].ready()]
+            for idx in completed_indices:
+                results[idx] = pending_results[idx].get()
+                remaining_indices.remove(idx)
+                pbar.update(1)
+
+            # Avoid a busy loop while workers are processing long PDFs.
+            if remaining_indices:
+                sleep(0.1)
+
+        _drain_worker_progress(progress_queue, active_docs, pbar)
+        _set_active_docs_postfix(pbar, set())
+
+    return [result for result in results if result is not None]
+
+
+def _init_worker_logging(log_dir: Path, console_mode: ConsoleLogMode = "normal", progress_queue=None):
     """Initialize logging in worker processes."""
+    global WORKER_PROGRESS_QUEUE
+
+    # Workers report document start/done events so the parent can update tqdm.
+    WORKER_PROGRESS_QUEUE = progress_queue
     setup_logging(log_dir, clear_logs=False, console_mode=console_mode)
 
 
@@ -673,7 +778,26 @@ def _process_pdf_wrapper(args):
 
     Returns tuple of (csv_path, failed_pages) from process_single_pdf.
     """
-    return process_single_pdf(*args)
+
+    pdf_path = args[0]
+    doc_label = _progress_doc_label(pdf_path)
+
+    # Tell the parent process which document this worker is handling.
+    _send_worker_progress("start", doc_label)
+    try:
+        return process_single_pdf(*args)
+    finally:
+        _send_worker_progress("done", doc_label)
+
+
+def _send_worker_progress(event: str, doc_label: str) -> None:
+    """Send a worker progress event when a progress queue is configured."""
+
+    # Guard: single-process and tests may not configure a progress queue.
+    if WORKER_PROGRESS_QUEUE is None:
+        return
+
+    WORKER_PROGRESS_QUEUE.put((event, doc_label))
 
 
 # ========================================
@@ -765,6 +889,7 @@ def _setup_rebuild_environment(profile_name: str) -> tuple[ProfileConfig, LabSpe
 
     global logger
     logger = context.logger
+    log_user_info(logger, "Processing profile: %s", profile_name)
     log_user_info(logger, "Using profile: %s", context.profile.name)
     log_user_info(logger, "Output: %s", context.output_path)
 
@@ -940,6 +1065,7 @@ def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfi
 
     global logger
     logger = context.logger
+    log_user_info(logger, "Processing profile: %s", profile_name)
     log_user_info(logger, "Input: %s", context.extraction_config.input_path)
     log_user_info(logger, "Output: %s", context.extraction_config.output_path)
     log_user_info(logger, "Model: %s", context.extraction_config.extract_model_id)
@@ -1026,10 +1152,12 @@ def _log_standardization_refresh_summary(
             log_user_info(logger, "[standardization] Auto-refresh disabled; no uncached mappings were found.")
             return
 
-        logger.warning(
-            f"[standardization] Auto-refresh disabled; {len(result.uncached_names)} name(s) and "
-            f"{len(result.uncached_unit_pairs)} unit pair(s) remain uncached. "
-            f"Manual fallback: {manual_command}"
+        log_user_warning(
+            logger,
+            "[standardization] Auto-refresh disabled; %s name(s) and %s unit pair(s) remain uncached. Manual fallback: %s",
+            len(result.uncached_names),
+            len(result.uncached_unit_pairs),
+            manual_command,
         )
         return
 
@@ -1054,19 +1182,21 @@ def _log_standardization_refresh_summary(
         )
 
     if result.name_error:
-        logger.warning(f"[standardization] Name auto-refresh failed: {result.name_error}")
+        log_user_warning(logger, "[standardization] Name auto-refresh failed: %s", result.name_error)
 
     if result.unit_error:
-        logger.warning(f"[standardization] Unit auto-refresh failed: {result.unit_error}")
+        log_user_warning(logger, "[standardization] Unit auto-refresh failed: %s", result.unit_error)
 
     # Guard: Fully resolved refreshes can stop after the positive summary.
     if not result.unresolved_names and not result.unresolved_unit_pairs:
         log_user_info(logger, "[standardization] Auto-refresh complete; no uncached mappings remain.")
         return
 
-    logger.warning(
-        f"[standardization] Remaining uncached mappings after auto-refresh: "
-        f"{len(result.unresolved_names)} name(s), {len(result.unresolved_unit_pairs)} unit pair(s)"
+    log_user_warning(
+        logger,
+        "[standardization] Remaining uncached mappings after auto-refresh: %s name(s), %s unit pair(s)",
+        len(result.unresolved_names),
+        len(result.unresolved_unit_pairs),
     )
 
 
@@ -1121,7 +1251,7 @@ def _maybe_auto_standardize_outputs(
                 allow_pending=allow_pending,
             )
         except PipelineError as exc:
-            logger.warning(f"[standardization] Output rebuild after auto-refresh failed: {exc}")
+            log_user_warning(logger, "[standardization] Output rebuild after auto-refresh failed: %s", exc)
         else:
             rebuilt_publish_df = reviewed_corpus.merged_review_df if allow_pending else reviewed_corpus.final_df
             _export_final_results(
@@ -1256,12 +1386,17 @@ def run_pipeline_for_pdf_files(
     """Process explicit PDF files and return the final export DataFrame plus metadata."""
 
     pdf_files = sorted(pdf_files)
-    log_user_info(logger, "Found %s PDF(s) for explicit pipeline run", len(pdf_files))
+    logger.info("Found %s PDF(s) for explicit pipeline run", len(pdf_files))
 
     if not pdf_files:
         raise PipelineError("No PDF files provided for processing.")
 
-    preflight = _prepare_pdf_run(pdf_files, config.output_path)
+    console_mode = getattr(config, "console_mode", "normal")
+    preflight = _prepare_pdf_run(
+        pdf_files,
+        config.output_path,
+        show_progress=_console_mode_shows_detail(console_mode),
+    )
     unique_pdf_count = len(preflight.pdfs_to_process)
 
     # Report duplicate-content PDFs before moving on to processing stats.
@@ -1275,7 +1410,7 @@ def run_pipeline_for_pdf_files(
             unique_pdf_count,
         )
 
-    log_user_info(logger, "Processing %s PDF(s)", len(preflight.pdfs_to_process))
+    logger.info("Processing %s PDF(s)", len(preflight.pdfs_to_process))
 
     log_dir = config.output_path / "logs"
     csv_paths, all_failed_pages, pdfs_failed = _process_pdfs_or_use_cache(
@@ -1283,7 +1418,7 @@ def run_pipeline_for_pdf_files(
         config,
         lab_specs,
         log_dir,
-        getattr(config, "console_mode", "normal"),
+        console_mode,
     )
 
     if not csv_paths:
@@ -1421,9 +1556,9 @@ def _report_extraction_failures(all_failed_pages: list[ExtractionFailureRecord],
 
     # Report any extraction failures to user and log
     if all_failed_pages:
-        logger.warning(f"  Pages with extraction failures: {len(all_failed_pages)}")
+        log_user_warning(logger, "Pages with extraction failures: %s", len(all_failed_pages))
         for failure in all_failed_pages:
-            logger.warning(f"    - {failure['page']}: {failure['reason']}")
+            log_user_warning(logger, "  - %s: %s", failure["page"], failure["reason"])
     else:
         log_user_info(logger, "Extraction failures: 0")
 
@@ -1472,7 +1607,6 @@ def main():
 
     # Run extraction pipeline for each profile
     for profile_name in profiles_to_run:
-        logger.info("Processing profile: %s", profile_name)
         try:
             # Route reviewed-JSON rebuilds through the JSON-only path instead of the extraction pipeline.
             if rebuild_from_json:

@@ -268,7 +268,7 @@ def standardize_lab_names(
     """
     Map raw test names plus optional section labels to standardized lab names using cache-only lookup.
 
-    Cache miss returns $UNKNOWN$ and logs a warning.
+    Cache miss returns $UNKNOWN$ and logs a detailed info message.
 
     Args:
         raw_test_names: List of (raw_test_name, raw_section_name) tuples from extraction
@@ -317,17 +317,17 @@ def standardize_lab_names(
         uncached_names.append((raw_name, raw_section_name))
         cached_results[(raw_name, raw_section_name)] = UNKNOWN_VALUE
 
-    # Log neutral warnings so callers can decide whether to auto-refresh later.
+    # Log cache misses as detailed diagnostics; end-of-run summaries tell users what remains unresolved.
     if uncached_names:
-        logger.warning(f"[name_standardization] {len(uncached_names)} uncached names (using $UNKNOWN$ for this pass).")
+        logger.info(f"[name_standardization] {len(uncached_names)} uncached names (using $UNKNOWN$ for this pass).")
         for raw_name, raw_section_name in uncached_names[:10]:  # Log first 10 to avoid flooding
             if normalize_section_cache_key_component(raw_section_name):
-                logger.warning(f"  Cache miss: ('{raw_name}', '{raw_section_name}')")
+                logger.info(f"  Cache miss: ('{raw_name}', '{raw_section_name}')")
                 continue
 
-            logger.warning(f"  Cache miss: '{raw_name}'")
+            logger.info(f"  Cache miss: '{raw_name}'")
         if len(uncached_names) > 10:
-            logger.warning(f"  ... and {len(uncached_names) - 10} more")
+            logger.info(f"  ... and {len(uncached_names) - 10} more")
 
     # Return results for all names from cache ($UNKNOWN$ for misses).
     return {context: cached_results.get(context, UNKNOWN_VALUE) for context in normalized_contexts}
@@ -339,7 +339,7 @@ def standardize_lab_units(
     """
     Map raw lab units to standardized units using cache-only lookup.
 
-    Cache miss returns $UNKNOWN$ and logs a warning.
+    Cache miss returns $UNKNOWN$ and logs a detailed info message.
 
     Args:
         unit_contexts: List of (raw_unit, standardized_lab_name) tuples for context
@@ -374,13 +374,13 @@ def standardize_lab_units(
             uncached_pairs.append((raw_unit, lab_name))
             cached_results[(raw_unit, lab_name)] = UNKNOWN_VALUE
 
-    # Log neutral warnings so callers can decide whether to auto-refresh later.
+    # Log cache misses as detailed diagnostics; end-of-run summaries tell users what remains unresolved.
     if uncached_pairs:
-        logger.warning(f"[unit_standardization] {len(uncached_pairs)} uncached pairs (using $UNKNOWN$ for this pass).")
+        logger.info(f"[unit_standardization] {len(uncached_pairs)} uncached pairs (using $UNKNOWN$ for this pass).")
         for raw_unit, lab_name in uncached_pairs[:10]:  # Log first 10
-            logger.warning(f"  Cache miss: ('{raw_unit}', '{lab_name}')")
+            logger.info(f"  Cache miss: ('{raw_unit}', '{lab_name}')")
         if len(uncached_pairs) > 10:
-            logger.warning(f"  ... and {len(uncached_pairs) - 10} more")
+            logger.info(f"  ... and {len(uncached_pairs) - 10} more")
 
     # Return results for all input pairs from cache
     return {pair: cached_results.get(pair, UNKNOWN_VALUE) for pair in unit_contexts}

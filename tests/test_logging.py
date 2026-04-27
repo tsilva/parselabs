@@ -5,8 +5,9 @@ import sys
 
 import pytest
 
-from parselabs import pipeline
-from parselabs.utils import log_user_info, setup_logging
+from parselabs import pipeline, standardization
+from parselabs.standardization_refresh import StandardizationRefreshResult
+from parselabs.utils import log_user_info, log_user_warning, setup_logging
 
 
 @pytest.fixture
@@ -37,12 +38,13 @@ def _flush_root_handlers() -> None:
         handler.flush()
 
 
-def test_setup_logging_normal_console_filters_detail_info(tmp_path, capsys, restore_root_logger):
+def test_setup_logging_normal_console_filters_detail_info_and_warnings(tmp_path, capsys, restore_root_logger):
     setup_logging(tmp_path / "logs", console_mode="normal")
     test_logger = logging.getLogger("tests.quiet_logging")
 
     test_logger.info("detail info")
     log_user_info(test_logger, "phase info")
+    log_user_warning(test_logger, "summary warning")
     test_logger.warning("warning info")
     test_logger.error("error info")
     _flush_root_handlers()
@@ -52,9 +54,12 @@ def test_setup_logging_normal_console_filters_detail_info(tmp_path, capsys, rest
 
     assert "detail info" not in captured.err
     assert "phase info" in captured.err
-    assert "warning info" in captured.err
+    assert "summary warning" in captured.err
+    assert "warning info" not in captured.err
     assert "error info" in captured.err
+    assert "INFO:" not in captured.err
     assert "detail info" in info_log
+    assert "warning info" in info_log
 
 
 def test_setup_logging_verbose_console_includes_detail_info(tmp_path, capsys, restore_root_logger):
@@ -64,6 +69,71 @@ def test_setup_logging_verbose_console_includes_detail_info(tmp_path, capsys, re
     test_logger.info("detail info")
 
     assert "detail info" in capsys.readouterr().err
+
+
+def test_standardization_cache_misses_stay_out_of_normal_console(tmp_path, capsys, monkeypatch, restore_root_logger):
+    setup_logging(tmp_path / "logs", console_mode="normal")
+    monkeypatch.setattr(standardization, "CACHE_DIR", tmp_path / "cache")
+
+    standardization.standardize_lab_units([("", "Urine Type II - Glucose")])
+    _flush_root_handlers()
+
+    captured = capsys.readouterr()
+    info_log = (tmp_path / "logs" / "info.log").read_text(encoding="utf-8")
+
+    assert "[unit_standardization]" not in captured.err
+    assert "[unit_standardization]" in info_log
+
+
+def test_standardization_unresolved_summary_is_user_visible(tmp_path, capsys, restore_root_logger):
+    setup_logging(tmp_path / "logs", console_mode="normal")
+    result = StandardizationRefreshResult(
+        uncached_names=(),
+        uncached_unit_pairs=(("", "Urine Type II - Glucose"),),
+        name_updates=0,
+        unit_updates=0,
+        unresolved_names=(),
+        unresolved_unit_pairs=(("", "Urine Type II - Glucose"),),
+    )
+
+    pipeline._log_standardization_refresh_summary(result, auto_standardize=True, profile_name="tiago")
+
+    assert "Remaining uncached mappings after auto-refresh" in capsys.readouterr().err
+
+
+def test_setup_profile_environment_logs_profile_after_configured_logging(tmp_path, capsys, monkeypatch, restore_root_logger):
+    setup_logging(tmp_path / "logs", console_mode="normal")
+    calls = []
+
+    class FakeContext:
+        logger = logging.getLogger("tests.profile")
+        extraction_config = type(
+            "FakeExtractionConfig",
+            (),
+            {
+                "input_path": tmp_path / "input",
+                "output_path": tmp_path / "output",
+                "extract_model_id": "test-model",
+            },
+        )()
+        lab_specs = object()
+
+        def copy_lab_specs_to_output(self):
+            return None
+
+    def fake_from_profile(*args, **kwargs):
+        calls.append(kwargs["console_mode"])
+        return FakeContext()
+
+    monkeypatch.setattr(pipeline.RuntimeContext, "from_profile", fake_from_profile)
+
+    pipeline._setup_profile_environment(type("Args", (), {"console_mode": "normal"})(), "tiago")
+
+    captured = capsys.readouterr()
+
+    assert calls == ["normal"]
+    assert "Processing profile: tiago" in captured.err
+    assert "INFO:" not in captured.err
 
 
 def test_setup_logging_quiet_console_shows_only_errors(tmp_path, capsys, restore_root_logger):
