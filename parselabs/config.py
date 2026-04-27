@@ -74,6 +74,7 @@ class ExtractionConfig:
     # Processing settings
     input_file_regex: str = "*.pdf"
     max_workers: int = field(default_factory=lambda: os.cpu_count() or 1)
+    console_mode: str = "normal"
 
 
 @dataclass

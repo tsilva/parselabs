@@ -3,18 +3,43 @@
 import json
 import logging
 from pathlib import Path
-from typing import TypeVar
+from typing import Literal, TypeVar
 
 import pandas as pd
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
+ConsoleLogMode = Literal["normal", "verbose", "debug", "quiet"]
+USER_VISIBLE_LOG_ATTR = "user_visible"
 
 
 _PRIMARY_IMAGE_MAX_WIDTH = 1800
 _FALLBACK_IMAGE_MAX_WIDTH = 1800
 _PAGE_BORDER_PADDING_PX = 64
+
+
+class UserVisibleConsoleFilter(logging.Filter):
+    """Keep default console output focused on user-facing progress and problems."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Return whether a record should appear in normal console mode."""
+
+        # Warnings and errors must stay visible in the default terminal output.
+        if record.levelno >= logging.WARNING:
+            return True
+
+        # Only explicitly marked info records are part of the normal console surface.
+        return bool(getattr(record, USER_VISIBLE_LOG_ATTR, False))
+
+
+def log_user_info(target_logger: logging.Logger, message: str, *args, **kwargs) -> None:
+    """Emit an INFO log that remains visible in normal console mode."""
+
+    # Preserve any caller-provided logging extras while marking this record for console display.
+    extra = dict(kwargs.pop("extra", {}) or {})
+    extra[USER_VISIBLE_LOG_ATTR] = True
+    target_logger.info(message, *args, extra=extra, **kwargs)
 
 
 def _resize_image(image: Image.Image, max_width: int) -> Image.Image:
@@ -113,8 +138,27 @@ def ensure_columns(df: pd.DataFrame, columns: list[str], default: object = None)
     return df
 
 
-def setup_logging(log_dir: Path, clear_logs: bool = False) -> logging.Logger:
+def _get_console_level(console_mode: ConsoleLogMode) -> int:
+    """Return the console handler level for one verbosity mode."""
+
+    # Debug mode exposes every record that reaches the root logger.
+    if console_mode == "debug":
+        return logging.DEBUG
+
+    # Quiet mode is intended for automation or focused failure output.
+    if console_mode == "quiet":
+        return logging.ERROR
+
+    # Normal and verbose both start at INFO; normal adds a visibility filter.
+    return logging.INFO
+
+
+def setup_logging(log_dir: Path, clear_logs: bool = False, console_mode: ConsoleLogMode = "normal") -> logging.Logger:
     """Configure file and console logging, optionally clearing existing logs."""
+
+    # Guard: Reject invalid programmatic modes with a clear error.
+    if console_mode not in {"normal", "verbose", "debug", "quiet"}:
+        raise ValueError(f"Unsupported console log mode: {console_mode}")
 
     # Set up log directory and file paths
     log_dir.mkdir(exist_ok=True)
@@ -129,7 +173,7 @@ def setup_logging(log_dir: Path, clear_logs: bool = False) -> logging.Logger:
 
     # Configure root logger so all modules inherit the same level
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(logging.DEBUG)
 
     # Remove existing handlers from root logger
     # Note: Don't close() handlers in multiprocessing context - they share file descriptors
@@ -156,8 +200,10 @@ def setup_logging(log_dir: Path, clear_logs: bool = False) -> logging.Logger:
 
     # Console handler
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(_get_console_level(console_mode))
     console_handler.setFormatter(console_formatter)
+    if console_mode == "normal":
+        console_handler.addFilter(UserVisibleConsoleFilter())
 
     # Register all handlers with the root logger
     root_logger.addHandler(info_handler)
