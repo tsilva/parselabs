@@ -3,6 +3,7 @@ from argparse import Namespace
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 
 from parselabs import pipeline as main
 from parselabs.config import ExtractionConfig
@@ -173,11 +174,23 @@ def test_maybe_auto_standardize_outputs_skips_rebuild_when_disabled(tmp_path, mo
     assert csv_paths == []
 
 
-def test_maybe_auto_standardize_outputs_keeps_outputs_when_refresh_raises(tmp_path, monkeypatch):
+def test_maybe_auto_standardize_outputs_keeps_outputs_when_refresh_returns_structured_error(tmp_path, monkeypatch):
     output_path = tmp_path / "output"
     _write_all_csv(output_path)
 
-    monkeypatch.setattr(main, "refresh_standardization_caches_from_dataframe", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(
+        main,
+        "refresh_standardization_caches_from_dataframe",
+        lambda *args, **kwargs: StandardizationRefreshResult(
+            uncached_names=(("Glucose", None),),
+            uncached_unit_pairs=(),
+            name_updates=0,
+            unit_updates=0,
+            unresolved_names=(("Glucose", None),),
+            unresolved_unit_pairs=(),
+            name_error="boom",
+        ),
+    )
     monkeypatch.setattr(main, "_rebuild_review_outputs_from_processed_documents", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("rebuild not expected")))
 
     csv_paths = main._maybe_auto_standardize_outputs(
@@ -194,6 +207,28 @@ def test_maybe_auto_standardize_outputs_keeps_outputs_when_refresh_raises(tmp_pa
     )
 
     assert csv_paths == []
+
+
+def test_maybe_auto_standardize_outputs_propagates_unexpected_refresh_errors(tmp_path, monkeypatch):
+    output_path = tmp_path / "output"
+    _write_all_csv(output_path)
+
+    monkeypatch.setattr(main, "refresh_standardization_caches_from_dataframe", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(main, "_rebuild_review_outputs_from_processed_documents", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("rebuild not expected")))
+
+    with pytest.raises(RuntimeError, match="boom"):
+        main._maybe_auto_standardize_outputs(
+            output_path=output_path,
+            lab_specs=SimpleNamespace(),
+            hidden_cols=[],
+            widths={},
+            model_id="test-model",
+            base_url="https://example.com",
+            api_key="test-key",
+            auto_standardize=True,
+            profile_name="tsilva",
+            allow_pending=True,
+        )
 
 
 def test_run_for_profile_calls_auto_standardize_by_default(tmp_path, monkeypatch):

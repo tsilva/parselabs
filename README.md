@@ -4,7 +4,7 @@
   # parselabs
 
   [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-  [![Python](https://img.shields.io/badge/Python-≥3.8-3776ab.svg)](https://python.org)
+  [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-3776ab.svg)](https://python.org)
 
   **🔬 Extract lab results from medical PDFs with vision extraction and reviewed JSON fixtures 📊**
 
