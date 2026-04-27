@@ -30,11 +30,13 @@ This document describes the current extraction, review, and export pipeline.
 - It filters them against `input_file_regex`, case-insensitively.
 - Missing directories, permission problems, and other OS errors are converted into pipeline errors.
 
-4. Exact-content deduplication for the current run.
+4. Exact-content deduplication and reusable-output scan for the current run.
 - `run_pipeline_for_pdf_files()` calls `_prepare_pdf_run(...)`.
-- That hashes every discovered PDF with SHA-256 and keeps the first 8 hex chars.
+- That shows a `Scanning PDFs` progress bar in normal console output, hashes every discovered PDF with SHA-256, and keeps the first 8 hex chars.
 - If two input files have identical content, only the first one is processed.
 - Later duplicates are logged as skipped duplicates.
+- Each unique PDF is then checked for a reusable per-document CSV plus reusable page JSON for every known page.
+- Fully reusable documents are carried forward as cached CSV paths and do not enter the worker pool.
 - There is no persisted run manifest cache in the current pipeline.
 
 5. Output path derivation.
@@ -44,11 +46,12 @@ This document describes the current extraction, review, and export pipeline.
 - This path logic is shared with `parselabs/store.py`.
 
 6. Parallel document processing.
-- Unique PDFs are processed through `_process_pdfs_in_parallel(...)`.
+- Only unique PDFs that were not fully reusable in the preflight scan are processed through `_process_pdfs_in_parallel(...)`.
 - Worker count is `min(config.max_workers, len(pdfs_to_process))`.
 - A single-worker run stays in-process; multi-worker runs use `multiprocessing.Pool`.
 - Logging is initialized inside each worker with the same console verbosity mode as the parent run.
-- The `Processing PDFs` progress bar shows a compact `active:` postfix with the document names currently assigned to workers.
+- The `Processing PDFs` progress bar is created after the scan and its total is only the documents that require extraction/rebuild work.
+- The progress bar shows a compact `active:` postfix with the document names currently assigned to workers.
 - Each worker calls `process_single_pdf(...)`.
 
 7. Per-document setup inside a worker.

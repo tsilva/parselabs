@@ -1,5 +1,5 @@
+import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pandas as pd
 
@@ -32,17 +32,7 @@ def test_prepare_pdf_run_hashes_each_pdf_and_builds_hashed_targets(tmp_path, mon
     pdf_b = tmp_path / "b.pdf"
     pdf_a.write_bytes(b"a")
     pdf_b.write_bytes(b"b")
-    monkeypatch.setattr(
-        main,
-        "plan_pdf_run",
-        lambda pdf_files, output_path: SimpleNamespace(
-            documents_to_process=[
-                build_document_ref(pdf_a, output_path, "a"),
-                build_document_ref(pdf_b, output_path, "b"),
-            ],
-            duplicates=[],
-        ),
-    )
+    monkeypatch.setattr(main, "compute_file_hash", lambda pdf_path: pdf_path.stem)
 
     preflight = main._prepare_pdf_run([pdf_a, pdf_b], output_dir)
 
@@ -61,19 +51,33 @@ def test_prepare_pdf_run_deduplicates_exact_content(tmp_path, monkeypatch):
     pdf_a.write_bytes(b"same")
     pdf_b.write_bytes(b"same")
 
-    monkeypatch.setattr(
-        main,
-        "plan_pdf_run",
-        lambda pdf_files, output_path: SimpleNamespace(
-            documents_to_process=[build_document_ref(pdf_a, output_path, "same-hash")],
-            duplicates=[(pdf_b, pdf_a)],
-        ),
-    )
+    monkeypatch.setattr(main, "compute_file_hash", lambda pdf_path: "same-hash")
 
     preflight = main._prepare_pdf_run([pdf_a, pdf_b], output_dir)
 
     assert [task.file_hash for task in preflight.pdfs_to_process] == ["same-hash"]
     assert preflight.duplicates == [(pdf_b, pdf_a)]
+
+
+def test_prepare_pdf_run_classifies_fully_cached_documents(tmp_path, monkeypatch):
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    pdf_a = tmp_path / "a.pdf"
+    pdf_a.write_bytes(b"a")
+    doc_ref = build_document_ref(pdf_a, output_dir, "deadbeef")
+    _write_valid_csv(doc_ref.doc_dir / "a.csv")
+    (doc_ref.doc_dir / "a.001.json").write_text(
+        json.dumps({"page_has_lab_data": True, "lab_results": [{"raw_lab_name": "Glucose"}]}),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(main, "_get_pdf_page_count", lambda pdf_path: 1)
+    monkeypatch.setattr(main, "compute_file_hash", lambda pdf_path: "deadbeef")
+
+    preflight = main._prepare_pdf_run([pdf_a], output_dir)
+
+    assert preflight.pdfs_to_process == []
+    assert preflight.cached_csv_paths == [doc_ref.doc_dir / "a.csv"]
 
 
 def test_process_single_pdf_uses_precomputed_hash(tmp_path, monkeypatch):
@@ -109,5 +113,33 @@ def test_process_pdfs_or_use_cache_returns_injected_cached_csvs(tmp_path):
     )
 
     assert csv_paths == [cached_csv]
+    assert failed_pages == []
+    assert pdfs_failed == 0
+
+
+def test_process_pdfs_or_use_cache_keeps_cached_csvs_with_new_processing_results(tmp_path, monkeypatch):
+    config = _build_config(tmp_path)
+    cached_csv = config.output_path / "cached_hash" / "cached.csv"
+    processed_csv = config.output_path / "processed_hash" / "processed.csv"
+    _write_valid_csv(cached_csv)
+    _write_valid_csv(processed_csv)
+    pdf_path = tmp_path / "processed.pdf"
+    pdf_path.write_bytes(b"processed")
+    preflight = main.PdfPreflightResult(
+        pdfs_to_process=[build_document_ref(pdf_path, config.output_path, "processed_hash")],
+        duplicates=[],
+        cached_csv_paths=[cached_csv],
+    )
+
+    monkeypatch.setattr(main, "_process_pdfs_in_parallel", lambda *args, **kwargs: ([processed_csv], [], 0))
+
+    csv_paths, failed_pages, pdfs_failed = main._process_pdfs_or_use_cache(
+        preflight,
+        config,
+        object(),
+        config.output_path / "logs",
+    )
+
+    assert csv_paths == [cached_csv, processed_csv]
     assert failed_pages == []
     assert pdfs_failed == 0

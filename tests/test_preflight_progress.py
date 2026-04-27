@@ -1,8 +1,6 @@
 from queue import Queue
-from types import SimpleNamespace
 
 from parselabs import pipeline as main
-from parselabs.store import build_document_ref
 
 
 class FakeProgressBar:
@@ -13,7 +11,7 @@ class FakeProgressBar:
         self.postfixes.append(value)
 
 
-def test_prepare_pdf_run_shows_hash_progress_for_multiple_pdfs_when_requested(tmp_path, monkeypatch):
+def test_prepare_pdf_run_shows_scan_progress_for_multiple_pdfs_when_requested(tmp_path, monkeypatch):
     output_dir = tmp_path / "output"
     output_dir.mkdir()
     pdf_a = tmp_path / "a.pdf"
@@ -27,22 +25,12 @@ def test_prepare_pdf_run_shows_hash_progress_for_multiple_pdfs_when_requested(tm
         return iterable
 
     monkeypatch.setattr(main, "tqdm", fake_tqdm)
-    monkeypatch.setattr(
-        main,
-        "plan_pdf_run",
-        lambda pdf_files, output_path: SimpleNamespace(
-            documents_to_process=[
-                build_document_ref(pdf_a, output_path, "a"),
-                build_document_ref(pdf_b, output_path, "b"),
-            ],
-            duplicates=[],
-        ),
-    )
+    monkeypatch.setattr(main, "compute_file_hash", lambda pdf_path: pdf_path.stem)
 
     preflight = main._prepare_pdf_run([pdf_a, pdf_b], output_dir, show_progress=True)
 
     assert [task.file_hash for task in preflight.pdfs_to_process] == ["a", "b"]
-    assert calls == ["Hashing PDFs"]
+    assert calls == ["Scanning PDFs"]
 
 
 def test_prepare_pdf_run_hides_hash_progress_by_default(tmp_path, monkeypatch):
@@ -59,17 +47,7 @@ def test_prepare_pdf_run_hides_hash_progress_by_default(tmp_path, monkeypatch):
         return iterable
 
     monkeypatch.setattr(main, "tqdm", fake_tqdm)
-    monkeypatch.setattr(
-        main,
-        "plan_pdf_run",
-        lambda pdf_files, output_path: SimpleNamespace(
-            documents_to_process=[
-                build_document_ref(pdf_a, output_path, "a"),
-                build_document_ref(pdf_b, output_path, "b"),
-            ],
-            duplicates=[],
-        ),
-    )
+    monkeypatch.setattr(main, "compute_file_hash", lambda pdf_path: pdf_path.stem)
 
     preflight = main._prepare_pdf_run([pdf_a, pdf_b], output_dir)
 
@@ -89,14 +67,7 @@ def test_prepare_pdf_run_skips_hash_progress_for_single_pdf(tmp_path, monkeypatc
         return iterable
 
     monkeypatch.setattr(main, "tqdm", fake_tqdm)
-    monkeypatch.setattr(
-        main,
-        "plan_pdf_run",
-        lambda pdf_files, output_path: SimpleNamespace(
-            documents_to_process=[build_document_ref(pdf_a, output_path, "a")],
-            duplicates=[],
-        ),
-    )
+    monkeypatch.setattr(main, "compute_file_hash", lambda pdf_path: pdf_path.stem)
 
     preflight = main._prepare_pdf_run([pdf_a], output_dir, show_progress=True)
 
