@@ -53,10 +53,11 @@ from parselabs.standardization_refresh import (  # noqa: E402
 )
 from parselabs.store import (  # noqa: E402
     DocumentRef,
+    build_document_ref,
+    compute_file_hash,
     discover_pdf_files,
     get_document_csv_path,
     is_page_payload_reusable,
-    plan_pdf_run,
     read_page_payload,
 )
 from parselabs.types import ExtractionFailureRecord, PagePayload  # noqa: E402
@@ -586,27 +587,113 @@ class ReviewedCorpusResult:
     final_df: pd.DataFrame
 
 
-def _console_mode_shows_detail(console_mode: str) -> bool:
-    """Return whether console output should include diagnostic progress details."""
+def _get_pdf_page_count(pdf_path: Path) -> int | None:
+    """Return the PDF page count when poppler metadata is available."""
 
-    # Verbose/debug modes are explicitly for detail; normal/quiet should stay concise.
-    return console_mode in {"verbose", "debug"}
+    pdfinfo_from_path = getattr(pdf2image, "pdfinfo_from_path", None)
+    if pdfinfo_from_path is None:
+        return None
+
+    try:
+        pdf_info = pdfinfo_from_path(str(pdf_path))
+    except Exception as exc:
+        logger.info("Could not read PDF page count for %s during preflight scan: %s", pdf_path.name, exc)
+        return None
+
+    page_count = pdf_info.get("Pages") if isinstance(pdf_info, dict) else None
+    try:
+        parsed_page_count = int(page_count)
+    except (TypeError, ValueError):
+        return None
+
+    if parsed_page_count <= 0:
+        return None
+    return parsed_page_count
+
+
+def _document_has_reusable_page_cache(document: DocumentRef) -> bool:
+    """Return whether every page JSON for a document can be reused without extraction."""
+
+    page_count = _get_pdf_page_count(document.source_pdf)
+
+    # Without a page count, require at least one cached page and no known failed/invalid pages.
+    if page_count is None:
+        json_paths = sorted(document.doc_dir.glob(f"{document.stem}.*.json"))
+        if not json_paths:
+            return False
+    else:
+        json_paths = [document.doc_dir / f"{document.stem}.{page_number:03d}.json" for page_number in range(1, page_count + 1)]
+
+    for json_path in json_paths:
+        if not json_path.exists():
+            return False
+        if not is_page_payload_reusable(read_page_payload(json_path)):
+            return False
+
+    return True
+
+
+def _document_csv_is_reusable(csv_path: Path) -> bool:
+    """Return whether a per-document CSV exists and has the minimum review identity columns."""
+
+    if not csv_path.exists():
+        return False
+
+    try:
+        columns = pd.read_csv(csv_path, nrows=0).columns
+    except (OSError, UnicodeDecodeError, pd.errors.ParserError):
+        return False
+
+    return all(column in columns for column in REQUIRED_CSV_COLS)
+
+
+def _classify_preflight_documents(documents: list[DocumentRef]) -> tuple[list[DocumentRef], list[Path]]:
+    """Split unique documents into extraction work and fully reusable CSV snapshots."""
+
+    documents_to_process: list[DocumentRef] = []
+    cached_csv_paths: list[Path] = []
+
+    for document in documents:
+        csv_path = get_document_csv_path(document.doc_dir)
+        if _document_csv_is_reusable(csv_path) and _document_has_reusable_page_cache(document):
+            cached_csv_paths.append(csv_path)
+            continue
+
+        documents_to_process.append(document)
+
+    return documents_to_process, cached_csv_paths
 
 
 def _prepare_pdf_run(pdf_files: list[Path], output_path: Path, *, show_progress: bool = False) -> PdfPreflightResult:
-    """Hash every PDF once, dedupe exact duplicates, and derive hashed output paths."""
+    """Hash, dedupe, and scan existing artifacts before starting extraction work."""
 
     pdf_iterator = pdf_files
+    duplicates: list[tuple[Path, Path]] = []
+    pdfs_to_process: list[DocumentRef] = []
+    cached_csv_paths: list[Path] = []
+    seen_by_hash: dict[str, Path] = {}
 
-    # Hashing is usually instant, so only show its progress bar in detailed console modes.
     if show_progress and len(pdf_files) > 1:
-        logger.info("Hashing PDFs for deduplication...")
-        pdf_iterator = tqdm(pdf_files, desc="Hashing PDFs", unit="pdf")
-    run_plan = plan_pdf_run(list(pdf_iterator), output_path)
+        logger.info("Scanning PDFs for deduplication and reusable outputs...")
+        pdf_iterator = tqdm(pdf_files, desc="Scanning PDFs", unit="pdf")
+
+    for pdf_path in pdf_iterator:
+        file_hash = compute_file_hash(pdf_path)
+
+        if file_hash in seen_by_hash:
+            duplicates.append((pdf_path, seen_by_hash[file_hash]))
+            continue
+
+        seen_by_hash[file_hash] = pdf_path
+        document = build_document_ref(pdf_path, output_path, file_hash)
+        document_pdfs_to_process, document_cached_csv_paths = _classify_preflight_documents([document])
+        pdfs_to_process.extend(document_pdfs_to_process)
+        cached_csv_paths.extend(document_cached_csv_paths)
 
     return PdfPreflightResult(
-        pdfs_to_process=run_plan.documents_to_process,
-        duplicates=run_plan.duplicates,
+        pdfs_to_process=pdfs_to_process,
+        duplicates=duplicates,
+        cached_csv_paths=cached_csv_paths,
     )
 
 
@@ -1033,7 +1120,7 @@ def _process_pdfs_or_use_cache(
         log_dir,
         console_mode,
     )
-    return _merge_unique_csv_paths(csv_paths), all_failed_pages, pdfs_failed
+    return _merge_unique_csv_paths([*preflight.cached_csv_paths, *csv_paths]), all_failed_pages, pdfs_failed
 
 
 def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfig, LabSpecsConfig]:
@@ -1395,9 +1482,11 @@ def run_pipeline_for_pdf_files(
     preflight = _prepare_pdf_run(
         pdf_files,
         config.output_path,
-        show_progress=_console_mode_shows_detail(console_mode),
+        show_progress=console_mode != "quiet",
     )
-    unique_pdf_count = len(preflight.pdfs_to_process)
+    reusable_pdf_count = len(preflight.cached_csv_paths)
+    process_pdf_count = len(preflight.pdfs_to_process)
+    unique_pdf_count = reusable_pdf_count + process_pdf_count
 
     # Report duplicate-content PDFs before moving on to processing stats.
     for dup_path, orig_path in preflight.duplicates:
@@ -1410,7 +1499,13 @@ def run_pipeline_for_pdf_files(
             unique_pdf_count,
         )
 
-    logger.info("Processing %s PDF(s)", len(preflight.pdfs_to_process))
+    log_user_info(
+        logger,
+        "Scan complete: %s reusable PDF(s), %s PDF(s) to process",
+        reusable_pdf_count,
+        process_pdf_count,
+    )
+    logger.info("Processing %s PDF(s)", process_pdf_count)
 
     log_dir = config.output_path / "logs"
     csv_paths, all_failed_pages, pdfs_failed = _process_pdfs_or_use_cache(
