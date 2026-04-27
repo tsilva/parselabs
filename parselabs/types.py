@@ -248,6 +248,13 @@ class ExtractionValidationResult(TypedDict):
     error_msg: str | None
 
 
+class ExtractionFailureRecord(TypedDict):
+    """Summary record for one page that failed extraction."""
+
+    page: str
+    reason: str
+
+
 class ReviewRow(RowIdentity, total=False):
     """Flattened review dataframe row contract."""
 

@@ -1,18 +1,17 @@
 # Current Pipeline
 
-Based on the current code, not prior documentation:
+This document describes the current extraction, review, and export pipeline.
 
 ## Subsystem Layout
 
-- `parselabs/runtime.py` is now the shared bootstrap surface for profile resolution, runtime context creation, OpenAI client caching, and runtime path access.
-- `parselabs/store.py` is now the shared filesystem/state surface for hashed document discovery, page JSON persistence, review actions, and legacy merged-review CSV fallback.
-- `parselabs/dataset.py` is now the shared data surface for review/export row builders, schema metadata, normalization/standardization/validation exports, and integrity-report helpers.
-- `parselabs/review.py` is now the shared UI helper surface for bbox scaling, source-page overlays, reference formatting, and results-explorer dataframe loading.
-- Legacy public modules such as `parselabs.profiles` and `parselabs.documents` remain import-compatible as thin shims over the new subsystem modules.
+- `parselabs/runtime.py` is the shared bootstrap surface for profile resolution, runtime context creation, OpenAI client caching, and runtime path access.
+- `parselabs/store.py` is the shared filesystem/state surface for hashed document discovery, page JSON persistence, review actions, and legacy merged-review CSV fallback.
+- `parselabs/dataset.py` is the shared data surface for review/export row builders, schema metadata, normalization/standardization/validation exports, and integrity-report helpers.
+- `parselabs/review.py` is the shared UI helper surface for bbox scaling, source-page overlays, reference formatting, and results-explorer dataframe loading.
 
 1. Profile/runtime setup.
 - `parselabs/cli.py` dispatches the top-level `parselabs` command into `extract`, `review`, and `admin` flows.
-- Extraction-mode flags are still parsed in `parselabs/pipeline.py`.
+- Extraction-mode flags are parsed in `parselabs/pipeline.py`.
 - It resolves the selected profile through `RuntimeContext.from_profile(...)` in `parselabs/runtime.py`.
 - For normal extraction runs, it requires input path, output path, API settings, and logging.
 - It copies the active `lab_specs.json` into the output directory so the run remains reproducible.
@@ -54,6 +53,7 @@ Based on the current code, not prior documentation:
 - It copies the original source PDF into that directory.
 - That copied PDF becomes the local artifact used for page conversion and later review.
 - The worker keeps track of page-level extraction failures separately from total document failure.
+- Expected vision API failures are converted to `ExtractionAPIError` and reported as document failures; unexpected internal runtime errors propagate instead of being folded into failed-page output.
 
 8. PDF conversion bootstrap.
 - The PDF is converted to PIL images with `pdf2image.convert_from_path(...)`.
@@ -184,7 +184,8 @@ Based on the current code, not prior documentation:
 - If the refresh adds any cache entries, the pipeline rebuilds per-document CSVs and merged outputs from persisted page JSON only.
 - It does not re-extract PDFs and does not repeat extraction API calls.
 - If `--no-auto-standardize` is passed, the refresh is skipped and the pipeline logs a final manual-fallback summary instead.
-- If refresh calls fail or some mappings remain unresolved, the run keeps the best-effort outputs and ends with a warning summary instead of failing.
+- If refresh calls return structured API/cache errors or leave mappings unresolved, the run keeps the best-effort outputs and ends with a warning summary instead of failing.
+- Unexpected exceptions inside the refresh orchestration propagate so implementation bugs are visible during the run.
 
 26. Reviewed-JSON rebuild mode.
 - If `--rebuild-from-json` is passed, extraction is skipped entirely.

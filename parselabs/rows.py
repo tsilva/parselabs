@@ -21,6 +21,7 @@ from parselabs.normalization import (
     deduplicate_results,
     flag_duplicate_entries,
 )
+from parselabs.review_flags import append_review_reason_code
 from parselabs.standardization import standardize_lab_names, standardize_lab_units
 from parselabs.store import (
     DocumentRef,
@@ -233,11 +234,22 @@ def build_document_review_dataframe(doc_dir: Path, lab_specs: LabSpecsConfig) ->
 def rebuild_document_csv(doc_dir: Path, lab_specs: LabSpecsConfig) -> Path:
     """Rebuild a per-document review CSV from page JSON files."""
 
+    # Keep public behavior path-only while the internal helper exposes the rebuilt frame.
+    csv_path, _ = _rebuild_document_csv_with_review_dataframe(doc_dir, lab_specs)
+    return csv_path
+
+
+def _rebuild_document_csv_with_review_dataframe(
+    doc_dir: Path,
+    lab_specs: LabSpecsConfig,
+) -> tuple[Path, pd.DataFrame]:
+    """Rebuild a per-document review CSV and return the computed review frame."""
+
     # Recompute the review frame from JSON so CSV contents always match persisted review state.
     review_df = build_document_review_dataframe(doc_dir, lab_specs)
     csv_path = get_document_csv_path(doc_dir)
     review_df.to_csv(csv_path, index=False, encoding="utf-8")
-    return csv_path
+    return csv_path, review_df
 
 
 def build_document_expected_dataframe(doc_dir: Path, lab_specs: LabSpecsConfig) -> pd.DataFrame:
@@ -1442,29 +1454,6 @@ def _add_export_column_aliases(review_df: pd.DataFrame) -> pd.DataFrame:
     return review_df
 
 
-def _append_review_reason_code(
-    review_df: pd.DataFrame,
-    mask: pd.Series,
-    reason_code: str,
-) -> pd.DataFrame:
-    """Append a review reason code without duplicating existing reason text."""
-
-    # Guard: No matching rows means there is nothing to update.
-    if review_df.empty or not mask.any():
-        return review_df
-
-    # Ensure review columns exist before appending reason codes.
-    if "review_needed" not in review_df.columns:
-        review_df["review_needed"] = False
-    if "review_reason" not in review_df.columns:
-        review_df["review_reason"] = ""
-
-    review_df.loc[mask, "review_needed"] = True
-    current_reasons = review_df.loc[mask, "review_reason"].fillna("").astype(str)
-    review_df.loc[mask, "review_reason"] = current_reasons.apply(lambda value: f"{value}{reason_code}; " if reason_code not in value else value)
-    return review_df
-
-
 def _remove_review_reason_code(
     review_df: pd.DataFrame,
     reason_code: str,
@@ -1498,13 +1487,13 @@ def _flag_unknown_mappings(review_df: pd.DataFrame) -> pd.DataFrame:
 
     # Unknown standardized lab names cannot be trusted for export.
     unknown_lab_mask = review_df["lab_name_standardized"].fillna("") == UNKNOWN_VALUE
-    review_df = _append_review_reason_code(review_df, unknown_lab_mask, UNKNOWN_LAB_MAPPING_REASON)
+    review_df = append_review_reason_code(review_df, unknown_lab_mask, UNKNOWN_LAB_MAPPING_REASON)
 
     # Known labs with unknown or missing units stay reviewable but cannot publish yet.
     unit_values = review_df["lab_unit_standardized"].fillna("")
     known_lab_mask = review_df["lab_name_standardized"].fillna("") != UNKNOWN_VALUE
     unknown_unit_mask = known_lab_mask & unit_values.isin(["", UNKNOWN_VALUE])
-    review_df = _append_review_reason_code(review_df, unknown_unit_mask, UNKNOWN_UNIT_MAPPING_REASON)
+    review_df = append_review_reason_code(review_df, unknown_unit_mask, UNKNOWN_UNIT_MAPPING_REASON)
     return review_df
 
 
@@ -1546,7 +1535,7 @@ def _flag_percentage_variant_ambiguity(
         if std_unit != "%" and std_name.endswith("(%)") and lab_specs.get_non_percentage_variant(str(std_name)) is not None:
             ambiguous_indices.append(idx)
 
-    return _append_review_reason_code(
+    return append_review_reason_code(
         review_df,
         review_df.index.isin(ambiguous_indices),
         AMBIGUOUS_PERCENTAGE_VARIANT_REASON,
@@ -1610,7 +1599,7 @@ def _flag_suspicious_reference_ranges(
         if ratios and all(ratio > 10 or ratio < 0.1 for ratio in ratios):
             suspicious_indices.append(idx)
 
-    return _append_review_reason_code(
+    return append_review_reason_code(
         review_df,
         review_df.index.isin(suspicious_indices),
         SUSPICIOUS_REFERENCE_RANGE_REASON,
