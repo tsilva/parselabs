@@ -23,7 +23,7 @@ from parselabs.paths import (
     get_static_dir,
     get_user_config_dir,
 )
-from parselabs.utils import setup_logging
+from parselabs.utils import ConsoleLogMode, setup_logging
 
 _CLIENT_CACHE: dict[tuple[str, str], OpenAI] = {}
 
@@ -72,6 +72,7 @@ class RuntimeContext:
         create_output_dir: bool = False,
         setup_logs: bool = False,
         clear_logs: bool = False,
+        console_mode: ConsoleLogMode = "normal",
     ) -> "RuntimeContext":
         """Load and validate profile-backed runtime state."""
 
@@ -122,7 +123,7 @@ class RuntimeContext:
 
         # Configure per-profile logging only when the caller needs log files.
         if setup_logs and output_path:
-            logger = setup_logging(output_path / "logs", clear_logs=clear_logs)
+            logger = setup_logging(output_path / "logs", clear_logs=clear_logs, console_mode=console_mode)
 
         extract_model_id = str(overrides.get("model") or profile.extract_model_id or "")
         input_file_regex = str(overrides.get("pattern") or profile.input_file_regex or "*.pdf")
@@ -140,6 +141,7 @@ class RuntimeContext:
                 extract_model_id=extract_model_id,
                 input_file_regex=input_file_regex,
                 max_workers=max_workers,
+                console_mode=console_mode,
             )
 
         openai_client = None
