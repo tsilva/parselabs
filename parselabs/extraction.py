@@ -632,7 +632,7 @@ def _log_extraction_quality(report_model: HealthLabReport, image_path: Path) -> 
             logger.debug(f"Page confirmed to have no lab data:\n\t- {image_path}")
         # Possible extraction failure - zero results when lab data was expected
         else:
-            logger.warning(f"Extraction returned 0 lab results. This may indicate a model extraction failure - image should be manually reviewed.\n\t- {image_path}")
+            logger.info(f"Extraction returned 0 lab results. This may indicate a model extraction failure - image should be manually reviewed.\n\t- {image_path}")
         return
 
     # Calculate percentage of null values

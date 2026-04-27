@@ -604,7 +604,7 @@ def test_run_pipeline_and_reviewed_rebuild_produce_matching_exports(tmp_path, mo
         pdfs_to_process=[],
         duplicates=[],
     )
-    monkeypatch.setattr(main, "_prepare_pdf_run", lambda pdf_files, _: preflight)
+    monkeypatch.setattr(main, "_prepare_pdf_run", lambda pdf_files, _, **kwargs: preflight)
 
     pipeline_result = main.run_pipeline_for_pdf_files([pdf_path], config, lab_specs)
     reviewed_df, _ = main.build_final_output_dataframe_from_reviewed_json(output_path, lab_specs)
@@ -636,7 +636,7 @@ def test_run_pipeline_with_only_pending_rows_publishes_empty_final_export(tmp_pa
         pdfs_to_process=[],
         duplicates=[],
     )
-    monkeypatch.setattr(main, "_prepare_pdf_run", lambda pdf_files, _: preflight)
+    monkeypatch.setattr(main, "_prepare_pdf_run", lambda pdf_files, _, **kwargs: preflight)
 
     pipeline_result = main.run_pipeline_for_pdf_files([pdf_path], config, lab_specs)
 
@@ -1213,7 +1213,7 @@ def test_apply_cached_standardization_skips_false_positive_unit_warning_for_abso
         ]
     )
 
-    with caplog.at_level(logging.WARNING, logger="parselabs.standardization"):
+    with caplog.at_level(logging.INFO, logger="parselabs.standardization"):
         standardized_df = apply_cached_standardization(review_df, lab_specs)
 
     assert "('x 10³/µl', 'Blood - Lymphocytes (%)')" not in caplog.text

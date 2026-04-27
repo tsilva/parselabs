@@ -14,7 +14,7 @@ This document describes the current extraction, review, and export pipeline.
 - Extraction-mode flags are parsed in `parselabs/pipeline.py`.
 - It resolves the selected profile through `RuntimeContext.from_profile(...)` in `parselabs/runtime.py`.
 - For normal extraction runs, it requires input path, output path, API settings, and logging.
-- Console logging defaults to a quiet normal mode: only user-facing phase notices, warnings, errors, progress bars, and the final summary are shown.
+- Console logging defaults to a quiet normal mode: only user-facing phase notices, summarized action-needed warnings, errors, progress bars, and the final summary are shown.
 - Detailed INFO diagnostics are still written to `output/logs/info.log`, and errors are also written to `output/logs/error.log`; `--verbose`, `--debug`, and `--quiet` adjust only console verbosity.
 - It copies the active `lab_specs.json` into the output directory so the run remains reproducible.
 
@@ -48,6 +48,7 @@ This document describes the current extraction, review, and export pipeline.
 - Worker count is `min(config.max_workers, len(pdfs_to_process))`.
 - A single-worker run stays in-process; multi-worker runs use `multiprocessing.Pool`.
 - Logging is initialized inside each worker with the same console verbosity mode as the parent run.
+- The `Processing PDFs` progress bar shows a compact `active:` postfix with the document names currently assigned to workers.
 - Each worker calls `process_single_pdf(...)`.
 
 7. Per-document setup inside a worker.

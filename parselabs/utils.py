@@ -25,11 +25,11 @@ class UserVisibleConsoleFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         """Return whether a record should appear in normal console mode."""
 
-        # Warnings and errors must stay visible in the default terminal output.
-        if record.levelno >= logging.WARNING:
+        # Errors must stay visible even if they are not explicitly marked.
+        if record.levelno >= logging.ERROR:
             return True
 
-        # Only explicitly marked info records are part of the normal console surface.
+        # Only explicitly marked info/warning records are part of the normal console surface.
         return bool(getattr(record, USER_VISIBLE_LOG_ATTR, False))
 
 
@@ -40,6 +40,15 @@ def log_user_info(target_logger: logging.Logger, message: str, *args, **kwargs) 
     extra = dict(kwargs.pop("extra", {}) or {})
     extra[USER_VISIBLE_LOG_ATTR] = True
     target_logger.info(message, *args, extra=extra, **kwargs)
+
+
+def log_user_warning(target_logger: logging.Logger, message: str, *args, **kwargs) -> None:
+    """Emit a WARNING log that remains visible in normal console mode."""
+
+    # Preserve any caller-provided logging extras while marking this record for console display.
+    extra = dict(kwargs.pop("extra", {}) or {})
+    extra[USER_VISIBLE_LOG_ATTR] = True
+    target_logger.warning(message, *args, extra=extra, **kwargs)
 
 
 def _resize_image(image: Image.Image, max_width: int) -> Image.Image:
@@ -187,7 +196,7 @@ def setup_logging(log_dir: Path, clear_logs: bool = False, console_mode: Console
 
     # Formatters
     file_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    console_formatter = logging.Formatter("%(levelname)s: %(message)s")
+    console_formatter = logging.Formatter("%(message)s") if console_mode == "normal" else logging.Formatter("%(levelname)s: %(message)s")
 
     # File handlers
     info_handler = logging.FileHandler(info_log_path, encoding="utf-8")
