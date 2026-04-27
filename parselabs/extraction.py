@@ -11,7 +11,8 @@ from typing import Annotated
 from openai import APIError, OpenAI
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from parselabs.paths import get_prompts_dir
+from parselabs.exceptions import ExtractionAPIError
+from parselabs.prompt_templates import load_prompt_template
 from parselabs.types import ExtractionValidationResult, PagePayload, RawExtractionPayload
 
 logger = logging.getLogger(__name__)
@@ -291,15 +292,6 @@ TOOLS = [
 # Extraction Prompts
 # ========================================
 
-_PROMPTS_DIR = get_prompts_dir()
-
-
-def load_prompt_template(name: str) -> str:
-    """Load one prompt template from the shared prompts directory."""
-
-    return (_PROMPTS_DIR / f"{name}.md").read_text(encoding="utf-8").strip()
-
-
 EXTRACTION_SYSTEM_PROMPT = load_prompt_template("extraction_system")
 EXTRACTION_USER_PROMPT = load_prompt_template("extraction_user")
 
@@ -478,10 +470,10 @@ def _execute_single_extraction(
                 "function": {"name": "extract_lab_results"},
             },
         )
-    # API-level failure - propagate as RuntimeError
+    # API-level failure - let the pipeline handle expected extraction outages.
     except APIError as e:
         logger.error(f"API Error during lab extraction from {image_path.name}: {e}")
-        raise RuntimeError(f"Lab extraction failed for {image_path.name}: {e}")
+        raise ExtractionAPIError(f"Lab extraction failed for {image_path.name}: {e}") from e
 
     # Guard: Invalid response structure from API
     if not completion or not completion.choices:

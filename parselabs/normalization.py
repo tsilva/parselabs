@@ -7,6 +7,7 @@ import unicodedata
 import pandas as pd
 
 from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig
+from parselabs.review_flags import append_review_reason_code, ensure_review_flag_columns
 from parselabs.utils import ensure_columns
 
 logger = logging.getLogger(__name__)
@@ -849,15 +850,12 @@ def flag_duplicate_entries(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty or "date" not in df.columns or "lab_name_standardized" not in df.columns:
         return df
 
-    # Initialize review columns if not present, ensuring correct dtypes
-    if "review_needed" not in df.columns:
-        df["review_needed"] = False
-    else:
-        df["review_needed"] = df["review_needed"].astype(bool)
-    if "review_reason" not in df.columns:
-        df["review_reason"] = ""
-    else:
-        df["review_reason"] = df["review_reason"].fillna("").astype(str)
+    # Initialize review columns before duplicate flags are added.
+    df = ensure_review_flag_columns(df)
+
+    # Preserve the existing boolean/string coercion behavior for duplicate review rows.
+    df["review_needed"] = df["review_needed"].astype(bool)
+    df["review_reason"] = df["review_reason"].fillna("").astype(str)
 
     # Consider only rows with usable standardized lab names for duplicate detection.
     candidate_mask = df["lab_name_standardized"].notna() & (df["lab_name_standardized"] != UNKNOWN_VALUE)
@@ -884,10 +882,7 @@ def flag_duplicate_entries(df: pd.DataFrame) -> pd.DataFrame:
     count = int(dup_mask.sum())
     logger.info(f"Flagging {count} rows as DUPLICATE_ENTRY")
 
-    df.loc[dup_mask, "review_needed"] = True
-    df.loc[dup_mask, "review_reason"] = df.loc[dup_mask, "review_reason"].fillna("").apply(lambda x: str(x) + "DUPLICATE_ENTRY; " if "DUPLICATE_ENTRY" not in str(x) else str(x))
-
-    return df
+    return append_review_reason_code(df, dup_mask, "DUPLICATE_ENTRY")
 
 
 def _duplicate_group_is_equivalent(group_df: pd.DataFrame) -> bool:

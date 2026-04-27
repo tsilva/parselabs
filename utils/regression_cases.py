@@ -27,13 +27,12 @@ from parselabs.regression import (  # noqa: E402
     write_canonical_csv,
 )
 from parselabs.rows import (  # noqa: E402
+    _rebuild_document_csv_with_review_dataframe,
     build_document_expected_dataframe,
-    build_document_review_dataframe,
     build_review_corpus_report,
     get_document_review_summary,
     iter_processed_documents,
     load_document_review_rows,
-    rebuild_document_csv,
 )
 from parselabs.runtime import RuntimeContext  # noqa: E402
 from parselabs.store import compute_file_hash  # noqa: E402
@@ -78,8 +77,7 @@ def approve_cases(args: argparse.Namespace) -> None:
     # Refresh every processed document CSV before deciding whether it is a valid fixture.
     valid_documents_by_stem: dict[str, tuple[Path, Path, pd.DataFrame]] = {}
     for document in iter_processed_documents(profile.output_path):
-        rebuild_document_csv(document.doc_dir, lab_specs)
-        review_df = build_document_review_dataframe(document.doc_dir, lab_specs)
+        _, review_df = _rebuild_document_csv_with_review_dataframe(document.doc_dir, lab_specs)
         summary = get_document_review_summary(document.doc_dir, review_df)
 
         # Skip documents that still have pending rows or unresolved missing-row markers.

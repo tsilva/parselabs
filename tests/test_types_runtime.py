@@ -6,6 +6,7 @@ from pathlib import Path
 from parselabs import review_artifacts_backend
 from parselabs.store import read_page_payload, write_page_payload
 from parselabs.types import (
+    ExtractionFailureRecord,
     PagePayload,
     ReviewDecisionResult,
     ReviewMissingRowMarker,
@@ -60,6 +61,18 @@ def test_row_identity_shape_stays_stable():
     assert review_row["source_file"] == "labs.pdf"
     assert review_row["page_number"] == 3
     assert review_row["result_index"] == 7
+
+
+def test_extraction_failure_record_shape_stays_stable():
+    failure: ExtractionFailureRecord = {
+        "page": "labs page 3",
+        "reason": "Malformed output after 2 attempts",
+    }
+
+    assert failure == {
+        "page": "labs page 3",
+        "reason": "Malformed output after 2 attempts",
+    }
 
 
 def test_row_identity_token_round_trip():

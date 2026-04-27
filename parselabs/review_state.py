@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
 
 import pandas as pd
 
@@ -55,7 +54,7 @@ def resolve_review_target_for_entry(entry: ReviewRow, output_path: Path) -> tupl
     if page_number is None or pd.isna(page_number):
         return None, "Missing page_number for entry."
 
-    identity = coerce_row_identity(cast(dict[str, object], entry))
+    identity = coerce_row_identity(entry)
 
     # Guard: Review writes require a stable source_file/page_number/result_index identity.
     if identity is None:

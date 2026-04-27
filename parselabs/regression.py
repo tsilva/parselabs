@@ -132,22 +132,6 @@ def discover_approved_cases(fixtures_dir: Path = APPROVED_FIXTURES_DIR) -> list[
     return cases
 
 
-def split_final_output_by_stem(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    """Split merged final output into one DataFrame per document stem."""
-
-    if df.empty or "source_file" not in df.columns:
-        return {}
-
-    docs: dict[str, pd.DataFrame] = {}
-    for source_file, group in df.groupby("source_file", dropna=False, sort=False):
-        source_name = str(source_file).strip()
-        stem = Path(source_name).stem if source_name else ""
-        if not stem:
-            continue
-        docs[stem] = group.copy()
-    return docs
-
-
 def canonicalize_export_df(df: pd.DataFrame) -> pd.DataFrame:
     """Normalize final export output for exact CSV regression comparisons."""
 

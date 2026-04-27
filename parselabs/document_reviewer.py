@@ -26,6 +26,7 @@ from parselabs.review import (
 from parselabs.review_state import ReviewTarget, apply_review_action_for_target, get_selected_row
 from parselabs.rows import ProcessedDocument, build_review_rows, get_document_review_summary, iter_processed_documents
 from parselabs.runtime import RuntimeContext
+from parselabs.types import ReviewAction
 
 logger = logging.getLogger(__name__)
 
@@ -453,7 +454,7 @@ def _rerender_toolbar_state(
     return _build_toolbar_outputs(dropdown_state, view)
 
 
-def _persist_row_action(document: ProcessedDocument, current_row: pd.Series, action: str) -> tuple[bool, str]:
+def _persist_row_action(document: ProcessedDocument, current_row: pd.Series, action: ReviewAction) -> tuple[bool, str]:
     """Persist one review action for the currently selected row."""
 
     target = ReviewTarget(
@@ -597,7 +598,7 @@ def _apply_review_action(
             prefer_first_visible=False,
         )
 
-    action = "clear" if status is None else ("accept" if status == "accepted" else "reject")
+    action: ReviewAction = "clear" if status is None else ("accept" if status == "accepted" else "reject")
     success, error = _persist_row_action(document, current_row, action)
 
     # Guard: Surface persistence errors without advancing away from the current row.
@@ -663,7 +664,8 @@ def _mark_missing_row(
             prefer_first_visible=False,
         )
 
-    success, error = _persist_row_action(document, current_row, "missing_row")
+    action: ReviewAction = "missing_row"
+    success, error = _persist_row_action(document, current_row, action)
 
     # Guard: Surface persistence errors without moving the current row.
     if not success:

@@ -12,6 +12,7 @@ import re
 import pandas as pd
 
 from parselabs.config import LabSpecsConfig
+from parselabs.review_flags import append_review_reason_code, ensure_review_flag_columns
 
 logger = logging.getLogger(__name__)
 
@@ -103,11 +104,8 @@ class ValueValidator:
         # Work on a copy to avoid mutating the original
         df = df.copy()
 
-        # Initialize review columns if not present
-        if "review_needed" not in df.columns:
-            df["review_needed"] = False
-        if "review_reason" not in df.columns:
-            df["review_reason"] = ""
+        # Initialize review columns before validation checks append reasons.
+        df = ensure_review_flag_columns(df)
         # Use the canonical export/review column names for every validation pass.
         self._value_col = "value"
         self._lab_name_col = "lab_name"
@@ -153,10 +151,8 @@ class ValueValidator:
         if not mask.any():
             return df
 
-        # Set review flag and append reason code to review_reason
-        df.loc[mask, "review_needed"] = True
-        # Handle NaN values in review_reason by converting to empty string first
-        df.loc[mask, "review_reason"] = df.loc[mask, "review_reason"].fillna("").apply(lambda x: str(x) + f"{reason_code}; " if reason_code not in str(x) else str(x))
+        # Set review flag and append reason code to review_reason.
+        df = append_review_reason_code(df, mask, reason_code)
 
         # Update stats
         count = int(mask.sum())

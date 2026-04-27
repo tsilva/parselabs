@@ -22,7 +22,7 @@ from parselabs.config import (  # noqa: E402
     LabSpecsConfig,
     ProfileConfig,
 )
-from parselabs.exceptions import ConfigurationError, PipelineError  # noqa: E402
+from parselabs.exceptions import ConfigurationError, ExtractionAPIError, PipelineError  # noqa: E402
 from parselabs.export_schema import COLUMN_SCHEMA, get_column_lists  # noqa: E402
 from parselabs.extraction import (  # noqa: E402
     extract_labs_from_page_image,
@@ -33,7 +33,7 @@ from parselabs.paths import (
 )
 from parselabs.rows import (  # noqa: E402
     DOCUMENT_REVIEW_COLUMNS,
-    build_document_review_dataframe,
+    _rebuild_document_csv_with_review_dataframe,
     get_document_review_summary,
     iter_processed_documents,
     load_document_review_rows,
@@ -57,6 +57,7 @@ from parselabs.store import (  # noqa: E402
     plan_pdf_run,
     read_page_payload,
 )
+from parselabs.types import ExtractionFailureRecord, PagePayload  # noqa: E402
 from parselabs.utils import (  # noqa: E402
     create_page_image_variants,
     setup_logging,
@@ -73,7 +74,7 @@ EXTRACTION_FAILURE_RAW_NAME = "[EXTRACTION FAILED]"
 # ========================================
 
 
-def _setup_pdf_processing(pdf_path: Path, output_dir: Path, file_hash: str) -> tuple[Path, Path, list]:
+def _setup_pdf_processing(pdf_path: Path, output_dir: Path, file_hash: str) -> tuple[Path, Path, list[ExtractionFailureRecord]]:
     """Initialize processing: create directories, return paths."""
     pdf_stem = pdf_path.stem  # Extract filename without extension for directory naming
     dir_name = f"{pdf_stem}_{file_hash}"  # Include file hash for uniqueness
@@ -132,7 +133,7 @@ def _prepare_page_images(page_image, page_name: str, doc_out_dir: Path) -> dict[
     return image_paths
 
 
-def _page_requires_image_fallback(page_data: dict) -> bool:
+def _page_requires_image_fallback(page_data: PagePayload) -> bool:
     """Return whether a page result is too weak to keep without another pass."""
 
     # Missing or malformed payloads cannot be trusted.
@@ -156,7 +157,7 @@ def _page_requires_image_fallback(page_data: dict) -> bool:
     return False
 
 
-def _ensure_extraction_failure_placeholder(page_data: dict) -> dict:
+def _ensure_extraction_failure_placeholder(page_data: PagePayload) -> PagePayload:
     """Insert a synthetic review row for failed pages that returned no results."""
 
     # Successful pages or pages with extracted rows already have reviewable content.
@@ -187,7 +188,7 @@ def _extract_page_data_from_image(
     config: ExtractionConfig,
     page_name: str,
     variant_name: str,
-) -> dict:
+) -> PagePayload:
     """Extract a single page from an image variant."""
 
     logger.info(f"[{page_name}] Attempting VISION extraction ({variant_name})")
@@ -205,8 +206,8 @@ def _extract_or_load_page_data(
     config: ExtractionConfig,
     pdf_stem: str,
     page_idx: int,
-    failed_pages: list,
-) -> dict:
+    failed_pages: list[ExtractionFailureRecord],
+) -> PagePayload:
     """Extract data from image or load from cache."""
 
     # Reuse only valid cached JSON payloads so failed pages are retried automatically.
@@ -224,7 +225,7 @@ def _extract_or_load_page_data(
 
         logger.info(f"[{page_name}] Re-running extraction because cached JSON is missing, invalid, or failed")
 
-    attempts: list[tuple[str, Callable[[], dict]]] = []
+    attempts: list[tuple[str, Callable[[], PagePayload]]] = []
 
     # Fall back through the primary image and then the alternate image.
     attempts.extend(
@@ -250,7 +251,7 @@ def _extract_or_load_page_data(
         ]
     )
 
-    page_data: dict | None = None
+    page_data: PagePayload | None = None
 
     # Stop at the first extraction attempt that produces a reviewable payload.
     for attempt_idx, (attempt_label, attempt_fn) in enumerate(attempts):
@@ -293,10 +294,10 @@ def _extract_or_load_page_data(
 
 
 def _check_and_record_failure(
-    page_data: dict,
+    page_data: PagePayload,
     pdf_stem: str,
     page_idx: int,
-    failed_pages: list,
+    failed_pages: list[ExtractionFailureRecord],
     page_name: str | None = None,
 ) -> None:
     """Check if extraction failed and record failure reason."""
@@ -309,7 +310,7 @@ def _check_and_record_failure(
     failure_reason = page_data.get("_failure_reason", "Unknown error")
 
     # Record failure for summary reporting
-    failed_pages.append({"page": f"{pdf_stem} page {page_idx + 1}", "reason": failure_reason})
+    failed_pages.append({"page": f"{pdf_stem} page {page_idx + 1}", "reason": str(failure_reason)})
 
     # Log failure if page name available
     if page_name:
@@ -339,8 +340,8 @@ def _process_single_page(
     pdf_stem: str,
     doc_out_dir: Path,
     config: ExtractionConfig,
-    failed_pages: list,
-) -> tuple[list, dict | None]:
+    failed_pages: list[ExtractionFailureRecord],
+) -> tuple[list, PagePayload | None]:
     """Process a single PDF page: preprocess, extract, and return results with metadata.
 
     Returns tuple of (page_results, page_data) where page_data is the full extraction data.
@@ -377,7 +378,7 @@ def _extract_via_pages(
     config: ExtractionConfig,
     doc_out_dir: Path,
     pdf_stem: str,
-    failed_pages: list,
+    failed_pages: list[ExtractionFailureRecord],
 ) -> tuple[list, str | None]:
     """Extract lab results using per-page vision extraction."""
 
@@ -422,7 +423,7 @@ def _extract_data_from_pdf(
     config: ExtractionConfig,
     doc_out_dir: Path,
     pdf_stem: str,
-    failed_pages: list,
+    failed_pages: list[ExtractionFailureRecord],
 ) -> tuple[list, str | None]:
     """Extract lab data from PDF using per-page vision extraction.
 
@@ -444,7 +445,7 @@ def process_single_pdf(
     output_dir: Path,
     config: ExtractionConfig,
     lab_specs: LabSpecsConfig,
-) -> tuple[Path | None, list[dict]]:
+) -> tuple[Path | None, list[ExtractionFailureRecord]]:
     """Process a single PDF file: extract page JSON and rebuild the review CSV.
 
     Returns:
@@ -482,7 +483,7 @@ def process_single_pdf(
         logger.info(f"[{pdf_stem}] Completed successfully")
         return csv_path, failed_pages
 
-    except (OSError, PermissionError, PipelineError, RuntimeError) as e:
+    except (OSError, PermissionError, PipelineError, ExtractionAPIError) as e:
         logger.error(f"[{pdf_stem}] Processing failed: {e}", exc_info=True)
         return None, failed_pages
 
@@ -565,7 +566,7 @@ class PipelineRunResult:
     final_df: pd.DataFrame
     merged_review_df: pd.DataFrame
     csv_paths: list[Path]
-    failed_pages: list[dict]
+    failed_pages: list[ExtractionFailureRecord]
     pdfs_failed: int
 
 
@@ -613,7 +614,7 @@ def _process_pdfs_in_parallel(
     config: ExtractionConfig,
     lab_specs: LabSpecsConfig,
     log_dir: Path,
-) -> tuple[list[Path], list[dict], int]:
+) -> tuple[list[Path], list[ExtractionFailureRecord], int]:
     """
     Process PDFs in parallel using multiprocessing pool.
 
@@ -648,7 +649,7 @@ def _process_pdfs_in_parallel(
 
     # Unpack results and collect statistics.
     pdfs_failed = sum(1 for csv_path, _ in results if csv_path is None)
-    all_failed_pages = []
+    all_failed_pages: list[ExtractionFailureRecord] = []
     for _, failed_pages in results:
         all_failed_pages.extend(failed_pages)
 
@@ -866,7 +867,7 @@ def _process_pdfs_or_use_cache(
     config: ExtractionConfig,
     lab_specs: LabSpecsConfig,
     log_dir: Path,
-) -> tuple[list[Path], list[dict], int]:
+) -> tuple[list[Path], list[ExtractionFailureRecord], int]:
     """Process the exact-content unique PDFs for this run.
 
     Returns tuple of (csv_paths, all_failed_pages, pdfs_failed).
@@ -1069,17 +1070,13 @@ def _maybe_auto_standardize_outputs(
         _log_standardization_refresh_summary(result, auto_standardize=False, profile_name=profile_name)
         return _list_processed_document_csv_paths(output_path)
 
-    try:
-        result = refresh_standardization_caches_from_dataframe(
-            merged_review_df,
-            lab_specs,
-            model_id=model_id,
-            base_url=base_url,
-            api_key=api_key,
-        )
-    except Exception as exc:
-        logger.warning(f"[standardization] Auto-refresh failed before completion: {exc}")
-        return _list_processed_document_csv_paths(output_path)
+    result = refresh_standardization_caches_from_dataframe(
+        merged_review_df,
+        lab_specs,
+        model_id=model_id,
+        base_url=base_url,
+        api_key=api_key,
+    )
 
     updated_csv_paths = _list_processed_document_csv_paths(output_path)
 
@@ -1140,8 +1137,8 @@ def _collect_reviewed_corpus_from_document_dirs(
 
     # Rebuild every document CSV from canonical page JSON before collecting rows.
     for doc_dir in doc_dirs:
-        csv_paths.append(rebuild_document_csv(doc_dir, lab_specs))
-        review_df = build_document_review_dataframe(doc_dir, lab_specs)
+        csv_path, review_df = _rebuild_document_csv_with_review_dataframe(doc_dir, lab_specs)
+        csv_paths.append(csv_path)
         review_frames.append(review_df)
         summary = get_document_review_summary(doc_dir, review_df)
 
@@ -1379,7 +1376,7 @@ def run_for_profile(args, profile_name: str) -> None:
     _report_extraction_failures(pipeline_result.failed_pages, config.output_path / "all.csv", final_csv_paths)
 
 
-def _report_extraction_failures(all_failed_pages: list[dict], csv_path: Path, csv_paths: list[Path]) -> None:
+def _report_extraction_failures(all_failed_pages: list[ExtractionFailureRecord], csv_path: Path, csv_paths: list[Path]) -> None:
     """Log and report any extraction failures to user."""
 
     # Log final pipeline summary

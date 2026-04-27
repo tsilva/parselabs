@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import pandas as pd
 from openai import APIError, OpenAI
 
 from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig
-from parselabs.extraction import load_prompt_template
+from parselabs.prompt_templates import load_prompt_template
 from parselabs.standardization import (
     build_name_cache_key,
     load_cache,
@@ -59,7 +60,7 @@ class StandardizationRefreshResult:
         return self.rebuild_required or bool(self.pruned_name_entries or self.pruned_unit_entries)
 
 
-def _parse_name_match_item(item: dict[object, object]) -> StandardizationNameMatch | None:
+def _parse_name_match_item(item: Mapping[str, object]) -> StandardizationNameMatch | None:
     """Return one validated name-match item or None for malformed LLM output."""
 
     raw_lab_name = item.get("raw_lab_name")
@@ -80,7 +81,7 @@ def _parse_name_match_item(item: dict[object, object]) -> StandardizationNameMat
     return parsed
 
 
-def _parse_unit_match_item(item: dict[object, object]) -> StandardizationUnitMatch | None:
+def _parse_unit_match_item(item: Mapping[str, object]) -> StandardizationUnitMatch | None:
     """Return one validated unit-match item or None for malformed LLM output."""
 
     raw_unit = item.get("raw_unit")

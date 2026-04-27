@@ -2,9 +2,11 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from parselabs import pipeline as main
 from parselabs.config import ExtractionConfig
+from parselabs.exceptions import ExtractionAPIError
 
 
 def _build_config(tmp_path: Path) -> ExtractionConfig:
@@ -171,3 +173,42 @@ def test_extract_or_load_page_data_uses_fallback_image_when_primary_is_weak(tmp_
 
     assert [path.name for path in attempts] == ["primary.jpg", "fallback.jpg"]
     assert page_data["lab_results"][0]["raw_lab_name"] == "Glucose"
+
+
+def test_process_single_pdf_returns_none_for_extraction_api_error(tmp_path, monkeypatch):
+    config = _build_config(tmp_path)
+    pdf_path = tmp_path / "api_failure.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4")
+
+    monkeypatch.setattr(main, "_copy_pdf_to_output", lambda pdf, doc_out_dir: doc_out_dir / pdf.name)
+    monkeypatch.setattr(main, "_extract_data_from_pdf", lambda *args: (_ for _ in ()).throw(ExtractionAPIError("api down")))
+    monkeypatch.setattr(main, "rebuild_document_csv", lambda *args: (_ for _ in ()).throw(AssertionError("rebuild not expected")))
+
+    csv_path, failed_pages = main.process_single_pdf(
+        pdf_path,
+        "knownhash",
+        config.output_path,
+        config,
+        object(),
+    )
+
+    assert csv_path is None
+    assert failed_pages == []
+
+
+def test_process_single_pdf_propagates_unexpected_runtime_error(tmp_path, monkeypatch):
+    config = _build_config(tmp_path)
+    pdf_path = tmp_path / "bug.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4")
+
+    monkeypatch.setattr(main, "_copy_pdf_to_output", lambda pdf, doc_out_dir: doc_out_dir / pdf.name)
+    monkeypatch.setattr(main, "_extract_data_from_pdf", lambda *args: (_ for _ in ()).throw(RuntimeError("internal bug")))
+
+    with pytest.raises(RuntimeError, match="internal bug"):
+        main.process_single_pdf(
+            pdf_path,
+            "knownhash",
+            config.output_path,
+            config,
+            object(),
+        )

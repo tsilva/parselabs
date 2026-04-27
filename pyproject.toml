@@ -27,7 +27,6 @@ dependencies = [
     "xlsxwriter",
     "plotly",
     "pydantic",
-    "numpy",
     "tqdm",
     "gradio>=5.0.0",
     "pyyaml",

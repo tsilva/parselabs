@@ -11,3 +11,9 @@ class PipelineError(Exception):
     """Raised when the extraction pipeline fails at runtime."""
 
     pass
+
+
+class ExtractionAPIError(Exception):
+    """Raised when the vision extraction API call fails."""
+
+    pass

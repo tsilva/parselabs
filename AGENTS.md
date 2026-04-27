@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents when working with code in this repository.
 
 ## Overview
 
@@ -25,55 +25,68 @@ parselabs --list-profiles
 parselabs --profile tsilva --model google/gemini-2.5-pro
 
 # Data integrity validation:
-python test.py
+uv run python test.py
 
 # View and review extracted results:
-parselabs-viewer --profile tsilva
+parselabs review --profile tsilva
+parselabs review --profile tsilva --tab review
+
+# Deterministic row-by-row MCP review server:
+parselabs-review-mcp
 ```
 
 ### Development
-The `utils/` directory contains helper scripts for building and maintaining configuration:
-- `validate_lab_specs_schema.py` - Validate lab_specs.json schema and LOINC code presence
-- `build_lab_specs_conversions.py` - Generate unit conversion factors for lab_specs.json
-- `build_lab_specs_ranges.py` - Generate evidence-based optimal ranges for lab_specs.json
-- `sort_lab_specs.py` - Sort lab specifications alphabetically
-- `analyze_unknowns.py` - Analyze $UNKNOWN$ values in extracted results
-- `update_standardization_caches.py` - Batch-update name/unit standardization caches via LLM
-- `migrate_output_dirs.py` - Batch-rename legacy output directories to include file hash suffix
+`parselabs admin` is the preferred entry point for maintenance and migration utilities. Legacy `utils/*.py` wrappers still exist, but new documentation should use the consolidated admin commands:
+- `parselabs admin validate-lab-specs` - Validate lab_specs.json schema and LOINC code presence
+- `parselabs admin lab-specs sort` - Sort lab specifications alphabetically
+- `parselabs admin lab-specs fix-encoding` - Normalize lab_specs.json encoding
+- `parselabs admin lab-specs build-conversions --input output/all.csv` - Generate unit conversion factors for lab_specs.json
+- `parselabs admin lab-specs build-ranges --user-stats user_stats.json` - Generate evidence-based optimal ranges for lab_specs.json
+- `parselabs admin analyze-unknowns` - Analyze $UNKNOWN$ values in extracted results
+- `parselabs admin update-standardization-caches` - Batch-update name/unit standardization caches via LLM
+- `parselabs admin regression ...` - Sync/report approved-document regression fixtures
+- `parselabs admin review-artifacts ...` - Fetch deterministic review artifacts and persist row decisions
+- `parselabs admin migrate-output-dirs` - Batch-rename legacy output directories to include file hash suffix
+- `parselabs admin migrate-raw-columns` - Rename legacy raw-column fields to the current schema
+- `parselabs admin cleanup-removed-fields` - Remove fields that are no longer persisted
 
 See `utils/README.md` for detailed usage instructions.
 
 ### LLM Prompts
 Prompt templates live in `prompts/` as `.md` files and are loaded at module level:
 - `extraction_system.md`, `extraction_user.md` - vision extraction prompts
-- `name_standardization.md`, `unit_standardization.md` - standardization prompts (used by `utils/update_standardization_caches.py`)
+- `name_standardization.md`, `unit_standardization.md` - standardization prompts (used by `parselabs admin update-standardization-caches`)
 - `conversion_factor_system.md`, `conversion_factor_user.md` - unit conversion factor prompts (template: `{lab_name}`, `{from_unit}`, `{to_unit}`)
 - `health_range_system.md`, `health_range_user.md` - optimal range prompts (template: `{lab_name}`, `{primary_unit}`, `{user_stats_json}`)
 
 ## Architecture
 
-### Core Pipeline (main.py)
+### Core Pipeline (`parselabs/pipeline.py`)
 
-The processing pipeline has 3 main stages:
+The processing pipeline has 5 main stages:
 
-1. **PDF Processing** (`process_single_pdf`)
+1. **PDF Processing** (`parselabs.pipeline.process_single_pdf`)
    - Converts each PDF page to preprocessed JPG images (grayscale, contrast-enhanced)
    - Each page is processed independently
 
-2. **Extraction** (`extract_labs_from_page_image`)
+2. **Extraction** (`parselabs.extraction.extract_labs_from_page_image`)
    - Extracts structured lab data directly from page images using vision models
    - Returns `HealthLabReport` with nested `LabResult` objects validated by Pydantic
 
 3. **Normalization & Mapping**
-   - Maps raw lab names/units to standardized enums via config files
+   - Maps raw lab names/units to standardized lab specs through cached standardization helpers
    - Converts values to primary units using conversion factors
-   - Deduplicates by (date, lab_name) pairs
+   - Deduplicates publishable export rows after normalization
 
-4. **Value Validation** (`validation.py`)
+4. **Value Validation** (`parselabs/validation.py`)
    - Detects extraction errors from the data itself (no source image re-check)
-   - Flags suspicious values for review in `viewer.py`
+   - Flags suspicious values for the combined review UI
 
-### Value Validation (validation.py)
+5. **Review/Export Row Building** (`parselabs/rows.py`)
+   - Builds per-document review CSVs from page JSON
+   - Builds accepted-row final exports from reviewed JSON when strict rebuilds are requested
+
+### Value Validation (`parselabs/validation.py`)
 
 The `ValueValidator` class detects extraction errors by analyzing the data itself:
 
@@ -104,16 +117,15 @@ The `ValueValidator` class detects extraction errors by analyzing the data itsel
 }
 ```
 
-Flagged rows appear in `viewer.py` under "Needs Review" filter with `review_needed=True` and `review_reason` columns.
+Flagged rows appear in the combined review UI under filters that use `review_needed=True` and `review_reason` columns.
 
-### Viewer (viewer.py)
+### Review UI (`parselabs/ui.py`)
 
 Interactive UI for browsing and reviewing extracted lab results:
 
 **Layout:**
-- Left: Data table with all results (click to select)
-- Right: Tabbed panel with Plot, Source image, and Details tabs
-- Bottom-right: Review actions (Accept/Reject/Skip)
+- Results Explorer tab: filtered table, summary cards, plots, source-page inspection, and details
+- Review Queue tab: document/page queue, large source page, compact row inspector, and review actions
 
 **Features:**
 - Time-series plots with dual reference ranges (lab_specs + PDF)
@@ -127,10 +139,10 @@ Interactive UI for browsing and reviewing extracted lab results:
 - Review status dropdown (All, Needs Review, Abnormal, Suboptimal, Unreviewed)
 
 **Keyboard shortcuts:**
-- `Y` = Accept, `N` = Reject, `S` = Skip
+- `Y` = Approve, `N` = Reject, `M` = Missing Row, `U` = Undo
 - Arrow keys or `j`/`k` = Navigate
 
-**Port:** 7862
+**Ports:** 7862 for the Results Explorer launch mode, 7863 for the Review Queue launch mode
 
 ### Configuration System
 
@@ -177,7 +189,7 @@ Example entry:
 }
 ```
 
-### Output Schema (17 columns)
+### Output Schema
 
 ```csv
 # Core identification
@@ -213,6 +225,8 @@ is_above_limit      # Value reported as above limit (e.g., ">738")
 lab_type            # blood/urine/feces (hidden in Excel)
 result_index        # Index within page (hidden in Excel)
 ```
+
+Current review CSVs also include page/result identity, review status, bbox metadata, raw section names, and additional normalized/export alias columns used by the review UI.
 
 ### Pydantic Models
 
@@ -254,7 +268,7 @@ Optional in shared config:
 The test suite validates both configuration and data integrity:
 
 ### Configuration Validation
-- **Schema validation** (via `utils/validate_lab_specs_schema.py`):
+- **Schema validation** (via `parselabs admin validate-lab-specs`):
   - JSON structure and syntax
   - Required fields for all labs (lab_type, primary_unit, loinc_code)
   - Data types and value ranges
@@ -276,11 +290,11 @@ The test suite validates both configuration and data integrity:
 - Lab unit consistency per lab_name
 - Outlier detection (>3 std from mean)
 
-Run with `python test.py` - prints report to console.
+Run with `uv run python test.py` - prints report to console.
 
 You can also run the schema validator standalone:
 ```bash
-python utils/validate_lab_specs_schema.py
+parselabs admin validate-lab-specs
 ```
 
 ## Important Conventions
@@ -296,7 +310,7 @@ uv pip install <pkg> # If you must install directly
 Note: `uv sync` requires `dangerouslyDisableSandbox: true` in Claude Code sandbox mode (UV cache writes are blocked).
 
 ### Documentation Maintenance
-When modifying the extraction pipeline in `main.py` or related modules:
+When modifying the extraction pipeline in `parselabs/pipeline.py` or related modules:
 - **Always update `docs/pipeline.md`** to reflect the changes
 - The pipeline diagram and step descriptions must stay in sync with the code
 
@@ -313,7 +327,8 @@ Lab names MUST start with lab type prefix:
 
 Use the unified viewer for interactive review:
 ```bash
-parselabs-viewer --profile tsilva
+parselabs review --profile tsilva
+parselabs review --profile tsilva --tab review
 ```
 
 Or filter programmatically:
