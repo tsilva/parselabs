@@ -59,7 +59,9 @@ from parselabs.store import (  # noqa: E402
 )
 from parselabs.types import ExtractionFailureRecord, PagePayload  # noqa: E402
 from parselabs.utils import (  # noqa: E402
+    ConsoleLogMode,
     create_page_image_variants,
+    log_user_info,
     setup_logging,
 )
 
@@ -67,6 +69,7 @@ from parselabs.utils import (  # noqa: E402
 logger = logging.getLogger(__name__)
 PROFILES_DIR = get_profiles_dir()
 EXTRACTION_FAILURE_RAW_NAME = "[EXTRACTION FAILED]"
+ACTIVE_CONSOLE_MODE: ConsoleLogMode = "normal"
 
 
 # ========================================
@@ -602,11 +605,11 @@ def _log_validation_stats(validation_stats: dict) -> None:
     # Check if any rows were flagged for review
     flagged_count = validation_stats.get("rows_flagged", 0)
     if flagged_count > 0:
-        logger.info(f"Validation flagged {flagged_count} rows for review")
+        log_user_info(logger, "Validation flagged %s rows for review", flagged_count)
 
         # Log breakdown of flag reasons
         for reason, count in validation_stats.get("flags_by_reason", {}).items():
-            logger.info(f"  - {reason}: {count}")
+            log_user_info(logger, "  - %s: %s", reason, count)
 
 
 def _process_pdfs_in_parallel(
@@ -614,6 +617,7 @@ def _process_pdfs_in_parallel(
     config: ExtractionConfig,
     lab_specs: LabSpecsConfig,
     log_dir: Path,
+    console_mode: ConsoleLogMode = "normal",
 ) -> tuple[list[Path], list[ExtractionFailureRecord], int]:
     """
     Process PDFs in parallel using multiprocessing pool.
@@ -624,13 +628,13 @@ def _process_pdfs_in_parallel(
 
     # Calculate optimal worker count (don't exceed CPU count or task count)
     n_workers = min(config.max_workers, len(pdfs_to_process))
-    logger.info(f"Using {n_workers} worker(s) for PDF processing")
+    log_user_info(logger, "Using %s worker(s) for PDF processing", n_workers)
 
     # Build task tuples for each PDF to process
     tasks = [(task.source_pdf, task.file_hash, config.output_path, config, lab_specs) for task in pdfs_to_process]
 
     if n_workers == 1:
-        _init_worker_logging(log_dir)
+        _init_worker_logging(log_dir, console_mode)
         results = []
         with tqdm(total=len(tasks), desc="Processing PDFs", unit="pdf") as pbar:
             for task in tasks:
@@ -638,7 +642,7 @@ def _process_pdfs_in_parallel(
                 pbar.update(1)
     else:
         # Execute parallel processing with progress bar
-        with Pool(n_workers, initializer=_init_worker_logging, initargs=(log_dir,)) as pool:
+        with Pool(n_workers, initializer=_init_worker_logging, initargs=(log_dir, console_mode)) as pool:
             results = []
 
             # Track progress with tqdm as tasks complete
@@ -659,9 +663,9 @@ def _process_pdfs_in_parallel(
     return csv_paths, all_failed_pages, pdfs_failed
 
 
-def _init_worker_logging(log_dir: Path):
+def _init_worker_logging(log_dir: Path, console_mode: ConsoleLogMode = "normal"):
     """Initialize logging in worker processes."""
-    setup_logging(log_dir, clear_logs=False)
+    setup_logging(log_dir, clear_logs=False, console_mode=console_mode)
 
 
 def _process_pdf_wrapper(args):
@@ -734,7 +738,14 @@ Examples:
         action="store_false",
         help="Skip the end-of-run cache refresh for uncached standardization mappings",
     )
-    parser.set_defaults(auto_standardize=True)
+
+    # Console verbosity controls only terminal output; log files keep detailed diagnostics.
+    verbosity_group = parser.add_mutually_exclusive_group()
+    verbosity_group.add_argument("--quiet", dest="console_mode", action="store_const", const="quiet", help="Show only errors on the console")
+    verbosity_group.add_argument("--verbose", dest="console_mode", action="store_const", const="verbose", help="Show detailed INFO logs on the console")
+    verbosity_group.add_argument("--debug", dest="console_mode", action="store_const", const="debug", help="Show DEBUG and higher logs on the console")
+
+    parser.set_defaults(auto_standardize=True, console_mode="normal")
 
     return parser.parse_args()
 
@@ -749,17 +760,18 @@ def _setup_rebuild_environment(profile_name: str) -> tuple[ProfileConfig, LabSpe
         need_api=False,
         setup_logs=True,
         clear_logs=False,
+        console_mode=ACTIVE_CONSOLE_MODE,
     )
 
     global logger
     logger = context.logger
-    logger.info(f"Using profile: {context.profile.name}")
-    logger.info(f"Output: {context.output_path}")
+    log_user_info(logger, "Using profile: %s", context.profile.name)
+    log_user_info(logger, "Output: %s", context.output_path)
 
     # Copy lab specs to the output folder so rebuild artifacts stay reproducible.
     copied_path = context.copy_lab_specs_to_output()
     if copied_path is not None:
-        logger.info(f"Copied lab specs to output: {copied_path}")
+        logger.info("Copied lab specs to output: %s", copied_path)
 
     return context.profile, context.lab_specs
 
@@ -853,6 +865,18 @@ def _merge_unique_csv_paths(csv_paths: list[Path]) -> list[Path]:
     return unique_paths
 
 
+def _get_console_mode(args) -> ConsoleLogMode:
+    """Resolve the requested console logging mode from parsed arguments."""
+
+    # Validate defensively for callers that construct argparse namespaces directly in tests.
+    console_mode = getattr(args, "console_mode", "normal")
+    if console_mode in {"normal", "verbose", "debug", "quiet"}:
+        return console_mode
+
+    # Fallback to the normal default when a custom namespace omits or corrupts the mode.
+    return "normal"
+
+
 def _discover_pdf_files(input_path: Path, input_file_regex: str | None) -> list[Path]:
     """Discover PDFs and translate filesystem errors into pipeline errors."""
 
@@ -867,6 +891,7 @@ def _process_pdfs_or_use_cache(
     config: ExtractionConfig,
     lab_specs: LabSpecsConfig,
     log_dir: Path,
+    console_mode: ConsoleLogMode = "normal",
 ) -> tuple[list[Path], list[ExtractionFailureRecord], int]:
     """Process the exact-content unique PDFs for this run.
 
@@ -881,6 +906,7 @@ def _process_pdfs_or_use_cache(
         config,
         lab_specs,
         log_dir,
+        console_mode,
     )
     return _merge_unique_csv_paths(csv_paths), all_failed_pages, pdfs_failed
 
@@ -905,6 +931,7 @@ def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfi
         create_output_dir=True,
         setup_logs=True,
         clear_logs=True,
+        console_mode=_get_console_mode(args),
     )
 
     # Guard: Extraction flows always require a validated extraction config.
@@ -913,13 +940,13 @@ def _setup_profile_environment(args, profile_name: str) -> tuple[ExtractionConfi
 
     global logger
     logger = context.logger
-    logger.info(f"Input: {context.extraction_config.input_path}")
-    logger.info(f"Output: {context.extraction_config.output_path}")
-    logger.info(f"Model: {context.extraction_config.extract_model_id}")
+    log_user_info(logger, "Input: %s", context.extraction_config.input_path)
+    log_user_info(logger, "Output: %s", context.extraction_config.output_path)
+    log_user_info(logger, "Model: %s", context.extraction_config.extract_model_id)
 
     copied_path = context.copy_lab_specs_to_output()
     if copied_path is not None:
-        logger.info(f"Copied lab specs to output: {copied_path}")
+        logger.info("Copied lab specs to output: %s", copied_path)
 
     return context.extraction_config, context.lab_specs
 
@@ -933,13 +960,13 @@ def _export_final_results(
     """Export final results to CSV and Excel formats."""
 
     # Export merged results to CSV format
-    logger.info("Saving merged CSV...")
+    log_user_info(logger, "Saving merged CSV...")
     csv_path = output_path / "all.csv"
     final_df.to_csv(csv_path, index=False, encoding="utf-8")
-    logger.info(f"Saved merged CSV: {csv_path}")
+    log_user_info(logger, "Saved merged CSV: %s", csv_path)
 
     # Export merged results to Excel format with formatting
-    logger.info("Exporting to Excel...")
+    log_user_info(logger, "Exporting to Excel...")
     excel_path = output_path / "all.xlsx"
     export_excel(final_df, excel_path, hidden_cols, widths)
 
@@ -996,7 +1023,7 @@ def _log_standardization_refresh_summary(
     # Disabled auto-refresh still gets a final scan summary for manual follow-up.
     if not auto_standardize:
         if not result.attempted:
-            logger.info("[standardization] Auto-refresh disabled; no uncached mappings were found.")
+            log_user_info(logger, "[standardization] Auto-refresh disabled; no uncached mappings were found.")
             return
 
         logger.warning(
@@ -1008,17 +1035,20 @@ def _log_standardization_refresh_summary(
 
     # Guard: No unresolved work means the run was already fully cached.
     if not result.attempted and not result.changed:
-        logger.info("[standardization] Auto-refresh not needed; all mappings were already cached.")
+        log_user_info(logger, "[standardization] Auto-refresh not needed; all mappings were already cached.")
         return
 
     # Summarize any cache mutations before reporting unresolved leftovers.
-    logger.info(
-        f"[standardization] Auto-refresh summary: +{result.name_updates} name mapping(s), "
-        f"+{result.unit_updates} unit mapping(s)"
+    log_user_info(
+        logger,
+        "[standardization] Auto-refresh summary: +%s name mapping(s), +%s unit mapping(s)",
+        result.name_updates,
+        result.unit_updates,
     )
 
     if result.pruned_name_entries or result.pruned_unit_entries:
-        logger.info(
+        log_user_info(
+            logger,
             f"[standardization] Removed {result.pruned_name_entries} stale name entr{'y' if result.pruned_name_entries == 1 else 'ies'} "
             f"and {result.pruned_unit_entries} stale unit entr{'y' if result.pruned_unit_entries == 1 else 'ies'}"
         )
@@ -1031,7 +1061,7 @@ def _log_standardization_refresh_summary(
 
     # Guard: Fully resolved refreshes can stop after the positive summary.
     if not result.unresolved_names and not result.unresolved_unit_pairs:
-        logger.info("[standardization] Auto-refresh complete; no uncached mappings remain.")
+        log_user_info(logger, "[standardization] Auto-refresh complete; no uncached mappings remain.")
         return
 
     logger.warning(
@@ -1082,7 +1112,7 @@ def _maybe_auto_standardize_outputs(
 
     # Apply successful cache updates to all persisted outputs without re-extracting PDFs.
     if result.rebuild_required:
-        logger.info("[standardization] Rebuilding outputs from page JSON to apply refreshed caches...")
+        log_user_info(logger, "[standardization] Rebuilding outputs from page JSON to apply refreshed caches...")
 
         try:
             reviewed_corpus = _rebuild_review_outputs_from_processed_documents(
@@ -1189,7 +1219,7 @@ def _collect_reviewed_corpus_from_document_dirs(
         )
 
     merged_accepted_df = pd.concat(accepted_rows, ignore_index=True)
-    logger.info("Applying shared export pipeline to accepted reviewed rows...")
+    log_user_info(logger, "Applying shared export pipeline to accepted reviewed rows...")
     final_df, validation_stats = transform_rows_to_final_export(
         merged_accepted_df,
         lab_specs,
@@ -1226,7 +1256,7 @@ def run_pipeline_for_pdf_files(
     """Process explicit PDF files and return the final export DataFrame plus metadata."""
 
     pdf_files = sorted(pdf_files)
-    logger.info(f"Found {len(pdf_files)} PDF(s) for explicit pipeline run")
+    log_user_info(logger, "Found %s PDF(s) for explicit pipeline run", len(pdf_files))
 
     if not pdf_files:
         raise PipelineError("No PDF files provided for processing.")
@@ -1238,12 +1268,14 @@ def run_pipeline_for_pdf_files(
     for dup_path, orig_path in preflight.duplicates:
         logger.warning(f"Skipping duplicate PDF: {dup_path.name} (same content as {orig_path.name})")
     if preflight.duplicates:
-        logger.info(
-            f"Skipped {len(preflight.duplicates)} duplicate PDF(s), "
-            f"{unique_pdf_count} unique PDF(s) remaining"
+        log_user_info(
+            logger,
+            "Skipped %s duplicate PDF(s), %s unique PDF(s) remaining",
+            len(preflight.duplicates),
+            unique_pdf_count,
         )
 
-    logger.info(f"Processing {len(preflight.pdfs_to_process)} PDF(s)")
+    log_user_info(logger, "Processing %s PDF(s)", len(preflight.pdfs_to_process))
 
     log_dir = config.output_path / "logs"
     csv_paths, all_failed_pages, pdfs_failed = _process_pdfs_or_use_cache(
@@ -1251,12 +1283,13 @@ def run_pipeline_for_pdf_files(
         config,
         lab_specs,
         log_dir,
+        getattr(config, "console_mode", "normal"),
     )
 
     if not csv_paths:
         raise PipelineError("No PDFs successfully processed.")
 
-    logger.info(f"Successfully processed {len(csv_paths)} document review snapshots")
+    log_user_info(logger, "Successfully processed %s document review snapshots", len(csv_paths))
     reviewed_corpus = _collect_reviewed_corpus_from_document_dirs(
         [csv_path.parent for csv_path in csv_paths],
         lab_specs,
@@ -1292,9 +1325,13 @@ def build_final_output_dataframe_from_reviewed_json(
 def _run_reviewed_json_rebuild(args, profile_name: str, allow_pending: bool) -> None:
     """Rebuild per-document CSVs and merged outputs from reviewed page JSON files."""
 
+    global ACTIVE_CONSOLE_MODE
+
+    # Make the rebuild environment use the same console mode as the parsed CLI args.
+    ACTIVE_CONSOLE_MODE = _get_console_mode(args)
     profile, lab_specs = _setup_rebuild_environment(profile_name)
     _, hidden_cols, widths, _ = get_column_lists(COLUMN_SCHEMA)
-    logger.info("Rebuilding document CSVs and merged outputs from reviewed page JSON files...")
+    log_user_info(logger, "Rebuilding document CSVs and merged outputs from reviewed page JSON files...")
     reviewed_corpus = _rebuild_review_outputs_from_processed_documents(
         profile.output_path,
         lab_specs,
@@ -1333,11 +1370,11 @@ def run_for_profile(args, profile_name: str) -> None:
     # Setup environment: config, logging, lab specs (raises ConfigurationError on failure)
     config, lab_specs = _setup_profile_environment(args, profile_name)
 
-    logger.info("Validating API access with a simple prompt...")
+    log_user_info(logger, "Validating API access with a simple prompt...")
     is_available, message = validate_api_access(get_openai_client(config), config.extract_model_id)
     if not is_available:
         raise ConfigurationError(f"Cannot start extraction for profile '{profile_name}' - {message}")
-    logger.info(f"API validation passed: {message}")
+    log_user_info(logger, "API validation passed: %s", message)
 
     # Get column configuration for export formatting
     _, hidden_cols, widths, _ = get_column_lists(COLUMN_SCHEMA)
@@ -1347,7 +1384,7 @@ def run_for_profile(args, profile_name: str) -> None:
         pdf_files = discover_pdf_files(config.input_path, config.input_file_regex)
     except (FileNotFoundError, PermissionError, OSError) as exc:
         raise PipelineError(str(exc)) from exc
-    logger.info(f"Found {len(pdf_files)} PDF(s) matching '{config.input_file_regex}'")
+    log_user_info(logger, "Found %s PDF(s) matching '%s'", len(pdf_files), config.input_file_regex)
 
     if not pdf_files:
         raise PipelineError(f"No PDF files found matching '{config.input_file_regex}' in {config.input_path}")
@@ -1380,10 +1417,7 @@ def _report_extraction_failures(all_failed_pages: list[ExtractionFailureRecord],
     """Log and report any extraction failures to user."""
 
     # Log final pipeline summary
-    logger.info("=" * 50)
-    logger.info("Pipeline completed")
-    logger.info(f"  PDFs processed: {len(csv_paths)}")
-    logger.info(f"  Output: {csv_path}")
+    log_user_info(logger, "Pipeline completed: %s PDF(s) processed; output: %s", len(csv_paths), csv_path)
 
     # Report any extraction failures to user and log
     if all_failed_pages:
@@ -1391,7 +1425,7 @@ def _report_extraction_failures(all_failed_pages: list[ExtractionFailureRecord],
         for failure in all_failed_pages:
             logger.warning(f"    - {failure['page']}: {failure['reason']}")
     else:
-        logger.info("  Extraction failures: 0")
+        log_user_info(logger, "Extraction failures: 0")
 
 
 def main():
@@ -1429,7 +1463,7 @@ def main():
             logger.error(f"No profiles found. Create profile files in {PROFILES_DIR}.")
             logger.error("Or use --profile to specify one.")
             sys.exit(1)
-        logger.info(f"Running all profiles: {', '.join(profiles_to_run)}")
+        logger.info("Running profiles: %s", ", ".join(profiles_to_run))
 
     # Initialize results tracking for each profile
     results = {}
@@ -1438,9 +1472,7 @@ def main():
 
     # Run extraction pipeline for each profile
     for profile_name in profiles_to_run:
-        logger.info(f"\n{'=' * 60}")
-        logger.info(f"Processing profile: {profile_name}")
-        logger.info(f"{'=' * 60}")
+        logger.info("Processing profile: %s", profile_name)
         try:
             # Route reviewed-JSON rebuilds through the JSON-only path instead of the extraction pipeline.
             if rebuild_from_json:
@@ -1455,11 +1487,9 @@ def main():
 
     # Print summary if multiple profiles were processed
     if len(profiles_to_run) > 1:
-        logger.info(f"\n{'=' * 60}")
-        logger.info("Summary:")
-        logger.info(f"{'=' * 60}")
+        logger.info("Profile summary:")
         for profile_name, status in results.items():
-            logger.info(f"  {profile_name}: {status}")
+            logger.info("  %s: %s", profile_name, status)
 
 
 if __name__ == "__main__":
