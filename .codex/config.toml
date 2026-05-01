@@ -1,4 +1,15 @@
+sandbox_mode = "workspace-write"
+
 [mcp_servers.parselabs-review-mcp]
+args = [
+    "run",
+    "parselabs-review-mcp",
+]
 command = "uv"
-args = ["run", "parselabs-review-mcp"]
 cwd = "/Users/tsilva/repos/tsilva/parselabs"
+
+[shell_environment_policy]
+inherit = "core"
+
+[shell_environment_policy.set]
+CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1"
