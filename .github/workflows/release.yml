@@ -1,8 +1,13 @@
 name: Release
 on:
+  workflow_dispatch:
   push:
     branches: [main]
-    paths: [parselabs/__init__.py]
+    paths:
+      - .github/workflows/release.yml
+      - parselabs/__init__.py
+      - pyproject.toml
+      - uv.lock
 concurrency:
   group: release
   cancel-in-progress: false
@@ -18,7 +23,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           cache: true
-      - run: uv sync
+      - run: uv sync --extra dev
       - run: uv run pytest
 
   publish:
