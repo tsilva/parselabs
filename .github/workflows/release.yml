@@ -40,20 +40,41 @@ jobs:
           fetch-depth: 0
       - name: Check version
         id: check-version
-        uses: tsilva/.github/.github/actions/check-version@main
+        shell: bash
+        run: |
+          version="$(python3 - <<'PY'
+          from pathlib import Path
+
+          namespace = {}
+          exec(Path("parselabs/__init__.py").read_text(), namespace)
+          print(namespace["__version__"])
+          PY
+          )"
+          tag="v${version}"
+          if git rev-parse --verify --quiet "refs/tags/${tag}" >/dev/null; then
+            exists=true
+          elif curl --fail --silent --head "https://pypi.org/pypi/parselabs/${version}/json" >/dev/null; then
+            exists=true
+          else
+            exists=false
+          fi
+          {
+            echo "tag=${tag}"
+            echo "version_exists=${exists}"
+          } >> "${GITHUB_OUTPUT}"
       - name: Setup uv
-        if: steps.check-version.outputs.tag_exists == 'false'
+        if: steps.check-version.outputs.version_exists == 'false'
         uses: astral-sh/setup-uv@v4
         with:
           cache: true
       - name: Build package
-        if: steps.check-version.outputs.tag_exists == 'false'
+        if: steps.check-version.outputs.version_exists == 'false'
         run: uv build
       - name: Create GitHub release
-        if: steps.check-version.outputs.tag_exists == 'false'
+        if: steps.check-version.outputs.version_exists == 'false'
         run: gh release create "${{ steps.check-version.outputs.tag }}" --title "${{ steps.check-version.outputs.tag }}" --generate-notes dist/*
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish to PyPI
-        if: steps.check-version.outputs.tag_exists == 'false'
+        if: steps.check-version.outputs.version_exists == 'false'
         uses: pypa/gh-action-pypi-publish@release/v1
