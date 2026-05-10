@@ -252,6 +252,15 @@ def test_run_for_profile_calls_auto_standardize_by_default(tmp_path, monkeypatch
             csv_paths=[],
         ),
     )
+    monkeypatch.setattr(
+        main,
+        "_rebuild_review_outputs_from_processed_documents",
+        lambda *args, **kwargs: SimpleNamespace(
+            merged_review_df=pd.DataFrame([{"raw_lab_name": "Glucose"}]),
+            final_df=pd.DataFrame(),
+            csv_paths=[],
+        ),
+    )
     monkeypatch.setattr(main, "get_column_lists", lambda schema: ([], [], {}, {}))
     monkeypatch.setattr(main, "_export_final_results", lambda *args, **kwargs: None)
     monkeypatch.setattr(
@@ -264,6 +273,55 @@ def test_run_for_profile_calls_auto_standardize_by_default(tmp_path, monkeypatch
     main.run_for_profile(Namespace(auto_standardize=True), "tsilva")
 
     assert auto_calls == [True]
+
+
+def test_run_for_profile_exports_full_processed_corpus_after_subset_scan(tmp_path, monkeypatch):
+    config = _build_config(tmp_path)
+    config.input_path.mkdir(parents=True, exist_ok=True)
+    config.output_path.mkdir(parents=True, exist_ok=True)
+    pdf_path = config.input_path / "current.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4")
+    exported_frames = []
+
+    monkeypatch.setattr(main, "_setup_profile_environment", lambda args, profile_name: (config, SimpleNamespace()))
+    monkeypatch.setattr(main, "get_openai_client", lambda config: object())
+    monkeypatch.setattr(main, "validate_api_access", lambda client, model_id: (True, "ok"))
+    monkeypatch.setattr(main, "discover_pdf_files", lambda input_path, pattern: [pdf_path])
+    monkeypatch.setattr(
+        main,
+        "run_pipeline_for_pdf_files",
+        lambda pdf_files, config, lab_specs: SimpleNamespace(
+            merged_review_df=pd.DataFrame([{"source_file": "current.csv"}]),
+            failed_pages=[],
+            csv_paths=[],
+        ),
+    )
+    monkeypatch.setattr(
+        main,
+        "_rebuild_review_outputs_from_processed_documents",
+        lambda *args, **kwargs: SimpleNamespace(
+            merged_review_df=pd.DataFrame(
+                [
+                    {"source_file": "historical.csv"},
+                    {"source_file": "current.csv"},
+                ]
+            ),
+            final_df=pd.DataFrame(),
+            csv_paths=[],
+        ),
+    )
+    monkeypatch.setattr(main, "get_column_lists", lambda schema: ([], [], {}, {}))
+    monkeypatch.setattr(
+        main,
+        "_export_final_results",
+        lambda final_df, hidden_cols, widths, output_path: exported_frames.append(final_df.copy()),
+    )
+    monkeypatch.setattr(main, "_maybe_auto_standardize_outputs", lambda **kwargs: [])
+    monkeypatch.setattr(main, "_report_extraction_failures", lambda *args, **kwargs: None)
+
+    main.run_for_profile(Namespace(auto_standardize=True), "tsilva")
+
+    assert exported_frames[0]["source_file"].tolist() == ["historical.csv", "current.csv"]
 
 
 def test_run_reviewed_json_rebuild_uses_auto_standardize_setting(tmp_path, monkeypatch):

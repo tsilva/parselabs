@@ -1621,9 +1621,16 @@ def run_for_profile(args, profile_name: str) -> None:
 
     pipeline_result = run_pipeline_for_pdf_files(pdf_files, config, lab_specs)
 
-    # Export the merged review corpus so all.csv mirrors the per-document review CSVs.
+    # Rebuild from every processed document so disappeared input PDFs do not prune historical output rows.
+    reviewed_corpus = _rebuild_review_outputs_from_processed_documents(
+        config.output_path,
+        lab_specs,
+        allow_pending=True,
+    )
+
+    # Export the merged review corpus so all.csv mirrors the full per-document review state.
     _export_final_results(
-        pipeline_result.merged_review_df,
+        reviewed_corpus.merged_review_df,
         hidden_cols,
         widths,
         config.output_path,
