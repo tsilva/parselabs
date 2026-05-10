@@ -1047,7 +1047,7 @@ def validate_api_access(client: OpenAI, model_id: str, timeout: int = 10) -> tup
             model=model_id,
             messages=[{"role": "user", "content": "Reply with OK."}],
             temperature=0,
-            max_tokens=5,
+            max_tokens=16,
             timeout=timeout,
         )
         if not completion or not getattr(completion, "choices", None):

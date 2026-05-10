@@ -33,7 +33,7 @@ def test_validate_api_access_runs_minimal_completion():
         "model": "google/gemini-test",
         "messages": [{"role": "user", "content": "Reply with OK."}],
         "temperature": 0,
-        "max_tokens": 5,
+        "max_tokens": 16,
         "timeout": 7,
     }
 
