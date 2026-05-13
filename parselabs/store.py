@@ -262,6 +262,91 @@ def write_page_payload(json_path: Path, payload: PagePayload) -> None:
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+_BBOX_FIELDS = [
+    "bbox_left",
+    "bbox_top",
+    "bbox_right",
+    "bbox_bottom",
+]
+_COLUMN_BBOX_MAX_WIDTH = 40.0
+_COLUMN_BBOX_MIN_HEIGHT = 250.0
+_COLUMN_BBOX_ASPECT_RATIO = 4.0
+_COLUMN_BBOX_CLUSTER_GAP = 30.0
+_COLUMN_BBOX_CLUSTER_MIN_COUNT = 3
+
+
+def _coerce_cached_bbox(result: dict) -> tuple[float, float, float, float] | None:
+    """Return cached bbox coordinates when all four values are usable numbers."""
+
+    # Missing bbox values make the cached extraction stale under the current contract.
+    if any(result.get(field_name) is None for field_name in _BBOX_FIELDS):
+        return None
+
+    # Cached JSON may contain strings from older outputs, but they still need to be numeric.
+    try:
+        left, top, right, bottom = [float(result[field_name]) for field_name in _BBOX_FIELDS]
+    except (TypeError, ValueError):
+        return None
+
+    return left, top, right, bottom
+
+
+def _is_column_like_cached_bbox(bbox: tuple[float, float, float, float]) -> bool:
+    """Return whether a cached bbox looks like a table column instead of a row."""
+
+    left, top, right, bottom = bbox
+    width = right - left
+    height = bottom - top
+    return (
+        width <= _COLUMN_BBOX_MAX_WIDTH
+        and height >= _COLUMN_BBOX_MIN_HEIGHT
+        and height >= (width * _COLUMN_BBOX_ASPECT_RATIO)
+    )
+
+
+def _cached_results_have_reusable_bboxes(results: object) -> bool:
+    """Return whether every cached result satisfies the current bbox contract."""
+
+    # No-result pages are reusable because there are no row bboxes to validate.
+    if results is None:
+        return True
+
+    # Malformed result containers should be regenerated instead of reused.
+    if not isinstance(results, list):
+        return False
+
+    column_like_bboxes = []
+
+    for result in results:
+        # Malformed result entries should be regenerated instead of reused.
+        if not isinstance(result, dict):
+            return False
+
+        bbox = _coerce_cached_bbox(result)
+
+        # Rows with incomplete or non-numeric bboxes need a fresh extraction.
+        if bbox is None:
+            return False
+
+        # Track column slices so both isolated and clustered malformed bboxes are invalidated.
+        if _is_column_like_cached_bbox(bbox):
+            column_like_bboxes.append(bbox)
+
+    # A single column slice is enough to mark the page cache unsafe.
+    if len(column_like_bboxes) == 1:
+        return False
+
+    left_positions = sorted(bbox[0] for bbox in column_like_bboxes)
+    adjacent_column_slices = sum(
+        1
+        for idx in range(1, len(left_positions))
+        if (left_positions[idx] - left_positions[idx - 1]) <= _COLUMN_BBOX_CLUSTER_GAP
+    )
+
+    # Clustered column slices are the common malformed extraction shape.
+    return len(column_like_bboxes) < _COLUMN_BBOX_CLUSTER_MIN_COUNT and adjacent_column_slices == 0
+
+
 def is_page_payload_reusable(payload: dict | None) -> bool:
     """Return whether a cached page JSON payload can be reused safely."""
 
@@ -271,7 +356,7 @@ def is_page_payload_reusable(payload: dict | None) -> bool:
     if payload.get("_extraction_failed"):
         return False
 
-    return True
+    return _cached_results_have_reusable_bboxes(payload.get("lab_results"))
 
 
 def save_review_status(doc_dir: Path, page_number: int, result_index: int, status: str | None) -> tuple[bool, str]:

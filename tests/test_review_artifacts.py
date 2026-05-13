@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -7,7 +8,41 @@ from types import SimpleNamespace
 from PIL import Image
 
 from parselabs import review_artifacts_backend
+from parselabs.config import LabSpecsConfig
 from utils import review_artifacts
+
+
+def _make_lab_specs(tmp_path: Path) -> LabSpecsConfig:
+    """Create minimal lab specs for export-sync tests."""
+
+    config_path = tmp_path / "lab_specs.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "Blood - Glucose": {
+                    "primary_unit": "mg/dL",
+                    "lab_type": "blood",
+                    "loinc_code": "2345-7",
+                    "ranges": {"default": [70, 100]},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    return LabSpecsConfig(config_path=config_path)
+
+
+def _stub_standardization(monkeypatch) -> None:
+    """Keep review-output rebuilds deterministic in artifact CLI tests."""
+
+    monkeypatch.setattr(
+        "parselabs.rows.standardize_lab_names",
+        lambda name_contexts: {context: "Blood - Glucose" for context in name_contexts},
+    )
+    monkeypatch.setattr(
+        "parselabs.rows.standardize_lab_units",
+        lambda unit_contexts: {context: "mg/dL" for context in unit_contexts},
+    )
 
 
 def _write_processed_document(
@@ -86,13 +121,15 @@ def test_next_returns_pending_row_and_crop(tmp_path, monkeypatch, capsys):
 def test_decide_persists_review_status_for_row_id(tmp_path, monkeypatch, capsys):
     output_path = tmp_path / "output"
     doc_dir = output_path / "cbc_12345678"
+    lab_specs = _make_lab_specs(tmp_path)
     _write_processed_document(doc_dir, statuses=[None])
+    _stub_standardization(monkeypatch)
 
     # Keep the CLI focused on the synthetic processed output tree.
     monkeypatch.setattr(
         review_artifacts_backend,
         "load_review_context",
-        lambda profile_name: SimpleNamespace(output_path=output_path),
+        lambda profile_name: SimpleNamespace(output_path=output_path, lab_specs=lab_specs),
     )
 
     review_artifacts.main(
@@ -121,7 +158,14 @@ def test_decide_persists_review_status_for_row_id(tmp_path, monkeypatch, capsys)
 
     assert exit_code == 0
     assert payload["ok"] is True
+    assert payload["outputs_synced"] is True
     assert stored_page["lab_results"][0]["review_status"] == "rejected"
+    assert (doc_dir / "cbc.csv").exists()
+    assert (output_path / "all.csv").exists()
+    assert (output_path / "all.xlsx").exists()
+    with (output_path / "all.csv").open(newline="", encoding="utf-8") as csv_file:
+        rows = list(csv.DictReader(csv_file))
+    assert rows[0]["review_status"] == "rejected"
 
 
 def test_next_returns_done_when_no_pending_rows(tmp_path, monkeypatch, capsys):

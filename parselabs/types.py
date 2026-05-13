@@ -321,6 +321,10 @@ class ReviewDecisionResult(TypedDict, total=False):
     doc_dir: str
     page_number: int
     result_index: int
+    outputs_synced: bool
+    document_csv_path: str
+    merged_csv_path: str
+    merged_xlsx_path: str
 
 
 class StandardizationNameMatch(TypedDict, total=False):

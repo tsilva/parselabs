@@ -9,12 +9,16 @@ from dataclasses import dataclass
 from json import JSONDecodeError
 from pathlib import Path
 
+import pandas as pd
 from PIL import Image
 
+from parselabs.config import LabSpecsConfig
+from parselabs.export_schema import COLUMN_SCHEMA, get_column_lists
 from parselabs.review import get_bbox_coordinates, scale_bbox_to_pixels
 from parselabs.review_state import ReviewTarget, apply_review_action_for_target
 from parselabs.runtime import RuntimeContext
-from parselabs.store import get_page_image_path, iter_processed_documents, parse_page_number, read_page_payload
+from parselabs.rows import DOCUMENT_REVIEW_COLUMNS, _rebuild_document_csv_with_review_dataframe
+from parselabs.store import get_document_csv_path, get_page_image_path, iter_processed_documents, parse_page_number, read_page_payload
 from parselabs.types import (
     BBox,
     PageLabResultPayload,
@@ -217,6 +221,12 @@ def apply_review_decision(profile_name: str, row_id: str, decision: str) -> tupl
             "error": error,
         }
 
+    sync_result = sync_review_exports_after_decision(
+        output_path,
+        target.doc_dir,
+        context.lab_specs,
+    )
+
     return True, {
         "ok": True,
         "profile": profile_name,
@@ -225,7 +235,57 @@ def apply_review_decision(profile_name: str, row_id: str, decision: str) -> tupl
         "doc_dir": str(target.doc_dir),
         "page_number": target.page_number,
         "result_index": target.result_index,
+        **sync_result,
     }
+
+
+def sync_review_exports_after_decision(
+    output_path: Path,
+    doc_dir: Path,
+    lab_specs: LabSpecsConfig,
+) -> ReviewDecisionResult:
+    """Refresh review CSV/XLSX outputs after one row decision is written to JSON."""
+
+    csv_path, _ = _rebuild_document_csv_with_review_dataframe(doc_dir, lab_specs)
+    csv_paths = [get_document_csv_path(document.doc_dir) for document in iter_processed_documents(output_path)]
+    merged_df = build_merged_review_dataframe_from_csv_paths(csv_paths)
+    export_merged_review_dataframe(merged_df, output_path)
+
+    return {
+        "outputs_synced": True,
+        "document_csv_path": str(csv_path),
+        "merged_csv_path": str(output_path / "all.csv"),
+        "merged_xlsx_path": str(output_path / "all.xlsx"),
+    }
+
+
+def build_merged_review_dataframe_from_csv_paths(csv_paths: list[Path]) -> pd.DataFrame:
+    """Return a merged review dataframe from existing per-document CSV snapshots."""
+
+    review_frames: list[pd.DataFrame] = []
+
+    for csv_path in csv_paths:
+        if csv_path.exists():
+            review_frames.append(pd.read_csv(csv_path))
+
+    if not review_frames:
+        return pd.DataFrame(columns=DOCUMENT_REVIEW_COLUMNS)
+
+    return pd.concat(review_frames, ignore_index=True, sort=False)
+
+
+def export_merged_review_dataframe(merged_df: pd.DataFrame, output_path: Path) -> None:
+    """Write the merged review dataframe to the profile CSV and XLSX outputs."""
+
+    _, hidden_cols, widths, _ = get_column_lists(COLUMN_SCHEMA)
+    csv_path = output_path / "all.csv"
+    xlsx_path = output_path / "all.xlsx"
+    merged_df.to_csv(csv_path, index=False, encoding="utf-8")
+
+    # Reuse the pipeline Excel formatter without importing the pipeline module at import time.
+    from parselabs.pipeline import export_excel
+
+    export_excel(merged_df, xlsx_path, hidden_cols, widths)
 
 
 def write_bbox_clip(
