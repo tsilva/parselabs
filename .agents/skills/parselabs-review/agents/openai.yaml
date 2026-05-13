@@ -1,0 +1,4 @@
+interface:
+  display_name: "Parselabs Review"
+  short_description: "Review profile rows and repair bad data"
+  default_prompt: "Use $parselabs-review to review unconfirmed extracted lab rows for profile tiago."
