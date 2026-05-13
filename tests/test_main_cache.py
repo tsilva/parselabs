@@ -73,6 +73,10 @@ def test_extract_or_load_page_data_reuses_valid_cached_json(tmp_path, monkeypatc
                     {
                         "raw_lab_name": "Glucose",
                         "raw_value": "92",
+                        "bbox_left": 100,
+                        "bbox_top": 200,
+                        "bbox_right": 400,
+                        "bbox_bottom": 320,
                     }
                 ],
             }
@@ -135,6 +139,55 @@ def test_extract_or_load_page_data_retries_failed_cached_json(tmp_path, monkeypa
 
     assert page_data.get("_extraction_failed") is not True
     assert page_data["lab_results"][0]["raw_lab_name"] == "Glucose"
+
+
+def test_extract_or_load_page_data_retries_cached_json_with_missing_bbox(tmp_path, monkeypatch):
+    config = _build_config(tmp_path)
+    json_path = tmp_path / "glucose.001.json"
+    json_path.write_text(
+        json.dumps(
+            {
+                "page_has_lab_data": True,
+                "lab_results": [
+                    {
+                        "raw_lab_name": "Glucose",
+                        "raw_value": "91",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        main,
+        "_extract_page_data_from_image",
+        lambda *args, **kwargs: {
+            "page_has_lab_data": True,
+            "lab_results": [
+                {
+                    "raw_lab_name": "Glucose",
+                    "raw_value": "92",
+                    "bbox_left": 100,
+                    "bbox_top": 200,
+                    "bbox_right": 400,
+                    "bbox_bottom": 320,
+                }
+            ],
+        },
+    )
+
+    page_data = main._extract_or_load_page_data(
+        {"primary": tmp_path / "primary.jpg", "fallback": tmp_path / "fallback.jpg"},
+        json_path,
+        "glucose.001",
+        config,
+        "glucose",
+        0,
+        [],
+    )
+
+    assert page_data["lab_results"][0]["raw_value"] == "92"
 
 
 def test_extract_or_load_page_data_uses_fallback_image_when_primary_is_weak(tmp_path, monkeypatch):
