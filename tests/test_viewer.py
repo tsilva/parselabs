@@ -16,19 +16,27 @@ subplots_module.make_subplots = lambda *args, **kwargs: None
 
 
 class _FakeFigure:
+    def __init__(self):
+        self.hrect_calls = []
+        self.hline_calls = []
+        self.layout_updates = []
+
     def add_trace(self, *args, **kwargs):
         return None
 
     def add_hrect(self, *args, **kwargs):
+        self.hrect_calls.append((args, kwargs))
         return None
 
     def add_hline(self, *args, **kwargs):
+        self.hline_calls.append((args, kwargs))
         return None
 
     def add_annotation(self, *args, **kwargs):
         return None
 
     def update_layout(self, *args, **kwargs):
+        self.layout_updates.append((args, kwargs))
         return None
 
     def update_xaxes(self, *args, **kwargs):
@@ -155,6 +163,67 @@ def test_get_initial_document_prefers_bbox_backed_review_document():
 
     assert viewer.get_initial_document(df, prioritize_review_sources=True) == "alpha.csv"
     assert viewer.get_initial_document(df, prioritize_review_sources=False) is None
+
+
+def test_build_plot_download_filename_uses_sanitized_single_lab_name():
+    filename = viewer._build_plot_download_filename(["Blood - Thyroid Stimulating Hormone (TSH)"])
+
+    assert filename == "Blood - Thyroid Stimulating Hormone (TSH)"
+
+
+def test_build_plot_download_filename_falls_back_for_multiple_labs():
+    filename = viewer._build_plot_download_filename(["Blood - Glucose", "Blood - Insulin"])
+
+    assert filename == "lab-results"
+
+
+def test_create_single_lab_plot_can_hide_optimal_and_pdf_ranges():
+    df = pd.DataFrame(
+        [
+            {
+                "date": pd.Timestamp("2024-01-01"),
+                "lab_name": "Blood - Glucose",
+                "value": 92.0,
+                "lab_unit": "mg/dL",
+                "lab_specs_min": 70.0,
+                "lab_specs_max": 99.0,
+                "reference_min": 65.0,
+                "reference_max": 110.0,
+            }
+        ]
+    )
+
+    fig, _unit = viewer.create_single_lab_plot(
+        df,
+        "Blood - Glucose",
+        show_optimal_range=False,
+        show_pdf_range=False,
+    )
+
+    assert fig.hrect_calls == []
+    assert fig.hline_calls == []
+
+
+def test_create_single_lab_plot_shows_ranges_by_default():
+    df = pd.DataFrame(
+        [
+            {
+                "date": pd.Timestamp("2024-01-01"),
+                "lab_name": "Blood - Glucose",
+                "value": 92.0,
+                "lab_unit": "mg/dL",
+                "lab_specs_min": 70.0,
+                "lab_specs_max": 99.0,
+                "reference_min": 65.0,
+                "reference_max": 110.0,
+            }
+        ]
+    )
+
+    fig, _unit = viewer.create_single_lab_plot(df, "Blood - Glucose")
+
+    assert len(fig.hrect_calls) == 2
+    assert len(fig.hline_calls) == 4
 
 
 def test_apply_filters_sorts_oldest_first_in_document_page_order():
@@ -768,7 +837,7 @@ def test_dispatch_row_select_preserves_gradio_select_argument_order(monkeypatch,
     monkeypatch.setattr(
         viewer,
         "handle_row_select",
-        lambda evt_arg, filtered_arg, full_arg, lab_arg, output_arg, document_name=None: (
+        lambda evt_arg, filtered_arg, full_arg, lab_arg, output_arg, document_name=None, **_kwargs: (
             calls.append((evt_arg, filtered_arg, full_arg, lab_arg, output_arg)) or ("ok",)
         ),
     )
