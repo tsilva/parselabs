@@ -439,6 +439,12 @@ def save_missing_row_marker(doc_dir: Path, page_number: int, anchor_result_index
     if not isinstance(markers, list):
         return False, f"{REVIEW_MISSING_ROWS_KEY} must be a list in {json_path.name}."
 
+    for existing_marker in markers:
+        if not isinstance(existing_marker, dict):
+            continue
+        if existing_marker.get("anchor_result_index") == int(anchor_result_index):
+            return True, ""
+
     marker: ReviewMissingRowMarker = {
         "anchor_result_index": int(anchor_result_index),
         "created_at": datetime.now(timezone.utc).isoformat(),

@@ -5,6 +5,8 @@ from __future__ import annotations
 import html
 import json
 import logging  # noqa: E402
+import re
+import unicodedata
 from dataclasses import dataclass  # noqa: E402
 from pathlib import Path  # noqa: E402
 
@@ -281,6 +283,7 @@ SORT_ORDER_CHOICES = [
     SORT_DOCUMENT_ORDER,
 ]
 DEFAULT_SORT_ORDER = SORT_DATE_DESC
+DEFAULT_PLOT_DOWNLOAD_FILENAME = "lab-results"
 
 
 def normalize_visible_columns(visible_columns: list[str] | None) -> list[str]:
@@ -344,6 +347,36 @@ def _build_display_row_match_values(entry: pd.Series | dict, visible_columns: li
         return []
 
     return [str(value).strip() for value in display_df.iloc[0].tolist()]
+
+
+def _sanitize_download_filename(value: object) -> str:
+    """Return a filesystem-safe ASCII filename stem for Plotly downloads."""
+
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
+    safe_text = re.sub(r"[^A-Za-z0-9._() -]+", "", ascii_text)
+    safe_text = re.sub(r"\s+", " ", safe_text).strip(" ._-")
+    return safe_text or DEFAULT_PLOT_DOWNLOAD_FILENAME
+
+
+def _build_plot_download_filename(lab_names: list | None) -> str:
+    """Return the filename stem used by the Plotly PNG download button."""
+
+    if not lab_names:
+        return DEFAULT_PLOT_DOWNLOAD_FILENAME
+
+    normalized_lab_names = [str(lab_name).strip() for lab_name in lab_names if str(lab_name).strip()]
+    if len(normalized_lab_names) == 1:
+        return _sanitize_download_filename(normalized_lab_names[0])
+
+    return DEFAULT_PLOT_DOWNLOAD_FILENAME
+
+
+def _set_plot_download_filename(fig: go.Figure, lab_names: list | None) -> go.Figure:
+    """Attach a sanitized PNG download filename for the frontend Plotly config."""
+
+    fig.update_layout(meta={"download_filename": _build_plot_download_filename(lab_names)})
+    return fig
 
 
 # =============================================================================
@@ -680,6 +713,9 @@ def create_single_lab_plot(
     df: pd.DataFrame,
     lab_name: str,
     selected_ref: tuple[float, float] | None = None,
+    *,
+    show_optimal_range: bool = True,
+    show_pdf_range: bool = True,
 ) -> tuple[go.Figure, str]:
     """Generate a single plot for one lab test. Returns (figure, unit).
 
@@ -754,7 +790,7 @@ def create_single_lab_plot(
     has_pdf_range = False
 
     # Add lab_specs optimal range (blue band)
-    if "lab_specs_min" in lab_df.columns and "lab_specs_max" in lab_df.columns:
+    if show_optimal_range and "lab_specs_min" in lab_df.columns and "lab_specs_max" in lab_df.columns:
         min_vals = lab_df["lab_specs_min"].dropna()
         max_vals = lab_df["lab_specs_max"].dropna()
 
@@ -815,7 +851,7 @@ def create_single_lab_plot(
                 )
 
     # Add PDF reference range (orange band)
-    if "reference_min" in lab_df.columns and "reference_max" in lab_df.columns:
+    if show_pdf_range and "reference_min" in lab_df.columns and "reference_max" in lab_df.columns:
         min_vals = lab_df["reference_min"].dropna()
         max_vals = lab_df["reference_max"].dropna()
 
@@ -952,6 +988,9 @@ def create_interactive_plot(
     df: pd.DataFrame,
     lab_names: list | None,
     selected_ref: tuple[float, float] | None = None,
+    *,
+    show_optimal_range: bool = True,
+    show_pdf_range: bool = True,
 ) -> go.Figure:
     """Generate interactive Plotly plot(s) for selected lab tests.
 
@@ -975,13 +1014,19 @@ def create_interactive_plot(
             font=dict(size=16, color="gray"),
         )
         fig.update_layout(template="plotly_white", height=220)
-        return fig
+        return _set_plot_download_filename(fig, lab_names)
 
     # Single lab — delegate to dedicated single-lab plot
     if len(lab_names) == 1:
-        fig, _ = create_single_lab_plot(df, lab_names[0], selected_ref=selected_ref)
+        fig, _ = create_single_lab_plot(
+            df,
+            lab_names[0],
+            selected_ref=selected_ref,
+            show_optimal_range=show_optimal_range,
+            show_pdf_range=show_pdf_range,
+        )
         fig.update_layout(height=240)
-        return fig
+        return _set_plot_download_filename(fig, lab_names)
 
     # Multiple labs — create stacked subplots
     n_labs = len(lab_names)
@@ -1044,7 +1089,7 @@ def create_interactive_plot(
         )
 
         # Add lab_specs optimal range (blue band)
-        if "lab_specs_min" in lab_df.columns and "lab_specs_max" in lab_df.columns:
+        if show_optimal_range and "lab_specs_min" in lab_df.columns and "lab_specs_max" in lab_df.columns:
             min_vals = lab_df["lab_specs_min"].dropna()
             max_vals = lab_df["lab_specs_max"].dropna()
 
@@ -1098,7 +1143,7 @@ def create_interactive_plot(
                 )
 
         # Add PDF reference range (orange band)
-        if "reference_min" in lab_df.columns and "reference_max" in lab_df.columns:
+        if show_pdf_range and "reference_min" in lab_df.columns and "reference_max" in lab_df.columns:
             min_vals = lab_df["reference_min"].dropna()
             max_vals = lab_df["reference_max"].dropna()
 
@@ -1142,7 +1187,7 @@ def create_interactive_plot(
 
     fig.update_xaxes(tickformat="%Y")
 
-    return fig
+    return _set_plot_download_filename(fig, lab_names)
 
 
 # =============================================================================
@@ -1171,6 +1216,8 @@ def _build_empty_viewer_state(
     visible_columns: list[str] | None = None,
     plot_labs: list[str] | None = None,
     position_text: str = "No results",
+    show_optimal_range: bool = True,
+    show_pdf_range: bool = True,
 ) -> ViewerRenderState:
     """Build the stable empty-state payload for viewer callbacks."""
 
@@ -1178,7 +1225,12 @@ def _build_empty_viewer_state(
     return ViewerRenderState(
         display_df=prepare_display_df(filtered_df, visible_columns=visible_columns),
         summary_html=build_summary_cards(summary_df),
-        plot=create_interactive_plot(full_df, plot_labs or []),
+        plot=create_interactive_plot(
+            full_df,
+            plot_labs or [],
+            show_optimal_range=show_optimal_range,
+            show_pdf_range=show_pdf_range,
+        ),
         filtered_df=filtered_df,
         current_idx=0,
         position_text=position_text,
@@ -1237,6 +1289,8 @@ def _render_viewer_state(
     empty_position_text: str = "No results",
     document_name: str | None = None,
     visible_columns: list[str] | None = None,
+    show_optimal_range: bool = True,
+    show_pdf_range: bool = True,
 ) -> ViewerRenderState:
     """Build the unified viewer render payload for the current filtered dataframe."""
 
@@ -1251,6 +1305,8 @@ def _render_viewer_state(
             visible_columns=visible_columns,
             plot_labs=[lab_names] if lab_names else [],
             position_text=empty_position_text,
+            show_optimal_range=show_optimal_range,
+            show_pdf_range=show_pdf_range,
         )
 
     resolved_row_index = max(0, min(int(row_index), len(filtered_df) - 1))
@@ -1265,6 +1321,8 @@ def _render_viewer_state(
             visible_columns=visible_columns,
             plot_labs=[lab_names] if lab_names else [],
             position_text=empty_position_text,
+            show_optimal_range=show_optimal_range,
+            show_pdf_range=show_pdf_range,
         )
 
     row_context = build_viewer_row_context(
@@ -1283,13 +1341,21 @@ def _render_viewer_state(
             visible_columns=visible_columns,
             plot_labs=[lab_names] if lab_names else [],
             position_text=empty_position_text,
+            show_optimal_range=show_optimal_range,
+            show_pdf_range=show_pdf_range,
         )
 
     prev_button_props, next_button_props = _build_navigation_button_props(row_context.row_index, len(filtered_df))
     return ViewerRenderState(
         display_df=prepare_display_df(filtered_df, visible_columns=visible_columns),
         summary_html=build_summary_cards(resolved_summary_df),
-        plot=create_interactive_plot(full_df, row_context.plot_labs, selected_ref=row_context.selected_ref),
+        plot=create_interactive_plot(
+            full_df,
+            row_context.plot_labs,
+            selected_ref=row_context.selected_ref,
+            show_optimal_range=show_optimal_range,
+            show_pdf_range=show_pdf_range,
+        ),
         filtered_df=filtered_df,
         current_idx=row_context.row_index,
         position_text=(
@@ -1320,6 +1386,8 @@ def handle_filter_change(
     visible_columns: list[str] | None = None,
     table_sort_column: str = DEFAULT_TABLE_SORT_COLUMN,
     table_sort_direction: str = DEFAULT_TABLE_SORT_DIRECTION,
+    show_optimal_range: bool = True,
+    show_pdf_range: bool = True,
 ) -> tuple:
     """Handle filter changes and update viewer state from the first visible row."""
 
@@ -1341,6 +1409,8 @@ def handle_filter_change(
         summary_df=filtered_df,
         document_name=document_name,
         visible_columns=visible_columns,
+        show_optimal_range=show_optimal_range,
+        show_pdf_range=show_pdf_range,
     ).as_filter_outputs()
 
 
@@ -1351,12 +1421,20 @@ def handle_row_select(
     lab_names: str | None,
     output_path: Path,
     document_name: str | None = None,
+    show_optimal_range: bool = True,
+    show_pdf_range: bool = True,
 ) -> tuple:
     """Handle row selection to update plot, details, and current index."""
 
     # Guard: Empty selections render the stable placeholder state.
     if evt is None or filtered_df.empty:
-        render_state = _build_empty_viewer_state(full_df, filtered_df, summary_df=filtered_df)
+        render_state = _build_empty_viewer_state(
+            full_df,
+            filtered_df,
+            summary_df=filtered_df,
+            show_optimal_range=show_optimal_range,
+            show_pdf_range=show_pdf_range,
+        )
     else:
         row_idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
         selected_idx = 0 if row_idx is None or row_idx < 0 or row_idx >= len(filtered_df) else int(row_idx)
@@ -1368,6 +1446,8 @@ def handle_row_select(
             row_index=selected_idx,
             summary_df=filtered_df,
             document_name=document_name,
+            show_optimal_range=show_optimal_range,
+            show_pdf_range=show_pdf_range,
         )
 
     return (
@@ -1388,6 +1468,8 @@ def _dispatch_row_select(
     evt: gr.SelectData,
     output_path: Path,
     document_name: str | None = None,
+    show_optimal_range: bool = True,
+    show_pdf_range: bool = True,
 ) -> tuple:
     """Adapt Gradio's input-first select callback order to the row-select handler."""
 
@@ -1398,6 +1480,8 @@ def _dispatch_row_select(
         lab_names,
         output_path,
         document_name=document_name,
+        show_optimal_range=show_optimal_range,
+        show_pdf_range=show_pdf_range,
     )
 
 
@@ -1462,12 +1546,20 @@ def handle_navigation(
     delta: int,
     output_path: Path,
     document_name: str | None = None,
+    show_optimal_range: bool = True,
+    show_pdf_range: bool = True,
 ) -> tuple:
     """Move the current selection backward or forward through the filtered rows."""
 
     # Guard: Empty result sets render the stable placeholder state.
     if filtered_df.empty:
-        render_state = _build_empty_viewer_state(full_df, filtered_df, summary_df=filtered_df)
+        render_state = _build_empty_viewer_state(
+            full_df,
+            filtered_df,
+            summary_df=filtered_df,
+            show_optimal_range=show_optimal_range,
+            show_pdf_range=show_pdf_range,
+        )
     else:
         resolved_index = max(0, min(int(current_idx), len(filtered_df) - 1))
         next_idx = max(0, min(resolved_index + delta, len(filtered_df) - 1))
@@ -1479,6 +1571,8 @@ def handle_navigation(
             row_index=next_idx,
             summary_df=filtered_df,
             document_name=document_name,
+            show_optimal_range=show_optimal_range,
+            show_pdf_range=show_pdf_range,
         )
 
     return (
@@ -1500,11 +1594,19 @@ def handle_plot_point_select(
     lab_names: str | None,
     output_path: Path,
     document_name: str | None = None,
+    show_optimal_range: bool = True,
+    show_pdf_range: bool = True,
 ) -> tuple:
     """Handle a plotly point click by selecting the matching table row when visible."""
 
     if filtered_df.empty:
-        render_state = _build_empty_viewer_state(full_df, filtered_df, summary_df=filtered_df)
+        render_state = _build_empty_viewer_state(
+            full_df,
+            filtered_df,
+            summary_df=filtered_df,
+            show_optimal_range=show_optimal_range,
+            show_pdf_range=show_pdf_range,
+        )
     else:
         fallback_idx = max(0, min(int(current_idx), len(filtered_df) - 1))
         matched_idx = _resolve_plot_point_row_index(filtered_df, point_token)
@@ -1516,6 +1618,8 @@ def handle_plot_point_select(
             row_index=fallback_idx if matched_idx is None else matched_idx,
             summary_df=filtered_df,
             document_name=document_name,
+            show_optimal_range=show_optimal_range,
+            show_pdf_range=show_pdf_range,
         )
 
     return (
@@ -1543,6 +1647,8 @@ def handle_review_action(
     visible_columns: list[str] | None = None,
     table_sort_column: str = DEFAULT_TABLE_SORT_COLUMN,
     table_sort_direction: str = DEFAULT_TABLE_SORT_DIRECTION,
+    show_optimal_range: bool = True,
+    show_pdf_range: bool = True,
 ) -> tuple:
     """Handle review action (accept or reject) and rerender the current filter."""
 
@@ -1553,6 +1659,8 @@ def handle_review_action(
             filtered_df,
             summary_df=full_df,
             visible_columns=visible_columns,
+            show_optimal_range=show_optimal_range,
+            show_pdf_range=show_pdf_range,
         ).as_review_outputs(full_df)
 
     resolved_index = max(0, min(int(current_idx), len(filtered_df) - 1))
@@ -1621,6 +1729,8 @@ def handle_review_action(
         empty_position_text="All done!",
         document_name=document_name,
         visible_columns=visible_columns,
+        show_optimal_range=show_optimal_range,
+        show_pdf_range=show_pdf_range,
     )
     return render_state.as_review_outputs(full_df)
 
@@ -1770,6 +1880,17 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                             )
 
                         with gr.Tab("Plot", elem_id="workspace-plot-tab"):
+                            with gr.Row(elem_id="workspace-plot-controls"):
+                                show_optimal_range_toggle = gr.Checkbox(
+                                    label="Optimal Range",
+                                    value=True,
+                                    elem_id="show-optimal-range-toggle",
+                                )
+                                show_pdf_range_toggle = gr.Checkbox(
+                                    label="PDF Range",
+                                    value=True,
+                                    elem_id="show-pdf-range-toggle",
+                                )
                             plot_display = gr.Plot(
                                 value=initial_view.plot,
                                 label="",
@@ -1791,6 +1912,8 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             table_sort_filter,
             table_sort_direction_filter,
             sort_filter,
+            show_optimal_range_toggle,
+            show_pdf_range_toggle,
             full_df_state,
         ]
         filter_outputs = [
@@ -1810,6 +1933,8 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             filtered_df: pd.DataFrame,
             full_df: pd.DataFrame,
             lab_name: str | None,
+            show_optimal_range: bool,
+            show_pdf_range: bool,
             evt: gr.SelectData,
         ) -> tuple:
             return _dispatch_row_select(
@@ -1818,6 +1943,8 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 lab_name,
                 evt,
                 output_path,
+                show_optimal_range=show_optimal_range,
+                show_pdf_range=show_pdf_range,
             )
 
         for trigger in [
@@ -1830,7 +1957,7 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             sort_filter,
         ]:
             trigger.change(
-                fn=lambda lab_names, latest_only, review_filter, visible_columns, table_sort_column, table_sort_direction, sort_order, full_df: handle_filter_change(
+                fn=lambda lab_names, latest_only, review_filter, visible_columns, table_sort_column, table_sort_direction, sort_order, show_optimal_range, show_pdf_range, full_df: handle_filter_change(
                     lab_names,
                     latest_only,
                     review_filter,
@@ -1840,6 +1967,8 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                     visible_columns=visible_columns,
                     table_sort_column=table_sort_column,
                     table_sort_direction=table_sort_direction,
+                    show_optimal_range=show_optimal_range,
+                    show_pdf_range=show_pdf_range,
                 ),
                 inputs=filter_inputs,
                 outputs=filter_outputs,
@@ -1847,7 +1976,7 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
 
         data_table.select(
             fn=_handle_data_table_select,
-            inputs=[filtered_df_state, full_df_state, lab_name_filter],
+            inputs=[filtered_df_state, full_df_state, lab_name_filter, show_optimal_range_toggle, show_pdf_range_toggle],
             outputs=[
                 current_idx_state,
                 position_display,
@@ -1864,6 +1993,8 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             filtered_df_state,
             full_df_state,
             lab_name_filter,
+            show_optimal_range_toggle,
+            show_pdf_range_toggle,
         ]
         nav_outputs = [
             current_idx_state,
@@ -1876,13 +2007,15 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
         ]
 
         plot_point_select_btn.click(
-            fn=lambda point_token, current_idx, filtered_df, full_df, lab_name: handle_plot_point_select(
+            fn=lambda point_token, current_idx, filtered_df, full_df, lab_name, show_optimal_range, show_pdf_range: handle_plot_point_select(
                 point_token,
                 current_idx,
                 filtered_df,
                 full_df,
                 lab_name,
                 output_path,
+                show_optimal_range=show_optimal_range,
+                show_pdf_range=show_pdf_range,
             ),
             inputs=[
                 plot_point_selection,
@@ -1890,34 +2023,55 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 filtered_df_state,
                 full_df_state,
                 lab_name_filter,
+                show_optimal_range_toggle,
+                show_pdf_range_toggle,
             ],
             outputs=nav_outputs,
         )
 
         prev_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name: handle_navigation(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, show_optimal_range, show_pdf_range: handle_navigation(
                 current_idx,
                 filtered_df,
                 full_df,
                 lab_name,
                 -1,
                 output_path,
+                show_optimal_range=show_optimal_range,
+                show_pdf_range=show_pdf_range,
             ),
             inputs=nav_inputs,
             outputs=nav_outputs,
         )
         next_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name: handle_navigation(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, show_optimal_range, show_pdf_range: handle_navigation(
                 current_idx,
                 filtered_df,
                 full_df,
                 lab_name,
                 1,
                 output_path,
+                show_optimal_range=show_optimal_range,
+                show_pdf_range=show_pdf_range,
             ),
             inputs=nav_inputs,
             outputs=nav_outputs,
         )
+        for plot_range_trigger in [show_optimal_range_toggle, show_pdf_range_toggle]:
+            plot_range_trigger.change(
+                fn=lambda current_idx, filtered_df, full_df, lab_name, show_optimal_range, show_pdf_range: handle_navigation(
+                    current_idx,
+                    filtered_df,
+                    full_df,
+                    lab_name,
+                    0,
+                    output_path,
+                    show_optimal_range=show_optimal_range,
+                    show_pdf_range=show_pdf_range,
+                ),
+                inputs=nav_inputs,
+                outputs=nav_outputs,
+            )
 
         review_btn_inputs = [
             current_idx_state,
@@ -1930,6 +2084,8 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
             table_sort_filter,
             table_sort_direction_filter,
             sort_filter,
+            show_optimal_range_toggle,
+            show_pdf_range_toggle,
         ]
         review_outputs = [
             full_df_state,
@@ -1946,7 +2102,7 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
         ]
 
         accept_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, visible_columns, table_sort_column, table_sort_direction, sort_order: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, visible_columns, table_sort_column, table_sort_direction, sort_order, show_optimal_range, show_pdf_range: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1959,12 +2115,14 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 visible_columns=visible_columns,
                 table_sort_column=table_sort_column,
                 table_sort_direction=table_sort_direction,
+                show_optimal_range=show_optimal_range,
+                show_pdf_range=show_pdf_range,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
         reject_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, visible_columns, table_sort_column, table_sort_direction, sort_order: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, visible_columns, table_sort_column, table_sort_direction, sort_order, show_optimal_range, show_pdf_range: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1977,12 +2135,14 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 visible_columns=visible_columns,
                 table_sort_column=table_sort_column,
                 table_sort_direction=table_sort_direction,
+                show_optimal_range=show_optimal_range,
+                show_pdf_range=show_pdf_range,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
         undo_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, visible_columns, table_sort_column, table_sort_direction, sort_order: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, visible_columns, table_sort_column, table_sort_direction, sort_order, show_optimal_range, show_pdf_range: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -1995,12 +2155,14 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 visible_columns=visible_columns,
                 table_sort_column=table_sort_column,
                 table_sort_direction=table_sort_direction,
+                show_optimal_range=show_optimal_range,
+                show_pdf_range=show_pdf_range,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
         )
         missing_btn.click(
-            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, visible_columns, table_sort_column, table_sort_direction, sort_order: handle_review_action(
+            fn=lambda current_idx, filtered_df, full_df, lab_name, latest_only, review_filter, visible_columns, table_sort_column, table_sort_direction, sort_order, show_optimal_range, show_pdf_range: handle_review_action(
                 current_idx,
                 filtered_df,
                 full_df,
@@ -2013,6 +2175,8 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                 visible_columns=visible_columns,
                 table_sort_column=table_sort_column,
                 table_sort_direction=table_sort_direction,
+                show_optimal_range=show_optimal_range,
+                show_pdf_range=show_pdf_range,
             ),
             inputs=review_btn_inputs,
             outputs=review_outputs,
