@@ -8,6 +8,10 @@ Labs Parser is a Python tool that uses AI (via OpenRouter API) to extract labora
 
 **Design Principle:** Extraction is objective (what's on the page). Analysis is subjective (health status, optimal targets, custom ranges) and belongs in a separate review tool.
 
+## Privacy and PII
+
+Never commit PII, PHI, patient records, lab-report images, extracted personal identifiers, profile outputs, review screenshots, OCR dumps, or any other private medical artifacts to this repository. Keep real user documents and generated review artifacts outside Git-tracked paths; use synthetic or fully anonymized fixtures only.
+
 ## Key Commands
 
 ### Running the Parser
