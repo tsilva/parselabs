@@ -51,6 +51,8 @@ logs/
 .worktrees/
 
 # Project-specific rules
+.codex/parselabs-review/
+tmp/review_sheets/
 !profiles/_*
 *$py.class
 *.cover
