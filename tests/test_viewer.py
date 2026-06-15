@@ -17,11 +17,13 @@ subplots_module.make_subplots = lambda *args, **kwargs: None
 
 class _FakeFigure:
     def __init__(self):
+        self.trace_calls = []
         self.hrect_calls = []
         self.hline_calls = []
         self.layout_updates = []
 
     def add_trace(self, *args, **kwargs):
+        self.trace_calls.append((args, kwargs))
         return None
 
     def add_hrect(self, *args, **kwargs):
@@ -50,7 +52,7 @@ class _FakeFigure:
 
 
 graph_objects_module.Figure = _FakeFigure
-graph_objects_module.Scatter = lambda *args, **kwargs: None
+graph_objects_module.Scatter = lambda *args, **kwargs: {"args": args, "kwargs": kwargs}
 
 sys.modules.setdefault("plotly", plotly_module)
 sys.modules.setdefault("plotly.graph_objects", graph_objects_module)
@@ -58,6 +60,28 @@ sys.modules.setdefault("plotly.subplots", subplots_module)
 
 viewer = importlib.import_module("parselabs.results_view")
 review_helpers = importlib.import_module("parselabs.review")
+
+
+def _trace_kwargs(trace_call):
+    return trace_call[0][0]["kwargs"]
+
+
+def _figure_hrect_count(fig) -> int:
+    if hasattr(fig, "hrect_calls"):
+        return len(fig.hrect_calls)
+    return sum(1 for shape in fig.layout.shapes if shape.type == "rect")
+
+
+def _figure_hline_count(fig) -> int:
+    if hasattr(fig, "hline_calls"):
+        return len(fig.hline_calls)
+    return sum(1 for shape in fig.layout.shapes if shape.type == "line")
+
+
+def _figure_trace_dicts(fig) -> list[dict]:
+    if hasattr(fig, "trace_calls"):
+        return [_trace_kwargs(call) for call in fig.trace_calls]
+    return [trace.to_plotly_json() for trace in fig.data]
 
 
 def _write_viewer_page(output_path: Path, stem: str = "glucose") -> Path:
@@ -200,8 +224,8 @@ def test_create_single_lab_plot_can_hide_optimal_and_pdf_ranges():
         show_pdf_range=False,
     )
 
-    assert fig.hrect_calls == []
-    assert fig.hline_calls == []
+    assert _figure_hrect_count(fig) == 0
+    assert _figure_hline_count(fig) == 0
 
 
 def test_create_single_lab_plot_shows_ranges_by_default():
@@ -222,8 +246,52 @@ def test_create_single_lab_plot_shows_ranges_by_default():
 
     fig, _unit = viewer.create_single_lab_plot(df, "Blood - Glucose")
 
-    assert len(fig.hrect_calls) == 2
-    assert len(fig.hline_calls) == 4
+    assert _figure_hrect_count(fig) == 1
+    assert _figure_hline_count(fig) == 2
+    assert any(
+        trace.get("name") == "PDF Reference"
+        for trace in _figure_trace_dicts(fig)
+    )
+
+
+def test_create_single_lab_plot_interpolates_per_point_pdf_reference_ranges():
+    df = pd.DataFrame(
+        [
+            {
+                "date": pd.Timestamp("2024-01-01"),
+                "lab_name": "Blood - Anti-TPO",
+                "value": 50.0,
+                "lab_unit": "IU/mL",
+                "reference_min": None,
+                "reference_max": 60.0,
+            },
+            {
+                "date": pd.Timestamp("2025-01-01"),
+                "lab_name": "Blood - Anti-TPO",
+                "value": 5.2,
+                "lab_unit": "IU/mL",
+                "reference_min": 1.0,
+                "reference_max": 16.0,
+            },
+        ]
+    )
+
+    fig, _unit = viewer.create_single_lab_plot(df, "Blood - Anti-TPO", show_optimal_range=False)
+
+    pdf_trace = next(
+        trace
+        for trace in _figure_trace_dicts(fig)
+        if trace.get("name") == "PDF Reference"
+    )
+    lower_trace = next(
+        trace
+        for trace in _figure_trace_dicts(fig)
+        if trace.get("name") == "PDF Reference Lower"
+    )
+
+    assert list(lower_trace["y"]) == [0.0, 1.0]
+    assert list(pdf_trace["y"]) == [60.0, 16.0]
+    assert pdf_trace["fill"] == "tonexty"
 
 
 def test_apply_filters_sorts_oldest_first_in_document_page_order():
