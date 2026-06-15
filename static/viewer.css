@@ -369,7 +369,24 @@ footer,
 }
 
 #workspace-plot-controls {
+    align-items: center;
     flex: 0 0 auto !important;
+    gap: 8px;
+}
+
+#workspace-plot-controls > div {
+    min-width: 0;
+}
+
+#plot-download-btn {
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
+#plot-download-btn,
+#plot-download-btn button {
+    min-height: 36px;
+    white-space: nowrap;
 }
 
 #workspace-source-image,

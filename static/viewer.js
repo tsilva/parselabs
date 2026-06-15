@@ -383,6 +383,20 @@
         };
     }
 
+    function downloadPlotImage(plotElement) {
+        const filename = getPlotDownloadFilename(plotElement);
+
+        if (!plotElement || !filename || !window.Plotly?.downloadImage) {
+            return false;
+        }
+
+        window.Plotly.downloadImage(plotElement, {
+            format: 'png',
+            filename,
+        });
+        return true;
+    }
+
     function bindPlotDownloadButtonHandler() {
         const plotElement = document.querySelector('#viewer-plot .js-plotly-plot');
         const downloadButton = document.querySelector('#viewer-plot .modebar-btn[data-title="Download plot as a PNG"]');
@@ -392,19 +406,36 @@
         }
 
         downloadButton.addEventListener('click', function(event) {
-            const filename = getPlotDownloadFilename(plotElement);
-
-            if (!filename || !window.Plotly?.downloadImage) {
+            if (!downloadPlotImage(plotElement)) {
                 return;
             }
 
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation();
-            window.Plotly.downloadImage(plotElement, {
-                format: 'png',
-                filename,
-            });
+        }, true);
+
+        downloadButton.dataset.viewerDownloadBound = 'true';
+    }
+
+    function bindVisiblePlotDownloadButtonHandler() {
+        const downloadButton = document.querySelector('#plot-download-btn button, button#plot-download-btn');
+
+        if (!downloadButton || downloadButton.dataset.viewerDownloadBound === 'true') {
+            return;
+        }
+
+        downloadButton.addEventListener('click', function(event) {
+            const plotElement = document.querySelector('#viewer-plot .js-plotly-plot');
+            const modebarDownloadButton = document.querySelector('#viewer-plot .modebar-btn[data-title="Download plot as a PNG"]');
+
+            if (!downloadPlotImage(plotElement) && modebarDownloadButton) {
+                modebarDownloadButton.click();
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
         }, true);
 
         downloadButton.dataset.viewerDownloadBound = 'true';
@@ -539,6 +570,7 @@
         bindPlotClickHandler();
         applyPlotDownloadFilename();
         bindPlotDownloadButtonHandler();
+        bindVisiblePlotDownloadButtonHandler();
         scheduleSelectedRowSync(false);
     });
     observer.observe(document.body, {
@@ -588,6 +620,7 @@
         bindPlotClickHandler();
         applyPlotDownloadFilename();
         bindPlotDownloadButtonHandler();
+        bindVisiblePlotDownloadButtonHandler();
         scheduleSelectedRowSync(true);
     });
     window.addEventListener('resize', function() {
@@ -603,6 +636,7 @@
     bindPlotClickHandler();
     applyPlotDownloadFilename();
     bindPlotDownloadButtonHandler();
+    bindVisiblePlotDownloadButtonHandler();
     scheduleSelectedRowSync(true);
 })();
 </script>

@@ -709,6 +709,134 @@ def prepare_display_df(df: pd.DataFrame, visible_columns: list[str] | None = Non
 # =============================================================================
 
 
+def _coerce_plot_float(value: object) -> float | None:
+    """Coerce a dataframe value to a finite float for Plotly reference traces."""
+
+    numeric_value = pd.to_numeric(value, errors="coerce")
+    if pd.isna(numeric_value):
+        return None
+    return float(numeric_value)
+
+
+def _format_plot_number(value: float) -> str:
+    """Format reference bounds compactly for point hovers."""
+
+    return f"{value:g}"
+
+
+def _format_pdf_reference_hover_text(row: pd.Series, unit: str) -> str:
+    """Format the per-row PDF reference interval for a value marker hover."""
+
+    ref_min = _coerce_plot_float(row.get("reference_min"))
+    ref_max = _coerce_plot_float(row.get("reference_max"))
+    unit_text = f" {unit}" if unit else ""
+
+    if ref_min is not None and ref_max is not None:
+        return f"{_format_plot_number(ref_min)} - {_format_plot_number(ref_max)}{unit_text}"
+    if ref_max is not None:
+        return f"< {_format_plot_number(ref_max)}{unit_text}"
+    if ref_min is not None:
+        return f"> {_format_plot_number(ref_min)}{unit_text}"
+    return "not reported"
+
+
+def _get_one_sided_reference_floor(lab_df: pd.DataFrame, upper_bound: float) -> float:
+    """Return a visible lower bound for one-sided ``< upper`` reference intervals."""
+
+    data_min = _coerce_plot_float(lab_df["value"].min())
+    if data_min is not None and data_min >= 0 and upper_bound >= 0:
+        return 0.0
+    if data_min is None:
+        return upper_bound * 0.9
+    return min(data_min, upper_bound) * 0.9
+
+
+def _get_one_sided_reference_ceiling(lab_df: pd.DataFrame, lower_bound: float) -> float:
+    """Return a visible upper bound for one-sided ``> lower`` reference intervals."""
+
+    data_max = _coerce_plot_float(lab_df["value"].max())
+    if data_max is None:
+        return lower_bound * 1.1
+    return max(data_max, lower_bound) * 1.1
+
+
+def _build_pdf_reference_band(lab_df: pd.DataFrame) -> tuple[list[object], list[float], list[float]]:
+    """Build dated lower/upper PDF reference bounds for an interpolated band."""
+
+    x_values: list[object] = []
+    lower_values: list[float] = []
+    upper_values: list[float] = []
+
+    for _, row in lab_df.iterrows():
+        ref_min = _coerce_plot_float(row.get("reference_min"))
+        ref_max = _coerce_plot_float(row.get("reference_max"))
+
+        if ref_min is None and ref_max is None:
+            continue
+
+        if ref_min is not None and ref_max is not None:
+            y0, y1 = sorted((ref_min, ref_max))
+        elif ref_max is not None:
+            y0, y1 = _get_one_sided_reference_floor(lab_df, ref_max), ref_max
+        else:
+            assert ref_min is not None
+            y0, y1 = ref_min, _get_one_sided_reference_ceiling(lab_df, ref_min)
+
+        x_values.append(row["date"])
+        lower_values.append(y0)
+        upper_values.append(y1)
+
+    return x_values, lower_values, upper_values
+
+
+def _add_pdf_reference_band(
+    fig: go.Figure,
+    lab_df: pd.DataFrame,
+    *,
+    row: int | None = None,
+    col: int | None = None,
+    showlegend: bool = True,
+) -> bool:
+    """Add an interpolated PDF reference band from each result's own range."""
+
+    if "reference_min" not in lab_df.columns or "reference_max" not in lab_df.columns:
+        return False
+
+    x_values, lower_values, upper_values = _build_pdf_reference_band(lab_df)
+    if not x_values:
+        return False
+
+    lower_trace = go.Scatter(
+        x=x_values,
+        y=lower_values,
+        mode="lines",
+        name="PDF Reference Lower",
+        line=dict(color="rgba(245, 158, 11, 0.65)", width=1, dash="dash"),
+        hoverinfo="skip",
+        showlegend=False,
+    )
+    upper_trace = go.Scatter(
+        x=x_values,
+        y=upper_values,
+        mode="lines",
+        name="PDF Reference",
+        line=dict(color="rgba(245, 158, 11, 0.75)", width=1, dash="dash"),
+        fill="tonexty",
+        fillcolor="rgba(245, 158, 11, 0.18)",
+        hoverinfo="skip",
+        showlegend=showlegend,
+    )
+
+    if row is None or col is None:
+        fig.add_trace(lower_trace)
+        fig.add_trace(upper_trace)
+    else:
+        fig.add_trace(lower_trace, row=row, col=col)
+        fig.add_trace(upper_trace, row=row, col=col)
+
+    return True
+
+
 def create_single_lab_plot(
     df: pd.DataFrame,
     lab_name: str,
@@ -722,8 +850,9 @@ def create_single_lab_plot(
     Args:
         df: DataFrame with lab data
         lab_name: Name of the lab test to plot
-        selected_ref: Optional (ref_min, ref_max) from the selected row. When provided,
-                      this is used for the PDF reference range instead of computing the mode.
+        selected_ref: Retained for callback compatibility. PDF reference ranges are
+                      rendered per result because source reports can use different
+                      assay-specific ranges for the same standardized lab.
     """
 
     lab_df = df[df["lab_name"] == lab_name].copy()
@@ -771,6 +900,7 @@ def create_single_lab_plot(
 
     fig = go.Figure()
     point_customdata = lab_df.apply(_build_row_token_for_entry, axis=1).tolist()
+    point_reference_text = lab_df.apply(lambda row: _format_pdf_reference_hover_text(row, unit), axis=1).tolist()
 
     # Add data trace
     fig.add_trace(
@@ -778,11 +908,16 @@ def create_single_lab_plot(
             x=lab_df["date"],
             y=lab_df["value"],
             customdata=point_customdata,
+            text=point_reference_text,
             mode="lines+markers",
             name="Values",
             marker=dict(size=10, color="#1f77b4"),
             line=dict(width=2),
-            hovertemplate=(f"<b>Date:</b> %{{x|%Y-%m-%d}}<br><b>Value:</b> %{{y:.2f}} {unit}<br><extra></extra>"),
+            hovertemplate=(
+                f"<b>Date:</b> %{{x|%Y-%m-%d}}<br>"
+                f"<b>Value:</b> %{{y:.2f}} {unit}<br>"
+                "<b>PDF Ref:</b> %{text}<br><extra></extra>"
+            ),
         )
     )
 
@@ -850,80 +985,8 @@ def create_single_lab_plot(
                     annotation_position="bottom right",
                 )
 
-    # Add PDF reference range (orange band)
-    if show_pdf_range and "reference_min" in lab_df.columns and "reference_max" in lab_df.columns:
-        min_vals = lab_df["reference_min"].dropna()
-        max_vals = lab_df["reference_max"].dropna()
-
-        ref_min = None
-        ref_max = None
-
-        # Use selected row's reference range if provided
-        if selected_ref is not None:
-            sel_min, sel_max = selected_ref
-            if sel_min is not None and pd.notna(sel_min):
-                ref_min = float(sel_min)
-            if sel_max is not None and pd.notna(sel_max):
-                ref_max = float(sel_max)
-        else:
-            # Fallback to mode-based logic for historical view
-            if not min_vals.empty:
-                ref_min = float(min_vals.mode().iloc[0]) if len(min_vals.mode()) > 0 else float(min_vals.iloc[0])
-            if not max_vals.empty:
-                ref_max = float(max_vals.mode().iloc[0]) if len(max_vals.mode()) > 0 else float(max_vals.iloc[0])
-
-        if ref_min is not None or ref_max is not None:
-            has_pdf_range = True
-
-            if ref_min is not None and ref_max is not None:
-                fig.add_hrect(
-                    y0=ref_min,
-                    y1=ref_max,
-                    fillcolor="rgba(245, 158, 11, 0.20)",
-                    line_width=0,
-                )
-                fig.add_hline(
-                    y=ref_min,
-                    line_dash="dash",
-                    line_color="rgba(245, 158, 11, 0.8)",
-                )
-                fig.add_hline(
-                    y=ref_max,
-                    line_dash="dash",
-                    line_color="rgba(245, 158, 11, 0.8)",
-                )
-            elif ref_max is not None:
-                data_min = lab_df["value"].min()
-                y_bottom = min(0, data_min * 0.9) if data_min > 0 else data_min * 1.1
-                fig.add_hrect(
-                    y0=y_bottom,
-                    y1=ref_max,
-                    fillcolor="rgba(245, 158, 11, 0.20)",
-                    line_width=0,
-                )
-                fig.add_hline(
-                    y=ref_max,
-                    line_dash="dash",
-                    line_color="rgba(245, 158, 11, 0.8)",
-                    annotation_text=f"< {ref_max}",
-                    annotation_position="top right",
-                )
-            else:
-                data_max = lab_df["value"].max()
-                y_top = max(data_max * 1.2, ref_min * 2) if data_max > 0 else data_max * 0.8
-                fig.add_hrect(
-                    y0=ref_min,
-                    y1=y_top,
-                    fillcolor="rgba(245, 158, 11, 0.20)",
-                    line_width=0,
-                )
-                fig.add_hline(
-                    y=ref_min,
-                    line_dash="dash",
-                    line_color="rgba(245, 158, 11, 0.8)",
-                    annotation_text=f"> {ref_min}",
-                    annotation_position="bottom right",
-                )
+    if show_pdf_range:
+        has_pdf_range = _add_pdf_reference_band(fig, lab_df)
 
     # Add legend entries
     if has_lab_specs_range:
@@ -934,18 +997,6 @@ def create_single_lab_plot(
                 mode="markers",
                 marker=dict(size=10, color="rgba(37, 99, 235, 0.6)", symbol="square"),
                 name="Optimal Range",
-                showlegend=True,
-            )
-        )
-
-    if has_pdf_range:
-        fig.add_trace(
-            go.Scatter(
-                x=[None],
-                y=[None],
-                mode="markers",
-                marker=dict(size=10, color="rgba(245, 158, 11, 0.6)", symbol="square"),
-                name="PDF Reference",
                 showlegend=True,
             )
         )
@@ -997,8 +1048,8 @@ def create_interactive_plot(
     Args:
         df: DataFrame with lab data
         lab_names: List of lab names to plot
-        selected_ref: Optional (ref_min, ref_max) from the selected row. Only applies
-                      to single-lab plots or the first lab in multi-lab plots.
+        selected_ref: Retained for callback compatibility. PDF reference ranges are
+                      rendered per result instead of from a selected/static row.
     """
 
     # Guard: no labs selected or no data
@@ -1072,17 +1123,23 @@ def create_interactive_plot(
 
         color = colors[i % len(colors)]
         point_customdata = lab_df.apply(_build_row_token_for_entry, axis=1).tolist()
+        point_reference_text = lab_df.apply(lambda row: _format_pdf_reference_hover_text(row, unit), axis=1).tolist()
 
         fig.add_trace(
             go.Scatter(
                 x=lab_df["date"],
                 y=lab_df["value"],
                 customdata=point_customdata,
+                text=point_reference_text,
                 mode="lines+markers",
                 name="Values",
                 marker=dict(size=8, color=color),
                 line=dict(width=2, color=color),
-                hovertemplate=(f"<b>Date:</b> %{{x|%Y-%m-%d}}<br><b>Value:</b> %{{y:.2f}} {unit}<br><extra></extra>"),
+                hovertemplate=(
+                    f"<b>Date:</b> %{{x|%Y-%m-%d}}<br>"
+                    f"<b>Value:</b> %{{y:.2f}} {unit}<br>"
+                    "<b>PDF Ref:</b> %{text}<br><extra></extra>"
+                ),
             ),
             row=i + 1,
             col=1,
@@ -1142,37 +1199,8 @@ def create_interactive_plot(
                     col=1,
                 )
 
-        # Add PDF reference range (orange band)
-        if show_pdf_range and "reference_min" in lab_df.columns and "reference_max" in lab_df.columns:
-            min_vals = lab_df["reference_min"].dropna()
-            max_vals = lab_df["reference_max"].dropna()
-
-            ref_min = None
-            ref_max = None
-
-            # Use selected row's reference range for the first lab (primary selection)
-            if i == 0 and selected_ref is not None:
-                sel_min, sel_max = selected_ref
-                if sel_min is not None and pd.notna(sel_min):
-                    ref_min = float(sel_min)
-                if sel_max is not None and pd.notna(sel_max):
-                    ref_max = float(sel_max)
-            else:
-                # Fallback to mode-based logic for other labs or when no selection
-                if not min_vals.empty:
-                    ref_min = float(min_vals.mode().iloc[0]) if len(min_vals.mode()) > 0 else float(min_vals.iloc[0])
-                if not max_vals.empty:
-                    ref_max = float(max_vals.mode().iloc[0]) if len(max_vals.mode()) > 0 else float(max_vals.iloc[0])
-
-            if ref_min is not None and ref_max is not None:
-                fig.add_hrect(
-                    y0=ref_min,
-                    y1=ref_max,
-                    fillcolor="rgba(245, 158, 11, 0.20)",
-                    line_width=0,
-                    row=i + 1,
-                    col=1,
-                )
+        if show_pdf_range:
+            _add_pdf_reference_band(fig, lab_df, row=i + 1, col=1, showlegend=False)
 
         fig.update_yaxes(title_text=unit if unit else "Value", row=i + 1, col=1)
 
@@ -1890,6 +1918,11 @@ def create_app(context: RuntimeContext, *, launch_mode: str = "results-explorer"
                                     label="PDF Range",
                                     value=True,
                                     elem_id="show-pdf-range-toggle",
+                                )
+                                gr.Button(
+                                    "Download PNG",
+                                    size="sm",
+                                    elem_id="plot-download-btn",
                                 )
                             plot_display = gr.Plot(
                                 value=initial_view.plot,
