@@ -84,7 +84,6 @@ parselabs --profile myname --rebuild-from-json
 
 parselabs review --profile myname          # launch Results Explorer on port 7862
 parselabs review --profile myname --tab review
-parselabs-review-mcp                       # deterministic row review MCP server
 
 parselabs admin --help
 parselabs admin validate-lab-specs
