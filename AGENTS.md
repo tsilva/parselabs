@@ -34,9 +34,6 @@ uv run python test.py
 # View and review extracted results:
 parselabs review --profile tsilva
 parselabs review --profile tsilva --tab review
-
-# Deterministic row-by-row MCP review server:
-parselabs-review-mcp
 ```
 
 ### Development
