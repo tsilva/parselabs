@@ -82,7 +82,6 @@ def test_review_state_does_not_depend_on_review_ui_layers():
     graph = _collect_import_graph()
     assert "parselabs.review" not in graph["parselabs.review_state"]
     assert "parselabs.results_view" not in graph["parselabs.review_state"]
-    assert "parselabs.document_reviewer" not in graph["parselabs.review_state"]
 
 
 def test_standardization_refresh_does_not_depend_on_extraction_layer():

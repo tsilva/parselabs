@@ -144,87 +144,6 @@ def _format_document_label(source_file: object) -> str:
     return source_text.rsplit(".", 1)[0]
 
 
-def _build_document_summary(df: pd.DataFrame) -> pd.DataFrame:
-    """Build per-document summary rows used for dropdown ordering and defaults."""
-
-    if df.empty or "source_file" not in df.columns:
-        return pd.DataFrame(columns=["source_file", "result_count", "bbox_count", "needs_review_count", "unreviewed_count"])
-
-    summary_df = df[df["source_file"].notna()].copy()
-    if summary_df.empty:
-        return pd.DataFrame(columns=["source_file", "result_count", "bbox_count", "needs_review_count", "unreviewed_count"])
-
-    bbox_columns = ["bbox_left", "bbox_top", "bbox_right", "bbox_bottom"]
-    has_bbox = (
-        summary_df[bbox_columns].notna().all(axis=1)
-        if set(bbox_columns).issubset(summary_df.columns)
-        else pd.Series(False, index=summary_df.index)
-    )
-    review_status = summary_df["review_status"] if "review_status" in summary_df.columns else pd.Series("", index=summary_df.index)
-    review_needed = summary_df["review_needed"] if "review_needed" in summary_df.columns else pd.Series(False, index=summary_df.index)
-    is_unreviewed = review_status.isna() | review_status.astype(str).str.strip().eq("")
-
-    summary_df = summary_df.assign(
-        has_bbox=has_bbox,
-        needs_review_unresolved=review_needed.fillna(False) & is_unreviewed,
-        is_unreviewed=is_unreviewed,
-    )
-
-    return (
-        summary_df.groupby("source_file", dropna=True)
-        .agg(
-            result_count=("source_file", "size"),
-            bbox_count=("has_bbox", "sum"),
-            needs_review_count=("needs_review_unresolved", "sum"),
-            unreviewed_count=("is_unreviewed", "sum"),
-        )
-        .reset_index()
-    )
-
-
-def get_document_choices(df: pd.DataFrame, *, prioritize_review_sources: bool = False) -> list[tuple[str, str]]:
-    """Return readable document dropdown choices keyed by source file."""
-
-    document_summary = _build_document_summary(df)
-    if document_summary.empty:
-        return []
-
-    if prioritize_review_sources:
-        document_summary = document_summary.sort_values(
-            ["bbox_count", "needs_review_count", "unreviewed_count", "result_count", "source_file"],
-            ascending=[False, False, False, False, True],
-            na_position="last",
-        )
-    else:
-        document_summary = document_summary.sort_values("source_file", ascending=True, na_position="last")
-
-    return [
-        (f"{_format_document_label(row.source_file)} ({int(row.result_count)})", str(row.source_file))
-        for row in document_summary.itertuples()
-        if str(row.source_file).strip()
-    ]
-
-
-def get_initial_document(df: pd.DataFrame, *, prioritize_review_sources: bool) -> str | None:
-    """Pick the default document for the current workspace launch mode."""
-
-    if not prioritize_review_sources:
-        return None
-
-    document_summary = _build_document_summary(df)
-    if document_summary.empty:
-        return None
-
-    ranked = document_summary.sort_values(
-        ["bbox_count", "needs_review_count", "unreviewed_count", "result_count", "source_file"],
-        ascending=[False, False, False, False, True],
-        na_position="last",
-    )
-    top_row = ranked.iloc[0]
-    source_file = str(top_row.get("source_file") or "").strip()
-    return source_file or None
-
-
 # =============================================================================
 # Display Configuration
 # =============================================================================
@@ -307,21 +226,6 @@ def _normalize_table_sort_direction(table_sort_direction: str | None) -> str:
     if table_sort_direction == SORT_DIRECTION_DESC:
         return SORT_DIRECTION_DESC
     return SORT_DIRECTION_ASC
-
-
-def _build_row_token(source_file: object, page_number: object, result_index: object) -> str:
-    """Build a stable UI token for one merged results row."""
-
-    return (
-        build_row_identity_token(
-            {
-                "source_file": source_file,
-                "page_number": page_number,
-                "result_index": result_index,
-            }
-        )
-        or ""
-    )
 
 
 def _build_row_token_for_entry(entry: pd.Series | dict) -> str:
@@ -460,7 +364,6 @@ def apply_filters(
     lab_names: str | None,
     latest_only: bool,
     review_filter: str,
-    document_name: str | None = None,
     sort_order: str = DEFAULT_SORT_ORDER,
     table_sort_column: str = DEFAULT_TABLE_SORT_COLUMN,
     table_sort_direction: str = DEFAULT_TABLE_SORT_DIRECTION,
@@ -479,10 +382,6 @@ def apply_filters(
         return df
 
     filtered = df.copy()
-
-    # Narrow to one document before sorting so page order stays local to that source.
-    if document_name and "source_file" in filtered.columns:
-        filtered = filtered[filtered["source_file"] == document_name]
 
     # Latest only: keep only the most recent value per lab test
     # This must run BEFORE status filters so we get the latest result first,
@@ -520,7 +419,6 @@ def apply_filters(
 
     filtered = _sort_filtered_rows(
         filtered,
-        document_name=document_name,
         sort_order=sort_order,
     )
     filtered = _sort_filtered_rows_by_column(
@@ -596,7 +494,6 @@ def _sort_filtered_rows_by_column(
 def _sort_filtered_rows(
     filtered: pd.DataFrame,
     *,
-    document_name: str | None,
     sort_order: str,
 ) -> pd.DataFrame:
     """Return one stable sort order shared by the table, bbox view, and navigation."""
@@ -607,15 +504,6 @@ def _sort_filtered_rows(
 
     normalized_sort_order = sort_order if sort_order in SORT_ORDER_CHOICES else DEFAULT_SORT_ORDER
     has_page_fields = {"page_number", "result_index"}.issubset(filtered.columns)
-
-    # Focused document views should stay in source order regardless of the global date mode.
-    if document_name and has_page_fields:
-        return filtered.sort_values(
-            ["page_number", "result_index", "lab_name"],
-            ascending=[True, True, True],
-            na_position="last",
-            kind="mergesort",
-        )
 
     # Explicit document-order mode walks documents top-to-bottom in stored source order.
     if normalized_sort_order == SORT_DOCUMENT_ORDER and has_page_fields:
@@ -1302,7 +1190,6 @@ def _render_viewer_state(
     row_index: int = 0,
     summary_df: pd.DataFrame | None = None,
     empty_position_text: str = "No results",
-    document_name: str | None = None,
     visible_columns: list[str] | None = None,
     show_optimal_range: bool = True,
     show_pdf_range: bool = True,
@@ -1372,11 +1259,7 @@ def _render_viewer_state(
         ),
         filtered_df=filtered_df,
         current_idx=row_context.row_index,
-        position_text=(
-            f"**{row_context.row_index + 1} of {len(filtered_df)} in {_format_document_label(document_name)}**"
-            if document_name
-            else row_context.position_text.replace("Row", "Result")
-        ),
+        position_text=row_context.position_text.replace("Row", "Result"),
         source_image_value=row_context.source_image_value,
         selection_html=_build_selection_state_html(
             row_context.row_index,
@@ -1395,7 +1278,6 @@ def handle_filter_change(
     review_filter: str,
     full_df: pd.DataFrame,
     output_path: Path,
-    document_name: str | None = None,
     sort_order: str = DEFAULT_SORT_ORDER,
     visible_columns: list[str] | None = None,
     table_sort_column: str = DEFAULT_TABLE_SORT_COLUMN,
@@ -1410,7 +1292,6 @@ def handle_filter_change(
         lab_names,
         latest_only,
         review_filter,
-        document_name=document_name,
         sort_order=sort_order,
         table_sort_column=table_sort_column,
         table_sort_direction=table_sort_direction,
@@ -1421,7 +1302,6 @@ def handle_filter_change(
         output_path,
         lab_names,
         summary_df=filtered_df,
-        document_name=document_name,
         visible_columns=visible_columns,
         show_optimal_range=show_optimal_range,
         show_pdf_range=show_pdf_range,
@@ -1434,7 +1314,6 @@ def handle_row_select(
     full_df: pd.DataFrame,
     lab_names: str | None,
     output_path: Path,
-    document_name: str | None = None,
     show_optimal_range: bool = True,
     show_pdf_range: bool = True,
 ) -> tuple:
@@ -1459,7 +1338,6 @@ def handle_row_select(
             lab_names,
             row_index=selected_idx,
             summary_df=filtered_df,
-            document_name=document_name,
             show_optimal_range=show_optimal_range,
             show_pdf_range=show_pdf_range,
         )
@@ -1481,7 +1359,6 @@ def _dispatch_row_select(
     lab_names: str | None,
     evt: gr.SelectData,
     output_path: Path,
-    document_name: str | None = None,
     show_optimal_range: bool = True,
     show_pdf_range: bool = True,
 ) -> tuple:
@@ -1493,7 +1370,6 @@ def _dispatch_row_select(
         full_df,
         lab_names,
         output_path,
-        document_name=document_name,
         show_optimal_range=show_optimal_range,
         show_pdf_range=show_pdf_range,
     )
@@ -1559,7 +1435,6 @@ def handle_navigation(
     lab_names: str | None,
     delta: int,
     output_path: Path,
-    document_name: str | None = None,
     show_optimal_range: bool = True,
     show_pdf_range: bool = True,
 ) -> tuple:
@@ -1584,7 +1459,6 @@ def handle_navigation(
             lab_names,
             row_index=next_idx,
             summary_df=filtered_df,
-            document_name=document_name,
             show_optimal_range=show_optimal_range,
             show_pdf_range=show_pdf_range,
         )
@@ -1607,7 +1481,6 @@ def handle_plot_point_select(
     full_df: pd.DataFrame,
     lab_names: str | None,
     output_path: Path,
-    document_name: str | None = None,
     show_optimal_range: bool = True,
     show_pdf_range: bool = True,
 ) -> tuple:
@@ -1631,7 +1504,6 @@ def handle_plot_point_select(
             lab_names,
             row_index=fallback_idx if matched_idx is None else matched_idx,
             summary_df=filtered_df,
-            document_name=document_name,
             show_optimal_range=show_optimal_range,
             show_pdf_range=show_pdf_range,
         )
@@ -1656,7 +1528,6 @@ def handle_review_action(
     review_filter: str,
     status: str,
     output_path: Path,
-    document_name: str | None = None,
     sort_order: str = DEFAULT_SORT_ORDER,
     visible_columns: list[str] | None = None,
     table_sort_column: str = DEFAULT_TABLE_SORT_COLUMN,
@@ -1711,7 +1582,6 @@ def handle_review_action(
         lab_names,
         latest_only,
         review_filter,
-        document_name=document_name,
         sort_order=sort_order,
         table_sort_column=table_sort_column,
         table_sort_direction=table_sort_direction,
@@ -1741,7 +1611,6 @@ def handle_review_action(
         row_index=next_index if not filtered_df.empty else 0,
         summary_df=full_df,
         empty_position_text="All done!",
-        document_name=document_name,
         visible_columns=visible_columns,
         show_optimal_range=show_optimal_range,
         show_pdf_range=show_pdf_range,

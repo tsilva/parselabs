@@ -329,7 +329,19 @@ def test_run_reviewed_json_rebuild_uses_auto_standardize_setting(tmp_path, monke
     output_path.mkdir(parents=True, exist_ok=True)
     auto_calls = []
 
-    monkeypatch.setattr(main, "_setup_rebuild_environment", lambda profile_name: (SimpleNamespace(output_path=output_path, openrouter_base_url=None, openrouter_api_key=None, extract_model_id="model"), SimpleNamespace()))
+    monkeypatch.setattr(
+        main,
+        "_setup_rebuild_environment",
+        lambda profile_name, console_mode: (
+            SimpleNamespace(
+                output_path=output_path,
+                openrouter_base_url=None,
+                openrouter_api_key=None,
+                extract_model_id="model",
+            ),
+            SimpleNamespace(),
+        ),
+    )
     monkeypatch.setattr(main, "get_column_lists", lambda schema: ([], [], {}, {}))
     monkeypatch.setattr(
         main,
@@ -359,7 +371,19 @@ def test_run_reviewed_json_rebuild_exports_final_rows_only_when_fixture_ready(tm
         csv_paths=[],
     )
 
-    monkeypatch.setattr(main, "_setup_rebuild_environment", lambda profile_name: (SimpleNamespace(output_path=output_path, openrouter_base_url=None, openrouter_api_key=None, extract_model_id="model"), SimpleNamespace()))
+    monkeypatch.setattr(
+        main,
+        "_setup_rebuild_environment",
+        lambda profile_name, console_mode: (
+            SimpleNamespace(
+                output_path=output_path,
+                openrouter_base_url=None,
+                openrouter_api_key=None,
+                extract_model_id="model",
+            ),
+            SimpleNamespace(),
+        ),
+    )
     monkeypatch.setattr(main, "get_column_lists", lambda schema: ([], [], {}, {}))
     monkeypatch.setattr(main, "_rebuild_review_outputs_from_processed_documents", lambda *args, **kwargs: reviewed_corpus)
     monkeypatch.setattr(main, "_export_final_results", lambda df, *args, **kwargs: exported_frames.append(df.copy()))

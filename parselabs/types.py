@@ -183,23 +183,6 @@ class PageLabResultPayload(TypedDict, total=False):
     review_completed_at: str | None
 
 
-class RawExtractionLabResultPayload(TypedDict, total=False):
-    """Best-effort raw lab-result item parsed from a tool-call payload."""
-
-    raw_lab_name: JsonValue
-    raw_section_name: JsonValue
-    raw_value: JsonValue
-    raw_lab_unit: JsonValue
-    raw_reference_range: JsonValue
-    raw_reference_min: JsonValue
-    raw_reference_max: JsonValue
-    raw_comments: JsonValue
-    bbox_left: JsonValue
-    bbox_top: JsonValue
-    bbox_right: JsonValue
-    bbox_bottom: JsonValue
-
-
 class ReviewMissingRowMarker(TypedDict):
     """Persisted missing-row marker stored on one page payload."""
 

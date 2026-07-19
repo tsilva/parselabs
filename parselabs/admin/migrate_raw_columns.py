@@ -33,16 +33,8 @@ _JSON_RENAMES = {
     "comments": "raw_comments",
 }
 
-# Per-document CSV column renames (internal names)
-_CSV_INTERNAL_RENAMES = {
-    "lab_name_raw": "raw_lab_name",
-    "value_raw": "raw_value",
-    "lab_unit_raw": "raw_lab_unit",
-    "reference_min_raw": "raw_reference_min",
-    "reference_max_raw": "raw_reference_max",
-    "reference_range": "raw_reference_range",
-    "comments": "raw_comments",
-}
+# Per-document CSVs use the same internal field names as page JSON.
+_CSV_INTERNAL_RENAMES = _JSON_RENAMES
 
 # all.csv column renames (export names)
 _CSV_EXPORT_RENAMES = {
