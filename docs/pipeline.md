@@ -5,7 +5,7 @@ This document describes the current extraction, review, and export pipeline.
 ## Subsystem Layout
 
 - `parselabs/runtime.py` is the shared bootstrap surface for profile resolution, runtime context creation, OpenAI client caching, and runtime path access.
-- `parselabs/store.py` is the shared filesystem/state surface for hashed document discovery, page JSON persistence, review actions, and legacy merged-review CSV fallback.
+- `parselabs/store.py` is the shared filesystem/state surface for hashed document discovery, page JSON persistence, and review actions.
 - `parselabs/rows.py` is the shared review/export row-building surface; `parselabs/dataset.py` owns integrity reports.
 - `parselabs/review.py` owns shared UI presentation helpers, while `parselabs/review_data.py` owns results-explorer dataframe loading.
 - `parselabs/admin/` owns installable maintenance-command implementations; `utils/*.py` contains compatibility entry points only.
@@ -179,8 +179,8 @@ This document describes the current extraction, review, and export pipeline.
 
 24. What `all.csv` and `all.xlsx` contain on the first export pass.
 - `run_for_profile()` does not write `pipeline_result.final_df` to disk.
-- Instead, it reloads the per-document CSVs and merges them with `_build_merged_review_dataframe_from_csv_paths(...)`.
-- It writes that merged review-state dataframe to `output/all.csv` and `output/all.xlsx`.
+- Instead, it rebuilds every processed document from canonical page JSON with `_rebuild_review_outputs_from_processed_documents(...)`.
+- It writes that corpus result's merged review-state dataframe to `output/all.csv` and `output/all.xlsx`.
 - So the first export pass still writes the merged review-state dataframe, not accepted-only reviewed truth.
 
 25. End-of-run standardization auto-refresh.

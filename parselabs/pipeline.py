@@ -29,10 +29,7 @@ from parselabs.export_schema import COLUMN_SCHEMA, get_column_lists  # noqa: E40
 from parselabs.extraction import (  # noqa: E402
     extract_labs_from_page_image,
 )
-from parselabs.paths import (
-    get_env_file,  # noqa: E402
-    get_profiles_dir,  # noqa: E402
-)
+from parselabs.paths import get_env_file  # noqa: E402
 from parselabs.rows import (  # noqa: E402
     DOCUMENT_REVIEW_COLUMNS,
     _rebuild_document_csv_with_review_dataframe,
@@ -71,9 +68,7 @@ from parselabs.utils import (  # noqa: E402
 
 # Module-level logger (file handlers added after config is loaded)
 logger = logging.getLogger(__name__)
-PROFILES_DIR = get_profiles_dir()
 EXTRACTION_FAILURE_RAW_NAME = "[EXTRACTION FAILED]"
-ACTIVE_CONSOLE_MODE: ConsoleLogMode = "normal"
 WORKER_PROGRESS_QUEUE = None
 
 
@@ -961,7 +956,10 @@ Examples:
     return parser.parse_args()
 
 
-def _setup_rebuild_environment(profile_name: str) -> tuple[ProfileConfig, LabSpecsConfig]:
+def _setup_rebuild_environment(
+    profile_name: str,
+    console_mode: ConsoleLogMode,
+) -> tuple[ProfileConfig, LabSpecsConfig]:
     """Setup logging and lab specs for a reviewed-JSON rebuild."""
 
     context = RuntimeContext.from_profile(
@@ -971,7 +969,7 @@ def _setup_rebuild_environment(profile_name: str) -> tuple[ProfileConfig, LabSpe
         need_api=False,
         setup_logs=True,
         clear_logs=False,
-        console_mode=ACTIVE_CONSOLE_MODE,
+        console_mode=console_mode,
     )
 
     global logger
@@ -1087,15 +1085,6 @@ def _get_console_mode(args) -> ConsoleLogMode:
 
     # Fallback to the normal default when a custom namespace omits or corrupts the mode.
     return "normal"
-
-
-def _discover_pdf_files(input_path: Path, input_file_regex: str | None) -> list[Path]:
-    """Discover PDFs and translate filesystem errors into pipeline errors."""
-
-    try:
-        return discover_pdf_files(input_path, input_file_regex)
-    except (FileNotFoundError, PermissionError, OSError) as exc:
-        raise PipelineError(str(exc)) from exc
 
 
 def _process_pdfs_or_use_cache(
@@ -1353,22 +1342,6 @@ def _maybe_auto_standardize_outputs(
     return updated_csv_paths
 
 
-def _build_merged_review_dataframe_from_csv_paths(csv_paths: list[Path]) -> pd.DataFrame:
-    """Return the merged review-dataframe snapshot for the processed documents."""
-
-    review_frames: list[pd.DataFrame] = []
-
-    # Load each per-document CSV exactly as persisted so all.csv mirrors document CSV state.
-    for csv_path in csv_paths:
-        review_frames.append(pd.read_csv(csv_path))
-
-    # Guard: No document CSVs means the merged review dataset must keep a stable schema.
-    if not review_frames:
-        return pd.DataFrame(columns=DOCUMENT_REVIEW_COLUMNS)
-
-    return pd.concat(review_frames, ignore_index=True, sort=False)
-
-
 def _collect_reviewed_corpus_from_document_dirs(
     doc_dirs: list[Path],
     lab_specs: LabSpecsConfig,
@@ -1555,11 +1528,7 @@ def build_final_output_dataframe_from_reviewed_json(
 def _run_reviewed_json_rebuild(args, profile_name: str, allow_pending: bool) -> None:
     """Rebuild per-document CSVs and merged outputs from reviewed page JSON files."""
 
-    global ACTIVE_CONSOLE_MODE
-
-    # Make the rebuild environment use the same console mode as the parsed CLI args.
-    ACTIVE_CONSOLE_MODE = _get_console_mode(args)
-    profile, lab_specs = _setup_rebuild_environment(profile_name)
+    profile, lab_specs = _setup_rebuild_environment(profile_name, _get_console_mode(args))
     _, hidden_cols, widths, _ = get_column_lists(COLUMN_SCHEMA)
     log_user_info(logger, "Rebuilding document CSVs and merged outputs from reviewed page JSON files...")
     reviewed_corpus = _rebuild_review_outputs_from_processed_documents(
@@ -1684,7 +1653,7 @@ def main():
 
         # No profiles configured yet
         else:
-            logger.info(f"No profiles found. Create profile files in {PROFILES_DIR}.")
+            logger.info(f"No profiles found. Create profile files in {ProfileConfig.get_profiles_dir()}.")
         return
 
     # Determine which profiles to run (single specified or all available)
@@ -1697,7 +1666,7 @@ def main():
 
         # Guard: No profiles configured
         if not profiles_to_run:
-            logger.error(f"No profiles found. Create profile files in {PROFILES_DIR}.")
+            logger.error(f"No profiles found. Create profile files in {ProfileConfig.get_profiles_dir()}.")
             logger.error("Or use --profile to specify one.")
             sys.exit(1)
         logger.info("Running profiles: %s", ", ".join(profiles_to_run))

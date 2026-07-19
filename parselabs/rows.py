@@ -498,8 +498,6 @@ def _iter_flattened_review_rows(
 
 def _flatten_page_payloads(
     page_payloads: Iterable[PagePayload],
-    *,
-    accepted_only: bool = False,
 ) -> pd.DataFrame:
     """Flatten canonical page payloads into the shared review-row shape."""
 
@@ -524,7 +522,6 @@ def _flatten_page_payloads(
                 page_number=page_number,
                 document_date=document_date,
                 include_extraction_failed_reason=False,
-                include_statuses={"accepted"} if accepted_only else None,
             )
         )
 

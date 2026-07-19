@@ -8,53 +8,6 @@ import pandas as pd
 
 from parselabs.config import Demographics, LabSpecsConfig
 from parselabs.rows import build_corpus_review_rows
-from parselabs.store import read_page_payload, resolve_page_path
-from parselabs.types import PagePayload, PersistedReviewStatus, coerce_persisted_review_status
-
-
-def _load_json_cached(json_path: Path, cache: dict[str, PagePayload | None]) -> PagePayload | None:
-    """Load and cache page JSON for review-status backfills."""
-
-    json_path_str = str(json_path)
-    if json_path_str in cache:
-        return cache[json_path_str]
-
-    cache[json_path_str] = read_page_payload(json_path)
-    return cache[json_path_str]
-
-
-def _sync_review_statuses(df: pd.DataFrame, output_path: Path) -> list[PersistedReviewStatus | None]:
-    """Read review_status from page JSON for legacy merged review CSVs."""
-
-    json_cache: dict[str, PagePayload | None] = {}
-    review_statuses: list[PersistedReviewStatus | None] = []
-
-    for row in df.itertuples():
-        result_index = getattr(row, "result_index", None)
-        if result_index is None or pd.isna(result_index):
-            review_statuses.append(None)
-            continue
-
-        json_path = resolve_page_path(
-            output_path,
-            getattr(row, "source_file", ""),
-            getattr(row, "page_number", None),
-            ".json",
-        )
-        json_data = _load_json_cached(json_path, json_cache)
-        if json_data and "lab_results" in json_data:
-            result_idx = int(result_index)
-            if result_idx < len(json_data["lab_results"]):
-                review_statuses.append(
-                    coerce_persisted_review_status(
-                        json_data["lab_results"][result_idx].get("review_status")
-                    )
-                )
-                continue
-
-        review_statuses.append(None)
-
-    return review_statuses
 
 
 def _is_out_of_range(value: float, range_min: object, range_max: object) -> bool:
@@ -148,9 +101,6 @@ def load_results_dataframe(
 
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
-
-    if "review_status" not in df.columns:
-        df["review_status"] = _sync_review_statuses(df, output_path)
 
     if "reference_min" in df.columns and "reference_max" in df.columns:
         df["reference_range"] = df.apply(_format_reference_range, axis=1)

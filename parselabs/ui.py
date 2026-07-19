@@ -6,7 +6,7 @@ import logging
 
 import gradio as gr
 
-from parselabs import document_reviewer, results_view
+from parselabs import results_view
 from parselabs.runtime import RuntimeContext
 
 logger = logging.getLogger(__name__)
@@ -18,10 +18,7 @@ REVIEW_TAB_ID = "review-queue"
 def build_app(context: RuntimeContext, default_tab: str) -> gr.Blocks:
     """Build the single review workspace."""
 
-    return results_view.create_app(
-        context,
-        launch_mode=_normalize_default_tab(default_tab),
-    )
+    return results_view.create_app(context)
 
 
 def launch_app(context: RuntimeContext, default_tab: str) -> None:
@@ -29,7 +26,6 @@ def launch_app(context: RuntimeContext, default_tab: str) -> None:
 
     demo = build_app(context, default_tab)
     allowed_paths = RuntimeContext.list_output_roots()
-    css = "\n".join([document_reviewer.CUSTOM_CSS, results_view.CUSTOM_CSS])
     head = results_view.KEYBOARD_JS
     server_port = 7862 if _normalize_default_tab(default_tab) == RESULTS_TAB_ID else 7863
 
@@ -44,7 +40,7 @@ def launch_app(context: RuntimeContext, default_tab: str) -> None:
         show_error=True,
         inbrowser=False,
         allowed_paths=allowed_paths,
-        css=css,
+        css=results_view.CUSTOM_CSS,
         head=head,
     )
 

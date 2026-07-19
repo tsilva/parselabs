@@ -129,66 +129,6 @@ def test_build_page_image_value_for_entry_returns_plain_image_when_bbox_missing(
     assert annotations == []
 
 
-def test_get_document_choices_prioritizes_bbox_docs_for_review_mode():
-    df = pd.DataFrame(
-        [
-            {
-                "source_file": "beta.csv",
-                "review_status": "",
-                "review_needed": True,
-                "bbox_left": None,
-                "bbox_top": None,
-                "bbox_right": None,
-                "bbox_bottom": None,
-            },
-            {
-                "source_file": "alpha.csv",
-                "review_status": "",
-                "review_needed": False,
-                "bbox_left": 1,
-                "bbox_top": 2,
-                "bbox_right": 3,
-                "bbox_bottom": 4,
-            },
-        ]
-    )
-
-    choices = viewer.get_document_choices(df, prioritize_review_sources=True)
-
-    assert choices == [
-        ("alpha (1)", "alpha.csv"),
-        ("beta (1)", "beta.csv"),
-    ]
-
-
-def test_get_initial_document_prefers_bbox_backed_review_document():
-    df = pd.DataFrame(
-        [
-            {
-                "source_file": "beta.csv",
-                "review_status": "",
-                "review_needed": True,
-                "bbox_left": None,
-                "bbox_top": None,
-                "bbox_right": None,
-                "bbox_bottom": None,
-            },
-            {
-                "source_file": "alpha.csv",
-                "review_status": "",
-                "review_needed": False,
-                "bbox_left": 1,
-                "bbox_top": 2,
-                "bbox_right": 3,
-                "bbox_bottom": 4,
-            },
-        ]
-    )
-
-    assert viewer.get_initial_document(df, prioritize_review_sources=True) == "alpha.csv"
-    assert viewer.get_initial_document(df, prioritize_review_sources=False) is None
-
-
 def test_build_plot_download_filename_uses_sanitized_single_lab_name():
     filename = viewer._build_plot_download_filename(["Blood - Thyroid Stimulating Hormone (TSH)"])
 
@@ -345,52 +285,6 @@ def test_apply_filters_sorts_oldest_first_in_document_page_order():
         {"source_file": "older.csv", "page_number": 1, "result_index": 1},
         {"source_file": "older.csv", "page_number": 2, "result_index": 0},
         {"source_file": "newer.csv", "page_number": 1, "result_index": 0},
-    ]
-
-
-def test_apply_filters_keeps_single_document_in_page_order_for_all_sort_modes():
-    df = pd.DataFrame(
-        [
-            {
-                "date": pd.Timestamp("2024-01-01"),
-                "lab_name": "Blood - Zeta",
-                "source_file": "older.csv",
-                "page_number": 2,
-                "result_index": 0,
-                "review_status": "",
-            },
-            {
-                "date": pd.Timestamp("2024-01-01"),
-                "lab_name": "Blood - Alpha",
-                "source_file": "older.csv",
-                "page_number": 1,
-                "result_index": 1,
-                "review_status": "",
-            },
-            {
-                "date": pd.Timestamp("2024-01-01"),
-                "lab_name": "Blood - Beta",
-                "source_file": "older.csv",
-                "page_number": 1,
-                "result_index": 0,
-                "review_status": "",
-            },
-        ]
-    )
-
-    filtered = viewer.apply_filters(
-        df,
-        None,
-        False,
-        "All",
-        document_name="older.csv",
-        sort_order=viewer.SORT_DATE_ASC,
-    )
-
-    assert filtered[["page_number", "result_index"]].to_dict("records") == [
-        {"page_number": 1, "result_index": 0},
-        {"page_number": 1, "result_index": 1},
-        {"page_number": 2, "result_index": 0},
     ]
 
 
@@ -905,7 +799,7 @@ def test_dispatch_row_select_preserves_gradio_select_argument_order(monkeypatch,
     monkeypatch.setattr(
         viewer,
         "handle_row_select",
-        lambda evt_arg, filtered_arg, full_arg, lab_arg, output_arg, document_name=None, **_kwargs: (
+        lambda evt_arg, filtered_arg, full_arg, lab_arg, output_arg, **_kwargs: (
             calls.append((evt_arg, filtered_arg, full_arg, lab_arg, output_arg)) or ("ok",)
         ),
     )
@@ -939,7 +833,7 @@ def test_create_app_does_not_render_profile_selector(monkeypatch, tmp_path):
     monkeypatch.setattr(
         viewer,
         "_render_viewer_state",
-        lambda full_df, filtered_df, output_path, idx, summary_df=None, document_name=None, **kwargs: empty_state,
+        lambda full_df, filtered_df, output_path, idx, summary_df=None, **kwargs: empty_state,
     )
 
     context = types.SimpleNamespace(

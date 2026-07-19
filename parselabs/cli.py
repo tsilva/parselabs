@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 
 
 def _handle_ui_import_error(exc: ImportError) -> None:
@@ -26,7 +26,7 @@ def _handle_ui_import_error(exc: ImportError) -> None:
 def main(argv: Sequence[str] | None = None) -> None:
     """Run the unified parselabs CLI."""
 
-    args = _coerce_argv(argv)
+    args = list(sys.argv[1:] if argv is None else argv)
 
     if not args:
         _run_extract([])
@@ -43,7 +43,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         return
 
     if command == "review":
-        _run_review(rest, program_name="parselabs review")
+        _run_review(rest)
         return
 
     if command == "admin":
@@ -61,10 +61,16 @@ def _run_extract(argv: Sequence[str], *, program_name: str = "parselabs") -> Non
 
     from parselabs.pipeline import main as _main
 
-    _run_with_argv(_main, argv, program_name)
+    old_argv = sys.argv
+    sys.argv = [program_name, *argv]
+
+    try:
+        _main()
+    finally:
+        sys.argv = old_argv
 
 
-def _run_review(argv: Sequence[str], *, program_name: str, default_tab: str = "results") -> None:
+def _run_review(argv: Sequence[str]) -> None:
     """Run the combined review UI with tab-aware argument parsing."""
 
     try:
@@ -72,7 +78,7 @@ def _run_review(argv: Sequence[str], *, program_name: str, default_tab: str = "r
     except ImportError as exc:
         _handle_ui_import_error(exc)
 
-    args = _parse_review_args(argv, program_name=program_name, default_tab=default_tab)
+    args = _parse_review_args(argv)
     context = _load_ui_context(args)
     launch_app(context, default_tab=args.tab)
 
@@ -85,26 +91,14 @@ def _run_admin(argv: Sequence[str]) -> None:
     raise SystemExit(_main(list(argv)))
 
 
-def _run_with_argv(callback: Callable[[], None], argv: Sequence[str], program_name: str) -> None:
-    """Call a CLI entry point after swapping in the desired argv."""
-
-    old_argv = sys.argv
-    sys.argv = [program_name, *argv]
-
-    try:
-        callback()
-    finally:
-        sys.argv = old_argv
-
-
-def _parse_review_args(argv: Sequence[str], *, program_name: str, default_tab: str) -> argparse.Namespace:
+def _parse_review_args(argv: Sequence[str]) -> argparse.Namespace:
     """Parse the review CLI arguments."""
 
     from parselabs.runtime import add_profile_arguments
 
     parser = add_profile_arguments(
         argparse.ArgumentParser(
-            prog=program_name,
+            prog="parselabs review",
             description="Launch the combined Parselabs review UI.",
         ),
         profile_help="Profile name",
@@ -112,7 +106,7 @@ def _parse_review_args(argv: Sequence[str], *, program_name: str, default_tab: s
     parser.add_argument(
         "--tab",
         choices=["results", "review"],
-        default=default_tab,
+        default="results",
         help="Default tab to open in the combined UI",
     )
     args = parser.parse_args(list(argv))
@@ -140,15 +134,6 @@ def _load_ui_context(args: argparse.Namespace):
         raise SystemExit(0)
 
     return load_ui_context(args.profile)
-
-
-def _coerce_argv(argv: Sequence[str] | None) -> list[str]:
-    """Return a mutable argv list for top-level dispatch."""
-
-    if argv is None:
-        return list(sys.argv[1:])
-
-    return list(argv)
 
 
 def _help_text() -> str:

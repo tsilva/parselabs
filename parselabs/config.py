@@ -290,7 +290,6 @@ class LabSpecsConfig:
         self._specs = {}
         self._standardized_names = []
         self._standardized_units = []
-        self._lab_type_map = {}
         self._canonical_name_map = {}
         self._lab_name_aliases = {}
 
@@ -335,13 +334,6 @@ class LabSpecsConfig:
                     all_units.add(unit)
 
         self._standardized_units = sorted(all_units)
-
-        # Build lab_type mapping
-        self._lab_type_map = {
-            self._canonical_name_map.get(lab_name, lab_name): spec.get("lab_type", "blood")
-            for lab_name, spec in self._specs.items()
-            if not lab_name.startswith("_") and isinstance(spec, dict)
-        }
 
         logger.info(f"Loaded {len(self._standardized_names)} lab specs, {len(self._standardized_units)} units")
 

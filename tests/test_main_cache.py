@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-import pandas as pd
 import pytest
 
 from parselabs import pipeline as main
@@ -17,49 +16,6 @@ def _build_config(tmp_path: Path) -> ExtractionConfig:
         extract_model_id="test-model",
         max_workers=1,
     )
-
-
-def test_build_merged_review_dataframe_from_csv_paths_keeps_review_rows(tmp_path):
-    first_csv = tmp_path / "doc1.csv"
-    second_csv = tmp_path / "doc2.csv"
-
-    pd.DataFrame(
-        [
-            {
-                "page_number": 1,
-                "result_index": 0,
-                "source_file": "a.pdf",
-                "raw_lab_name": "Glicose",
-                "raw_value": "92",
-                "raw_lab_unit": "mg/dL",
-                "lab_name": "Blood - Glucose",
-                "value": 92.0,
-                "lab_unit": "mg/dL",
-                "review_status": "",
-            }
-        ]
-    ).to_csv(first_csv, index=False)
-    pd.DataFrame(
-        [
-            {
-                "page_number": 2,
-                "result_index": 1,
-                "source_file": "b.pdf",
-                "raw_lab_name": "Colesterol",
-                "raw_value": "180",
-                "raw_lab_unit": "mg/dL",
-                "lab_name": "Blood - Total Cholesterol",
-                "value": 180.0,
-                "lab_unit": "mg/dL",
-                "review_status": "accepted",
-            }
-        ]
-    ).to_csv(second_csv, index=False)
-
-    merged_df = main._build_merged_review_dataframe_from_csv_paths([first_csv, second_csv])
-
-    assert merged_df["source_file"].tolist() == ["a.pdf", "b.pdf"]
-    assert merged_df["review_status"].fillna("").tolist() == ["", "accepted"]
 
 
 def test_extract_or_load_page_data_reuses_valid_cached_json(tmp_path, monkeypatch):

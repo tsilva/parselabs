@@ -32,16 +32,16 @@ def test_main_routes_extract_subcommand(monkeypatch):
 
 
 def test_main_routes_review_subcommand(monkeypatch):
-    calls: list[tuple[list[str], str, str]] = []
+    calls: list[list[str]] = []
 
-    def fake_run_review(argv, *, program_name, default_tab="results"):
-        calls.append((list(argv), program_name, default_tab))
+    def fake_run_review(argv):
+        calls.append(list(argv))
 
     monkeypatch.setattr(cli, "_run_review", fake_run_review)
 
     cli.main(["review", "--profile", "tsilva", "--tab", "review"])
 
-    assert calls == [(["--profile", "tsilva", "--tab", "review"], "parselabs review", "results")]
+    assert calls == [["--profile", "tsilva", "--tab", "review"]]
 
 
 def test_main_routes_admin_subcommand(monkeypatch):
@@ -65,11 +65,7 @@ def test_main_rejects_removed_review_docs_alias():
 
 
 def test_parse_review_args_supports_tab_selection():
-    args = cli._parse_review_args(
-        ["--profile", "tsilva", "--tab", "review"],
-        program_name="parselabs review",
-        default_tab="results",
-    )
+    args = cli._parse_review_args(["--profile", "tsilva", "--tab", "review"])
 
     assert args.profile == "tsilva"
     assert args.tab == "review"
@@ -77,11 +73,7 @@ def test_parse_review_args_supports_tab_selection():
 
 def test_parse_review_args_requires_profile_for_review_ui(capsys):
     with pytest.raises(SystemExit) as exc_info:
-        cli._parse_review_args(
-            [],
-            program_name="parselabs review",
-            default_tab="results",
-        )
+        cli._parse_review_args([])
 
     captured = capsys.readouterr()
 
@@ -90,11 +82,7 @@ def test_parse_review_args_requires_profile_for_review_ui(capsys):
 
 
 def test_parse_review_args_allows_listing_profiles_without_profile():
-    args = cli._parse_review_args(
-        ["--list-profiles"],
-        program_name="parselabs review",
-        default_tab="results",
-    )
+    args = cli._parse_review_args(["--list-profiles"])
 
     assert args.list_profiles is True
     assert args.profile is None

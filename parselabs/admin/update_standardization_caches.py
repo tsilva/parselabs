@@ -16,28 +16,10 @@ from parselabs.config import LabSpecsConfig, ProfileConfig
 from parselabs.exceptions import ConfigurationError
 from parselabs.runtime import load_profile_config
 from parselabs.standardization_refresh import (
-    _prune_unknown_cache_entries as _shared_prune_unknown_cache_entries,
-)
-from parselabs.standardization_refresh import (
-    _render_prompt_template as _shared_render_prompt_template,
-)
-from parselabs.standardization_refresh import (
     refresh_standardization_caches_from_dataframe,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _render_prompt_template(template: str, **replacements: object) -> str:
-    """Compatibility wrapper for the shared prompt-template renderer."""
-
-    return _shared_render_prompt_template(template, **replacements)
-
-
-def _prune_unknown_cache_entries(cache: dict) -> tuple[dict, int]:
-    """Compatibility wrapper for the shared cache-pruning helper."""
-
-    return _shared_prune_unknown_cache_entries(cache)
 
 
 def _load_profile_dataframe(profile_name: str) -> tuple[ProfileConfig, pd.DataFrame]:
