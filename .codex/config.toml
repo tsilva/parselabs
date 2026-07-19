@@ -1,13 +1,5 @@
 sandbox_mode = "workspace-write"
 
-[mcp_servers.parselabs-review-mcp]
-args = [
-    "run",
-    "parselabs-review-mcp",
-]
-command = "uv"
-cwd = "/Users/tsilva/repos/tsilva/parselabs"
-
 [shell_environment_policy]
 inherit = "core"
 

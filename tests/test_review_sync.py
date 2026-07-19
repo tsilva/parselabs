@@ -11,6 +11,7 @@ import pytest
 from parselabs import pipeline as main
 from parselabs import rows as rows_module
 from parselabs import standardization as standardization_module
+from parselabs.admin import regression_cases
 from parselabs.config import ExtractionConfig, LabSpecsConfig, ProfileConfig
 from parselabs.normalization import apply_normalizations, flag_duplicate_entries
 from parselabs.rows import (
@@ -28,7 +29,6 @@ from parselabs.rows import (
     save_review_status,
 )
 from parselabs.types import ReviewMissingRowMarker
-from utils import regression_cases
 
 
 def _write_processed_document(

@@ -30,7 +30,6 @@ dependencies = [
     "tqdm",
     "gradio>=5.0.0",
     "pyyaml",
-    "mcp>=1.26.0",
 ]
 
 [project.optional-dependencies]
@@ -55,6 +54,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.version]
 path = "parselabs/__init__.py"
+
+[tool.hatch.build.targets.wheel.force-include]
+"config" = "parselabs/resources/config"
+"prompts" = "parselabs/resources/prompts"
+"static" = "parselabs/resources/static"
 
 [tool.ruff]
 line-length = 230

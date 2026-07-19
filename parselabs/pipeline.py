@@ -103,7 +103,7 @@ def _copy_pdf_to_output(pdf_path: Path, doc_out_dir: Path) -> Path:
 
     # Copy only if missing or file size differs (ensures we have latest version)
     if not copied_pdf.exists() or copied_pdf.stat().st_size != pdf_path.stat().st_size:
-        shutil.copy2(pdf_path, copied_pdf)  # copy2 preserves metadata like timestamps
+        shutil.copyfile(pdf_path, copied_pdf)
     return copied_pdf  # Return path to the copied PDF (whether newly copied or existing)
 
 

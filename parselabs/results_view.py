@@ -100,7 +100,6 @@ class ViewerRowContext:
     position_text: str
     source_image_value: tuple[str, list[tuple[tuple[int, int, int, int], str]]] | None
     plot_labs: list[str]
-    selected_ref: tuple[float, float] | None
 
 
 def build_viewer_row_context(
@@ -117,9 +116,6 @@ def build_viewer_row_context(
         return None
 
     entry = row.to_dict()
-    ref_min = row.get("reference_min")
-    ref_max = row.get("reference_max")
-    selected_ref = (ref_min, ref_max) if pd.notna(ref_min) or pd.notna(ref_max) else None
     plot_labs = [selected_lab_name] if selected_lab_name else [row.get("lab_name")]
 
     return ViewerRowContext(
@@ -127,7 +123,6 @@ def build_viewer_row_context(
         position_text=f"**Row {row_index + 1} of {len(filtered_df)}**",
         source_image_value=build_page_image_value_for_entry(entry, output_path, label=SOURCE_BBOX_LABEL),
         plot_labs=plot_labs,
-        selected_ref=selected_ref,
     )
 
 
@@ -840,7 +835,6 @@ def _add_pdf_reference_band(
 def create_single_lab_plot(
     df: pd.DataFrame,
     lab_name: str,
-    selected_ref: tuple[float, float] | None = None,
     *,
     show_optimal_range: bool = True,
     show_pdf_range: bool = True,
@@ -850,9 +844,6 @@ def create_single_lab_plot(
     Args:
         df: DataFrame with lab data
         lab_name: Name of the lab test to plot
-        selected_ref: Retained for callback compatibility. PDF reference ranges are
-                      rendered per result because source reports can use different
-                      assay-specific ranges for the same standardized lab.
     """
 
     lab_df = df[df["lab_name"] == lab_name].copy()
@@ -1038,7 +1029,6 @@ def create_single_lab_plot(
 def create_interactive_plot(
     df: pd.DataFrame,
     lab_names: list | None,
-    selected_ref: tuple[float, float] | None = None,
     *,
     show_optimal_range: bool = True,
     show_pdf_range: bool = True,
@@ -1048,8 +1038,6 @@ def create_interactive_plot(
     Args:
         df: DataFrame with lab data
         lab_names: List of lab names to plot
-        selected_ref: Retained for callback compatibility. PDF reference ranges are
-                      rendered per result instead of from a selected/static row.
     """
 
     # Guard: no labs selected or no data
@@ -1072,7 +1060,6 @@ def create_interactive_plot(
         fig, _ = create_single_lab_plot(
             df,
             lab_names[0],
-            selected_ref=selected_ref,
             show_optimal_range=show_optimal_range,
             show_pdf_range=show_pdf_range,
         )
@@ -1380,7 +1367,6 @@ def _render_viewer_state(
         plot=create_interactive_plot(
             full_df,
             row_context.plot_labs,
-            selected_ref=row_context.selected_ref,
             show_optimal_range=show_optimal_range,
             show_pdf_range=show_pdf_range,
         ),

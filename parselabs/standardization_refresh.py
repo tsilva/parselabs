@@ -12,6 +12,7 @@ from openai import APIError, OpenAI
 
 from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig
 from parselabs.prompt_templates import load_prompt_template
+from parselabs.runtime import get_openai_client_for_credentials
 from parselabs.standardization import (
     build_name_cache_key,
     load_cache,
@@ -439,10 +440,7 @@ def _build_client(
     if not api_key:
         raise ValueError("Standardization refresh requires an OpenRouter API key.")
 
-    return OpenAI(
-        base_url=base_url or "https://openrouter.ai/api/v1",
-        api_key=api_key,
-    )
+    return get_openai_client_for_credentials(base_url, api_key)
 
 
 def refresh_standardization_caches_from_dataframe(

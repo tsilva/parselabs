@@ -1,15 +1,18 @@
 from pathlib import Path
 
-from parselabs.paths import get_env_file, get_profiles_dir
+from parselabs import paths
 
 
-def test_get_profiles_dir_uses_profiles_subdirectory(monkeypatch):
-    monkeypatch.setattr(Path, "home", classmethod(lambda cls: Path("/tmp/test-home")))
+def test_writable_cache_is_user_config_state(monkeypatch, tmp_path):
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
 
-    assert get_profiles_dir() == Path("/tmp/test-home/.config/parselabs/profiles")
+    assert paths.get_cache_dir() == tmp_path / ".config" / "parselabs" / "cache"
 
 
-def test_get_env_file_uses_user_config_directory(monkeypatch):
-    monkeypatch.setattr(Path, "home", classmethod(lambda cls: Path("/tmp/test-home")))
+def test_bundled_resources_resolve_in_source_checkout():
+    resource_root = paths.get_bundled_resources_dir()
 
-    assert get_env_file() == Path("/tmp/test-home/.config/parselabs/.env")
+    assert (resource_root / "config" / "lab_specs.json").is_file()
+    assert (resource_root / "prompts" / "extraction_system.md").is_file()
+    assert (resource_root / "static" / "viewer.css").is_file()
+    assert paths.get_source_lab_specs_path() == resource_root / "config" / "lab_specs.json"

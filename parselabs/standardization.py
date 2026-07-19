@@ -6,12 +6,13 @@ import re
 import unicodedata
 
 from parselabs.config import UNKNOWN_VALUE
-from parselabs.paths import get_cache_dir
+from parselabs.paths import get_bundled_cache_dir, get_cache_dir
 
 logger = logging.getLogger(__name__)
 
-# Cache directory for standardization results (user-editable JSON files)
+# Writable user cache plus immutable defaults bundled with the application.
 CACHE_DIR = get_cache_dir()
+DEFAULT_CACHE_DIR = get_bundled_cache_dir()
 
 
 def normalize_name_cache_key_component(raw_name) -> str:
@@ -236,6 +237,10 @@ def load_cache(name: str) -> dict:
     """Load JSON cache file. User-editable for overriding decisions."""
 
     path = CACHE_DIR / f"{name}.json"
+
+    # Use the bundled defaults until the user has a writable override.
+    if not path.exists():
+        path = DEFAULT_CACHE_DIR / f"{name}.json"
 
     # Cache file exists — attempt to load it
     if path.exists():

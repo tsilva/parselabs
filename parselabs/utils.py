@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Literal, TypeVar
 
@@ -49,6 +50,21 @@ def log_user_warning(target_logger: logging.Logger, message: str, *args, **kwarg
     extra = dict(kwargs.pop("extra", {}) or {})
     extra[USER_VISIBLE_LOG_ATTR] = True
     target_logger.warning(message, *args, extra=extra, **kwargs)
+
+
+def make_path_writable(path: Path, mode: int) -> None:
+    """Clear restrictive filesystem flags and apply an owner-writable mode."""
+
+    if hasattr(os, "chflags"):
+        try:
+            os.chflags(path, 0)
+        except OSError:
+            pass
+
+    try:
+        path.chmod(mode)
+    except OSError:
+        pass
 
 
 def _resize_image(image: Image.Image, max_width: int) -> Image.Image:

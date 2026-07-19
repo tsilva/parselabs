@@ -11,7 +11,6 @@ from typing import Any
 
 import pandas as pd
 
-
 BBOX_COLUMNS = ["bbox_left", "bbox_top", "bbox_right", "bbox_bottom"]
 
 

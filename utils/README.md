@@ -1,11 +1,13 @@
 # Utility Scripts
 
-`parselabs admin` is the preferred entry point for maintenance and migration commands. The legacy `utils/*.py` scripts still work as compatibility wrappers, but new documentation should prefer the consolidated admin CLI.
+`parselabs admin` is the preferred entry point for maintenance and migration commands. Installable implementations live in `parselabs/admin/`; the legacy `utils/*.py` paths are thin compatibility entry points.
 
 ## Lab Specifications Manager
 
-### lab_specs_manager.py
+### `parselabs admin lab-specs`
 Consolidated utility for managing lab_specs.json operations.
+
+The mutating `sort` and `fix-encoding` commands require an editable source checkout so installed package resources remain immutable.
 
 **Commands:**
 
@@ -40,7 +42,7 @@ Options:
 
 ## Validation
 
-### validate_lab_specs_schema.py
+### `parselabs admin validate-lab-specs`
 Comprehensive schema validator for lab_specs.json.
 
 Validates:
@@ -69,7 +71,7 @@ Exit codes:
 
 ## Analysis
 
-### analyze_unknowns.py
+### `parselabs admin analyze-unknowns`
 Analyze $UNKNOWN$ values in extracted results to identify patterns and missing lab mappings.
 
 Usage:
@@ -79,7 +81,7 @@ parselabs admin analyze-unknowns
 
 ## Review Artifacts
 
-### review_artifacts.py
+### `parselabs admin review-artifacts`
 Return one pending stored extraction row plus deterministic visual artifacts for native row-by-row auditing without the Gradio reviewer.
 
 Usage:
@@ -101,7 +103,7 @@ Output:
 
 ## Migration
 
-### migrate_output_dirs.py
+### `parselabs admin migrate-output-dirs`
 Batch-rename legacy output directories to include the file hash suffix (`{stem}/` → `{stem}_{hash}/`).
 
 Usage:
@@ -116,7 +118,7 @@ parselabs admin migrate-output-dirs --profile tsilva
 parselabs admin migrate-output-dirs
 ```
 
-### migrate_raw_columns.py
+### `parselabs admin migrate-raw-columns`
 Rename `_raw` suffix columns to `raw_` prefix in JSON, per-document CSV, and all.csv files.
 
 Usage:
