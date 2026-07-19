@@ -12,11 +12,12 @@ import pandas as pd
 from parselabs.config import ProfileConfig
 from parselabs.exceptions import ConfigurationError
 from parselabs.export_schema import COLUMN_ORDER, COLUMN_SCHEMA
+from parselabs.paths import get_project_root
 from parselabs.runtime import load_profile_config
 from parselabs.types import ApprovedCaseMetadata
 from parselabs.utils import ensure_columns
 
-APPROVED_FIXTURES_DIR = Path("tests/fixtures/approved")
+APPROVED_FIXTURES_DIR = get_project_root() / "tests" / "fixtures" / "approved"
 CASE_JSON_NAME = "case.json"
 EXPECTED_CSV_NAME = "expected.csv"
 DOCUMENT_PDF_NAME = "document.pdf"

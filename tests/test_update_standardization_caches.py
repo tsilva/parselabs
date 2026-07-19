@@ -1,4 +1,4 @@
-from utils.update_standardization_caches import _prune_unknown_cache_entries, _render_prompt_template
+from parselabs.admin.update_standardization_caches import _prune_unknown_cache_entries, _render_prompt_template
 
 
 def test_render_prompt_template_preserves_literal_braces():

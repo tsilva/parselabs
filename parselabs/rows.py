@@ -25,34 +25,29 @@ from parselabs.review_flags import append_review_reason_code
 from parselabs.standardization import standardize_lab_names, standardize_lab_units
 from parselabs.store import (
     DocumentRef,
+    count_review_missing_rows,
     get_document_csv_path,
     get_document_stem,
+    iter_processed_documents,
     parse_page_number,
     read_page_payload,
 )
 from parselabs.store import (
-    count_review_missing_rows as count_review_missing_rows_in_store,
+    get_page_image_path as get_page_image_path,
 )
 from parselabs.store import (
-    get_page_image_path as get_page_image_path_from_store,
+    get_review_missing_rows as get_review_missing_rows,
 )
 from parselabs.store import (
-    get_review_missing_rows as get_review_missing_rows_from_store,
+    save_missing_row_marker as save_missing_row_marker,
 )
 from parselabs.store import (
-    iter_processed_documents as iter_processed_documents_from_store,
-)
-from parselabs.store import (
-    save_missing_row_marker as save_missing_row_marker_in_store,
-)
-from parselabs.store import (
-    save_review_status as save_review_status_in_store,
+    save_review_status as save_review_status,
 )
 from parselabs.types import (
     PageLabResultPayload,
     PagePayload,
     PersistedReviewStatus,
-    ReviewMissingRowRecord,
     ReviewRow,
     coerce_persisted_review_status,
 )
@@ -161,12 +156,6 @@ class ReviewCorpusReport:
 
 class ReviewStateError(RuntimeError):
     """Raised when reviewed JSON cannot be promoted into fixture truth."""
-
-
-def iter_processed_documents(output_path: Path) -> list[ProcessedDocument]:
-    """Discover processed document directories under an output path."""
-
-    return iter_processed_documents_from_store(output_path)
 
 
 def get_review_summary(review_df: pd.DataFrame, missing_row_markers: int = 0) -> ReviewSummary:
@@ -549,30 +538,6 @@ def _flatten_page_payloads(
     return flattened_df
 
 
-def save_review_status(doc_dir: Path, page_number: int, result_index: int, status: str | None) -> tuple[bool, str]:
-    """Persist a review decision to the page JSON backing a CSV row."""
-
-    return save_review_status_in_store(doc_dir, page_number, result_index, status)
-
-
-def save_missing_row_marker(doc_dir: Path, page_number: int, anchor_result_index: int) -> tuple[bool, str]:
-    """Persist a missing-row marker to the page JSON backing the current review row."""
-
-    return save_missing_row_marker_in_store(doc_dir, page_number, anchor_result_index)
-
-
-def get_review_missing_rows(doc_dir: Path, page_number: int | None = None) -> list[ReviewMissingRowRecord]:
-    """Return unresolved missing-row markers for a document or page."""
-
-    return get_review_missing_rows_from_store(doc_dir, page_number=page_number)
-
-
-def count_review_missing_rows(doc_dir: Path, page_number: int | None = None) -> int:
-    """Return the number of unresolved missing-row markers for a document or page."""
-
-    return count_review_missing_rows_in_store(doc_dir, page_number=page_number)
-
-
 def ensure_document_fixture_ready(doc_dir: Path, lab_specs: LabSpecsConfig) -> ReviewSummary:
     """Raise when a processed document is not ready to become reviewed truth."""
 
@@ -653,12 +618,6 @@ def build_review_corpus_report(output_path: Path, lab_specs: LabSpecsConfig) -> 
         rejected_raw_name_counts=dict(rejected_raw_name_counts.most_common()),
         rejected_raw_unit_counts=dict(rejected_raw_unit_counts.most_common()),
     )
-
-
-def get_page_image_path(doc_dir: Path, page_number: int) -> Path | None:
-    """Return the primary page image for a review row when it exists."""
-
-    return get_page_image_path_from_store(doc_dir, page_number)
 
 
 def _extract_document_date(page_payload: PagePayload, doc_dir: Path) -> str | None:

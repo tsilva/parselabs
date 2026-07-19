@@ -16,7 +16,6 @@ from PIL import Image
 
 from parselabs.review import scale_bbox_to_pixels
 
-
 BBOX_COLUMNS = ["bbox_left", "bbox_top", "bbox_right", "bbox_bottom"]
 
 

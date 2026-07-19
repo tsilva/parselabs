@@ -17,7 +17,7 @@ from parselabs.regression import (
     get_required_regression_profile,
 )
 from parselabs.rows import build_document_expected_dataframe_from_reviewed_json, save_review_status
-from parselabs.utils import setup_logging
+from parselabs.utils import make_path_writable, setup_logging
 
 
 def _close_root_logging_handlers() -> None:
@@ -43,23 +43,11 @@ def _cleanup_temp_root(temp_root: Path) -> None:
 
     # Relax permissions first so macOS temp cleanup does not fail on nested outputs.
     for child in sorted(temp_root.rglob("*"), reverse=True):
-        try:
-            # Directories need execute permission for recursive traversal and deletion.
-            if child.is_dir():
-                child.chmod(0o700)
-                continue
-
-            # Files only need read/write permission for explicit cleanup.
-            child.chmod(0o600)
-        except OSError:
-            # Best-effort cleanup should keep going even when a path disappeared mid-walk.
-            continue
+        mode = 0o700 if child.is_dir() else 0o600
+        make_path_writable(child, mode)
 
     # Ensure the root directory itself is traversable before removing it.
-    try:
-        temp_root.chmod(0o700)
-    except OSError:
-        pass
+    make_path_writable(temp_root, 0o700)
 
     # Remove the temp tree eagerly so pytest does not need to clean it up later.
     shutil.rmtree(temp_root, ignore_errors=True)
@@ -144,7 +132,7 @@ def _apply_review_state(review_state_path: Path | None, doc_dir: Path) -> None:
     if review_state_path is None or not review_state_path.exists():
         pytest.fail(
             "Approved fixture is missing review_state.json. "
-            "Resync fixtures with `uv run python utils/regression_cases.py sync-reviewed --profile ...`."
+            "Resync fixtures with `parselabs admin regression sync-reviewed --profile ...`."
         )
 
     snapshot_payload = json.loads(review_state_path.read_text(encoding="utf-8"))

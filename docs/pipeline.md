@@ -6,8 +6,9 @@ This document describes the current extraction, review, and export pipeline.
 
 - `parselabs/runtime.py` is the shared bootstrap surface for profile resolution, runtime context creation, OpenAI client caching, and runtime path access.
 - `parselabs/store.py` is the shared filesystem/state surface for hashed document discovery, page JSON persistence, review actions, and legacy merged-review CSV fallback.
-- `parselabs/dataset.py` is the shared data surface for review/export row builders, schema metadata, normalization/standardization/validation exports, and integrity-report helpers.
-- `parselabs/review.py` is the shared UI helper surface for bbox scaling, source-page overlays, reference formatting, and results-explorer dataframe loading.
+- `parselabs/rows.py` is the shared review/export row-building surface; `parselabs/dataset.py` owns integrity reports.
+- `parselabs/review.py` owns shared UI presentation helpers, while `parselabs/review_data.py` owns results-explorer dataframe loading.
+- `parselabs/admin/` owns installable maintenance-command implementations; `utils/*.py` contains compatibility entry points only.
 
 1. Profile/runtime setup.
 - `parselabs/cli.py` dispatches the top-level `parselabs` command into `extract`, `review`, and `admin` flows.
@@ -56,7 +57,7 @@ This document describes the current extraction, review, and export pipeline.
 
 7. Per-document setup inside a worker.
 - `process_single_pdf(...)` creates the hashed document directory if needed.
-- It copies the original source PDF into that directory.
+- It copies only the original PDF contents into that directory, without propagating restrictive filesystem flags or unrelated metadata.
 - That copied PDF becomes the local artifact used for page conversion and later review.
 - The worker keeps track of page-level extraction failures separately from total document failure.
 - Expected vision API failures are converted to `ExtractionAPIError` and reported as document failures; unexpected internal runtime errors propagate instead of being folded into failed-page output.
@@ -186,6 +187,7 @@ This document describes the current extraction, review, and export pipeline.
 - After the first export pass, the pipeline scans merged review rows for uncached standardization names and unit pairs.
 - By default, it runs one in-process cache refresh pass using the same OpenRouter credentials and extraction model resolved for the active runtime.
 - The shared refresh helper updates raw-name mappings first, using the extracted `raw_section_name` as part of the name-cache key when available, then rescans unit pairs using the newly resolved standardized names before calling the unit standardizer.
+- Bundled standardization caches are immutable defaults; automatic and admin refreshes persist user overrides under `~/.config/parselabs/cache/`.
 - This means a row that was `$UNKNOWN$` on the first pass can still contribute a unit mapping in the same automatic refresh cycle.
 - If the refresh adds any cache entries, the pipeline rebuilds per-document CSVs and merged outputs from persisted page JSON only.
 - It does not re-extract PDFs and does not repeat extraction API calls.

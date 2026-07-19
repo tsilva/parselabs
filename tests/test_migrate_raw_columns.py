@@ -2,7 +2,7 @@ import json
 
 import pandas as pd
 
-from utils import migrate_raw_columns
+from parselabs.admin import migrate_raw_columns
 
 
 def test_migrate_json_file_renames_legacy_raw_keys(tmp_path):

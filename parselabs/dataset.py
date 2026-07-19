@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import hashlib
-import importlib
-import json
 import logging
-from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
 
 from parselabs.exceptions import ConfigurationError
+from parselabs.lab_specs_validation import LabSpecsValidator
 from parselabs.paths import get_lab_specs_path
 from parselabs.runtime import list_non_template_profiles, load_profile_config
 
@@ -198,86 +196,13 @@ def _check_unique_date_lab_name(df: pd.DataFrame, report: dict[str, list[str]]) 
         _append_report_error(report, str(source_file), f"Duplicate (date, lab_name) at index {row.Index}: date={date_val}, lab_name={lab_name}")
 
 
-def _check_loinc_critical_codes(report: dict[str, list[str]]) -> None:
-    """Ensure critical LOINC codes are correct."""
-
-    file_key = str(LAB_SPECS_PATH)
-
-    try:
-        with open(LAB_SPECS_PATH, "r", encoding="utf-8") as handle:
-            config = json.load(handle)
-
-        expected_codes = {
-            "Blood - Alpha-1-Antitrypsin (AAT)": "1825-9",
-            "Blood - Alkaline Phosphatase (ALP)": "6768-6",
-            "Blood - Bilirubin Total": "1975-2",
-            "Blood - Albumin (%)": "13980-8",
-            "Blood - Alpha-1 Globulins (%)": "13978-2",
-        }
-
-        for test_name, expected_code in expected_codes.items():
-            if test_name not in config:
-                continue
-            actual_code = config[test_name].get("loinc_code")
-            if actual_code != expected_code:
-                _append_report_error(report, file_key, f"{test_name} code should be {expected_code}, got {actual_code}")
-
-        hemolysis_tests = [
-            "Blood - Hemolysis (total, immediate) (%)",
-            "Blood - Hemolysis (total, after incubation) (%)",
-            "Blood - Hemolysis (initial, immediate) (%)",
-            "Blood - Hemolysis (initial, after incubation) (%)",
-        ]
-        for test_name in hemolysis_tests:
-            if test_name not in config:
-                continue
-            if config[test_name].get("loinc_code") == "1975-2":
-                _append_report_error(report, file_key, f"{test_name} should not share code 1975-2 with Bilirubin")
-    except (OSError, json.JSONDecodeError) as exc:
-        _append_report_error(report, file_key, f"Exception: {exc}")
-
-
-def _check_no_critical_loinc_duplicates(report: dict[str, list[str]]) -> None:
-    """Ensure completely different tests do not share critical LOINC codes."""
-
-    file_key = str(LAB_SPECS_PATH)
-
-    try:
-        with open(LAB_SPECS_PATH, "r", encoding="utf-8") as handle:
-            config = json.load(handle)
-
-        loinc_to_tests: dict[str, list[str]] = defaultdict(list)
-        for name, spec in config.items():
-            if name.startswith("_"):
-                continue
-            code = spec.get("loinc_code")
-            if code:
-                loinc_to_tests[code].append(name)
-
-        critical_pairs = [
-            ("Alkaline Phosphatase", "Alpha-1-Antitrypsin"),
-            ("Bilirubin", "Hemolysis"),
-            ("Albumin (%)", "Alpha-1 Globulin"),
-        ]
-
-        for code, tests in loinc_to_tests.items():
-            for first, second in critical_pairs:
-                has_first = any(first in test for test in tests)
-                has_second = any(second in test for test in tests)
-                if has_first and has_second:
-                    _append_report_error(report, file_key, f"LOINC {code} incorrectly shared between {first} and {second}: {tests}")
-    except (OSError, json.JSONDecodeError) as exc:
-        _append_report_error(report, file_key, f"Exception: {exc}")
-
-
 def _check_lab_specs_schema(report: dict[str, list[str]]) -> None:
     """Validate lab_specs.json schema and completeness."""
 
     file_key = str(LAB_SPECS_PATH)
 
     try:
-        validator_module = importlib.import_module("utils.validate_lab_specs_schema")
-        validator = validator_module.LabSpecsValidator()
+        validator = LabSpecsValidator()
         validator.validate()
 
         for error in validator.errors:
@@ -292,8 +217,6 @@ def build_integrity_report(profile_names: list[str] | None = None) -> dict[str, 
     report: dict[str, list[str]] = {}
 
     _check_lab_specs_schema(report)
-    _check_loinc_critical_codes(report)
-    _check_no_critical_loinc_duplicates(report)
 
     if profile_names is None:
         profile_names = list_non_template_profiles()

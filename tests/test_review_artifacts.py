@@ -8,8 +8,8 @@ from types import SimpleNamespace
 from PIL import Image
 
 from parselabs import review_artifacts_backend
+from parselabs.admin import review_artifacts
 from parselabs.config import LabSpecsConfig
-from utils import review_artifacts
 
 
 def _make_lab_specs(tmp_path: Path) -> LabSpecsConfig:

@@ -14,12 +14,15 @@ from openai import OpenAI
 from parselabs.config import Demographics, ExtractionConfig, LabSpecsConfig, ProfileConfig
 from parselabs.exceptions import ConfigurationError
 from parselabs.paths import (
+    get_bundled_cache_dir,
+    get_bundled_resources_dir,
     get_cache_dir,
     get_env_file,
     get_lab_specs_path,
     get_profiles_dir,
     get_project_root,
     get_prompts_dir,
+    get_source_lab_specs_path,
     get_static_dir,
     get_user_config_dir,
 )
@@ -31,7 +34,14 @@ _CLIENT_CACHE: dict[tuple[str, str], OpenAI] = {}
 def get_openai_client(config: ExtractionConfig) -> OpenAI:
     """Return a cached OpenAI client for one runtime configuration."""
 
-    cache_key = (config.openrouter_base_url, config.openrouter_api_key)
+    return get_openai_client_for_credentials(config.openrouter_base_url, config.openrouter_api_key)
+
+
+def get_openai_client_for_credentials(base_url: str | None, api_key: str) -> OpenAI:
+    """Return a cached OpenAI client for one endpoint and API key."""
+
+    resolved_base_url = base_url or "https://openrouter.ai/api/v1"
+    cache_key = (resolved_base_url, api_key)
     cached_client = _CLIENT_CACHE.get(cache_key)
 
     # Reuse a single client per endpoint/key pair so callers stay lightweight.
@@ -39,8 +49,8 @@ def get_openai_client(config: ExtractionConfig) -> OpenAI:
         return cached_client
 
     client = OpenAI(
-        base_url=config.openrouter_base_url,
-        api_key=config.openrouter_api_key,
+        base_url=resolved_base_url,
+        api_key=api_key,
     )
     _CLIENT_CACHE[cache_key] = client
     return client
@@ -285,12 +295,16 @@ def load_ui_context(profile_name: str | None) -> RuntimeContext:
 __all__ = [
     "RuntimeContext",
     "add_profile_arguments",
+    "get_bundled_cache_dir",
+    "get_bundled_resources_dir",
     "get_cache_dir",
     "get_lab_specs_path",
     "get_openai_client",
+    "get_openai_client_for_credentials",
     "get_profiles_dir",
     "get_project_root",
     "get_prompts_dir",
+    "get_source_lab_specs_path",
     "get_static_dir",
     "get_user_config_dir",
     "load_profile_config",

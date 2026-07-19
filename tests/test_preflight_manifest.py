@@ -67,7 +67,20 @@ def test_prepare_pdf_run_classifies_fully_cached_documents(tmp_path, monkeypatch
     doc_ref = build_document_ref(pdf_a, output_dir, "deadbeef")
     _write_valid_csv(doc_ref.doc_dir / "a.csv")
     (doc_ref.doc_dir / "a.001.json").write_text(
-        json.dumps({"page_has_lab_data": True, "lab_results": [{"raw_lab_name": "Glucose"}]}),
+        json.dumps(
+            {
+                "page_has_lab_data": True,
+                "lab_results": [
+                    {
+                        "raw_lab_name": "Glucose",
+                        "bbox_left": 0.1,
+                        "bbox_top": 0.1,
+                        "bbox_right": 0.9,
+                        "bbox_bottom": 0.2,
+                    }
+                ],
+            }
+        ),
         encoding="utf-8",
     )
 

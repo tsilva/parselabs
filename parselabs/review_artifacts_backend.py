@@ -1,4 +1,4 @@
-"""Shared deterministic review-artifact helpers for CLI and MCP flows."""
+"""Shared deterministic review-artifact helpers for admin review flows."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ from parselabs.config import LabSpecsConfig
 from parselabs.export_schema import COLUMN_SCHEMA, get_column_lists
 from parselabs.review import get_bbox_coordinates, scale_bbox_to_pixels
 from parselabs.review_state import ReviewTarget, apply_review_action_for_target
-from parselabs.runtime import RuntimeContext
 from parselabs.rows import DOCUMENT_REVIEW_COLUMNS, _rebuild_document_csv_with_review_dataframe
+from parselabs.runtime import RuntimeContext
 from parselabs.store import get_document_csv_path, get_page_image_path, iter_processed_documents, parse_page_number, read_page_payload
 from parselabs.types import (
     BBox,
