@@ -16,6 +16,7 @@ def test_classify_qualitative_value_handles_accented_negative_tokens():
 
     assert classify_qualitative_value("Límpido") == 0
     assert classify_qualitative_value("Não detetado") == 0
+    assert classify_qualitative_value("Não reativo") == 0
     assert classify_qualitative_value("Cultura estéril após incubação") == 0
     assert classify_qualitative_value("Amarela ouro") == 0
 

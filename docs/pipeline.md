@@ -140,6 +140,7 @@ This document describes the current extraction, review, and export pipeline.
 18. Deterministic normalization.
 - `apply_normalizations(...)` runs before review/export divergence.
 - This is the objective cleanup layer: numeric parsing, comparison-operator handling, unit conversion, reference normalization, and related mechanical transforms.
+- Portuguese non-reactive qualitative results such as `Não reativo` are normalized to boolean false for boolean-backed assays.
 - It is intentionally not a subjective correction layer.
 - The public export aliases like `lab_name`, `value`, `lab_unit`, `reference_min`, and `reference_max` are added later, after normalization.
 

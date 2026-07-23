@@ -314,6 +314,7 @@ def classify_qualitative_value(text: str) -> int | None:
         "ausent",  # ausente, ausentes, ausência
         "ausenci",  # ausencia
         "nao reagente",
+        "nao reativ",  # não reativo, não reativa
         "nao det",  # nao detetado, nao det.
         "not detected",
         "non reactive",
