@@ -187,7 +187,12 @@ This document describes the current extraction, review, and export pipeline.
 25. End-of-run standardization auto-refresh.
 - After the first export pass, the pipeline scans merged review rows for uncached standardization names and unit pairs.
 - By default, it runs one in-process cache refresh pass using the same OpenRouter credentials and extraction model resolved for the active runtime.
-- The shared refresh helper updates raw-name mappings first, using the extracted `raw_section_name` as part of the name-cache key when available, then rescans unit pairs using the newly resolved standardized names before calling the unit standardizer.
+- The shared refresh helper preserves deterministic first-seen order and sends bounded batches instead of one corpus-sized request. Name and unit calls both default to at most 50 items; the admin command can override these limits with `--name-batch-size` and `--unit-batch-size`.
+- Raw-name batches run first, using the extracted `raw_section_name` as part of the name-cache key when available. Every valid batch result is merged into the working cache and persisted immediately, so later name failures cannot discard earlier progress and newly resolved names are available when the refresh rescans dependent unit pairs.
+- Unit mappings use the same batched, eager-persistence flow. Every returned name or unit must correspond to an item in its current batch and use a configured candidate value. Hallucinated inputs, malformed items, out-of-candidate values, and `$UNKNOWN$` results are never cached.
+- Standardization uses a dedicated OpenAI client configuration with SDK retries disabled; extraction client retry behavior is unchanged. A retryable API failure can consume at most one application-level retry per item. Timed-out batches retry as two smaller deterministic sub-batches, while omitted or malformed response items retry only the incomplete subset. Retry splitting is not recursive.
+- A batch that remains unsuccessful is recorded in a concise aggregate error, but independent later batches continue. Update and unresolved counts therefore cover the complete best-effort refresh pass, including partial successes.
+- For `codex/...` standardization model IDs, name and unit calls explicitly use medium reasoning effort. Other providers do not receive that provider-specific option.
 - Bundled standardization caches are immutable defaults; automatic and admin refreshes persist user overrides under `~/.config/parselabs/cache/`.
 - This means a row that was `$UNKNOWN$` on the first pass can still contribute a unit mapping in the same automatic refresh cycle.
 - If the refresh adds any cache entries, the pipeline rebuilds per-document CSVs and merged outputs from persisted page JSON only.

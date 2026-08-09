@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Mapping
+import math
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from typing import Any, TypeVar
 
 import pandas as pd
-from openai import APIError, OpenAI
+from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError, OpenAI
 
 from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig
 from parselabs.prompt_templates import load_prompt_template
-from parselabs.runtime import get_openai_client_for_credentials
 from parselabs.standardization import (
     build_name_cache_key,
     load_cache,
@@ -25,6 +26,32 @@ from parselabs.types import StandardizationNameMatch, StandardizationUnitMatch
 from parselabs.utils import parse_llm_json_response
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_NAME_STANDARDIZATION_BATCH_SIZE = 50
+DEFAULT_UNIT_STANDARDIZATION_BATCH_SIZE = 50
+STANDARDIZATION_MAX_RETRY_DEPTH = 1
+_MAX_ERROR_DETAILS = 3
+_STANDARDIZATION_CALL_ERRORS = (APIError, OSError, ValueError)
+
+_BatchItem = TypeVar("_BatchItem")
+
+
+@dataclass(frozen=True)
+class _ValidatedBatch:
+    """Validated cache updates and response-complete input keys for one call."""
+
+    mappings: dict[str, str]
+    completed_keys: frozenset[str]
+
+
+@dataclass(frozen=True)
+class _BatchFailure:
+    """Concise internal failure detail for one top-level batch."""
+
+    batch_number: int
+    total_batches: int
+    unresolved_count: int
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -98,6 +125,7 @@ def _parse_unit_match_item(item: Mapping[str, object]) -> StandardizationUnitMat
         "standardized_unit": standardized_unit,
     }
 
+
 def _render_prompt_template(template: str, **replacements: object) -> str:
     """Replace only known placeholder tokens in a prompt template."""
 
@@ -158,20 +186,27 @@ def _standardize_names_with_llm(
 
 Return a JSON array of objects with raw_lab_name, raw_section_name, and standardized_name."""
 
-    completion = client.chat.completions.create(
-        model=model_id,
-        messages=[
+    request_options: dict[str, Any] = {
+        "model": model_id,
+        "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        temperature=0.1,
-        max_tokens=4000,
+        "temperature": 0.1,
+        "max_tokens": 4000,
+    }
+    if model_id.lower().startswith("codex/"):
+        request_options["reasoning_effort"] = "medium"
+
+    completion = client.chat.completions.create(
+        **request_options,
     )
 
     response_text = (completion.choices[0].message.content or "").strip()
     result = parse_llm_json_response(response_text, fallback=[])
 
     validated: dict[tuple[str, str | None], str] = {}
+    ambiguous_keys: set[str] = set()
     expected_by_key = {
         build_name_cache_key(item["raw_lab_name"], item.get("raw_section_name")): (
             item["raw_lab_name"],
@@ -203,8 +238,14 @@ Return a JSON array of objects with raw_lab_name, raw_section_name, and standard
         if expected_context is None:
             continue
 
-        if standardized_name in standardized_names:
-            validated[expected_context] = standardized_name
+        if standardized_name in standardized_names or standardized_name == UNKNOWN_VALUE:
+            previous_value = validated.get(expected_context)
+            if previous_value is not None and previous_value != standardized_name:
+                validated.pop(expected_context, None)
+                ambiguous_keys.add(cache_key)
+                continue
+            if cache_key not in ambiguous_keys:
+                validated[expected_context] = standardized_name
             continue
 
         logger.warning(
@@ -267,19 +308,27 @@ def _standardize_units_with_llm(
 
 Return a JSON array with the standardized values."""
 
-    completion = client.chat.completions.create(
-        model=model_id,
-        messages=[
+    request_options: dict[str, Any] = {
+        "model": model_id,
+        "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        temperature=0.1,
-        max_tokens=4000,
+        "temperature": 0.1,
+        "max_tokens": 4000,
+    }
+    if model_id.lower().startswith("codex/"):
+        request_options["reasoning_effort"] = "medium"
+
+    completion = client.chat.completions.create(
+        **request_options,
     )
 
     response_text = (completion.choices[0].message.content or "").strip()
     result_list = parse_llm_json_response(response_text, fallback=[])
     validated: dict[str, str] = {}
+    ambiguous_keys: set[str] = set()
+    expected_keys = {_build_unit_cache_key(raw_unit, lab_name) for raw_unit, lab_name in uncached_pairs}
 
     # Keep only candidate units and normalize keys exactly as the runtime does.
     if isinstance(result_list, list):
@@ -295,12 +344,22 @@ Return a JSON array with the standardized values."""
             item_lab_name = typed_item["lab_name"]
             standardized_unit = typed_item["standardized_unit"]
 
-            if standardized_unit not in standardized_units:
+            cache_key = _build_unit_cache_key(raw_unit, item_lab_name)
+
+            # Guard: Ignore outputs for items that were not part of this prompt.
+            if cache_key not in expected_keys:
                 continue
 
-            normalized_unit = normalize_unit_cache_key_component(raw_unit)
-            cache_key = f"{normalized_unit}|{str(item_lab_name).lower().strip()}"
-            validated[cache_key] = standardized_unit
+            if standardized_unit not in standardized_units and standardized_unit != UNKNOWN_VALUE:
+                continue
+
+            previous_value = validated.get(cache_key)
+            if previous_value is not None and previous_value != standardized_unit:
+                validated.pop(cache_key, None)
+                ambiguous_keys.add(cache_key)
+                continue
+            if cache_key not in ambiguous_keys:
+                validated[cache_key] = standardized_unit
 
     return validated
 
@@ -383,6 +442,13 @@ def _get_raw_unit_column(df: pd.DataFrame) -> str | None:
     return None
 
 
+def _build_unit_cache_key(raw_unit: object, lab_name: object) -> str:
+    """Build one normalized unit-cache key exactly as the runtime does."""
+
+    normalized_unit = normalize_unit_cache_key_component(raw_unit)
+    return f"{normalized_unit}|{str(lab_name).lower().strip()}"
+
+
 def _collect_uncached_unit_pairs(
     df: pd.DataFrame,
     *,
@@ -418,8 +484,7 @@ def _collect_uncached_unit_pairs(
         if effective_lab_name is None:
             continue
 
-        normalized_unit = normalize_unit_cache_key_component(raw_unit)
-        cache_key = f"{normalized_unit}|{effective_lab_name.lower().strip()}"
+        cache_key = _build_unit_cache_key(raw_unit, effective_lab_name)
         if cache_key in unit_cache or cache_key in seen_keys:
             continue
 
@@ -427,6 +492,258 @@ def _collect_uncached_unit_pairs(
         uncached_pairs.append((raw_unit, effective_lab_name))
 
     return uncached_pairs
+
+
+def _validate_name_batch_response(
+    response: object,
+    batch: list[tuple[str, str | None]],
+    standardized_names: list[str],
+) -> _ValidatedBatch:
+    """Keep only name outputs that correspond to this batch and its candidates."""
+
+    if not isinstance(response, Mapping):
+        return _ValidatedBatch(mappings={}, completed_keys=frozenset())
+
+    expected_keys = {build_name_cache_key(raw_name, raw_section_name) for raw_name, raw_section_name in batch}
+    candidate_names = set(standardized_names)
+    mappings: dict[str, str] = {}
+    completed_keys: set[str] = set()
+
+    for context, standardized_name in response.items():
+        if not isinstance(context, tuple) or len(context) != 2:
+            continue
+
+        raw_name, raw_section_name = context
+        if not isinstance(raw_name, str) or (raw_section_name is not None and not isinstance(raw_section_name, str)):
+            continue
+        if not isinstance(standardized_name, str):
+            continue
+
+        cache_key = build_name_cache_key(raw_name, raw_section_name)
+        if cache_key not in expected_keys:
+            continue
+
+        if standardized_name == UNKNOWN_VALUE:
+            completed_keys.add(cache_key)
+            continue
+        if standardized_name not in candidate_names:
+            continue
+
+        mappings[cache_key] = standardized_name
+        completed_keys.add(cache_key)
+
+    return _ValidatedBatch(mappings=mappings, completed_keys=frozenset(completed_keys))
+
+
+def _validate_unit_batch_response(
+    response: object,
+    batch: list[tuple[str, str]],
+    standardized_units: list[str],
+) -> _ValidatedBatch:
+    """Keep only unit outputs that correspond to this batch and its candidates."""
+
+    if not isinstance(response, Mapping):
+        return _ValidatedBatch(mappings={}, completed_keys=frozenset())
+
+    expected_keys = {_build_unit_cache_key(raw_unit, lab_name) for raw_unit, lab_name in batch}
+    candidate_units = set(standardized_units)
+    mappings: dict[str, str] = {}
+    completed_keys: set[str] = set()
+
+    for cache_key, standardized_unit in response.items():
+        if not isinstance(cache_key, str) or cache_key not in expected_keys:
+            continue
+        if not isinstance(standardized_unit, str):
+            continue
+
+        if standardized_unit == UNKNOWN_VALUE:
+            completed_keys.add(cache_key)
+            continue
+        if standardized_unit not in candidate_units:
+            continue
+
+        mappings[cache_key] = standardized_unit
+        completed_keys.add(cache_key)
+
+    return _ValidatedBatch(mappings=mappings, completed_keys=frozenset(completed_keys))
+
+
+def _is_retryable_standardization_error(exc: BaseException) -> bool:
+    """Return whether one failed LLM call may consume the single retry budget."""
+
+    if isinstance(exc, APIStatusError):
+        return exc.status_code in {408, 409, 429} or exc.status_code >= 500
+
+    return isinstance(exc, (APIConnectionError, APIError, OSError))
+
+
+def _is_timeout_error(exc: BaseException) -> bool:
+    """Return whether an exception represents a request timeout."""
+
+    if isinstance(exc, (APITimeoutError, TimeoutError)):
+        return True
+
+    return "timed out" in str(exc).lower() or "timeout" in str(exc).lower()
+
+
+def _describe_standardization_error(exc: BaseException) -> str:
+    """Return a concise error description without including request payloads."""
+
+    if _is_timeout_error(exc):
+        return "timed out"
+    if isinstance(exc, APIStatusError):
+        return f"HTTP {exc.status_code} ({type(exc).__name__})"
+    if isinstance(exc, APIConnectionError):
+        return "API connection failed"
+    if isinstance(exc, ValueError):
+        detail = str(exc).strip()
+        return f"ValueError: {detail[:120]}" if detail else "ValueError"
+    return type(exc).__name__
+
+
+def _split_batch(batch: list[_BatchItem]) -> tuple[list[_BatchItem], list[_BatchItem]]:
+    """Split a retryable batch into two deterministic, non-empty halves."""
+
+    midpoint = math.ceil(len(batch) / 2)
+    return batch[:midpoint], batch[midpoint:]
+
+
+def _process_standardization_batch(
+    batch: list[_BatchItem],
+    *,
+    batch_number: int,
+    total_batches: int,
+    label: str,
+    item_key: Callable[[_BatchItem], str],
+    call_batch: Callable[[list[_BatchItem]], object],
+    validate_response: Callable[[object, list[_BatchItem]], _ValidatedBatch],
+    persist_mappings: Callable[[dict[str, str]], None],
+) -> tuple[dict[str, str], _BatchFailure | None]:
+    """Run one batch with one bounded retry per item and eager persistence."""
+
+    combined_mappings: dict[str, str] = {}
+    completed_keys: set[str] = set()
+    attempt_errors: list[str] = []
+
+    def run_attempt(attempt_batch: list[_BatchItem]) -> tuple[_ValidatedBatch, BaseException | None]:
+        try:
+            response = call_batch(attempt_batch)
+        except _STANDARDIZATION_CALL_ERRORS as exc:
+            return _ValidatedBatch(mappings={}, completed_keys=frozenset()), exc
+
+        validated = validate_response(response, attempt_batch)
+        if validated.mappings:
+            persist_mappings(validated.mappings)
+        return validated, None
+
+    first_result, first_error = run_attempt(batch)
+    combined_mappings.update(first_result.mappings)
+    completed_keys.update(first_result.completed_keys)
+
+    if first_error is not None:
+        attempt_errors.append(_describe_standardization_error(first_error))
+        if _is_retryable_standardization_error(first_error) and STANDARDIZATION_MAX_RETRY_DEPTH > 0 and len(batch) > 1:
+            if _is_timeout_error(first_error):
+                logger.warning(
+                    "[standardization] %s batch %s/%s timed out; retrying as 2 smaller batches",
+                    label,
+                    batch_number,
+                    total_batches,
+                )
+            else:
+                logger.warning(
+                    "[standardization] %s batch %s/%s failed; retrying as 2 smaller batches",
+                    label,
+                    batch_number,
+                    total_batches,
+                )
+
+            # Each item is attempted exactly once more; failed sub-batches are never split again.
+            for retry_batch in _split_batch(batch):
+                retry_result, retry_error = run_attempt(retry_batch)
+                combined_mappings.update(retry_result.mappings)
+                completed_keys.update(retry_result.completed_keys)
+                if retry_error is not None:
+                    attempt_errors.append(_describe_standardization_error(retry_error))
+        elif _is_retryable_standardization_error(first_error) and len(batch) == 1:
+            attempt_errors.append("one-item batch cannot be split")
+    else:
+        missing_items = [item for item in batch if item_key(item) not in completed_keys]
+        if missing_items and STANDARDIZATION_MAX_RETRY_DEPTH > 0:
+            logger.warning(
+                "[standardization] %s batch %s/%s returned %s missing/invalid item(s); retrying that subset",
+                label,
+                batch_number,
+                total_batches,
+                len(missing_items),
+            )
+            retry_result, retry_error = run_attempt(missing_items)
+            combined_mappings.update(retry_result.mappings)
+            completed_keys.update(retry_result.completed_keys)
+            if retry_error is not None:
+                attempt_errors.append(_describe_standardization_error(retry_error))
+
+    missing_count = sum(item_key(item) not in completed_keys for item in batch)
+    unresolved_count = len(batch) - len(combined_mappings)
+    logger.info(
+        "[standardization] %s batch %s/%s: +%s mapping(s), %s unresolved",
+        label,
+        batch_number,
+        total_batches,
+        len(combined_mappings),
+        unresolved_count,
+    )
+
+    if not missing_count:
+        return combined_mappings, None
+
+    reason_parts = list(dict.fromkeys(attempt_errors))
+    if not reason_parts or completed_keys:
+        reason_parts.append("missing/invalid output after retry")
+    failure = _BatchFailure(
+        batch_number=batch_number,
+        total_batches=total_batches,
+        unresolved_count=missing_count,
+        reason="; ".join(reason_parts),
+    )
+    return combined_mappings, failure
+
+
+def _chunked(items: list[_BatchItem], batch_size: int) -> list[list[_BatchItem]]:
+    """Return deterministic contiguous batches in first-seen order."""
+
+    return [items[start : start + batch_size] for start in range(0, len(items), batch_size)]
+
+
+def _validate_batch_size(batch_size: int, label: str) -> None:
+    """Reject invalid batch configuration before making any API calls."""
+
+    if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size < 1:
+        raise ValueError(f"{label} standardization batch size must be a positive integer.")
+
+
+def _format_batch_failures(label: str, failures: list[_BatchFailure]) -> str | None:
+    """Aggregate batch failures without producing an unbounded error message."""
+
+    if not failures:
+        return None
+
+    details = [
+        f"batch {failure.batch_number}/{failure.total_batches} ({failure.unresolved_count} incomplete: {failure.reason})"
+        for failure in failures[:_MAX_ERROR_DETAILS]
+    ]
+    if len(failures) > _MAX_ERROR_DETAILS:
+        details.append(f"{len(failures) - _MAX_ERROR_DETAILS} more batch(es)")
+    return f"{len(failures)} {label.lower()} batch(es) incomplete: " + "; ".join(details)
+
+
+def _without_sdk_retries(client: OpenAI) -> OpenAI:
+    """Return a per-use client copy with SDK-level retries disabled."""
+
+    with_options = getattr(client, "with_options", None)
+    if callable(with_options):
+        return with_options(max_retries=0)
+    return client
 
 
 def _build_client(
@@ -440,7 +757,8 @@ def _build_client(
     if not api_key:
         raise ValueError("Standardization refresh requires an OpenRouter API key.")
 
-    return get_openai_client_for_credentials(base_url, api_key)
+    resolved_base_url = base_url or "https://openrouter.ai/api/v1"
+    return OpenAI(base_url=resolved_base_url, api_key=api_key, max_retries=0)
 
 
 def refresh_standardization_caches_from_dataframe(
@@ -452,8 +770,13 @@ def refresh_standardization_caches_from_dataframe(
     api_key: str | None = None,
     client: OpenAI | None = None,
     dry_run: bool = False,
+    name_batch_size: int = DEFAULT_NAME_STANDARDIZATION_BATCH_SIZE,
+    unit_batch_size: int = DEFAULT_UNIT_STANDARDIZATION_BATCH_SIZE,
 ) -> StandardizationRefreshResult:
     """Refresh name and unit standardization caches from a merged review dataframe."""
+
+    _validate_batch_size(name_batch_size, "Name")
+    _validate_batch_size(unit_batch_size, "Unit")
 
     name_cache, removed_name_unknowns = _prune_unknown_cache_entries(load_cache("name_standardization"))
     unit_cache, removed_unit_unknowns = _prune_unknown_cache_entries(load_cache("unit_standardization"))
@@ -486,71 +809,115 @@ def refresh_standardization_caches_from_dataframe(
             pruned_unit_entries=removed_unit_unknowns,
         )
 
-    # Build the API client lazily so no-op scans do not require runtime credentials.
-    if uncached_names and client is None:
-        try:
-            client = _build_client(base_url=base_url, api_key=api_key)
-        except ValueError as exc:
-            name_error = str(exc)
-
     # Refresh uncached raw names first so unit discovery can use the newly mapped names.
     if uncached_names:
-        if name_error:
-            logger.warning(f"[standardization] Skipping name refresh: {name_error}")
-        elif not model_id:
+        if not model_id:
             name_error = "Standardization refresh requires an extraction model ID."
-        else:
+        elif client is None:
             try:
-                assert client is not None
-                refreshed_names = _standardize_names_with_llm(uncached_names, lab_specs.standardized_names, client, model_id)
-            except (APIError, OSError, ValueError) as exc:  # pragma: no cover - exercised through pipeline warning path
+                client = _build_client(base_url=base_url, api_key=api_key)
+            except ValueError as exc:
                 name_error = str(exc)
-            else:
-                for (raw_name, raw_section_name), standardized_name in refreshed_names.items():
-                    cache_key = build_name_cache_key(raw_name, raw_section_name)
-                    working_name_cache[cache_key] = standardized_name
-                    name_cache[cache_key] = standardized_name
-                name_updates = len(refreshed_names)
 
-                # Save successful name updates immediately so partial refresh progress is not lost.
-                if name_updates:
+        if name_error:
+            logger.warning("[standardization] Skipping name refresh: %s", name_error)
+        else:
+            assert client is not None
+            assert model_id is not None
+            client = _without_sdk_retries(client)
+            name_client = client
+            name_model_id = model_id
+            name_batches = _chunked(uncached_names, name_batch_size)
+            name_failures: list[_BatchFailure] = []
+
+            def persist_name_mappings(mappings: dict[str, str]) -> None:
+                working_name_cache.update(mappings)
+                name_cache.update(mappings)
+                # Persist every successful call before attempting any later work.
+                if mappings:
                     save_cache("name_standardization", name_cache)
+
+            for batch_number, name_batch in enumerate(name_batches, start=1):
+                batch_mappings, batch_failure = _process_standardization_batch(
+                    name_batch,
+                    batch_number=batch_number,
+                    total_batches=len(name_batches),
+                    label="Name",
+                    item_key=lambda item: build_name_cache_key(item[0], item[1]),
+                    call_batch=lambda items: _standardize_names_with_llm(
+                        items,
+                        lab_specs.standardized_names,
+                        name_client,
+                        name_model_id,
+                    ),
+                    validate_response=lambda response, items: _validate_name_batch_response(
+                        response,
+                        items,
+                        lab_specs.standardized_names,
+                    ),
+                    persist_mappings=persist_name_mappings,
+                )
+                name_updates += len(batch_mappings)
+                if batch_failure is not None:
+                    name_failures.append(batch_failure)
+
+            name_error = _format_batch_failures("Name", name_failures)
 
     uncached_unit_pairs = _collect_uncached_unit_pairs(df, name_cache=working_name_cache, unit_cache=unit_cache)
 
-    # Build the API client only when the unit step actually needs one.
-    if uncached_unit_pairs and client is None:
-        try:
-            client = _build_client(base_url=base_url, api_key=api_key)
-        except ValueError as exc:
-            unit_error = str(exc)
-
     # Refresh unresolved unit contexts using the post-name-refresh working cache.
     if uncached_unit_pairs:
-        if unit_error:
-            logger.warning(f"[standardization] Skipping unit refresh: {unit_error}")
-        elif not model_id:
+        if not model_id:
             unit_error = "Standardization refresh requires an extraction model ID."
-        else:
+        elif client is None:
             try:
-                assert client is not None
-                refreshed_units = _standardize_units_with_llm(
-                    uncached_unit_pairs,
-                    lab_specs.standardized_units,
-                    client,
-                    model_id,
-                    lab_specs,
-                )
-            except (APIError, OSError, ValueError) as exc:  # pragma: no cover - exercised through pipeline warning path
+                client = _build_client(base_url=base_url, api_key=api_key)
+            except ValueError as exc:
                 unit_error = str(exc)
-            else:
-                for cache_key, standardized_unit in refreshed_units.items():
-                    unit_cache[cache_key] = standardized_unit
-                unit_updates = len(refreshed_units)
 
-                # Save successful unit updates immediately so partial refresh progress is not lost.
-                if unit_updates:
+        if unit_error:
+            logger.warning("[standardization] Skipping unit refresh: %s", unit_error)
+        else:
+            assert client is not None
+            assert model_id is not None
+            client = _without_sdk_retries(client)
+            unit_client = client
+            unit_model_id = model_id
+            unit_batches = _chunked(uncached_unit_pairs, unit_batch_size)
+            unit_failures: list[_BatchFailure] = []
+
+            def persist_unit_mappings(mappings: dict[str, str]) -> None:
+                unit_cache.update(mappings)
+                # Persist every successful call before attempting any later work.
+                if mappings:
                     save_cache("unit_standardization", unit_cache)
+
+            for batch_number, unit_batch in enumerate(unit_batches, start=1):
+                batch_mappings, batch_failure = _process_standardization_batch(
+                    unit_batch,
+                    batch_number=batch_number,
+                    total_batches=len(unit_batches),
+                    label="Unit",
+                    item_key=lambda item: _build_unit_cache_key(item[0], item[1]),
+                    call_batch=lambda items: _standardize_units_with_llm(
+                        items,
+                        lab_specs.standardized_units,
+                        unit_client,
+                        unit_model_id,
+                        lab_specs,
+                    ),
+                    validate_response=lambda response, items: _validate_unit_batch_response(
+                        response,
+                        items,
+                        lab_specs.standardized_units,
+                    ),
+                    persist_mappings=persist_unit_mappings,
+                )
+                unit_updates += len(batch_mappings)
+                if batch_failure is not None:
+                    unit_failures.append(batch_failure)
+
+            unit_error = _format_batch_failures("Unit", unit_failures)
 
     unresolved_names = _collect_uncached_names(df, working_name_cache)
     unresolved_unit_pairs = _collect_uncached_unit_pairs(df, name_cache=working_name_cache, unit_cache=unit_cache)

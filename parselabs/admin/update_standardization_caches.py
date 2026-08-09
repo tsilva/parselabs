@@ -16,10 +16,21 @@ from parselabs.config import LabSpecsConfig, ProfileConfig
 from parselabs.exceptions import ConfigurationError
 from parselabs.runtime import load_profile_config
 from parselabs.standardization_refresh import (
+    DEFAULT_NAME_STANDARDIZATION_BATCH_SIZE,
+    DEFAULT_UNIT_STANDARDIZATION_BATCH_SIZE,
     refresh_standardization_caches_from_dataframe,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _positive_int(value: str) -> int:
+    """Parse one positive CLI integer."""
+
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("batch size must be a positive integer")
+    return parsed
 
 
 def _load_profile_dataframe(profile_name: str) -> tuple[ProfileConfig, pd.DataFrame]:
@@ -102,6 +113,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profile", "-p", required=True, help="Profile name to scan for uncached values")
     parser.add_argument("--model", "-m", type=str, help="Model ID (overrides the profile value)")
     parser.add_argument("--dry-run", action="store_true", help="Show uncached values without calling LLM")
+    parser.add_argument(
+        "--name-batch-size",
+        type=_positive_int,
+        default=DEFAULT_NAME_STANDARDIZATION_BATCH_SIZE,
+        help=f"Maximum name mappings per LLM call (default: {DEFAULT_NAME_STANDARDIZATION_BATCH_SIZE})",
+    )
+    parser.add_argument(
+        "--unit-batch-size",
+        type=_positive_int,
+        default=DEFAULT_UNIT_STANDARDIZATION_BATCH_SIZE,
+        help=f"Maximum unit mappings per LLM call (default: {DEFAULT_UNIT_STANDARDIZATION_BATCH_SIZE})",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -124,6 +147,8 @@ def main(argv: list[str] | None = None) -> int:
         base_url=profile.openrouter_base_url,
         api_key=profile.openrouter_api_key,
         dry_run=args.dry_run,
+        name_batch_size=args.name_batch_size,
+        unit_batch_size=args.unit_batch_size,
     )
     _log_refresh_result(result)
     return 0
