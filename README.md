@@ -88,6 +88,7 @@ parselabs review --profile myname --tab review
 parselabs admin --help
 parselabs admin validate-lab-specs
 parselabs admin update-standardization-caches --profile myname
+parselabs admin update-standardization-caches --profile myname --name-batch-size 40 --unit-batch-size 40
 parselabs admin regression sync-reviewed --profile myname
 
 uv run python test.py --profile myname     # data integrity checks for one profile
