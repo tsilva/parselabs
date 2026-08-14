@@ -304,6 +304,7 @@ def classify_qualitative_value(text: str) -> int | None:
         "vestígios",
         "vestigios",
         "cultura polimicrobiana",
+        "imune",
     }
 
     # Negative patterns (not detected/absent/normal)
@@ -606,6 +607,21 @@ def _remap_numeric_urine_strip_variants(
 
         numeric_value = df.at[idx, "value_primary"]
         if pd.isna(numeric_value):
+            continue
+
+        # A bounded numeric reference interval indicates a quantitative assay.
+        # Do not destroy that information merely because section inference points
+        # at a urine-strip context.
+        reference_values = pd.to_numeric(
+            pd.Series(
+                [
+                    df.at[idx, "raw_reference_min"] if "raw_reference_min" in df.columns else None,
+                    df.at[idx, "raw_reference_max"] if "raw_reference_max" in df.columns else None,
+                ]
+            ),
+            errors="coerce",
+        )
+        if reference_values.notna().all():
             continue
 
         variant_name = QUALITATIVE_VARIANT_MAP[standardized_name]

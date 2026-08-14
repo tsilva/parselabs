@@ -711,6 +711,102 @@
       ]
     }
   },
+  "Blood - Anti-Rubella Virus IgG": {
+    "alternatives": [
+      {
+        "factor": 1.0,
+        "unit": "UI/ml"
+      }
+    ],
+    "lab_type": "blood",
+    "loinc_code": "5334-8",
+    "primary_unit": "IU/mL",
+    "ranges": {}
+  },
+  "Blood - Anti-Rubella Virus IgG (Qualitative)": {
+    "alternatives": [],
+    "lab_type": "blood",
+    "loinc_code": "40667-8",
+    "primary_unit": "boolean",
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    }
+  },
+  "Blood - Anti-Rubella Virus IgM": {
+    "alternatives": [
+      {
+        "factor": 1.0,
+        "unit": "UI/ml"
+      }
+    ],
+    "lab_type": "blood",
+    "loinc_code": "8015-0",
+    "primary_unit": "IU/mL",
+    "ranges": {}
+  },
+  "Blood - Anti-Rubella Virus IgM (Qualitative)": {
+    "alternatives": [],
+    "lab_type": "blood",
+    "loinc_code": "31616-6",
+    "primary_unit": "boolean",
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    }
+  },
+  "Blood - Anti-Toxoplasma gondii IgG": {
+    "alternatives": [
+      {
+        "factor": 1.0,
+        "unit": "UI/ml"
+      }
+    ],
+    "lab_type": "blood",
+    "loinc_code": "5388-4",
+    "primary_unit": "IU/mL",
+    "ranges": {}
+  },
+  "Blood - Anti-Toxoplasma gondii IgG (Qualitative)": {
+    "alternatives": [],
+    "lab_type": "blood",
+    "loinc_code": "40677-7",
+    "primary_unit": "boolean",
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    }
+  },
+  "Blood - Anti-Toxoplasma gondii IgM": {
+    "alternatives": [
+      {
+        "factor": 1.0,
+        "unit": "EIU/ml"
+      }
+    ],
+    "lab_type": "blood",
+    "loinc_code": "5390-0",
+    "primary_unit": "EIU/mL",
+    "ranges": {}
+  },
+  "Blood - Anti-Toxoplasma gondii IgM (Qualitative)": {
+    "alternatives": [],
+    "lab_type": "blood",
+    "loinc_code": "40678-5",
+    "primary_unit": "boolean",
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    }
+  },
   "Blood - Anti-Thyroglobulin Antibody (Anti-Tg Ab)": {
     "alternatives": [
       {
@@ -1890,6 +1986,18 @@
     "lab_type": "blood",
     "loinc_code": "75622-6",
     "primary_unit": "boolean",
+    "ranges": {}
+  },
+  "Blood - HIV (Antibody + p24 Antigen) Signal-to-Cutoff Ratio": {
+    "alternatives": [
+      {
+        "factor": 1.0,
+        "unit": "s/co"
+      }
+    ],
+    "lab_type": "blood",
+    "loinc_code": "75622-6-index",
+    "primary_unit": "S/CO",
     "ranges": {}
   },
   "Blood - HIV-1 Proviral DNA": {
@@ -3992,6 +4100,13 @@
       ]
     }
   },
+  "Blood - Squamous Cell Carcinoma Antigen (SCC)": {
+    "alternatives": [],
+    "lab_type": "blood",
+    "loinc_code": "9679-2",
+    "primary_unit": "ng/mL",
+    "ranges": {}
+  },
   "Blood - Vitamin B12": {
     "alternatives": [
       {
@@ -4067,6 +4182,30 @@
       ]
     }
   },
+  "Blood - Weil-Felix Reaction": {
+    "alternatives": [],
+    "lab_type": "blood",
+    "loinc_code": "",
+    "primary_unit": "boolean",
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    }
+  },
+  "Blood - Widal (S. Paratyphi A)": {
+    "alternatives": [],
+    "lab_type": "blood",
+    "loinc_code": "",
+    "primary_unit": "boolean",
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    }
+  },
   "Blood - Widal (S. Paratyphi A H)": {
     "alternatives": [],
     "lab_type": "blood",
@@ -4083,6 +4222,18 @@
     "alternatives": [],
     "lab_type": "blood",
     "loinc_code": "33316-1",
+    "primary_unit": "boolean",
+    "ranges": {
+      "default": [
+        0,
+        0
+      ]
+    }
+  },
+  "Blood - Widal (S. Paratyphi B)": {
+    "alternatives": [],
+    "lab_type": "blood",
+    "loinc_code": "",
     "primary_unit": "boolean",
     "ranges": {
       "default": [

@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -27,7 +27,8 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
         with:
-          cache: true
+          enable-cache: true
+          prune-cache: true
       - run: uv sync --extra dev
       - run: uv run pytest
 
@@ -38,10 +39,10 @@ jobs:
     permissions:
       contents: read
     outputs:
-      publish: ${{ steps.check-version.outputs.tag_exists == 'false' }}
+      publish: ${{ steps.check-version.outputs.version_exists == 'false' }}
       tag: ${{ steps.check-version.outputs.tag }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -73,12 +74,13 @@ jobs:
         if: steps.check-version.outputs.version_exists == 'false'
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
         with:
-          cache: true
+          enable-cache: true
+          prune-cache: true
       - name: Build package
         if: steps.check-version.outputs.version_exists == 'false'
         run: uv build
       - name: Store package artifacts
-        if: steps.check-version.outputs.tag_exists == 'false'
+        if: steps.check-version.outputs.version_exists == 'false'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: python-package-${{ github.sha }}

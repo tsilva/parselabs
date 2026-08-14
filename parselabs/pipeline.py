@@ -488,6 +488,7 @@ def process_single_pdf(
 
     except (OSError, PermissionError, PipelineError, ExtractionAPIError) as e:
         logger.error(f"[{pdf_stem}] Processing failed: {e}", exc_info=True)
+        failed_pages.append({"page": pdf_stem, "reason": str(e)})
         return None, failed_pages
 
 
@@ -1556,7 +1557,12 @@ def _run_reviewed_json_rebuild(args, profile_name: str, allow_pending: bool) -> 
         profile_name=profile_name,
         allow_pending=allow_pending,
     )
-    _report_extraction_failures([], profile.output_path / "all.csv", final_csv_paths)
+    _report_extraction_failures(
+        [],
+        profile.output_path / "all.csv",
+        final_csv_paths,
+        pdfs_failed=0,
+    )
 
 
 def run_for_profile(args, profile_name: str) -> None:
@@ -1616,21 +1622,44 @@ def run_for_profile(args, profile_name: str) -> None:
         profile_name=profile_name,
         allow_pending=True,
     )
-    _report_extraction_failures(pipeline_result.failed_pages, config.output_path / "all.csv", final_csv_paths)
+    failed_pages = pipeline_result.failed_pages
+    pdfs_failed = getattr(pipeline_result, "pdfs_failed", 0)
+    _report_extraction_failures(
+        failed_pages,
+        config.output_path / "all.csv",
+        final_csv_paths,
+        pdfs_failed=pdfs_failed,
+    )
+
+    if pdfs_failed or failed_pages:
+        raise PipelineError(
+            "Extraction was incomplete: "
+            f"{pdfs_failed} PDF(s) failed completely and "
+            f"{len(failed_pages)} failure record(s) were reported."
+        )
 
 
-def _report_extraction_failures(all_failed_pages: list[ExtractionFailureRecord], csv_path: Path, csv_paths: list[Path]) -> None:
+def _report_extraction_failures(
+    all_failed_pages: list[ExtractionFailureRecord],
+    csv_path: Path,
+    csv_paths: list[Path],
+    *,
+    pdfs_failed: int,
+) -> None:
     """Log and report any extraction failures to user."""
 
     # Log final pipeline summary
     log_user_info(logger, "Pipeline completed: %s PDF(s) processed; output: %s", len(csv_paths), csv_path)
 
     # Report any extraction failures to user and log
+    if pdfs_failed:
+        log_user_warning(logger, "PDFs that failed completely: %s", pdfs_failed)
+
     if all_failed_pages:
-        log_user_warning(logger, "Pages with extraction failures: %s", len(all_failed_pages))
+        log_user_warning(logger, "Extraction failure records: %s", len(all_failed_pages))
         for failure in all_failed_pages:
             log_user_warning(logger, "  - %s: %s", failure["page"], failure["reason"])
-    else:
+    if not pdfs_failed and not all_failed_pages:
         log_user_info(logger, "Extraction failures: 0")
 
 

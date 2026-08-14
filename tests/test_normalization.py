@@ -27,6 +27,7 @@ def test_classify_qualitative_value_handles_positive_marker_tokens():
     assert classify_qualitative_value("(*)") == 1
     assert classify_qualitative_value("1+") == 1
     assert classify_qualitative_value("Raras células") == 1
+    assert classify_qualitative_value("IMUNE") == 1
 
 
 def test_flag_duplicate_entries_ignores_equivalent_dual_unit_rows():
