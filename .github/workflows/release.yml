@@ -38,7 +38,7 @@ jobs:
     permissions:
       contents: read
     outputs:
-      publish: ${{ steps.check-version.outputs.tag_exists == 'false' }}
+      publish: ${{ steps.check-version.outputs.version_exists == 'false' }}
       tag: ${{ steps.check-version.outputs.tag }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -78,7 +78,7 @@ jobs:
         if: steps.check-version.outputs.version_exists == 'false'
         run: uv build
       - name: Store package artifacts
-        if: steps.check-version.outputs.tag_exists == 'false'
+        if: steps.check-version.outputs.version_exists == 'false'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: python-package-${{ github.sha }}
