@@ -196,6 +196,31 @@ def test_apply_normalizations_remaps_numeric_urine_strip_ketones_to_qualitative_
     assert normalized_df.loc[0, "value_primary"] == 1
 
 
+def test_apply_normalizations_preserves_numeric_assay_with_bounded_reference_interval(tmp_path):
+    lab_specs = _make_lab_specs(tmp_path)
+    df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Corpos Cetónicos",
+                "raw_value": "10",
+                "raw_comments": None,
+                "raw_section_name": "ANÁLISE SUMÁRIA DA URINA",
+                "raw_lab_unit": "mg/dl",
+                "raw_reference_min": 0,
+                "raw_reference_max": 15,
+                "lab_name_standardized": "Urine Type II - Ketones",
+                "lab_unit_standardized": "mg/dL",
+            }
+        ]
+    )
+
+    normalized_df = apply_normalizations(df, lab_specs)
+
+    assert normalized_df.loc[0, "lab_name_standardized"] == "Urine Type II - Ketones"
+    assert normalized_df.loc[0, "lab_unit_primary"] == "mg/dL"
+    assert normalized_df.loc[0, "value_primary"] == 10
+
+
 def test_apply_normalizations_remaps_numeric_urine_strip_blood_to_qualitative_variant(tmp_path):
     lab_specs = _make_lab_specs(tmp_path)
     df = pd.DataFrame(

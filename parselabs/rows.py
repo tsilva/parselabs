@@ -79,6 +79,7 @@ _INFERRED_URINE_SECTION_BY_NAME = {
 }
 
 _MIN_URINE_CONTEXT_ROWS = 3
+_GENERIC_COMPANION_NAMES = {"result", "resultado"}
 
 DOCUMENT_REVIEW_COLUMNS = [
     "date",
@@ -352,7 +353,13 @@ def _backfill_missing_raw_sections(review_df: pd.DataFrame) -> pd.DataFrame:
 
     for _, page_df in enriched_df.groupby("page_number", sort=False):
         normalized_names = page_df["raw_lab_name"].fillna("").astype(str).map(_normalize_section_inference_key)
-        urine_context_count = int(normalized_names.isin(_INFERRED_URINE_SECTION_BY_NAME).sum())
+        missing_section_mask = page_df["raw_section_name"].isna() | page_df["raw_section_name"].astype(str).str.strip().eq("")
+        urine_context_count = int(
+            (
+                normalized_names.isin(_INFERRED_URINE_SECTION_BY_NAME)
+                & missing_section_mask
+            ).sum()
+        )
 
         # Guard: Sparse matches are too weak to infer a urine section safely.
         if urine_context_count < _MIN_URINE_CONTEXT_ROWS:
@@ -751,9 +758,20 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
 
         standardized_unit = mapped_units.get((raw_unit, standardized_name))
 
+        inferred_percentage_unit = _infer_percentage_unit_from_value_and_range(
+            review_df.loc[idx],
+            standardized_name,
+            lab_specs,
+        )
+
+        # A clearly percentage-shaped value and reference interval can repair a unit
+        # token that OCR attached from the preceding protein-electrophoresis row.
+        if inferred_percentage_unit is not None:
+            standardized_unit = inferred_percentage_unit
+
         # Preserve explicit conversion units when stale cache entries collapse them into
         # the primary unit before apply_unit_conversions() can apply the factor.
-        if raw_unit.strip() != "":
+        elif raw_unit.strip() != "":
             inferred_unit = _infer_explicit_conversion_unit_from_raw_unit(
                 raw_unit,
                 standardized_name,
@@ -762,9 +780,8 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
             if inferred_unit is not None:
                 standardized_unit = inferred_unit
 
-        # Explicit non-percent units should force percentage-vs-absolute siblings onto the
-        # absolute path even when an old cache entry still points to the (%) variant.
-        if raw_unit.strip() != "":
+            # Explicit non-percent units should force percentage-vs-absolute siblings onto the
+            # absolute path even when an old cache entry still points to the (%) variant.
             inferred_unit = _infer_explicit_variant_unit_from_raw_unit(
                 raw_unit,
                 standardized_name,
@@ -837,6 +854,30 @@ def _build_variant_aware_name_contexts(
 
             if row["is_quantitative_companion"]:
                 variant_contexts[position] = (f"{raw_name} (quantitative)", raw_section_name)
+
+    # Some reports print an assay interpretation followed by a generic ``Resultado``
+    # row containing its numeric index. Use adjacency only for cache lookup; preserve
+    # the objective raw label in the exported audit columns.
+    for position in range(1, len(helper_df)):
+        current_row = helper_df.iloc[position]
+        previous_row = helper_df.iloc[position - 1]
+
+        if current_row["name_key"] not in _GENERIC_COMPANION_NAMES:
+            continue
+        if not bool(current_row["is_quantitative_companion"]):
+            continue
+        if not bool(previous_row["is_qualitative_companion"]):
+            continue
+        if current_row["page_number"] != previous_row["page_number"]:
+            continue
+        if current_row["section_key"] != previous_row["section_key"]:
+            continue
+
+        previous_name, previous_section = base_name_contexts[position - 1]
+        variant_contexts[position] = (
+            f"{previous_name} (quantitative)",
+            previous_section,
+        )
 
     return variant_contexts
 
@@ -1070,6 +1111,79 @@ def _infer_missing_variant_unit_from_ranges(
         return None
 
     return lab_specs.get_primary_unit(best_name)
+
+
+def _infer_percentage_unit_from_value_and_range(
+    row: pd.Series,
+    standardized_name: str,
+    lab_specs: LabSpecsConfig,
+) -> str | None:
+    """Recover a misplaced percentage unit when value and range agree decisively."""
+
+    percentage_variant = lab_specs.get_percentage_variant(standardized_name)
+    if percentage_variant is None:
+        return None
+    non_percentage_variant = (
+        lab_specs.get_non_percentage_variant(standardized_name)
+        or standardized_name
+    )
+
+    raw_min = row.get("raw_reference_min")
+    raw_max = row.get("raw_reference_max")
+    observed_value = row.get("raw_value")
+
+    percentage_range_score = _score_variant_range_match(
+        percentage_variant,
+        raw_min,
+        raw_max,
+        None,
+        lab_specs,
+    )
+    absolute_range_score = _score_variant_range_match(
+        non_percentage_variant,
+        raw_min,
+        raw_max,
+        None,
+        lab_specs,
+    )
+    percentage_value_score = _score_variant_range_match(
+        percentage_variant,
+        None,
+        None,
+        observed_value,
+        lab_specs,
+    )
+    absolute_value_score = _score_variant_range_match(
+        non_percentage_variant,
+        None,
+        None,
+        observed_value,
+        lab_specs,
+    )
+
+    scores = (
+        percentage_range_score,
+        absolute_range_score,
+        percentage_value_score,
+        absolute_value_score,
+    )
+    if any(score is None for score in scores):
+        return None
+
+    assert percentage_range_score is not None
+    assert absolute_range_score is not None
+    assert percentage_value_score is not None
+    assert absolute_value_score is not None
+
+    percentage_score = percentage_range_score + percentage_value_score
+    absolute_score = absolute_range_score + absolute_value_score
+
+    if percentage_value_score > 0.25 or absolute_value_score < 0.5:
+        return None
+    if absolute_score - percentage_score < 0.5:
+        return None
+
+    return "%"
 
 
 def _infer_explicit_variant_unit_from_raw_unit(

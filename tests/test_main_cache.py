@@ -202,7 +202,12 @@ def test_process_single_pdf_returns_none_for_extraction_api_error(tmp_path, monk
     )
 
     assert csv_path is None
-    assert failed_pages == []
+    assert failed_pages == [
+        {
+            "page": "api_failure",
+            "reason": "api down",
+        }
+    ]
 
 
 def test_process_single_pdf_propagates_unexpected_runtime_error(tmp_path, monkeypatch):

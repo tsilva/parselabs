@@ -7,6 +7,7 @@ import pytest
 
 from parselabs import pipeline as main
 from parselabs.config import ExtractionConfig
+from parselabs.exceptions import PipelineError
 from parselabs.standardization_refresh import StandardizationRefreshResult
 
 
@@ -249,6 +250,7 @@ def test_run_for_profile_calls_auto_standardize_by_default(tmp_path, monkeypatch
         lambda pdf_files, config, lab_specs: SimpleNamespace(
             merged_review_df=pd.DataFrame([{"raw_lab_name": "Glucose"}]),
             failed_pages=[],
+            pdfs_failed=0,
             csv_paths=[],
         ),
     )
@@ -275,6 +277,64 @@ def test_run_for_profile_calls_auto_standardize_by_default(tmp_path, monkeypatch
     assert auto_calls == [True]
 
 
+def test_run_for_profile_fails_after_publishing_partial_results_when_extraction_failed(
+    tmp_path, monkeypatch
+):
+    config = _build_config(tmp_path)
+    config.input_path.mkdir(parents=True, exist_ok=True)
+    config.output_path.mkdir(parents=True, exist_ok=True)
+    pdf_path = config.input_path / "doc.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4")
+    report_calls = []
+
+    monkeypatch.setattr(
+        main,
+        "_setup_profile_environment",
+        lambda args, profile_name: (config, SimpleNamespace()),
+    )
+    monkeypatch.setattr(main, "get_openai_client", lambda config: object())
+    monkeypatch.setattr(
+        main,
+        "validate_api_access",
+        lambda client, model_id: (True, "ok"),
+    )
+    monkeypatch.setattr(
+        main,
+        "discover_pdf_files",
+        lambda input_path, pattern: [pdf_path],
+    )
+    monkeypatch.setattr(
+        main,
+        "run_pipeline_for_pdf_files",
+        lambda pdf_files, config, lab_specs: SimpleNamespace(
+            failed_pages=[{"page": "doc", "reason": "model timeout"}],
+            pdfs_failed=1,
+        ),
+    )
+    monkeypatch.setattr(
+        main,
+        "_rebuild_review_outputs_from_processed_documents",
+        lambda *args, **kwargs: SimpleNamespace(
+            merged_review_df=pd.DataFrame(),
+            final_df=pd.DataFrame(),
+            csv_paths=[],
+        ),
+    )
+    monkeypatch.setattr(main, "get_column_lists", lambda schema: ([], [], {}, {}))
+    monkeypatch.setattr(main, "_export_final_results", lambda *args, **kwargs: None)
+    monkeypatch.setattr(main, "_maybe_auto_standardize_outputs", lambda **kwargs: [])
+    monkeypatch.setattr(
+        main,
+        "_report_extraction_failures",
+        lambda *args, **kwargs: report_calls.append(kwargs["pdfs_failed"]),
+    )
+
+    with pytest.raises(PipelineError, match="Extraction was incomplete"):
+        main.run_for_profile(Namespace(auto_standardize=True), "tsilva")
+
+    assert report_calls == [1]
+
+
 def test_run_for_profile_exports_full_processed_corpus_after_subset_scan(tmp_path, monkeypatch):
     config = _build_config(tmp_path)
     config.input_path.mkdir(parents=True, exist_ok=True)
@@ -293,6 +353,7 @@ def test_run_for_profile_exports_full_processed_corpus_after_subset_scan(tmp_pat
         lambda pdf_files, config, lab_specs: SimpleNamespace(
             merged_review_df=pd.DataFrame([{"source_file": "current.csv"}]),
             failed_pages=[],
+            pdfs_failed=0,
             csv_paths=[],
         ),
     )
