@@ -60,7 +60,7 @@ This document describes the current extraction, review, and export pipeline.
 - It copies only the original PDF contents into that directory, without propagating restrictive filesystem flags or unrelated metadata.
 - That copied PDF becomes the local artifact used for page conversion and later review.
 - The worker keeps track of page-level extraction failures separately from total document failure.
-- Expected vision API failures are converted to `ExtractionAPIError` and reported as document failures; unexpected internal runtime errors propagate instead of being folded into failed-page output.
+- Expected vision API failures are converted to `ExtractionAPIError` and reported as document failures with the document name and failure reason; unexpected internal runtime errors propagate instead of being folded into failed-page output.
 
 8. PDF conversion bootstrap.
 - The PDF is converted to PIL images with `pdf2image.convert_from_path(...)`.
@@ -130,10 +130,12 @@ This document describes the current extraction, review, and export pipeline.
 - Contextual lookup now also uses a folded compatibility pass that collapses stylized spaced-letter headers and accent/OCR variants before giving up on the cache.
 - Bare-name fallback is still guarded: it is only reused when the cache has no conflicting contextual mappings for that raw label.
 - When the same raw assay appears on one page as both a numeric result and a qualitative interpretation, the row builder now probes explicit `(quantitative)` / `(qualitative)` cache keys first before falling back to the undecorated raw name.
+- A generic adjacent `Resultado`/`Result` numeric row can inherit the preceding qualitative assay's context for cache lookup while preserving its objective raw label in audit columns.
 - It standardizes units using `standardize_lab_units(...)` only after the lab name is known.
 - Unknown name mappings become `$UNKNOWN$`.
 - Blank raw units are only inferred from the lab spec primary unit for a narrow safe set: `boolean`, `pH`, and `unitless`.
 - For percentage-vs-absolute sibling analytes, explicit non-percent raw units now override stale `%` cache entries so absolute differential counts do not stay pinned to percentage variants.
+- A percentage-shaped value and reference interval can repair an OCR-misplaced unit token when they decisively match the percentage sibling instead of the absolute sibling.
 - For percentage-vs-absolute sibling analytes, blank raw units can also be inferred from the report's own extracted reference ranges when those ranges clearly match one sibling variant over the other.
 - After unit mapping, the code remaps percentage-vs-absolute sibling analytes using the standardized unit as the tie-breaker.
 
@@ -183,6 +185,7 @@ This document describes the current extraction, review, and export pipeline.
 - Instead, it rebuilds every processed document from canonical page JSON with `_rebuild_review_outputs_from_processed_documents(...)`.
 - It writes that corpus result's merged review-state dataframe to `output/all.csv` and `output/all.xlsx`.
 - So the first export pass still writes the merged review-state dataframe, not accepted-only reviewed truth.
+- After rebuilding and exporting all available review outputs, a normal extraction run raises `PipelineError` if any PDF failed completely or any page/document failure record remains, so incomplete runs cannot exit successfully while retaining their diagnostic artifacts.
 
 25. End-of-run standardization auto-refresh.
 - After the first export pass, the pipeline scans merged review rows for uncached standardization names and unit pairs.

@@ -26,6 +26,11 @@ class LabSpecsValidator:
     # Labs that are allowed to not have LOINC codes (usually experimental/rare tests)
     LOINC_EXCEPTIONS = {
         "Blood - Anti-Dopamine D2 Receptor Antibody (D2R)",  # Rare/experimental test
+        # The source reports a combined Paratyphi result without H/O antigen resolution.
+        "Blood - Widal (S. Paratyphi A)",
+        "Blood - Widal (S. Paratyphi B)",
+        # No applicable LOINC term exists for the legacy qualitative Weil-Felix reaction.
+        "Blood - Weil-Felix Reaction",
     }
 
     CRITICAL_LOINC_CODES = {

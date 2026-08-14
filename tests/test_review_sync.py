@@ -290,6 +290,87 @@ def _make_boolean_serology_lab_specs(tmp_path: Path) -> LabSpecsConfig:
                     "lab_type": "blood",
                     "loinc_code": "5196-1",
                     "ranges": {"default": [0.0, 1.0]},
+                },
+                "Blood - HIV (Antibody + p24 Antigen)": {
+                    "primary_unit": "boolean",
+                    "lab_type": "blood",
+                    "loinc_code": "75622-6",
+                    "ranges": {"default": [0.0, 0.0]},
+                },
+                "Blood - HIV (Antibody + p24 Antigen) Signal-to-Cutoff Ratio": {
+                    "primary_unit": "S/CO",
+                    "lab_type": "blood",
+                    "loinc_code": "75622-6-index",
+                    "ranges": {},
+                },
+                "Blood - Anti-Rubella Virus IgG": {
+                    "primary_unit": "IU/mL",
+                    "alternatives": [{"factor": 1.0, "unit": "UI/ml"}],
+                    "lab_type": "blood",
+                    "loinc_code": "",
+                    "ranges": {},
+                },
+                "Blood - Anti-Rubella Virus IgG (Qualitative)": {
+                    "primary_unit": "boolean",
+                    "lab_type": "blood",
+                    "loinc_code": "",
+                    "ranges": {"default": [0.0, 0.0]},
+                },
+                "Blood - Anti-Rubella Virus IgM (Qualitative)": {
+                    "primary_unit": "boolean",
+                    "lab_type": "blood",
+                    "loinc_code": "",
+                    "ranges": {"default": [0.0, 0.0]},
+                },
+                "Blood - Anti-Toxoplasma gondii IgG": {
+                    "primary_unit": "IU/mL",
+                    "alternatives": [{"factor": 1.0, "unit": "UI/ml"}],
+                    "lab_type": "blood",
+                    "loinc_code": "",
+                    "ranges": {},
+                },
+                "Blood - Anti-Toxoplasma gondii IgG (Qualitative)": {
+                    "primary_unit": "boolean",
+                    "lab_type": "blood",
+                    "loinc_code": "",
+                    "ranges": {"default": [0.0, 0.0]},
+                },
+                "Blood - Anti-Toxoplasma gondii IgM": {
+                    "primary_unit": "EIU/mL",
+                    "alternatives": [{"factor": 1.0, "unit": "EIU/ml"}],
+                    "lab_type": "blood",
+                    "loinc_code": "",
+                    "ranges": {},
+                },
+                "Blood - Anti-Toxoplasma gondii IgM (Qualitative)": {
+                    "primary_unit": "boolean",
+                    "lab_type": "blood",
+                    "loinc_code": "",
+                    "ranges": {"default": [0.0, 0.0]},
+                },
+                "Blood - Widal (S. Paratyphi A)": {
+                    "primary_unit": "boolean",
+                    "lab_type": "blood",
+                    "loinc_code": "",
+                    "ranges": {"default": [0.0, 0.0]},
+                },
+                "Blood - Widal (S. Paratyphi B)": {
+                    "primary_unit": "boolean",
+                    "lab_type": "blood",
+                    "loinc_code": "",
+                    "ranges": {"default": [0.0, 0.0]},
+                },
+                "Blood - Weil-Felix Reaction": {
+                    "primary_unit": "boolean",
+                    "lab_type": "blood",
+                    "loinc_code": "",
+                    "ranges": {"default": [0.0, 0.0]},
+                },
+                "Blood - Squamous Cell Carcinoma Antigen (SCC)": {
+                    "primary_unit": "ng/mL",
+                    "lab_type": "blood",
+                    "loinc_code": "",
+                    "ranges": {},
                 }
             }
         ),
@@ -918,6 +999,259 @@ def test_apply_cached_standardization_remaps_standalone_boolean_rows_to_qualitat
     assert standardized_df["lab_unit_standardized"].tolist() == ["boolean"]
 
 
+def test_apply_cached_standardization_maps_adjacent_generic_serology_result_to_numeric_companion(
+    tmp_path, monkeypatch
+):
+    lab_specs = _make_boolean_serology_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            ("Ac. Anti-VIH (VIH1 + VIH2)", "SEROLOGIA"): "Blood - HIV (Antibody + p24 Antigen)",
+            (
+                "Ac. Anti-VIH (VIH1 + VIH2) (quantitative)",
+                "SEROLOGIA",
+            ): "Blood - HIV (Antibody + p24 Antigen) Signal-to-Cutoff Ratio",
+        },
+        unit_map={
+            (
+                "S/CO",
+                "Blood - HIV (Antibody + p24 Antigen) Signal-to-Cutoff Ratio",
+            ): "S/CO",
+            ("", "Blood - HIV (Antibody + p24 Antigen)"): "boolean",
+        },
+    )
+    review_df = pd.DataFrame(
+        [
+            {
+                "page_number": 4,
+                "raw_lab_name": "Ac. Anti-VIH (VIH1 + VIH2)",
+                "raw_section_name": "SEROLOGIA",
+                "raw_value": "Não reativo",
+                "raw_lab_unit": None,
+            },
+            {
+                "page_number": 4,
+                "raw_lab_name": "Resultado",
+                "raw_section_name": "SEROLOGIA",
+                "raw_value": "0,49",
+                "raw_lab_unit": "S/CO",
+                "raw_reference_min": None,
+                "raw_reference_max": 1.0,
+            },
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df["lab_name_standardized"].tolist() == [
+        "Blood - HIV (Antibody + p24 Antigen) (Qualitative)",
+        "Blood - HIV (Antibody + p24 Antigen) Signal-to-Cutoff Ratio",
+    ]
+    assert standardized_df["lab_unit_standardized"].tolist() == ["boolean", "S/CO"]
+
+
+def test_apply_cached_standardization_disambiguates_rubella_and_toxoplasma_antibodies(
+    tmp_path, monkeypatch
+):
+    lab_specs = _make_boolean_serology_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            ("IgG (qualitative)", "RUBEOLA <ELISA>"): "Blood - Anti-Rubella Virus IgG (Qualitative)",
+            ("IgG (quantitative)", "RUBEOLA <ELISA>"): "Blood - Anti-Rubella Virus IgG",
+            ("IgM", "RUBEOLA <ELISA>"): "Blood - Anti-Rubella Virus IgM (Qualitative)",
+            (
+                "Interpretacao de resultados:",
+                "RUBEOLA <ELISA>",
+            ): "Blood - Anti-Rubella Virus IgG (Qualitative)",
+            (
+                "IgG (qualitative)",
+                "TOXOPLASMOSE <ELISA>",
+            ): "Blood - Anti-Toxoplasma gondii IgG (Qualitative)",
+            (
+                "IgG (quantitative)",
+                "TOXOPLASMOSE <ELISA>",
+            ): "Blood - Anti-Toxoplasma gondii IgG",
+            (
+                "IgM (qualitative)",
+                "TOXOPLASMOSE <ELISA>",
+            ): "Blood - Anti-Toxoplasma gondii IgM (Qualitative)",
+            (
+                "IgM (quantitative)",
+                "TOXOPLASMOSE <ELISA>",
+            ): "Blood - Anti-Toxoplasma gondii IgM",
+        },
+        unit_map={
+            ("UI/ml", "Blood - Anti-Rubella Virus IgG"): "IU/mL",
+            ("UI/ml", "Blood - Anti-Toxoplasma gondii IgG"): "IU/mL",
+            ("EIU/ml", "Blood - Anti-Toxoplasma gondii IgM"): "EIU/mL",
+        },
+    )
+    review_df = pd.DataFrame(
+        [
+            {
+                "page_number": 3,
+                "raw_lab_name": "IgG",
+                "raw_section_name": "RUBEOLA <ELISA>",
+                "raw_value": "POSITIVO",
+                "raw_lab_unit": None,
+            },
+            {
+                "page_number": 3,
+                "raw_lab_name": "IgG",
+                "raw_section_name": "RUBEOLA <ELISA>",
+                "raw_value": "13",
+                "raw_lab_unit": "UI/ml",
+            },
+            {
+                "page_number": 3,
+                "raw_lab_name": "IgM",
+                "raw_section_name": "RUBEOLA <ELISA>",
+                "raw_value": "NEGATIVO",
+                "raw_lab_unit": None,
+            },
+            {
+                "page_number": 3,
+                "raw_lab_name": "Interpretacao de resultados:",
+                "raw_section_name": "RUBEOLA <ELISA>",
+                "raw_value": "IMUNE",
+                "raw_lab_unit": None,
+            },
+            {
+                "page_number": 3,
+                "raw_lab_name": "IgG",
+                "raw_section_name": "TOXOPLASMOSE <ELISA>",
+                "raw_value": "NEGATIVO",
+                "raw_lab_unit": None,
+            },
+            {
+                "page_number": 3,
+                "raw_lab_name": "IgG",
+                "raw_section_name": "TOXOPLASMOSE <ELISA>",
+                "raw_value": "1.2",
+                "raw_lab_unit": "UI/ml",
+            },
+            {
+                "page_number": 3,
+                "raw_lab_name": "IgM",
+                "raw_section_name": "TOXOPLASMOSE <ELISA>",
+                "raw_value": "NEGATIVO",
+                "raw_lab_unit": None,
+            },
+            {
+                "page_number": 3,
+                "raw_lab_name": "IgM",
+                "raw_section_name": "TOXOPLASMOSE <ELISA>",
+                "raw_value": "1.1",
+                "raw_lab_unit": "EIU/ml",
+            },
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df["lab_name_standardized"].tolist() == [
+        "Blood - Anti-Rubella Virus IgG (Qualitative)",
+        "Blood - Anti-Rubella Virus IgG",
+        "Blood - Anti-Rubella Virus IgM (Qualitative)",
+        "Blood - Anti-Rubella Virus IgG (Qualitative)",
+        "Blood - Anti-Toxoplasma gondii IgG (Qualitative)",
+        "Blood - Anti-Toxoplasma gondii IgG",
+        "Blood - Anti-Toxoplasma gondii IgM (Qualitative)",
+        "Blood - Anti-Toxoplasma gondii IgM",
+    ]
+    assert standardized_df["lab_unit_standardized"].tolist() == [
+        "boolean",
+        "UI/ml",
+        "boolean",
+        "boolean",
+        "boolean",
+        "UI/ml",
+        "boolean",
+        "EIU/mL",
+    ]
+
+
+def test_apply_cached_standardization_maps_legacy_serology_and_scc_contexts(
+    tmp_path, monkeypatch
+):
+    lab_specs = _make_boolean_serology_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            (
+                "Salmonella paratyphi A",
+                "REACCAO DE WIDAL",
+            ): "Blood - Widal (S. Paratyphi A)",
+            (
+                "Salmonella paratyphi B",
+                "REACCAO DE WIDAL",
+            ): "Blood - Widal (S. Paratyphi B)",
+            (
+                "REACCAO DE WEIL-FELIX",
+                "SEROLOGIA",
+            ): "Blood - Weil-Felix Reaction",
+            (
+                "Squamous cells carcinoma",
+                "Bioquímica - Marcadores Tumorais",
+            ): "Blood - Squamous Cell Carcinoma Antigen (SCC)",
+        },
+        unit_map={
+            (
+                "ng/mL",
+                "Blood - Squamous Cell Carcinoma Antigen (SCC)",
+            ): "ng/mL",
+        },
+    )
+    review_df = pd.DataFrame(
+        [
+            {
+                "page_number": 2,
+                "raw_lab_name": "Salmonella paratyphi A",
+                "raw_section_name": "REACCAO DE WIDAL",
+                "raw_value": "NEGATIVA",
+                "raw_lab_unit": None,
+            },
+            {
+                "page_number": 2,
+                "raw_lab_name": "Salmonella paratyphi B",
+                "raw_section_name": "REACCAO DE WIDAL",
+                "raw_value": "NEGATIVA",
+                "raw_lab_unit": None,
+            },
+            {
+                "page_number": 2,
+                "raw_lab_name": "REACCAO DE WEIL-FELIX",
+                "raw_section_name": "SEROLOGIA",
+                "raw_value": "NEGATIVA",
+                "raw_lab_unit": None,
+            },
+            {
+                "page_number": 1,
+                "raw_lab_name": "Squamous cells carcinoma",
+                "raw_section_name": "Bioquímica - Marcadores Tumorais",
+                "raw_value": "0.50",
+                "raw_lab_unit": "ng/mL",
+            },
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df["lab_name_standardized"].tolist() == [
+        "Blood - Widal (S. Paratyphi A) (Qualitative)",
+        "Blood - Widal (S. Paratyphi B) (Qualitative)",
+        "Blood - Weil-Felix Reaction (Qualitative)",
+        "Blood - Squamous Cell Carcinoma Antigen (SCC)",
+    ]
+    assert standardized_df["lab_unit_standardized"].tolist() == [
+        "boolean",
+        "boolean",
+        "boolean",
+        "ng/mL",
+    ]
+
+
 def test_backfill_missing_raw_sections_infers_urine_page_context():
     review_df = pd.DataFrame(
         [
@@ -938,6 +1272,56 @@ def test_backfill_missing_raw_sections_infers_urine_page_context():
     assert enriched_df.loc[3, "raw_section_name"] == "EXAME MICROSCOPICO DO SEDIMENTO"
     assert pd.isna(enriched_df.loc[4, "raw_section_name"])
     assert pd.isna(enriched_df.loc[5, "raw_section_name"])
+
+
+def test_backfill_missing_raw_sections_does_not_count_explicit_blood_rows_as_urine_context(
+    tmp_path, monkeypatch
+):
+    lab_specs = _make_mixed_section_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            ("Glicose", None): "Blood - Glucose (Fasting)",
+            ("Glicose", "Elementos anormais"): "Urine Type II - Glucose",
+        },
+        unit_map={
+            ("mg/dL", "Blood - Glucose (Fasting)"): "mg/dL",
+        },
+    )
+    review_df = pd.DataFrame(
+        [
+            {
+                "page_number": 1,
+                "raw_lab_name": "Eritrócitos",
+                "raw_section_name": "HEMOGRAMA",
+                "raw_value": "3.69",
+                "raw_lab_unit": "E6/mm3",
+            },
+            {
+                "page_number": 1,
+                "raw_lab_name": "Leucócitos",
+                "raw_section_name": "HEMOGRAMA",
+                "raw_value": "4000",
+                "raw_lab_unit": "/mm3",
+            },
+            {
+                "page_number": 1,
+                "raw_lab_name": "Glicose",
+                "raw_section_name": None,
+                "raw_value": "83",
+                "raw_lab_unit": "mg/dL",
+                "raw_reference_min": 70,
+                "raw_reference_max": 120,
+            },
+        ]
+    )
+
+    enriched_df = rows_module._backfill_missing_raw_sections(review_df)
+    standardized_df = apply_cached_standardization(enriched_df, lab_specs)
+
+    assert pd.isna(enriched_df.loc[2, "raw_section_name"])
+    assert standardized_df.loc[2, "lab_name_standardized"] == "Blood - Glucose (Fasting)"
+    assert standardized_df.loc[2, "lab_unit_standardized"] == "mg/dL"
 
 
 def test_build_document_review_dataframe_infers_missing_sections_for_urine_disambiguation(tmp_path, monkeypatch):
@@ -1135,6 +1519,38 @@ def test_apply_cached_standardization_overrides_stale_percentage_unit_cache_for_
 
     assert standardized_df["lab_name_standardized"].tolist() == ["Blood - Neutrophils"]
     assert standardized_df["lab_unit_standardized"].tolist() == ["10⁹/L"]
+
+
+def test_apply_cached_standardization_repairs_misaligned_electrophoresis_percentage_unit(
+    tmp_path, monkeypatch
+):
+    lab_specs = _make_protein_fraction_lab_specs(tmp_path)
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={
+            ("Albumina", "ELECTROFORESE DE PROTEINAS"): "Blood - Albumin",
+        },
+        unit_map={
+            ("g/dL", "Blood - Albumin"): "g/dL",
+        },
+    )
+    review_df = pd.DataFrame(
+        [
+            {
+                "raw_lab_name": "Albumina",
+                "raw_section_name": "ELECTROFORESE DE PROTEINAS",
+                "raw_lab_unit": "g/dL",
+                "raw_value": "61.5",
+                "raw_reference_min": 55.0,
+                "raw_reference_max": 64.0,
+            }
+        ]
+    )
+
+    standardized_df = apply_cached_standardization(review_df, lab_specs)
+
+    assert standardized_df.loc[0, "lab_name_standardized"] == "Blood - Albumin (%)"
+    assert standardized_df.loc[0, "lab_unit_standardized"] == "%"
 
 
 def test_apply_cached_standardization_handles_truncated_absolute_count_units(tmp_path, monkeypatch):
