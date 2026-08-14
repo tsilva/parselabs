@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-import importlib
+import importlib.util
 from pathlib import Path
 
 import pandas as pd
@@ -92,7 +92,12 @@ def test_review_build_page_image_value_for_entry_adds_overlay(tmp_path):
 
 
 def test_root_test_wrapper_delegates_to_dataset_helpers(monkeypatch):
-    test_module = importlib.import_module("test")
+    module_path = Path(__file__).resolve().parents[1] / "test.py"
+    spec = importlib.util.spec_from_file_location("parselabs_root_test", module_path)
+    assert spec is not None
+    assert spec.loader is not None
+    test_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(test_module)
     calls: dict[str, object] = {}
 
     def _fake_build_integrity_report(*, profile_names=None):
