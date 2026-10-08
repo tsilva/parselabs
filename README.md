@@ -1,10 +1,10 @@
-<div align="center">
+<p align="center">
   <img src="./logo.png" alt="parselabs" width="512" />
-
-  <h1>parselabs</h1>
-
-  **🔬 Extract lab results from medical PDFs with vision extraction and reviewed JSON fixtures 📊**
-</div>
+  <br />
+  <!-- repo-tagline:start -->
+  <strong>🔬 Extract structured lab results from medical PDFs 📊</strong>
+  <!-- repo-tagline:end -->
+</p>
 
 parselabs is a Python CLI for turning lab-report PDFs and images into structured review data. It converts pages to images, extracts objective lab results with an OpenRouter-compatible vision model, standardizes names and units, validates suspicious values, and writes CSV/XLSX outputs.
 
