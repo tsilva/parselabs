@@ -201,7 +201,9 @@ class PagePayload(TypedDict, total=False):
 
     collection_date: str | None
     report_date: str | None
+    registration_date: str | None
     lab_facility: str | None
+    patient_name: str | None
     page_has_lab_data: bool | None
     source_file: str | None
     page_number: int

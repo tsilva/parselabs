@@ -173,7 +173,9 @@ def test_llm_tool_schema_field_shape_remains_stable():
     assert list(schema["properties"]) == [
         "collection_date",
         "report_date",
+        "registration_date",
         "lab_facility",
+        "patient_name",
         "page_has_lab_data",
         "lab_results",
     ]

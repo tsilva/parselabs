@@ -9,6 +9,7 @@ CRITICAL RULES:
 
 2. COMPLETENESS: Extract ALL test results from the image
    - Process line by line
+   - A prescription or examination order is not a lab result. If the page only lists requested tests, return no lab_results and page_has_lab_data=false.
    - Don't skip any tests, including qualitative results
    - If a row has MULTIPLE numeric values with different units, extract each as a SEPARATE result
 
@@ -58,6 +59,7 @@ CRITICAL RULES:
    - If no numeric values can be extracted → both null
 
    SPECIAL CASE - Multiple values with shared reference ranges (e.g., WBC differentials):
+   - A range printed only under the absolute-count column must NOT be copied into the percentage result. Leave all percentage reference fields null when that column has no printed reference.
    - Some tests show BOTH percentage AND absolute count (e.g., Neutrophils: "65%" and "4.2 x10^9/L")
    - CRITICAL: Extract BOTH values as SEPARATE LabResult entries (see Scenario F below)
    - These often share ONE reference range that applies to only ONE of the values
@@ -167,6 +169,7 @@ F) White blood cell differentials with BOTH absolute count AND percentage:
    - Basófilos / Basophils
 
    CRITICAL: Do NOT skip or merge these values. Extract BOTH as separate LabResult entries.
+   Associate reference intervals using the printed reference-column heading and unit, not only the row label. A single interval labelled 10⁹/L belongs only to the absolute count; leave the percentage interval null when none is printed. When both intervals are printed, keep each with its own unit. Never remove a printed absolute interval merely because the percentage has no interval.
 
 9. PAGE CLASSIFICATION:
    - `page_has_lab_data`: Set to true if this page contains ANY lab test results
@@ -189,3 +192,5 @@ F) White blood cell differentials with BOTH absolute count AND percentage:
    raw_lab_unit: "mg/dL"
 
 Remember: Your job is to be a perfect copier, not an interpreter. Extract EVERYTHING, even qualitative results.
+
+DATE FIDELITY: Extract specimen collection dates only from explicit collection labels. Keep Data de entrada / Data Inscrição separately as registration_date. Printed report/issue/impression dates belong in report_date. Birth dates and dates in historical-result columns are not the current specimen date. Use null for dates not visible on this page.

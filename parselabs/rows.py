@@ -399,11 +399,19 @@ def build_corpus_review_rows(
     return pd.concat(review_frames, ignore_index=True, sort=False)
 
 
-def _extract_page_payload_date(page_payload: PagePayload) -> str | None:
+def _extract_page_event_date(page_payload: PagePayload) -> str | None:
+    return next((page_payload.get(key) for key in ("collection_date", "registration_date")
+                 if page_payload.get(key) not in (None, "", "0000-00-00")), None)
+
+
+def _extract_page_payload_date(
+    page_payload: PagePayload, fallback_event_date: str | None = None,
+) -> str | None:
     """Return the canonical date stored on one page payload."""
 
-    document_date = page_payload.get("collection_date") or page_payload.get("report_date")
-    return None if document_date == "0000-00-00" else document_date
+    event_date = _extract_page_event_date(page_payload) or fallback_event_date
+    report_date = page_payload.get("report_date")
+    return event_date or (report_date if report_date not in (None, "", "0000-00-00") else None)
 
 
 def _format_review_reason(
@@ -510,6 +518,9 @@ def _flatten_page_payloads(
 
     rows: list[ReviewRow] = []
     document_date: str | None = None
+    page_payloads = list(page_payloads)
+    event_date = next((_extract_page_event_date(p) for p in page_payloads
+                       if isinstance(p, dict) and _extract_page_event_date(p)), None)
 
     for page_idx, payload in enumerate(page_payloads, start=1):
         # Skip malformed payloads so callers can pass best-effort collections.
@@ -518,16 +529,17 @@ def _flatten_page_payloads(
 
         page_number = int(payload.get("page_number") or page_idx)
 
-        # Preserve the first usable document date across every row.
+        page_date = _extract_page_payload_date(payload, event_date)
+        # Use another page's date only for pages with no date of their own.
         if document_date is None:
-            document_date = _extract_page_payload_date(payload)
+            document_date = page_date
 
         rows.extend(
             _iter_flattened_review_rows(
                 payload,
                 source_file=payload.get("source_file"),
                 page_number=page_number,
-                document_date=document_date,
+                document_date=page_date,
                 include_extraction_failed_reason=False,
             )
         )
@@ -537,6 +549,8 @@ def _flatten_page_payloads(
         return pd.DataFrame(columns=DOCUMENT_REVIEW_COLUMNS)
 
     flattened_df = pd.DataFrame(rows)
+    if document_date is not None:
+        flattened_df["date"] = flattened_df["date"].fillna(document_date)
     flattened_df = _backfill_missing_raw_sections(flattened_df)
     ensure_columns(flattened_df, DOCUMENT_REVIEW_COLUMNS, default=None)
     return flattened_df
@@ -650,6 +664,7 @@ def load_document_review_rows(
     page_json_paths = sorted(doc_dir.glob("*.json"))
     source_file = f"{get_document_stem(doc_dir)}.csv"
     doc_date: str | None = None
+    payloads: list[tuple[int, PagePayload]] = []
 
     # Read each page JSON once and flatten its lab_results into row records.
     for page_json_path in page_json_paths:
@@ -665,16 +680,22 @@ def load_document_review_rows(
         if page_payload is None:
             continue
 
-        # Capture the first usable document date for all rows in this document.
+        payloads.append((page_number, page_payload))
+
+    event_date = next((_extract_page_event_date(p) for _, p in payloads
+                       if _extract_page_event_date(p)), None)
+    for page_number, page_payload in payloads:
+        page_date = _extract_page_payload_date(page_payload, event_date)
+        # Capture a fallback without overwriting dated pages.
         if doc_date is None:
-            doc_date = _extract_document_date(page_payload, doc_dir)
+            doc_date = page_date
 
         rows.extend(
             _iter_flattened_review_rows(
                 page_payload,
                 source_file=source_file,
                 page_number=page_number,
-                document_date=doc_date,
+                document_date=page_date,
                 include_extraction_failed_reason=True,
                 include_statuses=include_statuses,
             )
@@ -685,10 +706,12 @@ def load_document_review_rows(
         return pd.DataFrame(columns=DOCUMENT_REVIEW_COLUMNS)
 
     review_df = pd.DataFrame(rows)
+    if doc_date is None:
+        doc_date = _extract_document_date({}, doc_dir)
 
     # Apply the resolved document date to every row so later pages can still fill earlier blanks.
     if doc_date is not None:
-        review_df["date"] = doc_date
+        review_df["date"] = review_df["date"].fillna(doc_date)
 
     review_df = _backfill_missing_raw_sections(review_df)
     ensure_columns(review_df, DOCUMENT_REVIEW_COLUMNS, default=None)
@@ -1630,21 +1653,44 @@ def _flag_suspicious_reference_ranges(
         ref_max = review_df.at[idx, "reference_max_primary"]
         unit = review_df.at[idx, "lab_unit_primary"]
 
-        # Skip rows without a known lab mapping or a full reference range.
+        # A one-sided interval still needs review (for example, basophils <0.1).
         if pd.isna(std_name) or std_name == UNKNOWN_VALUE:
             continue
-        if pd.isna(ref_min) or pd.isna(ref_max):
+        if pd.isna(ref_min) and pd.isna(ref_max):
             continue
 
         # Inverted ranges are always suspicious.
-        if ref_min > ref_max:
+        if pd.notna(ref_min) and pd.notna(ref_max) and ref_min > ref_max:
             suspicious_indices.append(idx)
             continue
 
         # Percentage ranges above 100 are likely mixed-unit artifacts.
-        if unit == "%" and ref_max > 100:
+        if unit == "%" and pd.notna(ref_max) and ref_max > 100:
             suspicious_indices.append(idx)
             continue
+
+        # A percentage row inheriting the same reference interval as its
+        # absolute-count sibling is evidence of a column association error.
+        # Flag it for source review; never invent a replacement interval.
+        absolute_name = lab_specs.get_non_percentage_variant(str(std_name)) if unit == "%" else None
+        if absolute_name and {"page_number", "source_file"}.issubset(review_df.columns):
+            siblings = review_df[
+                (review_df["lab_name_standardized"] == absolute_name)
+                & (review_df["page_number"] == review_df.at[idx, "page_number"])
+                & (review_df["source_file"] == review_df.at[idx, "source_file"])
+            ]
+            same_min = siblings["reference_min_primary"].eq(ref_min) | (siblings["reference_min_primary"].isna() & pd.isna(ref_min))
+            same_max = siblings["reference_max_primary"].eq(ref_max) | (siblings["reference_max_primary"].isna() & pd.isna(ref_max))
+            if (same_min & same_max).any():
+                suspicious_indices.append(idx)
+                continue
+            if not siblings.empty and siblings[["reference_min_primary", "reference_max_primary"]].isna().all(axis=None):
+                percentage_score = _score_variant_range_match(str(std_name), ref_min, ref_max, None, lab_specs)
+                absolute_score = _score_variant_range_match(absolute_name, ref_min, ref_max, None, lab_specs)
+                if (percentage_score is not None and absolute_score is not None
+                        and absolute_score <= 0.5 and percentage_score - absolute_score >= 0.25):
+                    suspicious_indices.append(idx)
+                    continue
 
         # Absolute-unit protein fraction rows often print percentage ranges alongside the
         # mass concentration. When the configured (%) sibling is a clearly better match,
@@ -1661,9 +1707,9 @@ def _flag_suspicious_reference_ranges(
         expected_min, expected_max = expected_range[0], expected_range[1]
 
         ratios: list[float] = []
-        if isinstance(expected_min, (int, float)) and expected_min != 0:
+        if pd.notna(ref_min) and isinstance(expected_min, (int, float)) and expected_min != 0:
             ratios.append(abs(ref_min / expected_min))
-        if isinstance(expected_max, (int, float)) and expected_max != 0:
+        if pd.notna(ref_max) and isinstance(expected_max, (int, float)) and expected_max != 0:
             ratios.append(abs(ref_max / expected_max))
 
         if ratios and all(ratio > 10 or ratio < 0.1 for ratio in ratios):

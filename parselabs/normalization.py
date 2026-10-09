@@ -236,7 +236,7 @@ def _preprocess_values(df: pd.DataFrame) -> pd.DataFrame:
         df.loc[interval_mask, "_preprocessed_value"] = interval_midpoints.loc[interval_mask].map(str)
 
     # Convert preprocessed values to numeric
-    df["value_primary"] = pd.to_numeric(df["_preprocessed_value"], errors="coerce")
+    df["value_primary"] = pd.to_numeric(df["_preprocessed_value"], errors="coerce").astype(float)
 
     # Clean up temporary column
     df.drop(columns=["_preprocessed_value"], inplace=True)
@@ -796,8 +796,8 @@ def _apply_unit_conversions_for_lab(
 
         # Apply conversion to all matching rows (vectorized)
         df.loc[unit_mask, "value_primary"] = df.loc[unit_mask, "value_primary"] * factor
-        df.loc[unit_mask, "reference_min_primary"] = df.loc[unit_mask, "raw_reference_min"] * factor
-        df.loc[unit_mask, "reference_max_primary"] = df.loc[unit_mask, "raw_reference_max"] * factor
+        df.loc[unit_mask, "reference_min_primary"] = pd.to_numeric(df.loc[unit_mask, "raw_reference_min"], errors="coerce").astype(float) * factor
+        df.loc[unit_mask, "reference_max_primary"] = pd.to_numeric(df.loc[unit_mask, "raw_reference_max"], errors="coerce").astype(float) * factor
         df.loc[unit_mask, "lab_unit_primary"] = primary_unit
 
 
@@ -815,8 +815,8 @@ def apply_unit_conversions(
 
     # Initialize primary unit columns from standardized values
     df["lab_unit_primary"] = df["lab_unit_standardized"]
-    df["reference_min_primary"] = df["raw_reference_min"]
-    df["reference_max_primary"] = df["raw_reference_max"]
+    df["reference_min_primary"] = pd.to_numeric(df["raw_reference_min"], errors="coerce").astype(float)
+    df["reference_max_primary"] = pd.to_numeric(df["raw_reference_max"], errors="coerce").astype(float)
 
     # Phase 1: Extract comparison operators and preprocess values
     df = _preprocess_values(df)

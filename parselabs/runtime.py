@@ -152,6 +152,7 @@ class RuntimeContext:
                 input_file_regex=input_file_regex,
                 max_workers=max_workers,
                 console_mode=console_mode,
+                expected_patient_name=profile.name,
             )
 
         openai_client = None

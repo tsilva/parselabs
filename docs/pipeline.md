@@ -222,3 +222,9 @@ This document describes the current extraction, review, and export pipeline.
 - Per-document CSVs are derived review snapshots.
 - Normal extraction-mode `all.csv` and `all.xlsx` are merged review-state outputs, potentially rebuilt once more after automatic standardization refresh.
 - Strict reviewed rebuild mode writes the accepted-only final export instead of the review ledger.
+
+### Fidelity checks and cached reconstruction
+
+Discovery is recursive; clearly labelled prescriptions, orders and leaflets are not lab-result candidates. A printed patient name is checked against the configured profile name before page results are published. Continuation pages without names do not establish identity. Rebuilds preserve each page’s collection/report date instead of imposing one PDF-wide date; a document fallback fills only undated rows. Percentage and absolute-count sibling rows with identical reference bounds on the same source page are flagged rather than assigned invented replacement ranges. One-sided intervals are also checked. When the absolute sibling has no interval, a percentage interval that matches the configured absolute range substantially better is flagged for source review, without transferring or deleting bounds automatically. Explicit reticulocyte count units survive stale unit mappings, and numeric conversion columns support decimal factors even when all source values are integers.
+
+Date extraction keeps specimen collection, laboratory registration/entry and report issue dates separate. A continuation page lacking an event date inherits an explicit collection/registration date from the document before using its report issue date. Explicit different page event dates remain distinct.

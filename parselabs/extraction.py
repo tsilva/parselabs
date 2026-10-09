@@ -225,7 +225,12 @@ class BaseHealthLabReportModel(BaseModel):
 
     collection_date: COLLECTION_DATE_FIELD
     report_date: REPORT_DATE_FIELD
+    registration_date: str | None = Field(
+        default=None,
+        description="Laboratory registration or entry date explicitly printed as Data de entrada or Data Inscrição, in YYYY-MM-DD format. Keep separate from specimen collection and report issue dates.",
+    )
     lab_facility: LAB_FACILITY_FIELD
+    patient_name: str | None = Field(default=None, description="Patient name exactly as printed in the patient header; null when absent or unreadable. Never use a physician name.")
     page_has_lab_data: bool | None = Field(
         default=None,
         description="True if page contains lab test results, False if page is cover/instructions/administrative with no lab data",
@@ -728,7 +733,7 @@ def _fix_lab_results_format(tool_result_dict: RawExtractionPayload) -> RawExtrac
     """Fix common LLM formatting issues in lab_results and dates."""
 
     # Fix date formats at report level
-    for date_field in ["collection_date", "report_date"]:
+    for date_field in ["collection_date", "registration_date", "report_date"]:
         if date_field in tool_result_dict:
             tool_result_dict[date_field] = _normalize_date_format(tool_result_dict[date_field])
 

@@ -6,6 +6,7 @@ import logging  # noqa: E402
 import re  # noqa: E402
 import shutil  # noqa: E402
 import sys  # noqa: E402
+import unicodedata
 from dataclasses import dataclass, field  # noqa: E402
 from multiprocessing import Manager, Pool  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -16,6 +17,7 @@ from typing import Callable  # noqa: E402
 import pandas as pd  # noqa: E402
 import pdf2image  # noqa: E402
 from openai import OpenAI  # noqa: E402
+from PIL import Image
 from tqdm import tqdm  # noqa: E402
 
 # Local imports
@@ -122,13 +124,21 @@ def _prepare_page_images(page_image, page_name: str, doc_out_dir: Path) -> dict[
     """Create and cache the image variants used for page extraction."""
 
     image_paths = _get_page_image_paths(doc_out_dir, page_name)
-    if all(path.exists() for path in image_paths.values()):
+    valid_paths: set[Path] = set()
+    for path in image_paths.values():
+        try:
+            with Image.open(path) as cached_image:
+                cached_image.load()
+            valid_paths.add(path)
+        except (OSError, ValueError):
+            pass
+    if len(valid_paths) == len(image_paths):
         return image_paths
 
     variants = create_page_image_variants(page_image)
     for variant_name, processed_image in variants.items():
         image_path = image_paths[variant_name]
-        if image_path.exists():
+        if image_path in valid_paths:
             continue
         processed_image.save(image_path, "JPEG", quality=95)
         logger.info(f"[{page_name}] Saved {variant_name} extraction image")
@@ -336,6 +346,19 @@ def _add_page_metadata(results: list, page_idx: int, page_name: str) -> list:
     return enriched
 
 
+def validate_patient_identity(payload: PagePayload, expected_name: str | None) -> None:
+    """Reject an explicit incompatible patient header before publishing rows."""
+    def tokens(name: str) -> set[str]:
+        normalized = unicodedata.normalize("NFKD", name.casefold())
+        normalized = "".join(c for c in normalized if not unicodedata.combining(c))
+        return set(re.findall(r"[a-z]+", normalized)) - {"de", "da", "do", "das", "dos"}
+    actual = payload.get("patient_name")
+    if actual and expected_name:
+        expected = tokens(expected_name)
+        if expected and not expected.issubset(tokens(actual)):
+            raise PipelineError("Patient header does not match the selected profile; source review required")
+
+
 def _process_single_page(
     page_image,
     page_idx: int,
@@ -371,6 +394,7 @@ def _process_single_page(
     )
 
     # Add page metadata to results
+    validate_patient_identity(page_data, config.expected_patient_name)
     page_results = _add_page_metadata(page_data.get("lab_results", []), page_idx, page_name)
 
     return page_results, page_data

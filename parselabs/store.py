@@ -99,7 +99,7 @@ def build_hashed_csv_path(pdf_path: Path, output_path: Path, file_hash: str) -> 
 
 
 def discover_pdf_files(input_path: Path, input_file_regex: str | None) -> list[Path]:
-    """Return top-level PDF files matching the configured glob pattern."""
+    """Return recursive PDF candidates, excluding explicitly labelled orders."""
 
     try:
         entries = list(input_path.iterdir())
@@ -113,7 +113,9 @@ def discover_pdf_files(input_path: Path, input_file_regex: str | None) -> list[P
         raise OSError(f"Cannot enumerate input directory {input_path}: {detail}") from exc
 
     pattern = (input_file_regex or "*.pdf").lower()
-    return sorted(path for path in entries if path.is_file() and fnmatch.fnmatch(path.name.lower(), pattern))
+    return sorted(path for path in input_path.rglob("*")
+                  if path.is_file() and fnmatch.fnmatch(path.name.lower(), pattern)
+                  and not re.search(r"(?:^|\s-\s)(?:receita|pedido exame|bula)(?:\s|[.-]|$)", path.name, re.IGNORECASE))
 
 
 def plan_pdf_run(pdf_files: list[Path], output_path: Path) -> PdfRunPlan:

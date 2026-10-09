@@ -3543,6 +3543,8 @@
   },
   "Blood - Reticulocyte Count": {
     "alternatives": [
+      {"factor": 0.001, "unit": "/mmc"},
+      {"factor": 0.001, "unit": "/mm3"},
       {
         "factor": 0.001,
         "unit": "cells/µL"
