@@ -162,9 +162,9 @@ processing:
 
 **Shared runtime settings** (`~/.config/parselabs/.env`):
 ```bash
-OPENROUTER_API_KEY=your_api_key
+AGENTBRIDGE_API_KEY=your_api_key
 # Optional:
-# OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+# AGENTBRIDGE_BASE_URL=http://127.0.0.1:8082/api/v1
 EXTRACT_MODEL_ID=google/gemini-2.5-pro
 ```
 
@@ -258,11 +258,11 @@ Optional:
 - `processing.workers` (or top-level `workers`) - Parallel workers (default: CPU count)
 
 Required in shared config (`~/.config/parselabs/.env` or shell environment):
-- `OPENROUTER_API_KEY` - API key for OpenRouter
 - `EXTRACT_MODEL_ID` - Vision model for extraction
 
 Optional in shared config:
-- `OPENROUTER_BASE_URL` - Alternate OpenRouter-compatible endpoint
+- `AGENTBRIDGE_API_KEY` - Gateway access token when required
+- `AGENTBRIDGE_BASE_URL` - AgentBridge API root
 
 ## Validation (test.py)
 

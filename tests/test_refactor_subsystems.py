@@ -11,7 +11,7 @@ from parselabs import review, review_data, runtime
 from parselabs.config import ExtractionConfig, LabSpecsConfig
 
 
-def _build_config(tmp_path: Path, *, base_url: str = "https://openrouter.ai/api/v1", api_key: str = "test-key") -> ExtractionConfig:
+def _build_config(tmp_path: Path, *, base_url: str = "http://127.0.0.1:8082/api/v1", api_key: str = "test-key") -> ExtractionConfig:
     return ExtractionConfig(
         input_path=tmp_path,
         output_path=tmp_path / "output",
@@ -41,8 +41,8 @@ def test_runtime_get_openai_client_caches_by_endpoint_and_key(monkeypatch, tmp_p
     assert first is second
     assert first is not third
     assert calls == [
-        ("https://openrouter.ai/api/v1", "test-key"),
-        ("https://openrouter.ai/api/v1", "other-key"),
+        ("http://127.0.0.1:8082/api/v1", "test-key"),
+        ("http://127.0.0.1:8082/api/v1", "other-key"),
     ]
 
 

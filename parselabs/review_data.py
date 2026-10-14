@@ -92,10 +92,16 @@ def load_results_dataframe(
     output_path: Path,
     lab_specs: LabSpecsConfig,
     demographics: Demographics | None,
+    *,
+    include_document_key: bool = False,
 ) -> pd.DataFrame:
     """Load review rows for the results explorer from processed-document state."""
 
-    df = build_corpus_review_rows(output_path, lab_specs)
+    # Include the hashed directory identity only for callers that request it.
+    if include_document_key:
+        df = build_corpus_review_rows(output_path, lab_specs, include_document_key=True)
+    else:
+        df = build_corpus_review_rows(output_path, lab_specs)
     if df.empty:
         return df
 

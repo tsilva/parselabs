@@ -69,7 +69,7 @@ class ExtractionConfig:
     output_path: Path
     openrouter_api_key: str
     extract_model_id: str
-    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_base_url: str = "http://127.0.0.1:8082/api/v1"
 
     # Processing settings
     input_file_regex: str = "*.pdf"
@@ -157,12 +157,13 @@ class ProfileConfig:
 
         # Extract runtime settings
         openrouter_api_key = cls._first_value(
-            os.getenv("OPENROUTER_API_KEY"),
-            config_env.get("OPENROUTER_API_KEY"),
+            os.getenv("AGENTBRIDGE_API_KEY"),
+            config_env.get("AGENTBRIDGE_API_KEY"),
+            "not-needed",
         )
         openrouter_base_url = cls._first_value(
-            os.getenv("OPENROUTER_BASE_URL"),
-            config_env.get("OPENROUTER_BASE_URL"),
+            os.getenv("AGENTBRIDGE_BASE_URL"),
+            config_env.get("AGENTBRIDGE_BASE_URL"),
         )
         extract_model_id = cls._first_value(
             os.getenv("EXTRACT_MODEL_ID"),

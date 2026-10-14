@@ -384,13 +384,19 @@ def _backfill_missing_raw_sections(review_df: pd.DataFrame) -> pd.DataFrame:
 def build_corpus_review_rows(
     output_path: Path,
     lab_specs: LabSpecsConfig,
+    *,
+    include_document_key: bool = False,
 ) -> pd.DataFrame:
     """Return the combined review dataset for every processed document."""
 
-    review_frames = [
-        build_review_rows(document.doc_dir, lab_specs)
-        for document in iter_processed_documents(output_path)
-    ]
+    review_frames = []
+    for document in iter_processed_documents(output_path):
+        frame = build_review_rows(document.doc_dir, lab_specs)
+
+        # API callers need hashed identity when different PDFs share a filename.
+        if include_document_key:
+            frame["document_key"] = document.doc_dir.name
+        review_frames.append(frame)
 
     # Guard: No processed documents means there is nothing to concatenate.
     if not review_frames:

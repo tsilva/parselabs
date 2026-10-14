@@ -8,6 +8,8 @@ This document describes the current extraction, review, and export pipeline.
 - `parselabs/store.py` is the shared filesystem/state surface for hashed document discovery, page JSON persistence, and review actions.
 - `parselabs/rows.py` is the shared review/export row-building surface; `parselabs/dataset.py` owns integrity reports.
 - `parselabs/review.py` owns shared UI presentation helpers, while `parselabs/review_data.py` owns results-explorer dataframe loading.
+- `frontend/` owns the light Svelte Results and Review screens. `parselabs/ui.py` launches the loopback-only FastAPI app in `parselabs/dashboard.py`, serving the compiled `static/dashboard/` assets and one selected profile's review API.
+- The dashboard loads rows through `load_results_dataframe(..., include_document_key=True)`, preserving each hashed document directory in API identities so reports with the same filename remain distinct. Source pages and bounding boxes use the shared review/store helpers; decisions use `ReviewTarget` and `apply_review_action_for_target(...)` for that exact document. Review uses the original extracted value and reference; Results uses standardized values with raw fallbacks for unmapped units. A session token protects writes, stale status preconditions prevent overwrites, and source access is contained within the profile's output root. Refresh reloads page JSON; each decision reads and updates only its source page without rebuilding the entire corpus or derived CSV/XLSX exports. Other callers retain the existing row schema by default.
 - `parselabs/admin/` owns installable maintenance-command implementations; `utils/*.py` contains compatibility entry points only.
 
 1. Profile/runtime setup.
@@ -22,6 +24,8 @@ This document describes the current extraction, review, and export pipeline.
 2. API validation before any file work.
 - `run_for_profile()` calls `validate_api_access(...)` before PDF discovery.
 - That sends a minimal chat completion using the configured extraction model.
+- The preflight allows 120 seconds for AgentBridge model startup and queueing. SDK retries are disabled for this check because a timed-out request may still occupy a Codex worker.
+- Validation and vision extraction explicitly request high reasoning effort for `codex/gpt-6.1-sol`.
 - If the key is invalid, the model is unavailable, the endpoint is wrong, or the server times out, the run stops immediately.
 - This is a hard preflight check, not a best-effort warning.
 
@@ -195,7 +199,7 @@ This document describes the current extraction, review, and export pipeline.
 - Unit mappings use the same batched, eager-persistence flow. Every returned name or unit must correspond to an item in its current batch and use a configured candidate value. Hallucinated inputs, malformed items, out-of-candidate values, and `$UNKNOWN$` results are never cached.
 - Standardization uses a dedicated OpenAI client configuration with SDK retries disabled; extraction client retry behavior is unchanged. A retryable API failure can consume at most one application-level retry per item. Timed-out batches retry as two smaller deterministic sub-batches, while omitted or malformed response items retry only the incomplete subset. Retry splitting is not recursive.
 - A batch that remains unsuccessful is recorded in a concise aggregate error, but independent later batches continue. Update and unresolved counts therefore cover the complete best-effort refresh pass, including partial successes.
-- For `codex/...` standardization model IDs, name and unit calls explicitly use medium reasoning effort. Other providers do not receive that provider-specific option.
+- For `codex/gpt-6.1-sol`, name and unit standardization calls explicitly use high reasoning effort. Other `codex/...` models use medium effort. Other providers do not receive that provider-specific option.
 - Bundled standardization caches are immutable defaults; automatic and admin refreshes persist user overrides under `~/.config/parselabs/cache/`.
 - This means a row that was `$UNKNOWN$` on the first pass can still contribute a unit mapping in the same automatic refresh cycle.
 - If the refresh adds any cache entries, the pipeline rebuilds per-document CSVs and merged outputs from persisted page JSON only.

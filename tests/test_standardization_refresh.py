@@ -3,6 +3,7 @@ import logging
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 
 from parselabs import standardization_refresh as refresh
 from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig
@@ -48,15 +49,7 @@ def _install_cache_store(monkeypatch, *, name_cache=None, unit_cache=None):
 
 
 def _make_fake_client():
-    return SimpleNamespace(
-        chat=SimpleNamespace(
-            completions=SimpleNamespace(
-                create=lambda **kwargs: SimpleNamespace(
-                    choices=[SimpleNamespace(message=SimpleNamespace(content="[]"))]
-                )
-            )
-        )
-    )
+    return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="[]"))]))))
 
 
 def test_refresh_standardization_caches_noop_when_all_cached(tmp_path, monkeypatch):
@@ -216,9 +209,7 @@ def test_refresh_standardization_caches_persists_contextual_name_keys(tmp_path, 
     monkeypatch.setattr(
         refresh,
         "_standardize_names_with_llm",
-        lambda uncached_names, standardized_names, client, model_id: {
-            ("Glicose", "Elementos anormais"): "Urine Type II - Glucose (Qualitative)"
-        },
+        lambda uncached_names, standardized_names, client, model_id: {("Glicose", "Elementos anormais"): "Urine Type II - Glucose (Qualitative)"},
     )
     monkeypatch.setattr(
         refresh,
@@ -561,35 +552,35 @@ def test_unknown_response_is_complete_but_remains_uncached(tmp_path, monkeypatch
     assert result.name_error is None
 
 
-def test_codex_standardization_requests_use_medium_reasoning(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("model_id", "effort"),
+    [("codex/gpt-6.1-sol", "high"), ("codex/standardizer", "medium")],
+)
+def test_codex_standardization_requests_use_model_reasoning(tmp_path, monkeypatch, model_id, effort):
     lab_specs = _make_lab_specs(tmp_path)
     requests = []
     client = _make_fake_client()
-    client.chat.completions.create = lambda **kwargs: (
-        requests.append(kwargs) or SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="[]"))])
-    )
+    client.chat.completions.create = lambda **kwargs: requests.append(kwargs) or SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="[]"))])
     monkeypatch.setattr(refresh, "load_prompt_template", lambda _: "prompt")
 
-    refresh._standardize_names_with_llm([("Glucose", None)], lab_specs.standardized_names, client, "codex/standardizer")
+    refresh._standardize_names_with_llm([("Glucose", None)], lab_specs.standardized_names, client, model_id)
     refresh._standardize_units_with_llm(
         [("mg/dL", "Blood - Glucose")],
         lab_specs.standardized_units,
         client,
-        "codex/standardizer",
+        model_id,
         lab_specs,
     )
 
     assert len(requests) == 2
-    assert all(request["reasoning_effort"] == "medium" for request in requests)
+    assert all(request["reasoning_effort"] == effort for request in requests)
 
 
 def test_non_codex_standardization_requests_omit_reasoning_effort(tmp_path, monkeypatch):
     lab_specs = _make_lab_specs(tmp_path)
     requests = []
     client = _make_fake_client()
-    client.chat.completions.create = lambda **kwargs: (
-        requests.append(kwargs) or SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="[]"))])
-    )
+    client.chat.completions.create = lambda **kwargs: requests.append(kwargs) or SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="[]"))])
     monkeypatch.setattr(refresh, "load_prompt_template", lambda _: "prompt")
 
     refresh._standardize_names_with_llm([("Glucose", None)], lab_specs.standardized_names, client, "openai/gpt-5")

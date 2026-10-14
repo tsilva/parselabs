@@ -1,12 +1,12 @@
-"""Unified Gradio review workspace."""
+"""Launch the local Svelte results and review workspace."""
 
 from __future__ import annotations
 
 import logging
 
-import gradio as gr
+import uvicorn
 
-from parselabs import results_view
+from parselabs.dashboard import create_dashboard_app
 from parselabs.runtime import RuntimeContext
 
 logger = logging.getLogger(__name__)
@@ -15,18 +15,16 @@ RESULTS_TAB_ID = "results-explorer"
 REVIEW_TAB_ID = "review-queue"
 
 
-def build_app(context: RuntimeContext, default_tab: str) -> gr.Blocks:
+def build_app(context: RuntimeContext, default_tab: str):
     """Build the single review workspace."""
 
-    return results_view.create_app(context)
+    return create_dashboard_app(context, default_tab)
 
 
 def launch_app(context: RuntimeContext, default_tab: str) -> None:
     """Launch the unified review workspace for one selected profile."""
 
-    demo = build_app(context, default_tab)
-    allowed_paths = RuntimeContext.list_output_roots()
-    head = results_view.KEYBOARD_JS
+    app = build_app(context, default_tab)
     server_port = 7862 if _normalize_default_tab(default_tab) == RESULTS_TAB_ID else 7863
 
     logger.info(
@@ -34,15 +32,7 @@ def launch_app(context: RuntimeContext, default_tab: str) -> None:
         server_port,
         selected_tab_label(default_tab),
     )
-    demo.launch(
-        server_name="127.0.0.1",
-        server_port=server_port,
-        show_error=True,
-        inbrowser=False,
-        allowed_paths=allowed_paths,
-        css=results_view.CUSTOM_CSS,
-        head=head,
-    )
+    uvicorn.run(app, host="127.0.0.1", port=server_port)
 
 
 def selected_tab_label(default_tab: str) -> str:

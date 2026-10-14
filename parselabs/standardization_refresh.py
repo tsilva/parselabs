@@ -12,6 +12,8 @@ from typing import Any, TypeVar
 import pandas as pd
 from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError, OpenAI
 
+from parselabs.agentbridge import base_url as gateway_base_url
+from parselabs.agentbridge import model_id as gateway_model
 from parselabs.config import UNKNOWN_VALUE, LabSpecsConfig
 from parselabs.prompt_templates import load_prompt_template
 from parselabs.standardization import (
@@ -187,7 +189,7 @@ def _standardize_names_with_llm(
 Return a JSON array of objects with raw_lab_name, raw_section_name, and standardized_name."""
 
     request_options: dict[str, Any] = {
-        "model": model_id,
+        "model": gateway_model(model_id),
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -196,7 +198,7 @@ Return a JSON array of objects with raw_lab_name, raw_section_name, and standard
         "max_tokens": 4000,
     }
     if model_id.lower().startswith("codex/"):
-        request_options["reasoning_effort"] = "medium"
+        request_options["reasoning_effort"] = "high" if model_id == "codex/gpt-6.1-sol" else "medium"
 
     completion = client.chat.completions.create(
         **request_options,
@@ -267,11 +269,7 @@ def _standardize_units_with_llm(
 ) -> dict[str, str]:
     """Call the LLM to standardize a batch of raw lab units."""
 
-    uncached_pairs = [
-        (raw_unit, lab_name)
-        for raw_unit, lab_name in uncached_pairs
-        if lab_name and lab_name != UNKNOWN_VALUE
-    ]
+    uncached_pairs = [(raw_unit, lab_name) for raw_unit, lab_name in uncached_pairs if lab_name and lab_name != UNKNOWN_VALUE]
 
     # Guard: No resolved lab names means there is nothing to standardize.
     if not uncached_pairs:
@@ -309,7 +307,7 @@ def _standardize_units_with_llm(
 Return a JSON array with the standardized values."""
 
     request_options: dict[str, Any] = {
-        "model": model_id,
+        "model": gateway_model(model_id),
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -318,7 +316,7 @@ Return a JSON array with the standardized values."""
         "max_tokens": 4000,
     }
     if model_id.lower().startswith("codex/"):
-        request_options["reasoning_effort"] = "medium"
+        request_options["reasoning_effort"] = "high" if model_id == "codex/gpt-6.1-sol" else "medium"
 
     completion = client.chat.completions.create(
         **request_options,
@@ -393,11 +391,7 @@ def _collect_uncached_names(df: pd.DataFrame, name_cache: dict[str, str]) -> lis
     if "raw_lab_name" not in df.columns:
         return []
 
-    raw_section_series = (
-        df["raw_section_name"]
-        if "raw_section_name" in df.columns
-        else pd.Series([None] * len(df))
-    )
+    raw_section_series = df["raw_section_name"] if "raw_section_name" in df.columns else pd.Series([None] * len(df))
 
     uncached_names: list[tuple[str, str | None]] = []
     seen_keys: set[str] = set()
@@ -466,11 +460,7 @@ def _collect_uncached_unit_pairs(
     uncached_pairs: list[tuple[str, str]] = []
     seen_keys: set[str] = set()
     current_lab_names = df["lab_name"] if "lab_name" in df.columns else pd.Series([""] * len(df))
-    raw_section_series = (
-        df["raw_section_name"]
-        if "raw_section_name" in df.columns
-        else pd.Series([None] * len(df))
-    )
+    raw_section_series = df["raw_section_name"] if "raw_section_name" in df.columns else pd.Series([None] * len(df))
 
     # Resolve unit contexts row by row so freshly learned name mappings unlock unit scans.
     for raw_unit, raw_name, raw_section_name, current_lab_name in zip(
@@ -728,10 +718,7 @@ def _format_batch_failures(label: str, failures: list[_BatchFailure]) -> str | N
     if not failures:
         return None
 
-    details = [
-        f"batch {failure.batch_number}/{failure.total_batches} ({failure.unresolved_count} incomplete: {failure.reason})"
-        for failure in failures[:_MAX_ERROR_DETAILS]
-    ]
+    details = [f"batch {failure.batch_number}/{failure.total_batches} ({failure.unresolved_count} incomplete: {failure.reason})" for failure in failures[:_MAX_ERROR_DETAILS]]
     if len(failures) > _MAX_ERROR_DETAILS:
         details.append(f"{len(failures) - _MAX_ERROR_DETAILS} more batch(es)")
     return f"{len(failures)} {label.lower()} batch(es) incomplete: " + "; ".join(details)
@@ -753,12 +740,7 @@ def _build_client(
 ) -> OpenAI:
     """Create a client for on-demand standardization refreshes."""
 
-    # Guard: Auto-refresh cannot call the model without API credentials.
-    if not api_key:
-        raise ValueError("Standardization refresh requires an OpenRouter API key.")
-
-    resolved_base_url = base_url or "https://openrouter.ai/api/v1"
-    return OpenAI(base_url=resolved_base_url, api_key=api_key, max_retries=0)
+    return OpenAI(base_url=gateway_base_url(base_url), api_key=api_key or "not-needed", max_retries=0)
 
 
 def refresh_standardization_caches_from_dataframe(

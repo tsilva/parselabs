@@ -102,7 +102,7 @@ def discover_pdf_files(input_path: Path, input_file_regex: str | None) -> list[P
     """Return recursive PDF candidates, excluding explicitly labelled orders."""
 
     try:
-        entries = list(input_path.iterdir())
+        list(input_path.iterdir())
     except FileNotFoundError as exc:
         raise FileNotFoundError(f"Input directory does not exist: {input_path}") from exc
     except PermissionError as exc:

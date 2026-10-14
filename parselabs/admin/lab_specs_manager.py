@@ -35,6 +35,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+from parselabs.agentbridge import model_id as gateway_model
 from parselabs.exceptions import ConfigurationError
 from parselabs.paths import get_lab_specs_path, get_prompts_dir, get_source_lab_specs_path
 from parselabs.runtime import RuntimeContext
@@ -128,7 +129,7 @@ def get_conversion_factor(lab_name, from_unit, to_unit, client, model_id, temper
     )
 
     completion = client.chat.completions.create(
-        model=model_id,
+        model=gateway_model(model_id),
         messages=[
             {"role": "system", "content": system_prompt},
             {
@@ -166,7 +167,7 @@ def get_optimal_range(lab_name, primary_unit, user_stats, client, model_id, temp
     )
 
     completion = client.chat.completions.create(
-        model=model_id,
+        model=gateway_model(model_id),
         messages=[
             {"role": "system", "content": system_prompt},
             {

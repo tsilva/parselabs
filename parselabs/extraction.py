@@ -11,6 +11,7 @@ from typing import Annotated
 from openai import APIError, OpenAI
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from parselabs.agentbridge import model_id as gateway_model
 from parselabs.exceptions import ExtractionAPIError
 from parselabs.prompt_templates import load_prompt_template
 from parselabs.types import ExtractionValidationResult, PagePayload, RawExtractionPayload
@@ -450,10 +451,12 @@ def _execute_single_extraction(
         Dict with tool result data, or None if extraction failed
     """
 
+    resolved_model = gateway_model(model_id)
+    request_options = {"reasoning_effort": "high"} if resolved_model == "codex/gpt-6.1-sol" else {}
     # Call the vision model API
     try:
         completion = client.chat.completions.create(
-            model=model_id,
+            model=resolved_model,
             messages=[
                 {"role": "system", "content": effective_system_prompt},
                 {
@@ -474,6 +477,7 @@ def _execute_single_extraction(
                 "type": "function",
                 "function": {"name": "extract_lab_results"},
             },
+            **request_options,
         )
     # API-level failure - let the pipeline handle expected extraction outages.
     except APIError as e:
@@ -575,10 +579,7 @@ def _assert_complete_result_bboxes(report_model: HealthLabReport) -> None:
     if missing_bbox_count == 0:
         return
 
-    raise ValueError(
-        "MALFORMED OUTPUT: extracted lab results missing complete bounding boxes. "
-        f"Rows without full bbox data: {missing_bbox_count}/{len(report_model.lab_results)}."
-    )
+    raise ValueError(f"MALFORMED OUTPUT: extracted lab results missing complete bounding boxes. Rows without full bbox data: {missing_bbox_count}/{len(report_model.lab_results)}.")
 
 
 def _is_column_like_bbox(result: LabResult) -> bool:
@@ -587,11 +588,7 @@ def _is_column_like_bbox(result: LabResult) -> bool:
     width = float(result.bbox_right - result.bbox_left)
     height = float(result.bbox_bottom - result.bbox_top)
 
-    return (
-        width <= _COLUMN_BBOX_MAX_WIDTH
-        and height >= _COLUMN_BBOX_MIN_HEIGHT
-        and height >= (width * _COLUMN_BBOX_ASPECT_RATIO)
-    )
+    return width <= _COLUMN_BBOX_MAX_WIDTH and height >= _COLUMN_BBOX_MIN_HEIGHT and height >= (width * _COLUMN_BBOX_ASPECT_RATIO)
 
 
 def _assert_row_like_result_bboxes(report_model: HealthLabReport) -> None:
@@ -614,17 +611,10 @@ def _assert_row_like_result_bboxes(report_model: HealthLabReport) -> None:
         )
 
     left_positions = sorted(float(result.bbox_left) for result in column_like_results)
-    adjacent_column_slices = sum(
-        1
-        for idx in range(1, len(left_positions))
-        if (left_positions[idx] - left_positions[idx - 1]) <= _COLUMN_BBOX_CLUSTER_GAP
-    )
+    adjacent_column_slices = sum(1 for idx in range(1, len(left_positions)) if (left_positions[idx] - left_positions[idx - 1]) <= _COLUMN_BBOX_CLUSTER_GAP)
 
     if len(column_like_results) >= _COLUMN_BBOX_CLUSTER_MIN_COUNT or adjacent_column_slices > 0:
-        raise ValueError(
-            "MALFORMED OUTPUT: extracted lab results use clustered column-like bounding boxes instead of row regions. "
-            f"Column-like rows: {len(column_like_results)}/{len(report_model.lab_results)}."
-        )
+        raise ValueError(f"MALFORMED OUTPUT: extracted lab results use clustered column-like bounding boxes instead of row regions. Column-like rows: {len(column_like_results)}/{len(report_model.lab_results)}.")
 
 
 def _log_extraction_quality(report_model: HealthLabReport, image_path: Path) -> None:

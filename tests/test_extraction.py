@@ -1,5 +1,7 @@
 import warnings
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 from PIL import Image
 from pydantic.warnings import PydanticDeprecatedSince211
@@ -9,10 +11,25 @@ from parselabs.extraction import (
     HealthLabReport,
     HealthLabReportExtraction,
     LabResult,
+    _execute_single_extraction,
     _fix_lab_results_format,
     _validate_extraction_result,
 )
 from parselabs.utils import create_page_image_variants
+
+
+def test_sol_vision_extraction_requests_high_reasoning():
+    client = Mock()
+    client.chat.completions.create.return_value = SimpleNamespace(choices=[SimpleNamespace(
+        message=SimpleNamespace(tool_calls=[SimpleNamespace(function=SimpleNamespace(arguments='{"lab_results": []}'))])
+    )])
+    result = _execute_single_extraction(
+        image_path=Path("synthetic.jpg"), img_data="synthetic-image", model_id="codex/gpt-6.1-sol",
+        client=client, effective_system_prompt="Extract synthetic lab results.", current_temp=0,
+    )
+    assert result == {"lab_results": []}
+    assert client.chat.completions.create.call_args.kwargs["model"] == "codex/gpt-6.1-sol"
+    assert client.chat.completions.create.call_args.kwargs["reasoning_effort"] == "high"
 
 
 def test_fix_lab_results_format_recovers_stringified_json_items():

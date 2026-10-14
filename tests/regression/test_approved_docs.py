@@ -99,7 +99,7 @@ def approved_regression_run():
             input_path=input_dir,
             output_path=output_dir,
             openrouter_api_key=profile.openrouter_api_key,
-            openrouter_base_url=profile.openrouter_base_url or "https://openrouter.ai/api/v1",
+            openrouter_base_url=profile.openrouter_base_url or "http://127.0.0.1:8082/api/v1",
             extract_model_id=profile.extract_model_id,
             input_file_regex="*.pdf",
             max_workers=1,
@@ -130,10 +130,7 @@ def _apply_review_state(review_state_path: Path | None, doc_dir: Path) -> None:
 
     # Guard: Approved fixtures must carry review decisions now that exports are review-driven.
     if review_state_path is None or not review_state_path.exists():
-        pytest.fail(
-            "Approved fixture is missing review_state.json. "
-            "Resync fixtures with `parselabs admin regression sync-reviewed --profile ...`."
-        )
+        pytest.fail("Approved fixture is missing review_state.json. Resync fixtures with `parselabs admin regression sync-reviewed --profile ...`.")
 
     snapshot_payload = json.loads(review_state_path.read_text(encoding="utf-8"))
     snapshot_rows = snapshot_payload.get("rows", [])
@@ -151,9 +148,7 @@ def _apply_review_state(review_state_path: Path | None, doc_dir: Path) -> None:
 
         # Guard: A replay failure means extraction drifted or the snapshot no longer matches the document.
         if not ok:
-            pytest.fail(
-                f"Failed to replay review state for {doc_dir.name} page {page_number} row {result_index}: {message}"
-            )
+            pytest.fail(f"Failed to replay review state for {doc_dir.name} page {page_number} row {result_index}: {message}")
 
 
 @pytest.mark.approved_docs

@@ -4,8 +4,8 @@ from parselabs.config import ProfileConfig, load_config_env
 
 
 def test_profile_config_loads_env_runtime_settings_and_resolves_relative_paths(tmp_path, monkeypatch):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "env-key")
-    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://env.example/v1")
+    monkeypatch.setenv("AGENTBRIDGE_API_KEY", "env-key")
+    monkeypatch.setenv("AGENTBRIDGE_BASE_URL", "https://env.example/v1")
     monkeypatch.setenv("EXTRACT_MODEL_ID", "google/gemini-test")
 
     profile_path = tmp_path / "demo.yaml"
@@ -45,8 +45,8 @@ def test_profile_config_ignores_profile_runtime_keys_without_env_sources(tmp_pat
     home_dir = tmp_path / "home"
     (home_dir / ".config" / "parselabs").mkdir(parents=True)
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home_dir))
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv("OPENROUTER_BASE_URL", raising=False)
+    monkeypatch.delenv("AGENTBRIDGE_API_KEY", raising=False)
+    monkeypatch.delenv("AGENTBRIDGE_BASE_URL", raising=False)
     monkeypatch.delenv("EXTRACT_MODEL_ID", raising=False)
     load_config_env.cache_clear()
 
@@ -69,7 +69,7 @@ def test_profile_config_ignores_profile_runtime_keys_without_env_sources(tmp_pat
 
     profile = ProfileConfig.from_file(profile_path)
 
-    assert profile.openrouter_api_key is None
+    assert profile.openrouter_api_key == "not-needed"
     assert profile.openrouter_base_url is None
     assert profile.extract_model_id is None
     assert profile.workers == 8
@@ -82,16 +82,12 @@ def test_profile_config_prefers_shared_config_env_over_profile_keys(tmp_path, mo
     env_dir = home_dir / ".config" / "parselabs"
     env_dir.mkdir(parents=True)
     (env_dir / ".env").write_text(
-        (
-            'OPENROUTER_API_KEY="shared-key"\n'
-            'OPENROUTER_BASE_URL="https://shared.example/v1"\n'
-            'EXTRACT_MODEL_ID="google/gemini-shared"\n'
-        ),
+        ('AGENTBRIDGE_API_KEY="shared-key"\nAGENTBRIDGE_BASE_URL="https://shared.example/v1"\nEXTRACT_MODEL_ID="google/gemini-shared"\n'),
         encoding="utf-8",
     )
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home_dir))
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv("OPENROUTER_BASE_URL", raising=False)
+    monkeypatch.delenv("AGENTBRIDGE_API_KEY", raising=False)
+    monkeypatch.delenv("AGENTBRIDGE_BASE_URL", raising=False)
     monkeypatch.delenv("EXTRACT_MODEL_ID", raising=False)
     load_config_env.cache_clear()
 
@@ -122,16 +118,12 @@ def test_profile_config_prefers_process_env_over_shared_config_env(tmp_path, mon
     env_dir = home_dir / ".config" / "parselabs"
     env_dir.mkdir(parents=True)
     (env_dir / ".env").write_text(
-        (
-            "OPENROUTER_API_KEY=shared-key\n"
-            "OPENROUTER_BASE_URL=https://shared.example/v1\n"
-            "EXTRACT_MODEL_ID=google/gemini-shared\n"
-        ),
+        ("AGENTBRIDGE_API_KEY=shared-key\nAGENTBRIDGE_BASE_URL=https://shared.example/v1\nEXTRACT_MODEL_ID=google/gemini-shared\n"),
         encoding="utf-8",
     )
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home_dir))
-    monkeypatch.setenv("OPENROUTER_API_KEY", "shell-key")
-    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://shell.example/v1")
+    monkeypatch.setenv("AGENTBRIDGE_API_KEY", "shell-key")
+    monkeypatch.setenv("AGENTBRIDGE_BASE_URL", "https://shell.example/v1")
     monkeypatch.setenv("EXTRACT_MODEL_ID", "google/gemini-shell")
     load_config_env.cache_clear()
 

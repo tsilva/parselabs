@@ -1326,6 +1326,7 @@ wheels = [
 name = "parselabs"
 source = { editable = "." }
 dependencies = [
+    { name = "fastapi" },
     { name = "gradio" },
     { name = "openai" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -1336,6 +1337,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "tqdm" },
+    { name = "uvicorn" },
     { name = "xlsxwriter" },
 ]
 
@@ -1349,6 +1351,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "fastapi", specifier = "==0.134.0" },
     { name = "gradio", specifier = ">=5.0.0" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "openai" },
@@ -1362,6 +1365,7 @@ requires-dist = [
     { name = "pyyaml" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "tqdm" },
+    { name = "uvicorn", specifier = "==0.41.0" },
     { name = "xlsxwriter" },
 ]
 provides-extras = ["dev"]

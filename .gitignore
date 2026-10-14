@@ -135,3 +135,7 @@ user_stats.json
 var/
 venv.bak/
 wheels/
+
+# Svelte source must remain tracked despite the general Python lib/ exclusion.
+!frontend/src/lib/
+!frontend/src/lib/**

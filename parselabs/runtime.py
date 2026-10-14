@@ -11,6 +11,7 @@ from typing import Mapping
 
 from openai import OpenAI
 
+from parselabs.agentbridge import base_url as gateway_base_url
 from parselabs.config import Demographics, ExtractionConfig, LabSpecsConfig, ProfileConfig
 from parselabs.exceptions import ConfigurationError
 from parselabs.paths import (
@@ -40,7 +41,7 @@ def get_openai_client(config: ExtractionConfig) -> OpenAI:
 def get_openai_client_for_credentials(base_url: str | None, api_key: str) -> OpenAI:
     """Return a cached OpenAI client for one endpoint and API key."""
 
-    resolved_base_url = base_url or "https://openrouter.ai/api/v1"
+    resolved_base_url = gateway_base_url(base_url)
     cache_key = (resolved_base_url, api_key)
     cached_client = _CLIENT_CACHE.get(cache_key)
 
@@ -50,7 +51,7 @@ def get_openai_client_for_credentials(base_url: str | None, api_key: str) -> Ope
 
     client = OpenAI(
         base_url=resolved_base_url,
-        api_key=api_key,
+        api_key=api_key or "not-needed",
     )
     _CLIENT_CACHE[cache_key] = client
     return client
@@ -106,16 +107,8 @@ class RuntimeContext:
             raise ConfigurationError(f"Profile '{profile_name}' has no output_path defined.")
 
         # Guard: API-backed flows require both the key and extraction model.
-        if need_api and not profile.openrouter_api_key:
-            raise ConfigurationError(
-                f"Profile '{profile_name}' has no OpenRouter API key defined. "
-                f"Set OPENROUTER_API_KEY in {get_env_file()} or in the shell environment."
-            )
         if need_api and not profile.extract_model_id and not overrides.get("model"):
-            raise ConfigurationError(
-                f"Profile '{profile_name}' has no extract_model_id defined. "
-                f"Set EXTRACT_MODEL_ID in {get_env_file()}, in the shell environment, or pass --model."
-            )
+            raise ConfigurationError(f"Profile '{profile_name}' has no extract_model_id defined. Set EXTRACT_MODEL_ID in {get_env_file()}, in the shell environment, or pass --model.")
 
         # Guard: Input paths must exist before processing starts.
         if need_input and input_path and not input_path.exists():
@@ -147,7 +140,7 @@ class RuntimeContext:
                 input_path=input_path if input_path is not None else Path(),
                 output_path=output_path if output_path is not None else Path(),
                 openrouter_api_key=str(profile.openrouter_api_key or ""),
-                openrouter_base_url=profile.openrouter_base_url or "https://openrouter.ai/api/v1",
+                openrouter_base_url=profile.openrouter_base_url or "http://127.0.0.1:8082/api/v1",
                 extract_model_id=extract_model_id,
                 input_file_regex=input_file_regex,
                 max_workers=max_workers,
@@ -237,9 +230,7 @@ def load_profile_config(profile_name: str) -> ProfileConfig:
 
     profile_path = ProfileConfig.find_path(profile_name)
     if not profile_path:
-        raise ConfigurationError(
-            f"Profile '{profile_name}' not found. Use --list-profiles to see available profiles."
-        )
+        raise ConfigurationError(f"Profile '{profile_name}' not found. Use --list-profiles to see available profiles.")
 
     return ProfileConfig.from_file(profile_path)
 
@@ -256,9 +247,7 @@ def load_profile_configs(
 
     profile_names = ProfileConfig.list_profiles() if include_templates else list_non_template_profiles()
     if not profile_names:
-        raise ConfigurationError(
-            f"No profiles found. Create profile files in {ProfileConfig.get_profiles_dir()}."
-        )
+        raise ConfigurationError(f"No profiles found. Create profile files in {ProfileConfig.get_profiles_dir()}.")
 
     return [load_profile_config(name) for name in profile_names]
 
@@ -273,9 +262,7 @@ def resolve_profile_name(profile_name: str | None) -> str:
 
     # Guard: UI-backed flows need at least one configured profile.
     if not available_profiles:
-        raise ConfigurationError(
-            f"No profiles found. Create profile files in {ProfileConfig.get_profiles_dir()}."
-        )
+        raise ConfigurationError(f"No profiles found. Create profile files in {ProfileConfig.get_profiles_dir()}.")
 
     # Guard: Review UI flows must be started against one explicit profile.
     raise ConfigurationError("Review UI requires --profile. Use --list-profiles to see available profiles.")

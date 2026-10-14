@@ -20,6 +20,8 @@ from openai import OpenAI  # noqa: E402
 from PIL import Image
 from tqdm import tqdm  # noqa: E402
 
+from parselabs.agentbridge import model_id as gateway_model
+
 # Local imports
 from parselabs.config import (  # noqa: E402
     ExtractionConfig,
@@ -1026,8 +1028,7 @@ def _classify_api_check_error(error_msg: str, timeout: int) -> tuple[bool, str]:
     if "401" in error_msg or "Unauthorized" in error_msg:
         return (
             False,
-            f"Authentication failed - check OPENROUTER_API_KEY in {get_env_file()} "
-            f"or the shell environment: {error_msg}",
+            f"Authentication failed - check AGENTBRIDGE_API_KEY in {get_env_file()} or the shell environment: {error_msg}",
         )
 
     # Authorization / permission failures
@@ -1035,16 +1036,16 @@ def _classify_api_check_error(error_msg: str, timeout: int) -> tuple[bool, str]:
         return False, f"Authorization failed - key or account cannot use this model: {error_msg}"
 
     # Timeout errors (server slow or unreachable)
-    if "timeout" in error_msg.lower():
-        return False, f"Server timeout after {timeout}s - server may be unreachable"
+    if "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+        return False, f"API validation timed out after {timeout}s - AgentBridge may still be starting or queueing the model request"
 
     # Model / endpoint not found
     if "404" in error_msg:
-        return False, f"Model or endpoint not found - check EXTRACT_MODEL_ID and OPENROUTER_BASE_URL: {error_msg}"
+        return False, f"Model or endpoint not found - check EXTRACT_MODEL_ID and AGENTBRIDGE_BASE_URL: {error_msg}"
 
     # Invalid request / unsupported model configuration
     if "400" in error_msg or "BadRequest" in error_msg or "invalid" in error_msg.lower():
-        return False, f"API validation request was rejected - check EXTRACT_MODEL_ID, OPENROUTER_BASE_URL, or --model: {error_msg}"
+        return False, f"API validation request was rejected - check EXTRACT_MODEL_ID, AGENTBRIDGE_BASE_URL, or --model: {error_msg}"
 
     # Connection failures (network issues, DNS problems, server down)
     if "Connection" in error_msg or "refused" in error_msg.lower() or "reset" in error_msg.lower() or "Name or service not known" in error_msg or "getaddrinfo" in error_msg:
@@ -1054,24 +1055,28 @@ def _classify_api_check_error(error_msg: str, timeout: int) -> tuple[bool, str]:
     return False, f"API validation failed: {error_msg}"
 
 
-def validate_api_access(client: OpenAI, model_id: str, timeout: int = 10) -> tuple[bool, str]:
+def validate_api_access(client: OpenAI, model_id: str, timeout: int = 120) -> tuple[bool, str]:
     """Validate API access by running a minimal completion with the configured model.
 
     Args:
-        client: OpenAI client configured for OpenRouter
+        client: OpenAI client configured for AgentBridge
         model_id: Model used for extraction
         timeout: Timeout in seconds for the check
 
     Returns:
         Tuple of (is_available, message)
     """
+    resolved_model = gateway_model(model_id)
+    request_options = {"reasoning_effort": "high"} if resolved_model == "codex/gpt-6.1-sol" else {}
     try:
-        completion = client.chat.completions.create(
-            model=model_id,
+        # Retry timeouts enqueue duplicate Codex work while the original still runs.
+        completion = client.with_options(max_retries=0).chat.completions.create(
+            model=resolved_model,
             messages=[{"role": "user", "content": "Reply with OK."}],
             temperature=0,
             max_tokens=16,
             timeout=timeout,
+            **request_options,
         )
         if not completion or not getattr(completion, "choices", None):
             return False, "API validation failed: empty completion response"
@@ -1279,7 +1284,7 @@ def _log_standardization_refresh_summary(
         log_user_info(
             logger,
             f"[standardization] Removed {result.pruned_name_entries} stale name entr{'y' if result.pruned_name_entries == 1 else 'ies'} "
-            f"and {result.pruned_unit_entries} stale unit entr{'y' if result.pruned_unit_entries == 1 else 'ies'}"
+            f"and {result.pruned_unit_entries} stale unit entr{'y' if result.pruned_unit_entries == 1 else 'ies'}",
         )
 
     if result.name_error:
@@ -1413,16 +1418,9 @@ def _collect_reviewed_corpus_from_document_dirs(
     # Guard: Strict publish mode must stop before writing outputs when review is incomplete.
     if review_issues:
         issue_text = "\n".join(f"- {issue}" for issue in review_issues)
-        raise PipelineError(
-            "Reviewed JSON rebuild blocked because some documents are not fixture-ready:\n"
-            f"{issue_text}"
-        )
+        raise PipelineError(f"Reviewed JSON rebuild blocked because some documents are not fixture-ready:\n{issue_text}")
 
-    merged_review_df = (
-        pd.concat(review_frames, ignore_index=True, sort=False)
-        if review_frames
-        else pd.DataFrame(columns=DOCUMENT_REVIEW_COLUMNS)
-    )
+    merged_review_df = pd.concat(review_frames, ignore_index=True, sort=False) if review_frames else pd.DataFrame(columns=DOCUMENT_REVIEW_COLUMNS)
 
     # Guard: Empty accepted corpora still produce a stable empty export schema.
     if not accepted_rows:
@@ -1531,6 +1529,8 @@ def run_pipeline_for_pdf_files(
         failed_pages=all_failed_pages,
         pdfs_failed=pdfs_failed,
     )
+
+
 def build_final_output_dataframe_from_reviewed_json(
     output_path: Path,
     lab_specs: LabSpecsConfig,
@@ -1656,11 +1656,7 @@ def run_for_profile(args, profile_name: str) -> None:
     )
 
     if pdfs_failed or failed_pages:
-        raise PipelineError(
-            "Extraction was incomplete: "
-            f"{pdfs_failed} PDF(s) failed completely and "
-            f"{len(failed_pages)} failure record(s) were reported."
-        )
+        raise PipelineError(f"Extraction was incomplete: {pdfs_failed} PDF(s) failed completely and {len(failed_pages)} failure record(s) were reported.")
 
 
 def _report_extraction_failures(
