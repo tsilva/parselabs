@@ -31,8 +31,8 @@ This document describes the current extraction, review, and export pipeline.
 
 3. PDF discovery.
 - PDF enumeration is delegated to `discover_pdf_files(...)` in `parselabs/store.py`.
-- It lists only top-level files in the input directory.
-- It filters them against `input_file_regex`, case-insensitively.
+- It searches files recursively under the input directory.
+- It filters filenames against the `input_file_regex` glob, case-insensitively, and excludes explicitly labelled orders, prescriptions and leaflets.
 - Missing directories, permission problems, and other OS errors are converted into pipeline errors.
 
 4. Exact-content deduplication and reusable-output scan for the current run.
@@ -307,3 +307,10 @@ parselabs --profile NAME --rebuild-from-json --allow-pending --no-auto-standardi
 ```
 
 This rebuild preserves every pending review row and persisted JSON decision while regenerating per-document CSVs, merged CSV/XLSX exports and the output's lab-spec snapshot. Omit `--no-auto-standardize` only when an API-backed cache refresh is also wanted.
+
+## Profile configuration and routing
+
+Use the tracked [profile template](../profiles/template.yaml.example) for new
+private runtime profiles. See [shared-folder routing](../README.md#optional-shared-folder-routing)
+for the optional lab/exam filename convention and explicit-document behavior.
+Real patient bindings and source paths remain outside Git.

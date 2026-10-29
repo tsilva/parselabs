@@ -142,3 +142,6 @@ wheels/
 
 # Local shortcuts to external runtime profiles
 /.config/
+
+# Track only anonymized profile examples; real runtime YAML stays private.
+!/profiles/*.yaml.example
