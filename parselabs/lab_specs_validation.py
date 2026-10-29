@@ -35,6 +35,20 @@ class LabSpecsValidator:
         "Urine Type II - Deposit",
         # A bare cells observation does not identify the cell subtype required by specific terms.
         "Urine Type II - Sediment - Cells",
+        # Local pathology terms retain explicit loinc_note explanations until an exact
+        # specimen/method/scale match is verified; related cancer panels are not substitutes.
+        "Tissue - Excision Margin Distance",
+        "Tissue - Excision Margin Distance (Deep)",
+        "Tissue - Excision Margin Distance (Superficial)",
+        "Tissue - Gastric Dysplasia or Malignancy",
+        "Tissue - Gastric Glandular Atrophy",
+        "Tissue - Gastric Inflammatory Activity",
+        "Tissue - Gastric Intestinal Metaplasia",
+        "Tissue - Gastritis Severity",
+        "Tissue - Helicobacter pylori (Histology)",
+        "Tissue - PRAME Immunostain",
+        "Tissue - Tumor Classification",
+        "Tissue - Tumor Regression (%)",
     }
 
     CRITICAL_LOINC_CODES = {
@@ -50,7 +64,7 @@ class LabSpecsValidator:
         ("Albumin (%)", "Alpha-1 Globulin"),
     )
 
-    VALID_LAB_TYPES = {"blood", "urine", "feces", "saliva", "sample"}
+    VALID_LAB_TYPES = {"blood", "urine", "feces", "saliva", "sample", "tissue"}
     LAB_NAME_PREFIXES = {
         "blood": ["Blood - "],
         "urine": [
@@ -60,6 +74,7 @@ class LabSpecsValidator:
         "feces": ["Feces - "],
         "saliva": ["Saliva - "],
         "sample": ["Sample - "],
+        "tissue": ["Tissue - "],
     }
 
     def __init__(self, config_path: str | Path | None = None):
@@ -392,6 +407,11 @@ class LabSpecsValidator:
         # Known exception - allow missing LOINC
         if lab_name in self.LOINC_EXCEPTIONS:
             if not loinc_code:
+                # Tissue exceptions must explain the unresolved terminology match explicitly.
+                note = spec.get("loinc_note")
+                if spec.get("lab_type") == "tissue" and (not isinstance(note, str) or not note.strip()):
+                    self.errors.append(f"Lab '{lab_name}': Tissue LOINC exception requires a nonempty 'loinc_note'")
+                    return False
                 self.warnings.append(f"Lab '{lab_name}': Known exception without LOINC code")
             return True
 

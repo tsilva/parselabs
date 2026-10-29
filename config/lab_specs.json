@@ -5441,5 +5441,224 @@
     "loinc_code": "30522-7",
     "primary_unit": "mg/L",
     "ranges": {}
+  },
+  "Tissue - Breslow Thickness": {
+    "alternatives": [
+      {
+        "unit": "cm",
+        "factor": 10.0
+      }
+    ],
+    "lab_type": "tissue",
+    "loinc_code": "92839-0",
+    "primary_unit": "mm",
+    "ranges": {}
+  },
+  "Tissue - Excision Margin Distance": {
+    "alternatives": [
+      {
+        "unit": "cm",
+        "factor": 10.0
+      }
+    ],
+    "lab_type": "tissue",
+    "loinc_code": null,
+    "loinc_note": "Local distance term: the raw label may describe different margins and does not identify the closest margin required by LOINC 33737-8.",
+    "primary_unit": "mm",
+    "ranges": {}
+  },
+  "Tissue - Excision Margins": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": "21939-4",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Gastric Dysplasia or Malignancy": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": null,
+    "loinc_note": "Local combined gastric histology finding; separate dysplasia and malignancy observations cannot represent this combined raw label exactly.",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Gastric Glandular Atrophy": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": null,
+    "loinc_note": "Local gastric histology atrophy finding; no exact LOINC term verified.",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Gastric Inflammatory Activity": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": null,
+    "loinc_note": "Local ordinal gastric histology activity finding; no exact LOINC term verified.",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Gastric Intestinal Metaplasia": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": null,
+    "loinc_note": "Local gastric histology metaplasia finding; no exact LOINC term verified. LOINC answer codes are not observation codes.",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Gastritis Severity": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": null,
+    "loinc_note": "Local ordinal gastric histology finding; no exact LOINC term verified. A cancer diagnosis or an additional-findings panel is not equivalent.",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Helicobacter pylori (Histology)": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": null,
+    "loinc_note": "Local histological organism finding using modified Giemsa; LOINC 50320-1 is antigen immune staining and is not an equivalent method.",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Lymphovascular Invasion": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": "33761-8",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Melanoma Histologic Type": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": "44640-1",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Melanoma Satellite Nodules": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": "92838-2",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Melanoma Ulceration": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": "44660-9",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Mitotic Rate": {
+    "alternatives": [
+      {
+        "unit": "/mm²",
+        "factor": 1.0
+      }
+    ],
+    "lab_type": "tissue",
+    "loinc_code": "86669-9",
+    "primary_unit": "/mm2",
+    "ranges": {}
+  },
+  "Tissue - PRAME Immunostain": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": null,
+    "loinc_note": "Local immunostain result, including reported staining grades; no exact LOINC term verified.",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Pathology Diagnosis": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": "22637-3",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Perineural Invasion": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": "92837-4",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - SOX10 Immunostain": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": "73911-0",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Specimen Site": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": "22633-2",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Tumor Classification": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": null,
+    "loinc_note": "Local composite classification text may combine TNM and residual tumor status; do not substitute a single pT category or inferred stage.",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Tumor Regression": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": "44694-8",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Tumor Regression (%)": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": null,
+    "loinc_note": "Local quantitative term: LOINC 44694-8 is a nominal regression finding, not a percentage measurement; no exact quantitative code verified.",
+    "primary_unit": "%",
+    "ranges": {}
+  },
+  "Tissue - Tumor-Infiltrating Lymphocytes": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": "44693-0",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - p16 Immunostain": {
+    "alternatives": [],
+    "lab_type": "tissue",
+    "loinc_code": "49556-4",
+    "primary_unit": "text",
+    "ranges": {}
+  },
+  "Tissue - Excision Margin Distance (Deep)": {
+    "alternatives": [
+      {
+        "unit": "cm",
+        "factor": 10.0
+      }
+    ],
+    "lab_type": "tissue",
+    "loinc_code": null,
+    "loinc_note": "Local deep margin distance based on an explicit source label; no exact generic LOINC observation verified. Do not infer a lateral, closest-margin or tumor-specific term.",
+    "primary_unit": "mm",
+    "ranges": {}
+  },
+  "Tissue - Excision Margin Distance (Superficial)": {
+    "alternatives": [
+      {
+        "unit": "cm",
+        "factor": 10.0
+      }
+    ],
+    "lab_type": "tissue",
+    "loinc_code": null,
+    "loinc_note": "Local superficial margin distance based on an explicit source label; no exact generic LOINC observation verified. Do not infer a lateral, closest-margin or tumor-specific term.",
+    "primary_unit": "mm",
+    "ranges": {}
   }
 }

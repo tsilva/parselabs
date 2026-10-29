@@ -139,6 +139,7 @@ This document describes the current extraction, review, and export pipeline.
 - Explicit conversion-unit matching also folds those count-label accents, so remapping nRBC ratios from the absolute-count assay to the separate `/100 WBC` assay does not lose a supported denominator.
 - When the same raw assay appears on one page as both a numeric result and a qualitative interpretation, the row builder now probes explicit `(quantitative)` / `(qualitative)` cache keys first before falling back to the undecorated raw name.
 - A generic adjacent `Resultado`/`Result` numeric row can inherit the preceding qualitative assay's context for cache lookup while preserving its objective raw label in audit columns.
+- `_remap_tissue_measurement_variants(...)` separates nominal excision-margin status from explicitly unit-bearing margin distances, and nominal tumor regression from explicit percentages, before unit lookup. It works with a measurement on its own and does not infer a measurement unit from a bare number. `_remap_tissue_margin_locations(...)` then uses explicit superficial/deep wording in the raw label or comments to select distinct margin-distance definitions. A missing or combined location retains the generic definition; numeric value, row order and document order never establish a site. Custom catalogs without these siblings retain the generic form.
 - It standardizes units using `standardize_lab_units(...)` only after the lab name is known.
 - Unknown name mappings become `$UNKNOWN$`.
 - Blank raw units are only inferred from the lab spec primary unit for a narrow safe set: `boolean`, `pH`, `unitless`, `mm/h`, and `titer`. Explicit dilution results on titer-backed assays bypass stale index/boolean unit-cache mappings.
@@ -153,6 +154,7 @@ This document describes the current extraction, review, and export pipeline.
 - Portuguese non-reactive qualitative results such as `Não reativo` are normalized to boolean false for boolean-backed assays.
 - `Normal` and uncertain interpretations such as `DUVIDOSO` do not establish absence. Unclassified qualitative results keep a null numeric value, the complete `value_text`, and the `text` scale. Four-digit urine specific gravity notation such as `1012` normalizes to `1.012`; the source notation remains unchanged.
 - Reported text and intervals are preserved in `value_text`, alongside any derived numeric/boolean `value`. Textual sediment observations retain their reported wording without an invented cell count. Quantitative assays with only a negative label no longer become zero concentrations; configured qualitative ANA/CRP/MPO/PR3 siblings carry boolean interpretations separately. Urine-strip grades such as `Contém(+--)` preserve their full grading text.
+- Tissue/pathology rows obtain `lab_type=tissue` from their catalog definitions. Nominal diagnoses, sites, invasion findings, ordinal histology findings and immunostain grades use `text`, a null numeric value and the complete reported `value_text`. Quantitative Breslow thickness, mitotic rate, margin distances and regression percentages retain their explicit measurement scale; raw values and units remain unchanged. Pathology definitions have no inferred optimal or reference ranges.
 - Numeric annotations and approximations such as `9= NR` and `Ca. 125` also retain their complete source text alongside the parsed number. A bare `U` remains `U`, without inventing international calibration or a volume denominator. Legacy CH50 `U C'H 50` remains unconverted because no validated conversion to modern `U/mL` is configured.
 - Antibody assay `U/mL`, `U/L` and `kU/L` units are preserved without assuming international calibration. Conversely, explicit `IU/mL` cannot become a dimensionless index. Unverified unit aliases for SSA, anti-tTG IgA, rheumatoid factor and thyroid antibodies have been removed.
 - Explicit MCHC `%` and reticulocyte hemoglobin `pg/L` source scales remain literal; stale unit caches cannot silently replace them with `g/dL` or `pg`.
@@ -273,3 +275,35 @@ Reported numeric intervals remain in `value_text` with an empty numeric `value`;
 DGP IgA and IgG use distinct deamidated-gliadin definitions ([58709-7](https://loinc.org/58709-7), [58710-5](https://loinc.org/58710-5)). Method-specific HbA2 observations stay separate for [HPLC](https://loinc.org/42245-1) and [electrophoresis](https://loinc.org/4552-6). Quantitative urinary hemoglobin uses a [concentration definition](https://loinc.org/726-0), while presence-only strip observations retain their qualitative definition. High-sensitivity CRP has a [distinct method definition](https://loinc.org/30522-7). Stool cultures use the [stool specimen definition](https://loinc.org/625-4), and Gram-stain descriptions retain nominal text. Qualitative urine leukocytes use [5799-2](https://loinc.org/5799-2).
 
 Explicit Anti-HBs IU/mL converts to mIU/mL with factor 1000. Colony counts labelled `milhares UFC/mL` convert with factor 1000. Estradiol pmol/L converts to pg/mL with factor 0.272382, calculated from the [NIST molecular weight](https://webbook.nist.gov/cgi/cbook.cgi?ID=C50282). A printed urine glucose result of `Normal` remains text without an invented zero concentration. Exact units can come from an explicitly referenced attached table; obscured assay identities and contradictory source units require source review rather than inferred repairs.
+
+### Tissue and pathology terminology
+
+Pathology observations use the `tissue` specimen type and `Tissue - ` name prefix. The catalog includes the following verified terminology anchors:
+
+| Finding | LOINC |
+| --- | --- |
+| Breslow thickness | [92839-0](https://loinc.org/92839-0) |
+| Mitotic figures per area | [86669-9](https://loinc.org/86669-9) |
+| Melanoma ulceration | [44660-9](https://loinc.org/44660-9) |
+| Melanoma histologic type | [44640-1](https://loinc.org/44640-1) |
+| Melanoma satellite nodules | [92838-2](https://loinc.org/92838-2) |
+| Lymphovascular invasion | [33761-8](https://loinc.org/33761-8) |
+| Perineural invasion | [92837-4](https://loinc.org/92837-4) |
+| Tumor-infiltrating lymphocytes | [44693-0](https://loinc.org/44693-0) |
+| Nominal tumor regression | [44694-8](https://loinc.org/44694-8) |
+| Surgical margin status | [21939-4](https://loinc.org/21939-4) |
+| SOX10 immunostain | [73911-0](https://loinc.org/73911-0) |
+| p16 immunostain | [49556-4](https://loinc.org/49556-4) |
+| Pathology diagnosis and specimen site | [22637-3](https://loinc.org/22637-3), [22633-2](https://loinc.org/22633-2) |
+
+These codes identify observations; reported grades and interpretations remain literal text. No normal ranges, stages or binary normality results are inferred from descriptive findings. An explicit measurement unit selects margin-distance and regression-percentage siblings before nominal text handling; a bare number alone does not establish either scale. Margin distances retain their raw labels/comments. Explicit superficial and deep locations use separate standardized names, preserving both measurements even when their values agree. Conflicting values for the same margin still trigger duplicate review, and actual same-margin repeats remain eligible for export deduplication. Generic or ambiguous locations retain the existing review behavior. Each source document remains a distinct review record; copying a historical finding into a later note does not establish a new specimen date or authorize deleting its provenance.
+
+Twelve local pathology terms deliberately retain `loinc_code: null` and a `loinc_note`: generic and superficial/deep margin distances, quantitative regression percentage, composite tumor classification, PRAME staining, gastric inflammation/severity/atrophy/metaplasia/combined dysplasia-or-malignancy findings, and histological H. pylori detection. Their exact specimen, method or scale has no verified matching observation code in this catalog. For example, [50320-1](https://loinc.org/50320-1) describes an H. pylori antigen **immune stain**, so it is not assigned to modified-Giemsa histology. Answer-list codes and cancer panels are not replacements for individual observations. `LabSpecsValidator.LOINC_EXCEPTIONS` explicitly lists these terms and requires their explanatory notes; other new tissue definitions still require LOINC codes.
+
+To apply updated catalog definitions and local cache aliases without another extraction, run:
+
+```bash
+parselabs --profile NAME --rebuild-from-json --allow-pending --no-auto-standardize
+```
+
+This rebuild preserves every pending review row and persisted JSON decision while regenerating per-document CSVs, merged CSV/XLSX exports and the output's lab-spec snapshot. Omit `--no-auto-standardize` only when an API-backed cache refresh is also wanted.

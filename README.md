@@ -167,6 +167,7 @@ Extraction preserves inline units even when they conflict with a shared heading;
 - ABO group and Rh type retain text results. Unqualified glucose and fasting glucose have separate definitions. Second-hour sedimentation retains its two-hour scale (`mm/(2.h)`); printed distance readings are not relabeled as hourly rates.
 - Review UI defaults to the Results Explorer on `http://127.0.0.1:7862`; `--tab review` launches the Review Queue on `http://127.0.0.1:7863`.
 - `config/lab_specs.json` contains the bundled standardized lab definitions. Writable standardization-cache overrides live in `~/.config/parselabs/cache/` and fall back to the bundled defaults.
+- Tissue/pathology findings use `Tissue - ...` names and `lab_type=tissue`. Diagnoses, immunostain grades and other descriptive findings retain their literal text without inferred normality. Explicit margin distances and regression percentages have separate numeric definitions. Printed superficial and deep margin labels keep those measurements separate during duplicate detection and export. Terms without a verified exact LOINC match remain documented catalog exceptions; no substitute specimen or method code is assigned. See [pathology terminology](docs/pipeline.md#tissue-and-pathology-terminology).
 - `parselabs admin` is the preferred entry point for maintenance, lab-spec validation, cache refreshes, reviewed fixture sync, and output migrations.
 
 ## Architecture
