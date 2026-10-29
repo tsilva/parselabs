@@ -16,6 +16,7 @@ INTERVAL_VALUE_PATTERN = re.compile(
     r"^\s*(?P<min>\d+(?:\.\d+)?)\s*(?:-|a)\s*(?P<max>\d+(?:\.\d+)?)(?:\s*/.*)?\s*$",
     re.IGNORECASE,
 )
+TITER_VALUE_PATTERN = re.compile(r"^\s*(?:t[ií]tulo\s*)?(?P<operator>[<>])?\s*1\s*[:/]\s*(?P<denominator>\d+)\s*$", re.IGNORECASE)
 
 QUALITATIVE_VARIANT_MAP = {
     "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA)": "Blood - Anti-Tissue Transglutaminase Antibody IgA (Anti-tTG IgA) (Qualitative)",
@@ -127,35 +128,6 @@ def extract_comparison_value(value) -> tuple[str, bool, bool]:
     return s, False, False
 
 
-def parse_interval_midpoint(value) -> float | None:
-    """
-    Parse interval-style result text and return its midpoint.
-
-    Supports deterministic numeric ranges such as ``1 a 2/campo`` or ``0 - 5``.
-    Returns ``None`` when the value is not a simple ascending interval.
-    """
-
-    # Guard: Missing values cannot encode an interval midpoint.
-    if pd.isna(value):
-        return None
-
-    text = str(value).strip()
-    match = INTERVAL_VALUE_PATTERN.match(text)
-
-    # Guard: Non-interval values should fall back to the regular numeric parser.
-    if match is None:
-        return None
-
-    lower_bound = float(match.group("min"))
-    upper_bound = float(match.group("max"))
-
-    # Guard: Descending intervals are more likely malformed OCR than valid ranges.
-    if upper_bound < lower_bound:
-        return None
-
-    # Use the deterministic midpoint while preserving the original raw interval text.
-    return (lower_bound + upper_bound) / 2
-
 
 def apply_normalizations(
     df: pd.DataFrame,
@@ -227,16 +199,19 @@ def _preprocess_values(df: pd.DataFrame) -> pd.DataFrame:
     # Apply additional preprocessing (spaces, trailing =, embedded metadata, comma→period)
     df["_preprocessed_value"] = df["_preprocessed_value"].apply(preprocess_numeric_value)
 
-    # Derive midpoint values for interval-style observations before numeric coercion.
-    interval_midpoints = df["_preprocessed_value"].apply(parse_interval_midpoint)
-    interval_mask = interval_midpoints.notna()
-
-    # Replace only recognized interval rows so scalar values keep their original parsing path.
-    if interval_mask.any():
-        df.loc[interval_mask, "_preprocessed_value"] = interval_midpoints.loc[interval_mask].map(str)
+    # A reported interval is evidence, not a scalar measurement or an inferred midpoint.
+    interval_mask = df["_preprocessed_value"].astype(str).str.match(INTERVAL_VALUE_PATTERN)
+    df.loc[interval_mask, "_preprocessed_value"] = None
 
     # Convert preprocessed values to numeric
     df["value_primary"] = pd.to_numeric(df["_preprocessed_value"], errors="coerce").astype(float)
+
+    # Preserve reported text/intervals as an explicit result, even when a boolean interpretation is available.
+    numeric_literal = df["raw_value"].astype(str).str.fullmatch(
+        r"\s*[<>=≤≥]?\s*[+-]?(?:\d+(?:\s+\d{3})*(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d+)?\s*=?\s*"
+    )
+    text_mask = (df["value_primary"].isna() | interval_mask | ~numeric_literal) & df["raw_value"].notna()
+    df["value_text"] = df["raw_value"].where(text_mask, None)
 
     # Clean up temporary column
     df.drop(columns=["_preprocessed_value"], inplace=True)
@@ -310,7 +285,6 @@ def classify_qualitative_value(text: str) -> int | None:
     # Negative patterns (not detected/absent/normal)
     _NEGATIVE_PREFIXES = (
         "negativ",  # negativo, negativa, negative
-        "normal",
         "nr",
         "ausent",  # ausente, ausentes, ausência
         "ausenci",  # ausencia
@@ -370,6 +344,10 @@ def classify_qualitative_value(text: str) -> int | None:
     if re.fullmatch(r"\++", normalized) or re.fullmatch(r"\d+\+", normalized):
         return 1
 
+    # A urine-strip presence marker is qualitative; its grading must remain in value_text.
+    if re.fullmatch(r"contem\s*\(\+[-+]*\)", normalized):
+        return 1
+
     # Check negative patterns
     if any(normalized.startswith(p) for p in _NEGATIVE_PREFIXES):
         return 0
@@ -402,7 +380,7 @@ def _remap_qualitative_variant_rows(
     df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
 ) -> pd.DataFrame:
-    """Remap text-only urine strip analytes onto boolean qualitative variants."""
+    """Route textual interpretations to configured boolean siblings of the same assay."""
 
     # Guard: Missing lab mappings or empty inputs leave nothing to remap.
     if df.empty or "lab_name_standardized" not in df.columns:
@@ -413,14 +391,14 @@ def _remap_qualitative_variant_rows(
         ("raw_value", False),
         ("raw_comments", True),
     ]:
-        remap_indices: list[int] = []
+        remapped_names: dict[int, str] = {}
 
         # Inspect each row independently so only confidently qualitative rows are remapped.
         for idx in df.index:
             standardized_name = df.at[idx, "lab_name_standardized"]
 
-            # Skip labs that do not have a dedicated qualitative variant.
-            if standardized_name not in QUALITATIVE_VARIANT_MAP:
+            # Skip unknown labs and analytes without a configured qualitative sibling.
+            if pd.isna(standardized_name) or standardized_name == UNKNOWN_VALUE:
                 continue
 
             # Skip rows that already parsed as numeric values.
@@ -437,26 +415,28 @@ def _remap_qualitative_variant_rows(
             if needs_raw_value_isna and pd.notna(df.at[idx, "raw_value"]):
                 continue
 
-            # Skip text that the deterministic classifier cannot interpret.
-            if classify_qualitative_value(str(source_value)) is None:
+            # A printed "Normal" is a qualitative category, without asserting a zero concentration.
+            is_normal_category = str(source_value).strip().casefold() == "normal"
+            if classify_qualitative_value(str(source_value)) is None and not is_normal_category:
                 continue
 
-            variant_name = QUALITATIVE_VARIANT_MAP[standardized_name]
+            variant_name = lab_specs.get_qualitative_variant(standardized_name)
 
             # Skip variants missing from lab_specs so normalization stays internally consistent.
-            if lab_specs.get_primary_unit(variant_name) is None:
+            if variant_name is None or variant_name == standardized_name or lab_specs.get_primary_unit(variant_name) != "boolean":
                 continue
 
-            remap_indices.append(idx)
+            remapped_names[idx] = variant_name
 
         # Guard: No rows qualified for this source column.
-        if not remap_indices:
+        if not remapped_names:
             continue
 
         # Remap the standardized lab and unit so downstream review/export logic sees boolean rows.
-        df.loc[remap_indices, "lab_name_standardized"] = df.loc[remap_indices, "lab_name_standardized"].map(QUALITATIVE_VARIANT_MAP)
+        remap_indices = list(remapped_names)
+        df.loc[remap_indices, "lab_name_standardized"] = pd.Series(remapped_names)
         df.loc[remap_indices, "lab_unit_standardized"] = "boolean"
-        logger.info(f"[normalization] Remapped {len(remap_indices)} qualitative rows from {source_col} to boolean urine variants")
+        logger.info(f"[normalization] Remapped {len(remap_indices)} qualitative rows from {source_col} to configured boolean variants")
 
     return df
 
@@ -521,6 +501,12 @@ def _normalize_field_style_sediment_units(df: pd.DataFrame) -> pd.DataFrame:
         if standardized_name not in SEDIMENT_FIELD_STYLE_LABS:
             continue
 
+        raw_unit = str(df.at[idx, "raw_lab_unit"]).strip().lower() if "raw_lab_unit" in df.columns else ""
+        # A literal per-volume unit outranks stale cache entries and field-style result wording.
+        if raw_unit in {"/ul", "/µl", "/μl"}:
+            df.at[idx, "lab_unit_standardized"] = "/µl"
+            continue
+
         if str(standardized_unit).strip().lower() not in {"/ul", "/µl"}:
             continue
 
@@ -530,6 +516,11 @@ def _normalize_field_style_sediment_units(df: pd.DataFrame) -> pd.DataFrame:
         raw_value = "" if pd.isna(df.at[idx, "raw_value"]) else str(df.at[idx, "raw_value"]).strip()
         looks_field_style = bool(SEDIMENT_FIELD_STYLE_VALUE_PATTERN.search(raw_value))
         looks_qualitative = pd.isna(df.at[idx, "value_primary"]) and bool(raw_value)
+        raw_unit = str(df.at[idx, "raw_lab_unit"]).strip().lower() if "raw_lab_unit" in df.columns else ""
+
+        # Rarity wording alone cannot contradict an explicitly reported per-volume unit.
+        if looks_qualitative and not looks_field_style and raw_unit in {"/ul", "/µl"}:
+            continue
 
         if not looks_field_style and not looks_qualitative:
             continue
@@ -589,7 +580,7 @@ def _remap_numeric_urine_strip_variants(
     df: pd.DataFrame,
     lab_specs: LabSpecsConfig,
 ) -> pd.DataFrame:
-    """Collapse numeric urine-strip semi-quantitative values onto qualitative boolean variants."""
+    """Interpret unscaled strip grades while preserving reported numeric assay units."""
 
     if df.empty or "lab_name_standardized" not in df.columns or "raw_section_name" not in df.columns:
         return df
@@ -607,6 +598,12 @@ def _remap_numeric_urine_strip_variants(
 
         numeric_value = df.at[idx, "value_primary"]
         if pd.isna(numeric_value):
+            continue
+
+        raw_unit = str(df.at[idx, "raw_lab_unit"]).strip().lower() if "raw_lab_unit" in df.columns else ""
+
+        # A printed concentration or count remains quantitative even with a one-sided or absent interval.
+        if lab_specs.get_primary_unit(standardized_name) != "boolean" and raw_unit not in {"", "nan", "none", "null", "boolean", "bool", "unitless", "-"}:
             continue
 
         # A bounded numeric reference interval indicates a quantitative assay.
@@ -668,8 +665,8 @@ def _convert_qualitative_values(
     Convert qualitative text values to 0/1 for boolean labs.
 
     Uses deterministic pattern matching to convert values like "negativo"/"positivo"
-    to numeric 0/1 values. Handles both boolean labs and non-boolean labs
-    with negative-like values.
+    to numeric 0/1 values only for boolean labs. Text on quantitative assays
+    remains in value_text unless a configured qualitative sibling was selected.
     """
 
     # Find labs with boolean primary unit.
@@ -724,32 +721,128 @@ def _convert_qualitative_values(
                     len(matched_override_index),
                 )
 
-    # Non-boolean labs: convert only negative-like values to 0 from raw_value, then comments.
-    non_boolean_exclude = boolean_labs if boolean_labs else []
+    # Numeric assay thresholds cannot become reference intervals for 0/1 interpretations.
+    boolean_mask = df["lab_name_standardized"].isin(boolean_labs)
+    for column in ("reference_min_primary", "reference_max_primary"):
+        invalid_bounds = boolean_mask & df[column].notna() & ~df[column].between(0, 1)
+        df.loc[invalid_bounds, column] = float("nan")
 
-    for source_col, needs_raw_value_isna in [
-        ("raw_value", False),
-        ("raw_comments", True),
-    ]:
-        mask = df["value_primary"].isna() & df[source_col].notna() & ~df["lab_name_standardized"].isin(non_boolean_exclude)
+    return df
 
-        # For raw_comments source, only use when raw_value is also missing.
-        if needs_raw_value_isna:
-            mask &= df["raw_value"].isna()
 
-        # Guard: Skip sources with no rows left to classify.
-        if not mask.any():
+def parse_titer_value(value: object) -> tuple[float, bool, bool] | None:
+    """Read a printed 1:N dilution as its denominator, preserving comparison direction."""
+
+    match = TITER_VALUE_PATTERN.fullmatch(str(value))
+
+    # Guard: Only explicit, nonzero dilution formats establish a titer result.
+    if match is None or int(match.group("denominator")) <= 0:
+        return None
+
+    return float(match.group("denominator")), match.group("operator") == "<", match.group("operator") == ">"
+
+
+def _normalize_titer_values(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+    """Keep dilution measurements separate from index assays and boolean interpretations."""
+
+    for idx in df.index:
+        name = df.at[idx, "lab_name_standardized"]
+
+        # Guard: Fractions in arbitrary results must not be interpreted as assay titers.
+        if pd.isna(name) or lab_specs.get_primary_unit(name) != "titer":
             continue
 
-        qual_map = _classify_qualitative_batch(df.loc[mask, source_col].tolist())
-        converted_count = 0
-        for idx in df.loc[mask].index:
-            if qual_map.get(df.at[idx, source_col]) == 0:
-                df.at[idx, "value_primary"] = 0.0
-                converted_count += 1
-        if converted_count > 0:
-            logger.info(f"[normalization] Converted {converted_count} negative-like {source_col} to 0 (non-boolean labs)")
+        parsed = parse_titer_value(df.at[idx, "raw_value"])
 
+        # Guard: Missing or textual results retain value_text without an invented number.
+        if parsed is None:
+            continue
+
+        df.at[idx, "value_primary"], df.at[idx, "is_below_limit"], df.at[idx, "is_above_limit"] = parsed
+        df.at[idx, "lab_unit_standardized"] = "titer"
+        df.at[idx, "lab_unit_primary"] = "titer"
+        reference = str(df.at[idx, "raw_reference_range"]) if "raw_reference_range" in df.columns else ""
+
+        # Interpretive threshold prose is retained as text, without inventing a normal interval.
+        if not re.search(r"1\s*[:/]\s*\d+", reference):
+            continue
+
+        df.at[idx, "reference_min_primary"] = float("nan")
+        df.at[idx, "reference_max_primary"] = float("nan")
+        reference_titer = parse_titer_value(reference)
+
+        # Only a standalone printed comparison establishes a one-sided reference bound.
+        if reference_titer is None or not (reference_titer[1] or reference_titer[2]):
+            continue
+
+        column = "reference_max_primary" if reference_titer[1] else "reference_min_primary"
+        df.at[idx, column] = reference_titer[0]
+
+    return df
+
+
+def _preserve_nominal_results(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+    """Keep categories such as color and appearance without inferring normality codes."""
+
+    nominal_mask = df["lab_name_standardized"].map(lab_specs.get_primary_unit).eq("text")
+
+    # Guard: Numeric and boolean assays retain their existing measurement paths.
+    if not nominal_mask.any():
+        return df
+
+    df.loc[nominal_mask, "value_text"] = df.loc[nominal_mask, "raw_value"]
+    df.loc[nominal_mask, "value_primary"] = float("nan")
+    df.loc[nominal_mask, ["lab_unit_standardized", "lab_unit_primary"]] = "text"
+    df.loc[nominal_mask, ["reference_min_primary", "reference_max_primary"]] = float("nan")
+    return df
+
+
+def _normalize_two_hour_sedimentation_units(df: pd.DataFrame) -> pd.DataFrame:
+    """Preserve distance readings over two hours despite stale hourly unit caches."""
+
+    mask = df["lab_name_standardized"].eq("Blood - Erythrocyte Sedimentation Rate (ESR) - 2h")
+
+    # Only an explicitly printed distance unit establishes a two-hour distance reading.
+    if not mask.any() or "raw_lab_unit" not in df.columns:
+        return df
+
+    raw_units = df["raw_lab_unit"].fillna("").astype(str).str.strip().str.lower()
+    distance_mask = mask & raw_units.isin(["mm", "mn"])
+    df.loc[distance_mask, ["lab_unit_standardized", "lab_unit_primary"]] = "mm/(2.h)"
+    return df
+
+
+def _normalize_specific_gravity_notation(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert conventional four-digit relative-density notation to a ratio."""
+
+    mask = df["lab_name_standardized"].eq("Urine Type II - Specific Gravity")
+    values = pd.to_numeric(df["value_primary"], errors="coerce")
+    mask &= values.between(1000, 1100) & values.eq(values.round())
+
+    # Decimal ratios and values outside the supported notation remain unchanged.
+    if not mask.any():
+        return df
+
+    df.loc[mask, "value_primary"] = values.loc[mask] / 1000
+    for column in ["reference_min_primary", "reference_max_primary"]:
+        bounds = pd.to_numeric(df[column], errors="coerce")
+        bound_mask = mask & bounds.between(1000, 1100)
+        df.loc[bound_mask, column] = bounds.loc[bound_mask] / 1000
+    return df
+
+
+def _preserve_unclassified_qualitative_text(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+    """Keep indeterminate interpretations as text without inventing absence."""
+
+    mask = df["lab_name_standardized"].map(lab_specs.get_primary_unit).eq("boolean")
+    mask &= df["value_primary"].isna() & df["value_text"].notna()
+
+    # Classified positive/negative observations keep their boolean measurement.
+    if not mask.any():
+        return df
+
+    df.loc[mask, ["lab_unit_standardized", "lab_unit_primary"]] = "text"
+    df.loc[mask, ["reference_min_primary", "reference_max_primary"]] = float("nan")
     return df
 
 
@@ -820,6 +913,10 @@ def apply_unit_conversions(
 
     # Phase 1: Extract comparison operators and preprocess values
     df = _preprocess_values(df)
+    df = _normalize_titer_values(df, lab_specs)
+    df = _preserve_nominal_results(df, lab_specs)
+    df = _normalize_two_hour_sedimentation_units(df)
+    df = _normalize_specific_gravity_notation(df)
 
     # Phase 2: Recover field-style urine sediment units when the report value contradicts /µl.
     df = _normalize_field_style_sediment_units(df)
@@ -827,14 +924,15 @@ def apply_unit_conversions(
     # Phase 2b: Remaining /µL sediment rows are distinct absolute-count analytes.
     df = _remap_absolute_sediment_variant_names(df, lab_specs)
 
-    # Phase 3: Remap text-only urine strip analytes onto boolean qualitative variants.
+    # Phase 3: Route textual assay interpretations onto configured boolean siblings.
     df = _remap_qualitative_variant_rows(df, lab_specs)
 
-    # Phase 4: Collapse numeric urine-strip semi-quantitative values onto qualitative variants.
+    # Phase 4: Interpret unit-free strip grades without erasing printed quantitative units.
     df = _remap_numeric_urine_strip_variants(df, lab_specs)
 
     # Phase 5: Convert qualitative text values to 0/1 for boolean-style labs.
     df = _convert_qualitative_values(df, lab_specs)
+    df = _preserve_unclassified_qualitative_text(df, lab_specs)
 
     # Phase 6: Apply exact unit conversion factors for each lab type.
     for lab_name_standardized in df["lab_name_standardized"].unique():
@@ -934,6 +1032,18 @@ def _duplicate_group_is_equivalent(group_df: pd.DataFrame) -> bool:
     return raw_values.nunique() == 1 and primary_units.nunique() <= 1
 
 
+def _explicit_sample_number(raw_name: object) -> str:
+    """Identify separately numbered specimens without inventing sample identities."""
+
+    match = re.search(r"\b(\d+)\s*[ªº]?\s*(?:amostra|sample)\b|\b(?:amostra|sample)\s*(\d+)\b", str(raw_name), re.IGNORECASE)
+
+    # Unnumbered observations retain the existing deduplication identity.
+    if match is None:
+        return ""
+
+    return str(int(match.group(1) or match.group(2)))
+
+
 def deduplicate_results(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
     """
     Deduplicate by (date, lab_name_standardized), keeping best match (prefer primary unit).
@@ -962,8 +1072,18 @@ def deduplicate_results(df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataF
 
     df["_dedup_priority"] = df.apply(_dedup_priority, axis=1)
     df = df.sort_values(["date", "lab_name_standardized", "_dedup_priority"])
-    df = df.drop_duplicates(subset=["date", "lab_name_standardized"], keep="first")
-    df = df.drop(columns=["_dedup_priority"])
+    # Distinct textual findings from the same assay must survive numeric-unit deduplication.
+    dedup_columns = ["date", "lab_name_standardized"]
+    if "value_text" in df.columns:
+        dedup_columns.append("value_text")
+
+    # Separately labeled specimens are independent observations even when results agree.
+    if "raw_lab_name" in df.columns:
+        df["_dedup_specimen"] = df["raw_lab_name"].map(_explicit_sample_number)
+        dedup_columns.append("_dedup_specimen")
+
+    df = df.drop_duplicates(subset=dedup_columns, keep="first")
+    df = df.drop(columns=["_dedup_priority", "_dedup_specimen"], errors="ignore")
     return df.reset_index(drop=True)
 
 

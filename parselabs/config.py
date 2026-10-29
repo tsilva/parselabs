@@ -364,10 +364,10 @@ class LabSpecsConfig:
         return self._specs
 
     @staticmethod
-    def _looks_like_qualitative_boolean_name(lab_name: str, spec: dict) -> bool:
+    def _uses_qualitative_suffix(lab_name: str, spec: dict) -> bool:
         """Return whether the lab should expose a canonical qualitative suffix."""
 
-        if spec.get("primary_unit") != "boolean":
+        if spec.get("primary_unit") not in {"boolean", "text"}:
             return False
 
         if lab_name.endswith(LEGACY_QUALITATIVE_SUFFIX) or lab_name.endswith(CANONICAL_QUALITATIVE_SUFFIX):
@@ -397,7 +397,7 @@ class LabSpecsConfig:
         if lab_name.endswith(LEGACY_QUALITATIVE_SUFFIX):
             return f"{lab_name.removesuffix(LEGACY_QUALITATIVE_SUFFIX)}{CANONICAL_QUALITATIVE_SUFFIX}"
 
-        if self._looks_like_qualitative_boolean_name(lab_name, spec):
+        if self._uses_qualitative_suffix(lab_name, spec):
             return f"{lab_name}{CANONICAL_QUALITATIVE_SUFFIX}"
 
         return lab_name
@@ -464,12 +464,18 @@ class LabSpecsConfig:
         return self._specs[resolved_name].get("primary_unit")
 
     def get_qualitative_variant(self, lab_name: str) -> str | None:
-        """Return the canonical qualitative sibling for a boolean-backed analyte."""
+        """Return an explicit boolean sibling or the alias of a boolean-backed assay."""
 
         canonical_name = self.get_canonical_lab_name(lab_name)
 
         if canonical_name.endswith(CANONICAL_QUALITATIVE_SUFFIX):
-            return canonical_name
+            return canonical_name if self.get_primary_unit(canonical_name) == "boolean" else None
+
+        # Prefer an explicit boolean sibling of a quantitative assay when configured.
+        candidate = f"{canonical_name}{CANONICAL_QUALITATIVE_SUFFIX}"
+        resolved_candidate = self.resolve_lab_name(candidate)
+        if resolved_candidate is not None and self._specs[resolved_candidate].get("primary_unit") == "boolean":
+            return self.get_canonical_lab_name(candidate)
 
         resolved_name = self.resolve_lab_name(canonical_name)
 

@@ -20,6 +20,7 @@ from parselabs.normalization import (
     classify_qualitative_value,
     deduplicate_results,
     flag_duplicate_entries,
+    preprocess_numeric_value,
 )
 from parselabs.review_flags import append_review_reason_code
 from parselabs.standardization import standardize_lab_names, standardize_lab_units
@@ -102,6 +103,7 @@ DOCUMENT_REVIEW_COLUMNS = [
     "lab_unit_standardized",
     "lab_name",
     "value",
+    "value_text",
     "lab_unit",
     "reference_min",
     "reference_max",
@@ -454,7 +456,8 @@ def _build_flattened_review_row(
 
     status = coerce_persisted_review_status(result.get("review_status"))
     return {
-        "date": document_date,
+        # Separately collected specimens on one page retain their explicit dates.
+        "date": result.get("collection_date") or document_date,
         "source_file": source_file,
         "page_number": page_number,
         "result_index": result_index,
@@ -755,6 +758,9 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
         standardized_names.append(standardized_name)
 
     review_df["lab_name_standardized"] = standardized_names
+    review_df = _remap_explicit_urine_strip_counts(review_df, lab_specs)
+    review_df = _remap_nrbc_ratio_unit(review_df, lab_specs)
+    review_df = _remap_unqualified_glucose(review_df, lab_specs)
     review_df = _remap_boolean_companion_lab_names(review_df, lab_specs)
     review_df = _remap_unit_bearing_rows_off_qualitative_variants(review_df, lab_specs)
 
@@ -777,7 +783,7 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
     mapped_units = standardize_lab_units([context for context in unit_contexts if context != ("", "")])
 
     standardized_units: list[str | None] = []
-    safe_missing_unit_primary_units = {"boolean", "mm/h", "pH", "unitless"}
+    safe_missing_unit_primary_units = {"boolean", "mm/h", "pH", "unitless", "titer"}
 
     for idx, (raw_unit, standardized_name) in zip(review_df.index, unit_contexts, strict=False):
         # Leave units empty when the lab name did not map.
@@ -787,14 +793,71 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
 
         standardized_unit = mapped_units.get((raw_unit, standardized_name))
 
+        literal_scale = (
+            standardized_name == "Blood - Mean Corpuscular Hemoglobin Concentration (MCHC)" and raw_unit.strip() == "%"
+        ) or (
+            standardized_name == "Blood - Reticulocyte Hemoglobin Content" and _normalize_conversion_unit_token(raw_unit) == "pg/l"
+        )
+
+        # Preserve dimensionally unsupported source scales despite stale unit-cache aliases.
+        if literal_scale:
+            standardized_units.append(raw_unit.strip())
+            continue
+
+        # Nominal observations have no numeric/boolean scale, regardless of old cache entries.
+        if lab_specs.get_primary_unit(standardized_name) == "text":
+            standardized_units.append("text")
+            continue
+
+        # A printed dilution result must not inherit stale boolean/index unit mappings.
+        if lab_specs.get_primary_unit(standardized_name) == "titer" and re.search(r"1\s*[:/]\s*\d+", str(review_df.at[idx, "raw_value"])):
+            standardized_units.append("titer")
+            continue
+
+        # A geometric platelet-width index has no established conversion to a volume in fL.
+        if "Platelet Distribution Width" in standardized_name and re.fullmatch(r"10\s*\(\s*gsd\s*\)", raw_unit.strip().lower()):
+            standardized_units.append("10(GSD)")
+            continue
+
+        # A bare assay unit supplies neither an international calibration nor a volume denominator.
+        if raw_unit.strip().lower() == "u":
+            standardized_units.append("U")
+            continue
+
+        immune_assay = (
+            standardized_name.startswith("Blood - Anti-")
+            or "Antibod" in standardized_name
+            or "Rheumatoid Factor" in standardized_name
+            or "Antistreptolysin" in standardized_name
+        )
+        arbitrary_unit = re.fullmatch(r"(k?u)\s*/\s*(ml|l)", raw_unit.strip().lower())
+
+        # Antibody assay units do not establish international calibration by themselves.
+        if immune_assay and arbitrary_unit:
+            numerator = "kU" if arbitrary_unit.group(1) == "ku" else "U"
+            denominator = "mL" if arbitrary_unit.group(2) == "ml" else "L"
+            standardized_units.append(f"{numerator}/{denominator}")
+            continue
+
+        international_unit = re.fullmatch(r"(?:iu|ui)\s*/\s*(ml|l)", raw_unit.strip().lower())
+
+        # An explicitly calibrated result cannot be collapsed to a dimensionless index.
+        if international_unit and lab_specs.get_primary_unit(standardized_name) == "unitless":
+            standardized_units.append("IU/mL" if international_unit.group(1) == "ml" else "IU/L")
+            continue
+
+        # Legacy hemolytic complement units have no established conversion to modern U/mL.
+        if standardized_name == "Blood - Complement CH50" and re.fullmatch(r"u\s*c['’]?\s*h\s*50", raw_unit.strip().lower()):
+            standardized_units.append("U C'H 50")
+            continue
+
         inferred_percentage_unit = _infer_percentage_unit_from_value_and_range(
             review_df.loc[idx],
             standardized_name,
             lab_specs,
         )
 
-        # A clearly percentage-shaped value and reference interval can repair a unit
-        # token that OCR attached from the preceding protein-electrophoresis row.
+        # Percentage-shaped values may resolve missing units, never replace a printed unit.
         if inferred_percentage_unit is not None:
             standardized_unit = inferred_percentage_unit
 
@@ -1043,6 +1106,9 @@ def _normalize_conversion_unit_token(value: object) -> str:
     normalized_value = normalized_value.replace("μ", "µ")
     normalized_value = normalized_value.replace("ˆ", "^")
     normalized_value = normalized_value.replace("×", "x")
+
+    # Count-label accents are spelling variants, including after ratio-assay remapping.
+    normalized_value = normalized_value.replace("leucócitos", "leucocitos").replace("células", "celulas")
     normalized_value = re.sub(r"\s+", "", normalized_value)
     return normalized_value
 
@@ -1142,12 +1208,99 @@ def _infer_missing_variant_unit_from_ranges(
     return lab_specs.get_primary_unit(best_name)
 
 
+def _remap_explicit_urine_strip_counts(review_df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+    """Separate explicitly labeled strip cell estimates from presence-only assays."""
+
+    # The cell prefix and volume denominator identify the reported quantitative scale.
+    for idx in review_df.index:
+        name = str(review_df.at[idx, "lab_name_standardized"])
+        raw_unit = _normalize_conversion_unit_token(review_df.at[idx, "raw_lab_unit"])
+
+        # Sediment microscopy has its own method and must retain its existing path.
+        if not name.startswith("Urine") or "Sediment" in name:
+            continue
+
+        match = re.fullmatch(r"(leu|erit)/[uµ]l", raw_unit)
+
+        generic_count = re.fullmatch(r"cells?/[uµ]l", raw_unit)
+        volume_count = raw_unit in {"/ul", "/µl"}
+        cell = "Leukocytes" if "Leukocytes" in name else "Erythrocytes" if "Erythrocytes" in name else None
+        numeric_result = re.match(r"^\s*(?:[<>≤≥~≈]\s*)?\d", preprocess_numeric_value(str(review_df.loc[idx].get("raw_value", ""))))
+
+        # A literal volume denominator preserves its scale, including approximate or absent counts.
+        # Generic "Cells" wording needs a numeric result to establish a quantitative estimate.
+        if match is None and (cell is None or not (volume_count or generic_count is not None and numeric_result is not None)):
+            continue
+
+        # Explicit cell prefixes establish the type without relying on a legacy mapping.
+        if match is not None:
+            cell = "Leukocytes" if match.group(1) == "leu" else "Erythrocytes"
+        target = f"Urine Type II - {cell} (Test Strip)"
+
+        # Custom specifications may omit these method-specific quantitative variants.
+        if lab_specs.resolve_lab_name(target) is not None:
+            review_df.at[idx, "lab_name_standardized"] = target
+
+    return review_df
+
+
+def _remap_nrbc_ratio_unit(review_df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+    """Keep nucleated-cell ratios separate from concentrations of the same cells."""
+
+    absolute_name = "Blood - Nucleated Red Blood Cells (nRBC)"
+    ratio_name = absolute_name + " (/100 WBC)"
+
+    # Custom specifications may not define this separately reported ratio.
+    if lab_specs.resolve_lab_name(ratio_name) is None:
+        return review_df
+
+    # The explicitly printed denominator establishes the ratio without an inferred count conversion.
+    for idx in review_df.index[review_df["lab_name_standardized"].eq(absolute_name)]:
+        raw_unit = _normalize_section_inference_key(review_df.at[idx, "raw_lab_unit"])
+
+        # Only a leukocyte denominator supports this ratio specification.
+        if re.fullmatch(r"/\s*100\s*(?:wbc|leucocitos|leukocytes)", raw_unit):
+            review_df.at[idx, "lab_name_standardized"] = ratio_name
+
+    return review_df
+
+
+def _remap_unqualified_glucose(review_df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+    """Require a recorded fasting condition before retaining a fasting glucose label."""
+
+    # Custom lab specifications may not define an unqualified glucose observation.
+    if lab_specs.resolve_lab_name("Blood - Glucose") is None:
+        return review_df
+
+    mask = review_df["lab_name_standardized"].eq("Blood - Glucose (Fasting)")
+    for idx in review_df.index[mask]:
+        source = " ".join(
+            _normalize_section_inference_key(review_df.at[idx, column])
+            for column in ["raw_lab_name", "raw_section_name", "raw_comments"]
+            if column in review_df.columns and pd.notna(review_df.at[idx, column])
+        )
+        fasting = re.search(r"\b(?:jejum|fasting)\b", source)
+        negated = re.search(r"\b(?:non[- ]*fasting|not\s+fasting|(?:nao|sem)\s+(?:em\s+)?jejum)\b", source)
+
+        # A legacy cache cannot establish an unprinted or explicitly negated condition.
+        if not fasting or negated:
+            review_df.at[idx, "lab_name_standardized"] = "Blood - Glucose"
+
+    return review_df
+
+
 def _infer_percentage_unit_from_value_and_range(
     row: pd.Series,
     standardized_name: str,
     lab_specs: LabSpecsConfig,
 ) -> str | None:
-    """Recover a misplaced percentage unit when value and range agree decisively."""
+    """Resolve a missing percentage unit when value and range agree decisively."""
+
+    raw_unit = row.get("raw_lab_unit")
+
+    # Source fidelity takes precedence over a physiologically more plausible scale.
+    if pd.notna(raw_unit) and str(raw_unit).strip():
+        return None
 
     percentage_variant = lab_specs.get_percentage_variant(standardized_name)
     if percentage_variant is None:
@@ -1698,10 +1851,10 @@ def _flag_suspicious_reference_ranges(
                     suspicious_indices.append(idx)
                     continue
 
-        # Absolute-unit protein fraction rows often print percentage ranges alongside the
-        # mass concentration. When the configured (%) sibling is a clearly better match,
-        # keep the row reviewable through its mapped unit rather than flagging the range.
+        # Conflicting concentration/percentage references require source review; do not
+        # silently reinterpret a printed unit or suppress the discrepancy.
         if unit != "%" and _reference_range_matches_percentage_sibling_better(str(std_name), ref_min, ref_max, review_df.at[idx, "raw_value"], lab_specs):
+            suspicious_indices.append(idx)
             continue
 
         expected_range = lab_specs._specs.get(std_name, {}).get("ranges", {}).get("default", [])

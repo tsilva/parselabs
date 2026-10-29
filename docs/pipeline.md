@@ -95,6 +95,7 @@ This document describes the current extraction, review, and export pipeline.
 
 12. Extraction payload persistence.
 - After extraction, the runtime adds `source_file` programmatically because the model cannot know it.
+- Validated fresh extraction excludes explicitly labelled normal/control PT/APTT measurements, which describe control specimens rather than the patient. Patient clotting times and qualitative `Normal` results remain. The vision prompt also excludes these controls and preserves an inline result unit when it conflicts with a shared heading, recording the conflict for review instead of inferring a correction.
 - Each extracted row can now also carry `raw_section_name`, copied directly from the governing section/header visible on the page.
 - If extraction failed and returned no lab rows, `_ensure_extraction_failure_placeholder(...)` inserts a synthetic placeholder row.
 - Every useful outcome is saved as page JSON: extracted rows, explicit no-lab pages, and explicit extraction failures.
@@ -132,14 +133,17 @@ This document describes the current extraction, review, and export pipeline.
 - Name standardization is now section-aware: it prefers a cache key built from `(raw_lab_name, raw_section_name)` when a section/header was extracted for the row.
 - Older caches that still store contextual mappings as `section - raw_lab_name` are now read transparently alongside the newer `raw_lab_name|section` format.
 - Contextual lookup now also uses a folded compatibility pass that collapses stylized spaced-letter headers and accent/OCR variants before giving up on the cache.
+- Leading dagger/double-dagger footnote markers are ignored for name/section lookup only. Raw names and section text remain literal, and conflicting folded aliases remain unresolved.
 - Bare-name fallback is still guarded: it is only reused when the cache has no conflicting contextual mappings for that raw label.
+- Unit-cache keys are normalized on both the stored and queried sides for multiline whitespace, accented `leucócitos`/`células` count labels and equivalent micro symbols. Conflicting normalized aliases remain unresolved; distinct unit scales and symbols stay distinct, and raw source text is unchanged.
+- Explicit conversion-unit matching also folds those count-label accents, so remapping nRBC ratios from the absolute-count assay to the separate `/100 WBC` assay does not lose a supported denominator.
 - When the same raw assay appears on one page as both a numeric result and a qualitative interpretation, the row builder now probes explicit `(quantitative)` / `(qualitative)` cache keys first before falling back to the undecorated raw name.
 - A generic adjacent `Resultado`/`Result` numeric row can inherit the preceding qualitative assay's context for cache lookup while preserving its objective raw label in audit columns.
 - It standardizes units using `standardize_lab_units(...)` only after the lab name is known.
 - Unknown name mappings become `$UNKNOWN$`.
-- Blank raw units are only inferred from the lab spec primary unit for a narrow safe set: `boolean`, `pH`, and `unitless`.
+- Blank raw units are only inferred from the lab spec primary unit for a narrow safe set: `boolean`, `pH`, `unitless`, `mm/h`, and `titer`. Explicit dilution results on titer-backed assays bypass stale index/boolean unit-cache mappings.
 - For percentage-vs-absolute sibling analytes, explicit non-percent raw units now override stale `%` cache entries so absolute differential counts do not stay pinned to percentage variants.
-- A percentage-shaped value and reference interval can repair an OCR-misplaced unit token when they decisively match the percentage sibling instead of the absolute sibling.
+- A percentage-shaped value and reference interval can resolve a missing unit when they decisively match the percentage sibling. An explicit printed concentration unit is preserved even when its value or interval looks like a percentage; the discrepancy is flagged for source review.
 - For percentage-vs-absolute sibling analytes, blank raw units can also be inferred from the report's own extracted reference ranges when those ranges clearly match one sibling variant over the other.
 - After unit mapping, the code remaps percentage-vs-absolute sibling analytes using the standardized unit as the tie-breaker.
 
@@ -147,6 +151,26 @@ This document describes the current extraction, review, and export pipeline.
 - `apply_normalizations(...)` runs before review/export divergence.
 - This is the objective cleanup layer: numeric parsing, comparison-operator handling, unit conversion, reference normalization, and related mechanical transforms.
 - Portuguese non-reactive qualitative results such as `Não reativo` are normalized to boolean false for boolean-backed assays.
+- `Normal` and uncertain interpretations such as `DUVIDOSO` do not establish absence. Unclassified qualitative results keep a null numeric value, the complete `value_text`, and the `text` scale. Four-digit urine specific gravity notation such as `1012` normalizes to `1.012`; the source notation remains unchanged.
+- Reported text and intervals are preserved in `value_text`, alongside any derived numeric/boolean `value`. Textual sediment observations retain their reported wording without an invented cell count. Quantitative assays with only a negative label no longer become zero concentrations; configured qualitative ANA/CRP/MPO/PR3 siblings carry boolean interpretations separately. Urine-strip grades such as `Contém(+--)` preserve their full grading text.
+- Numeric annotations and approximations such as `9= NR` and `Ca. 125` also retain their complete source text alongside the parsed number. A bare `U` remains `U`, without inventing international calibration or a volume denominator. Legacy CH50 `U C'H 50` remains unconverted because no validated conversion to modern `U/mL` is configured.
+- Antibody assay `U/mL`, `U/L` and `kU/L` units are preserved without assuming international calibration. Conversely, explicit `IU/mL` cannot become a dimensionless index. Unverified unit aliases for SSA, anti-tTG IgA, rheumatoid factor and thyroid antibodies have been removed.
+- Explicit MCHC `%` and reticulocyte hemoglobin `pg/L` source scales remain literal; stale unit caches cannot silently replace them with `g/dL` or `pg`.
+- Platelet distribution width reported as `10(GSD)` keeps that index scale; cached mappings cannot relabel it as a volume in `fL`.
+- Immature granulocyte percentage and absolute-count observations use separate specifications (LOINC `38518-7` and `51584-1`), preserving both printed companions.
+- Nucleated red-cell results per `100 WBC` use a separate ratio specification (LOINC `19048-8`), so they survive deduplication alongside an absolute concentration of the same cells.
+- Qualitative sediment wording such as `Raras` retains an explicitly printed `/µL` unit and a null numeric result. Inline `/campo` result notation can establish a field-based scale, while the raw unit column remains available for source audit.
+- Numeric urine concentrations/counts with explicit units retain their quantitative values, including zero and one-sided reference intervals. Explicit `Leu/µL`, `Erit/µL` and named-cell `Cells/µL` strip estimates use quantitative test-strip definitions; sediment observations retain their microscopy definitions. Unit-free strip grades can still use qualitative variants. HLA-B27 presence without a printed method has a method-neutral specification (LOINC `4821-5`); genotyping is retained only when supported by the source.
+- When units convert, normalized displays use the converted number with its mapped unit, retaining approximation/interpretation markers. The complete original wording remains in `value_text` and source details.
+- Urobilinogen Ehrlich units convert at factor one to mg/dL, supported by [LOINC's mapping guidance for 19161-9](https://loinc.org/19161-9/); the raw source unit remains available.
+- Activity-derived urine cell estimates use separate test-strip definitions for [leukocytes 20408-1](https://loinc.org/20408-1) and [erythrocytes 20409-9](https://loinc.org/20409-9), rather than asserting sediment microscopy. Printed approximate counts retain their qualifier, and an absent/rare textual result never becomes an invented numeric count.
+- Color, appearance, ABO group and Rh type are nominal results with primary unit/scale `text`, no numeric `value`, and no inferred normality code. This overrides legacy boolean unit-cache entries while retaining the canonical qualitative assay names for color and appearance. Blood-group definitions follow [ABO 883-9](https://loinc.org/883-9) and [Rh 10331-7](https://loinc.org/10331-7).
+- Unqualified glucose has its own [2345-7 definition](https://loinc.org/2345-7), separate from explicitly fasting glucose. A legacy fasting mapping is downgraded unless a non-negated fasting condition appears in the raw name, section or comments. Source review must preserve a separately printed fasting condition in the raw comments rather than add a condition absent from the page.
+- Separately printed urine hemoglobin uses [725-2](https://loinc.org/725-2), preserving its identity alongside a separately printed blood observation. Macroscopic urine deposit abundance and unspecified sediment cells are retained as text with explicit unmapped-LOINC exceptions; a crystal or cell-subtype-specific code must not be substituted without source evidence.
+- Second-hour sedimentation uses [18184-2](https://loinc.org/18184-2) and the `mm/(2.h)` scale. An explicitly printed `mm` distance on the second-hour assay retains its value, overriding stale hourly-unit caches. An explicitly printed `mm/h` rate converts by a factor of two, including its reference bounds; the exact source unit remains in `raw_unit`.
+- Stool chymotrypsin activity retains `U/g` ([25375-7](https://loinc.org/25375-7)); calprotectin mass per stool mass retains `mg/kg` ([38445-3](https://loinc.org/38445-3)). Intrinsic-factor antibodies without a printed isotype use a generic definition ([11564-2](https://loinc.org/11564-2)) and preserve relative units without assuming calibration equivalence.
+- Separately printed thyroid-antibody presence interpretations have dedicated qualitative specifications ([thyroglobulin 15210-8](https://loinc.org/15210-8), [TPO 32042-4](https://loinc.org/32042-4)); their quantitative companions keep their original calibrated units.
+- ANA and Widal dilution results use a `titer` denominator value while retaining the printed `1:N`/`1/N` notation and comparison in `value_text`. Standalone dilution reference comparisons are parsed; interpretive threshold prose is kept in the raw range without creating a normal interval. The titer definitions follow [ANA 5048-4](https://loinc.org/5048-4), [Widal O 42959-7](https://loinc.org/42959-7/), and [Widal H 42960-5](https://loinc.org/42960-5). Separate presence assays use [ANA 42254-3](https://loinc.org/42254-3), [CRP 11039-5](https://loinc.org/11039-5), [MPO 29643-4](https://loinc.org/29643-4), and [PR3 63310-7](https://loinc.org/63310-7). A qualitative ANA result preserves the original pattern text; its reference dilution remains raw context and never becomes a boolean reference bound or a measured titer.
 - It is intentionally not a subjective correction layer.
 - The public export aliases like `lab_name`, `value`, `lab_unit`, `reference_min`, and `reference_max` are added later, after normalization.
 
@@ -164,11 +188,15 @@ This document describes the current extraction, review, and export pipeline.
 - It then runs `ValueValidator.validate(...)`.
 - The result becomes the per-document review CSV and the basis for the reviewer UI.
 
+Reticulocyte counts printed in millions per microliter (`10E6/uL`) convert to `10⁹/L` with a factor of 1000; a percentage reference interval is not an absolute-count interval.
+
 21. Export-mode behavior.
 - In `mode="export"`, unresolved rows are filtered out first by `_filter_exportable_rows(...)`.
 - Rows with unknown standardized labs or missing/non-publishable primary units are removed.
 - Duplicate-looking rows are still flagged first.
 - If lab specs exist, `deduplicate_results(...)` then removes publish-time duplicates.
+- Deduplication and date/lab integrity keys include `value_text` so separate qualitative findings from the same assay are retained; identical findings still collapse and numeric dual-unit handling is unchanged.
+- Explicit specimen numbers (for example, `1ª Amostra` or `Sample 2`) also distinguish separate source specimens during deduplication, even when their results match.
 - Export aliases are added.
 - Validation runs after deduplication.
 
@@ -220,6 +248,11 @@ This document describes the current extraction, review, and export pipeline.
 - In strict mode, `ensure_document_fixture_ready(...)` blocks promotion if any rows are still pending or any missing-row markers remain unresolved.
 - `--allow-pending` affects those reviewed-truth helpers.
 - It only changes whether reviewed rebuild mode publishes the review ledger or the accepted final export.
+- Golden-corpus promotion additionally requires a separate completed source/export audit bound to PDF/page SHA-256 hashes and the canonical export fingerprint. Pending rows, unresolved omissions, stale source evidence, or changed normalized output block promotion.
+- Private golden artifacts live outside Git under `~/.local/share/parselabs/approved/<profile>/<case-id>/`. Promotion freezes reviewed page JSON alongside the source PDF and expected CSV; changed existing baselines require explicit replacement, and unrelated cases remain frozen.
+- `RUN_LOCAL_GOLDENS=1 uv run pytest -m golden_local` checks frozen reviewed JSON through current normalization/export without API calls. The separate `RUN_APPROVED_DOCS=1` suite reruns vision extraction through the configured API. Ordinary CI skips both private modes.
+- `make regression-quick` runs fresh AgentBridge extraction for an explicitly curated local subset. `make regression-quick-offline` replays the same subset without API calls. The private sibling `quick-suite.json` pins case identities and PDF hashes, records layout rationale/tags and required profiles, and enforces document/page budgets. The full corpus remains available independently. Fresh runs verify source attestations before model calls and fail incomplete extractions. Both private modes reject CI execution before discovering patient artifacts.
+- Fresh runs match frozen review decisions by page and normalized observation content before comparing accepted exports. Missing/extra observations and substantive date/value/unit/reference/limit differences fail; reordered rows, equivalent raw numeric formatting and qualitative sentence-ending punctuation are allowed. Ambiguous decisions fail rather than transfer by position. Private outputs, logs and a completed comparison's `latest-result.json` are retained outside Git under the corpus's sibling `regression-runs/`; approved baselines remain unchanged. Quick fresh extraction uses two workers and remains subject to model latency.
 
 28. Canonical source of truth.
 - The canonical persisted intermediate is the per-page JSON in each hashed document directory.
@@ -231,4 +264,12 @@ This document describes the current extraction, review, and export pipeline.
 
 Discovery is recursive; clearly labelled prescriptions, orders and leaflets are not lab-result candidates. A printed patient name is checked against the configured profile name before page results are published. Continuation pages without names do not establish identity. Rebuilds preserve each page’s collection/report date instead of imposing one PDF-wide date; a document fallback fills only undated rows. Percentage and absolute-count sibling rows with identical reference bounds on the same source page are flagged rather than assigned invented replacement ranges. One-sided intervals are also checked. When the absolute sibling has no interval, a percentage interval that matches the configured absolute range substantially better is flagged for source review, without transferring or deleting bounds automatically. Explicit reticulocyte count units survive stale unit mappings, and numeric conversion columns support decimal factors even when all source values are integers.
 
-Date extraction keeps specimen collection, laboratory registration/entry and report issue dates separate. A continuation page lacking an event date inherits an explicit collection/registration date from the document before using its report issue date. Explicit different page event dates remain distinct.
+Date extraction keeps specimen collection, laboratory registration/entry and report issue dates separate. Registration includes `DT. ENTRADA` and older analytical-study `Data` headers beside `Hora Inscrição`, or episode-header `Data` beside tube/episode identifiers; a later FINAL EM or web-page print date does not replace that event date. A continuation page lacking an event date inherits an explicit collection/registration date from the document before using its report issue date. Explicit different page event dates remain distinct. Each result may also carry an explicit `collection_date`; flattening gives it precedence over the page date for that specimen. This survives extraction-model serialization and cached-JSON rebuilds. An undated result keeps the existing page/document fallback, but an unverified date cannot support golden-corpus validation.
+
+Reported numeric intervals remain in `value_text` with an empty numeric `value`; no midpoint is invented. Explicit sediment per-volume units override cached per-field mappings. Source rows with conflicting per-field and per-volume labels require review.
+
+### Assay identity and explicit scale
+
+DGP IgA and IgG use distinct deamidated-gliadin definitions ([58709-7](https://loinc.org/58709-7), [58710-5](https://loinc.org/58710-5)). Method-specific HbA2 observations stay separate for [HPLC](https://loinc.org/42245-1) and [electrophoresis](https://loinc.org/4552-6). Quantitative urinary hemoglobin uses a [concentration definition](https://loinc.org/726-0), while presence-only strip observations retain their qualitative definition. High-sensitivity CRP has a [distinct method definition](https://loinc.org/30522-7). Stool cultures use the [stool specimen definition](https://loinc.org/625-4), and Gram-stain descriptions retain nominal text. Qualitative urine leukocytes use [5799-2](https://loinc.org/5799-2).
+
+Explicit Anti-HBs IU/mL converts to mIU/mL with factor 1000. Colony counts labelled `milhares UFC/mL` convert with factor 1000. Estradiol pmol/L converts to pg/mL with factor 0.272382, calculated from the [NIST molecular weight](https://webbook.nist.gov/cgi/cbook.cgi?ID=C50282). A printed urine glucose result of `Normal` remains text without an invented zero concentration. Exact units can come from an explicitly referenced attached table; obscured assay identities and contradictory source units require source review rather than inferred repairs.

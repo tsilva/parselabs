@@ -1,5 +1,5 @@
 ---
-name: parselabs-review
+name: parselabs_review
 description: Use when reviewing Parselabs extracted lab rows for a profile. By default, review and accept/reject only unconfirmed rows through the Browser Use review UI or helper artifacts. Also supports explicit full re-audit of accepted/rejected rows, rejected-row root-cause investigation, source-evidence comparison against page/bbox crops, patching extracted page JSON when values or review decisions are proven wrong, and rebuilding profile outputs.
 ---
 

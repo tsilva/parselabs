@@ -33,6 +33,10 @@ def _coerce_optional_float(value: object) -> float | None:
 def _format_reference_range(row: pd.Series) -> str:
     """Format reference_min/reference_max into a display string."""
 
+    # Titer references are displayed as printed dilution ratios, not bare denominators.
+    if row.get("lab_unit") == "titer" and pd.notna(row.get("raw_reference_range")):
+        return str(row["raw_reference_range"])
+
     ref_min = row["reference_min"]
     ref_max = row["reference_max"]
 

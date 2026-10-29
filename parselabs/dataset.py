@@ -179,12 +179,16 @@ def _check_lab_value_outliers_by_lab_name(df: pd.DataFrame, report: dict[str, li
 
 
 def _check_unique_date_lab_name(df: pd.DataFrame, report: dict[str, list[str]]) -> None:
-    """Validate uniqueness of the (date, lab_name) key."""
+    """Flag repeated date/lab observations while keeping distinct textual findings."""
 
     if "date" not in df.columns or "lab_name" not in df.columns:
         return
 
-    duplicates = df.duplicated(subset=["date", "lab_name"], keep=False)
+    # Distinct source text can describe separate findings from one assay on the same date.
+    identity_columns = ["date", "lab_name"]
+    if "value_text" in df.columns:
+        identity_columns.append("value_text")
+    duplicates = df.duplicated(subset=identity_columns, keep=False)
     if not duplicates.any():
         return
 

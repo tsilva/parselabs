@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import logging
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -85,6 +86,10 @@ def format_reference_text(row: pd.Series) -> str:
 def format_mapped_reference_text(row: pd.Series) -> str:
     """Format the normalized reference range in the standardized unit."""
 
+    # Preserve dilution notation so a titer bound is not displayed as an index threshold.
+    if row.get("lab_unit") == "titer" and format_text(row.get("raw_reference_range"), empty=""):
+        return format_text(row.get("raw_reference_range"))
+
     return format_reference_bounds(
         row.get("reference_min"),
         row.get("reference_max"),
@@ -105,10 +110,32 @@ def format_raw_value(row: pd.Series) -> str:
     return value_text
 
 
+def mapped_value_label(row: pd.Series) -> str:
+    """Show annotations without pairing an unconverted source number with a mapped unit."""
+
+    reported = format_text(row.get("value_text"), empty="")
+    value = row.get("value")
+    unit_text = format_text(row.get("lab_unit"), empty="")
+    raw_unit = format_text(row.get("raw_lab_unit", row.get("raw_unit")), empty="")
+
+    # Pure numbers do not require source-text display decisions.
+    if not reported:
+        return format_text(value)
+
+    # Textual, boolean and titer observations keep their reported representation.
+    if pd.isna(value) or not raw_unit or raw_unit.casefold() == unit_text.casefold() or unit_text in {"boolean", "titer", "text"}:
+        return reported
+
+    approximate = "≈" if re.match(r"^(?:ca\.?\s|approx|cerca|[~≈])", reported, re.IGNORECASE) else ""
+    interpretation = re.search(r"=\s*(NR|R)\s*$", reported, re.IGNORECASE)
+    suffix = f" ({interpretation.group(1)})" if interpretation else ""
+    return f"{approximate}{format_text(value)}{suffix}"
+
+
 def format_mapped_value(row: pd.Series) -> str:
     """Format the standardized value and unit into one compact display string."""
 
-    value_text = format_text(row.get("value"))
+    value_text = mapped_value_label(row)
     unit_text = format_text(row.get("lab_unit"), empty="")
 
     # Omit the placeholder unit suffix when the unit is genuinely absent.

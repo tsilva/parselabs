@@ -6,6 +6,7 @@ COLUMN_SCHEMA = {
     # Extracted values (standardized)
     "lab_name": {"dtype": "str", "excel_width": 35},
     "value": {"dtype": "float64", "excel_width": 12},
+    "value_text": {"dtype": "str", "excel_width": 30},
     "lab_unit": {"dtype": "str", "excel_width": 15},
     # Source identification
     "source_file": {"dtype": "str", "excel_width": 25},
@@ -38,6 +39,7 @@ COLUMN_ORDER = [
     "date",
     "lab_name",
     "value",
+    "value_text",
     "lab_unit",
     "source_file",
     "page_number",

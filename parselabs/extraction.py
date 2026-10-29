@@ -153,6 +153,7 @@ class BaseLabResultModel(BaseModel):
         default=None,
         description="Additional notes or remarks about the test (NOT the test result itself). Only use for extra information like methodology notes or special conditions.",
     )
+    collection_date: COLLECTION_DATE_FIELD
     bbox_left: BBOX_LEFT_FIELD
     bbox_top: BBOX_TOP_FIELD
     bbox_right: BBOX_RIGHT_FIELD
@@ -228,7 +229,11 @@ class BaseHealthLabReportModel(BaseModel):
     report_date: REPORT_DATE_FIELD
     registration_date: str | None = Field(
         default=None,
-        description="Laboratory registration or entry date explicitly printed as Data de entrada or Data Inscrição, in YYYY-MM-DD format. Keep separate from specimen collection and report issue dates.",
+        description=(
+            "Laboratory registration or entry date, YYYY-MM-DD. Include Data de entrada, Data Inscrição, DT. ENTRADA, "
+            "or Data in the analytical-study/episode header beside Hora Inscrição or tube/episode identifiers. "
+            "Keep separate from specimen collection and report issue dates; do not use footer print dates or historical dates."
+        ),
     )
     lab_facility: LAB_FACILITY_FIELD
     patient_name: str | None = Field(default=None, description="Patient name exactly as printed in the patient header; null when absent or unreadable. Never use a physician name.")
@@ -526,6 +531,7 @@ def _validate_extraction_result(
     try:
         report_model = HealthLabReport(**tool_result_dict)
         report_model.normalize_empty_optionals()
+        _exclude_coagulation_controls(report_model)
         _assert_complete_result_bboxes(report_model)
         _assert_row_like_result_bboxes(report_model)
 
@@ -717,6 +723,20 @@ def _clean_numeric_field(value) -> float | None:
 
     # Unsupported type
     return None
+
+
+def _exclude_coagulation_controls(report: HealthLabReport) -> None:
+    """Exclude explicitly labelled normal/control clotting times, preserving patient PT/APTT."""
+
+    # Anchored labels distinguish control measurements from a patient's qualitative NORMAL result.
+    control_label = re.compile(r"(?:normal|control|controlo)\s+(?:pt|aptt|ttpa|tp)|(?:pt|aptt|ttpa|tp)\s+(?:normal|control|controlo)", re.IGNORECASE)
+    patient_rows = [row for row in report.lab_results if not control_label.fullmatch(row.raw_lab_name.strip())]
+    excluded = len(report.lab_results) - len(patient_rows)
+
+    # These rows describe the assay's control specimen, never the patient's observation.
+    if excluded:
+        logger.info("Excluded %d explicitly labelled coagulation control measurements", excluded)
+        report.lab_results = patient_rows
 
 
 def _fix_lab_results_format(tool_result_dict: RawExtractionPayload) -> RawExtractionPayload:

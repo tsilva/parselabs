@@ -300,6 +300,12 @@ parselabs admin validate-lab-specs
 
 ## Important Conventions
 
+### Local Regression After Significant Changes
+
+Run `make regression-quick` locally after significant changes to extraction, prompts, model routing, normalization, standardization mappings, row building or exports. This re-parses the explicitly curated private sample through AgentBridge. Use `make regression-quick-offline` for a deterministic replay of the same saved parses and `make regression-full-offline` for broader normalization/export coverage. Ordinary tests alone do not run private regressions.
+
+Keep the corpus, `quick-suite.json` selectors, model outputs and diffs outside Git. Never run real medical regression fixtures in CI; the private runners enforce this even when enabled explicitly. If the local corpus, curated manifest or AgentBridge is unavailable, report that the relevant regression was not run. Investigate differences without automatically replacing approved baselines. Do not use Tesseract.
+
 ### Package Management
 Always use `uv` for package management, never `pip` directly:
 ```bash
@@ -343,3 +349,15 @@ needs_review = df[df['review_needed'] == True]
 # Filter by specific validation reason
 format_errors = df[df['review_reason'].str.contains('FORMAT_ARTIFACT', na=False)]
 ```
+
+## Local profile shortcuts
+
+The repo `.config/` directory is Git-ignored and exposes only external runtime
+profiles for local browsing. `.config/profiles` links to the existing
+`~/.config/parselabs/profiles/` directory; keep that target limited to profile
+files. Do not move actual runtime files into the checkout or expose `.env`,
+credentials, sessions, databases, caches, logs or parser outputs through these
+shortcuts. Edits through a profile link affect its original and retain all
+existing source-write restrictions. Runtime discovery paths are unchanged.
+See README.md for recreation commands; links are local and external profiles
+require independent backups.

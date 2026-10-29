@@ -4,7 +4,7 @@ from parselabs.normalization import apply_normalizations
 from tests.test_urine_qualitative_variants import _make_lab_specs
 
 
-def test_apply_normalizations_leaves_unmapped_boolean_values_empty(tmp_path):
+def test_apply_normalizations_preserves_uncertain_boolean_assay_as_text(tmp_path):
     lab_specs = _make_lab_specs(tmp_path)
     df = pd.DataFrame(
         [
@@ -24,4 +24,5 @@ def test_apply_normalizations_leaves_unmapped_boolean_values_empty(tmp_path):
     normalized_df = apply_normalizations(df, lab_specs)
 
     assert pd.isna(normalized_df.loc[0, "value_primary"])
-    assert normalized_df.loc[0, "lab_unit_primary"] == "boolean"
+    assert normalized_df.loc[0, "lab_unit_primary"] == "text"
+    assert normalized_df.loc[0, "value_text"] == "DUVIDOSO"

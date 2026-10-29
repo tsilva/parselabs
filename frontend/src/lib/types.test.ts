@@ -42,3 +42,23 @@ test('flagged queues exclude confirmed decisions while history can show them', (
   assert.equal(matchesStatus(row, 'accepted'), true);
   assert.equal(matchesStatus({ ...row, review_status: '' }, 'flagged'), true);
 });
+
+test('textual observations retain their grade and titer formatting', () => {
+  const row = { value: 80, value_text: '<1/80', raw_value: '<1/80', is_below_limit: true } as Row;
+  assert.equal(valueLabel(row), '<1/80');
+  assert.equal(valueLabel({ ...row, value: 1, value_text: 'Contém(+--)', is_below_limit: false }), 'Contém(+--)');
+  assert.equal(valueLabel({ ...row, value: 1, value_text: '', is_below_limit: false }), '1');
+});
+
+test('textual sediment observations keep their mapped unit without a numeric count', () => {
+  const row = { value: null, value_text: 'Rare', raw_value: 'Rare', lab_unit: '/field', raw_lab_unit: null } as Row;
+  assert.equal(displayRow(row).lab_unit, '/field');
+  assert.equal(valueLabel(displayRow(row)), 'Rare');
+});
+
+test('converted numeric annotations use the converted number with its mapped unit', () => {
+  const row = { value: 0.125, value_text: 'Ca. 125', raw_value: 'Ca. 125', lab_unit: '10⁹/L', raw_lab_unit: '/mm3' } as Row;
+  assert.equal(valueLabel(row), '≈0.125');
+  assert.equal(valueLabel(row, true), 'Ca. 125');
+  assert.equal(valueLabel({ ...row, value: 0.009, value_text: '9= NR', raw_lab_unit: 'U/L', lab_unit: 'U/mL' }), '0.009 (NR)');
+});

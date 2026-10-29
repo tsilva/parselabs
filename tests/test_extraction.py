@@ -205,6 +205,7 @@ def test_llm_tool_schema_field_shape_remains_stable():
         "raw_reference_min",
         "raw_reference_max",
         "raw_comments",
+        "collection_date",
         "bbox_left",
         "bbox_top",
         "bbox_right",
@@ -267,6 +268,24 @@ def test_validate_extraction_result_accepts_rows_with_complete_bboxes():
     assert result["success"] is True
     assert result["should_retry"] is False
     assert result["data"]["lab_results"][0]["bbox_bottom"] == 320.0
+
+
+def test_extraction_excludes_labelled_clotting_controls_but_keeps_patient_times_and_normal_results():
+    box = {"bbox_left": 100, "bbox_top": 200, "bbox_right": 700, "bbox_bottom": 220}
+    rows = [
+        {"raw_lab_name": "PT", "raw_value": "14.7", **box},
+        {"raw_lab_name": "Normal PT", "raw_value": "10.2"},
+        {"raw_lab_name": "APTT", "raw_value": "27.1", **box},
+        {"raw_lab_name": "Normal APTT", "raw_value": "32.6"},
+        {"raw_lab_name": "PT", "raw_value": "Normal", **box},
+        {"raw_lab_name": "Morphology", "raw_value": "Normal", **box},
+        {"raw_lab_name": "PT ratio", "raw_value": "1.1", **box},
+    ]
+    result = _validate_extraction_result({"lab_results": rows}, Path("synthetic.jpg"), 0, 0)
+    assert result["success"]
+    assert [(row["raw_lab_name"], row["raw_value"]) for row in result["data"]["lab_results"]] == [
+        ("PT", "14.7"), ("APTT", "27.1"), ("PT", "Normal"), ("Morphology", "Normal"), ("PT ratio", "1.1"),
+    ]
 
 
 def test_validate_extraction_result_retries_for_column_like_bbox():

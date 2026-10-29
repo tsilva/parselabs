@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -12,16 +11,22 @@ import pytest
 from parselabs.config import ExtractionConfig, LabSpecsConfig
 from parselabs.regression import (
     build_case_diff,
+    build_fresh_case_diff,
     discover_approved_cases,
     empty_export_dataframe,
+    get_regression_runs_dir,
     get_required_regression_profile,
+    private_regression_enabled,
+    replay_review_decisions,
+    require_source_review,
+    select_regression_cases,
 )
-from parselabs.rows import build_document_expected_dataframe_from_reviewed_json, save_review_status
-from parselabs.utils import make_path_writable, setup_logging
+from parselabs.rows import build_document_expected_dataframe_from_reviewed_json
+from parselabs.utils import setup_logging
 
 
 def _close_root_logging_handlers() -> None:
-    """Close root handlers so temporary output trees can be deleted cleanly."""
+    """Flush and close handlers before protecting retained private diagnostics."""
 
     root_logger = logging.getLogger()
 
@@ -34,33 +39,48 @@ def _close_root_logging_handlers() -> None:
     logging.shutdown()
 
 
-def _cleanup_temp_root(temp_root: Path) -> None:
-    """Best-effort removal for regression temp trees before pytest teardown."""
+def _collect_profile_results(cases, output_dir, lab_specs):
+    """Report all document-level mismatches without positional review replay."""
 
-    # Guard: Nothing to delete when the temp tree is already gone.
-    if not temp_root.exists():
-        return
+    actual = {}
+    failures = []
+    for case in cases:
+        doc_dir = output_dir / f"{case.stem}_{case.file_hash}"
 
-    # Relax permissions first so macOS temp cleanup does not fail on nested outputs.
-    for child in sorted(temp_root.rglob("*"), reverse=True):
-        mode = 0o700 if child.is_dir() else 0o600
-        make_path_writable(child, mode)
+        # A missing document must not prevent exercising the remaining selected cases.
+        if not doc_dir.exists():
+            failures.append(f"{case.profile}/{case.case_id}: missing processed document. Artifacts: {output_dir}")
+            continue
 
-    # Ensure the root directory itself is traversable before removing it.
-    make_path_writable(temp_root, 0o700)
-
-    # Remove the temp tree eagerly so pytest does not need to clean it up later.
-    shutil.rmtree(temp_root, ignore_errors=True)
+        # Match every raw observation before evaluating accepted-only exports.
+        try:
+            replay_review_decisions(case.case_dir / "reviewed", doc_dir)
+            actual[(case.profile, case.case_id)] = build_document_expected_dataframe_from_reviewed_json(doc_dir, lab_specs)
+        except ValueError as exc:
+            failures.append(f"{case.profile}/{case.case_id}: {exc}. Artifacts: {doc_dir}")
+    return actual, failures
 
 
 @pytest.fixture(scope="module")
-def approved_regression_run():
-    if os.getenv("RUN_APPROVED_DOCS") != "1":
+def approved_regression_run(pytestconfig):
+    if not private_regression_enabled("RUN_APPROVED_DOCS"):
         pytest.skip("Set RUN_APPROVED_DOCS=1 to run approved document regressions.")
 
-    cases = discover_approved_cases()
+    cases = select_regression_cases(discover_approved_cases(), pytestconfig.getoption("--golden-suite"))
     if not cases:
-        pytest.fail("RUN_APPROVED_DOCS=1 is set, but no approved cases were found under tests/fixtures/approved/.")
+        pytest.fail("RUN_APPROVED_DOCS=1 is set, but the private local approved corpus is empty.")
+
+    # Verify frozen evidence before loading profiles or sending any source to the configured model.
+    import pandas as pd
+
+    for case in cases:
+        expected = pd.read_csv(case.expected_csv_path, keep_default_na=False, dtype=str)
+        with tempfile.TemporaryDirectory(prefix="parselabs-preflight-") as directory:
+            doc_dir = Path(directory) / case.case_id
+            shutil.copytree(case.case_dir / "reviewed", doc_dir)
+            pdf_path = doc_dir / case.original_filename
+            shutil.copyfile(case.document_path, pdf_path)
+            require_source_review(doc_dir, pdf_path, expected)
 
     try:
         from parselabs.pipeline import run_pipeline_for_pdf_files
@@ -75,13 +95,14 @@ def approved_regression_run():
         cases_by_profile.setdefault(profile_name, []).append(case)
 
     actual_by_stem = {}
+    failures = []
     for profile_name, profile_cases in cases_by_profile.items():
         try:
             profile = get_required_regression_profile(profile_name)
         except RuntimeError as exc:
             pytest.fail(str(exc))
 
-        temp_root = Path(tempfile.mkdtemp(prefix=f"approved-docs-{profile_name}-"))
+        temp_root = Path(tempfile.mkdtemp(prefix="extraction-", dir=get_regression_runs_dir()))
         input_dir = temp_root / "input"
         output_dir = temp_root / "output"
         input_dir.mkdir(parents=True, exist_ok=True)
@@ -89,7 +110,9 @@ def approved_regression_run():
 
         pdf_files = []
         for case in profile_cases:
-            target_pdf = input_dir / f"{case.stem}.pdf"
+            case_input_dir = input_dir / case.case_id
+            case_input_dir.mkdir()
+            target_pdf = case_input_dir / f"{case.stem}.pdf"
             target_pdf.write_bytes(case.document_path.read_bytes())
             pdf_files.append(target_pdf)
 
@@ -102,69 +125,94 @@ def approved_regression_run():
             openrouter_base_url=profile.openrouter_base_url or "http://127.0.0.1:8082/api/v1",
             extract_model_id=profile.extract_model_id,
             input_file_regex="*.pdf",
-            max_workers=1,
+            max_workers=2 if pytestconfig.getoption("--golden-suite") == "quick" else 1,
+            expected_patient_name=profile.name,
         )
         try:
-            run_pipeline_for_pdf_files(pdf_files, config, lab_specs)
+            result = run_pipeline_for_pdf_files(pdf_files, config, lab_specs)
 
-            # Replay the approved review decisions onto the fresh extraction before rebuilding reviewed truth.
-            for case in profile_cases:
-                doc_dir = output_dir / case.case_id
+            # A partial extraction cannot establish a clean regression result.
+            if result.failed_pages or result.pdfs_failed:
+                pytest.fail("Private regression extraction was incomplete; inspect local diagnostics.")
 
-                # Guard: Each rerun fixture should recreate its own processed document directory.
-                if not doc_dir.exists():
-                    pytest.fail(f"Approved case '{case.case_id}' did not recreate processed output at {doc_dir}.")
-
-                _apply_review_state(case.review_state_path, doc_dir)
-                actual_by_stem[case.stem] = build_document_expected_dataframe_from_reviewed_json(doc_dir, lab_specs)
+            # Independent cases continue after mismatches so all selected profiles are exercised.
+            profile_actual, profile_failures = _collect_profile_results(profile_cases, output_dir, lab_specs)
+            actual_by_stem.update(profile_actual)
+            failures.extend(profile_failures)
         finally:
-            # Release log files before removing the profile-specific temp tree.
+            # Retain private diagnostics for fresh extraction; approved fixtures are never modified.
             _close_root_logging_handlers()
-            _cleanup_temp_root(temp_root)
+            for path in temp_root.rglob("*"):
+                path.chmod(0o700 if path.is_dir() else 0o600)
 
-    return cases, actual_by_stem
-
-
-def _apply_review_state(review_state_path: Path | None, doc_dir: Path) -> None:
-    """Replay approved review decisions onto a freshly extracted processed document."""
-
-    # Guard: Approved fixtures must carry review decisions now that exports are review-driven.
-    if review_state_path is None or not review_state_path.exists():
-        pytest.fail("Approved fixture is missing review_state.json. Resync fixtures with `parselabs admin regression sync-reviewed --profile ...`.")
-
-    snapshot_payload = json.loads(review_state_path.read_text(encoding="utf-8"))
-    snapshot_rows = snapshot_payload.get("rows", [])
-
-    # Guard: Malformed snapshots should fail loudly so the fixture can be repaired.
-    if not isinstance(snapshot_rows, list):
-        pytest.fail(f"Approved fixture review state is malformed: {review_state_path}")
-
-    # Replay each reviewed decision using the same persistence helper as the reviewer UI.
-    for snapshot_row in snapshot_rows:
-        page_number = int(snapshot_row["page_number"])
-        result_index = int(snapshot_row["result_index"])
-        review_status = str(snapshot_row["review_status"])
-        ok, message = save_review_status(doc_dir, page_number, result_index, review_status)
-
-        # Guard: A replay failure means extraction drifted or the snapshot no longer matches the document.
-        if not ok:
-            pytest.fail(f"Failed to replay review state for {doc_dir.name} page {page_number} row {result_index}: {message}")
+    return cases, actual_by_stem, failures
 
 
 @pytest.mark.approved_docs
-def test_approved_documents_match_expected_csv(approved_regression_run):
-    cases, actual_by_stem = approved_regression_run
+def test_approved_documents_match_expected_csv(approved_regression_run, pytestconfig):
+    cases, actual_by_stem, failures = approved_regression_run
 
-    diffs = []
+    diffs = list(failures)
     for case in cases:
+        # Failed matching already has an actionable local diagnostic; do not add an empty-CSV diff.
+        if (case.profile, case.case_id) not in actual_by_stem:
+            continue
         expected_df = empty_export_dataframe() if case.expected_csv_path.stat().st_size == 0 else None
         if expected_df is None:
             import pandas as pd
 
-            expected_df = pd.read_csv(case.expected_csv_path, keep_default_na=False)
-        actual_df = actual_by_stem.get(case.stem, empty_export_dataframe())
-        diff = build_case_diff(expected_df, actual_df, case.case_id)
+            expected_df = pd.read_csv(case.expected_csv_path, keep_default_na=False, dtype=str)
+        actual_df = actual_by_stem.get((case.profile, case.case_id), empty_export_dataframe())
+        diff = build_fresh_case_diff(expected_df, actual_df, case.case_id)
         if diff:
             diffs.append(diff)
+
+    # Keep actionable diagnostics beside the local corpus, never in Git or CI artifacts.
+    report = get_regression_runs_dir() / "latest-result.json"
+    report.write_text(json.dumps({"suite": pytestconfig.getoption("--golden-suite"), "documents": len(cases), "passed": not diffs, "differences": diffs}, indent=2) + "\n", encoding="utf-8")
+    report.chmod(0o600)
+    assert not diffs, "\n\n".join(diffs)
+
+
+@pytest.mark.golden_local
+def test_local_golden_reviewed_json_matches_expected_csv(monkeypatch, pytestconfig):
+    """Exercise normalization and export against frozen private parses without any API."""
+
+    # Private corpora are never required or accessed by ordinary CI runs.
+    if not private_regression_enabled("RUN_LOCAL_GOLDENS"):
+        pytest.skip("Set RUN_LOCAL_GOLDENS=1 to replay the private local golden corpus.")
+
+    cases = select_regression_cases(discover_approved_cases(), pytestconfig.getoption("--golden-suite"))
+
+    # Explicit local regression must fail rather than silently pass an empty corpus.
+    if not cases:
+        pytest.fail("RUN_LOCAL_GOLDENS=1 is set, but the private local golden corpus is empty.")
+
+    import socket
+
+    import pandas as pd
+
+    # Enforce the local-only contract even if a future normalization change tries an API.
+    def reject_network(*args, **kwargs):
+        raise AssertionError("Offline golden regression must not access the network.")
+
+    monkeypatch.setattr(socket.socket, "connect", reject_network)
+    monkeypatch.setattr(socket.socket, "connect_ex", reject_network)
+    lab_specs = LabSpecsConfig()
+    diffs = []
+    for case in cases:
+        with tempfile.TemporaryDirectory(prefix="parselabs-golden-") as temp_dir:
+            doc_dir = Path(temp_dir) / f"{case.stem}_{case.file_hash}"
+            shutil.copytree(case.case_dir / "reviewed", doc_dir)
+            pdf_path = doc_dir / case.original_filename
+            shutil.copyfile(case.document_path, pdf_path)
+            expected = pd.read_csv(case.expected_csv_path, keep_default_na=False, dtype=str)
+            require_source_review(doc_dir, pdf_path, expected)
+            actual = build_document_expected_dataframe_from_reviewed_json(doc_dir, lab_specs)
+            diff = build_case_diff(expected, actual, f"{case.profile}/{case.case_id}")
+
+            # Accumulate all drift so a local run reports the complete affected corpus.
+            if diff:
+                diffs.append(diff)
 
     assert not diffs, "\n\n".join(diffs)

@@ -1521,7 +1521,7 @@ def test_apply_cached_standardization_overrides_stale_percentage_unit_cache_for_
     assert standardized_df["lab_unit_standardized"].tolist() == ["10⁹/L"]
 
 
-def test_apply_cached_standardization_repairs_misaligned_electrophoresis_percentage_unit(
+def test_apply_cached_standardization_preserves_printed_electrophoresis_unit(
     tmp_path, monkeypatch
 ):
     lab_specs = _make_protein_fraction_lab_specs(tmp_path)
@@ -1549,8 +1549,167 @@ def test_apply_cached_standardization_repairs_misaligned_electrophoresis_percent
 
     standardized_df = apply_cached_standardization(review_df, lab_specs)
 
-    assert standardized_df.loc[0, "lab_name_standardized"] == "Blood - Albumin (%)"
-    assert standardized_df.loc[0, "lab_unit_standardized"] == "%"
+    assert standardized_df.loc[0, "lab_name_standardized"] == "Blood - Albumin"
+    assert standardized_df.loc[0, "lab_unit_standardized"] == "g/dL"
+
+
+@pytest.mark.parametrize("raw_name,comments,expected", [
+    ("Glucose", None, "Blood - Glucose"),
+    ("Glicose em jejum", None, "Blood - Glucose (Fasting)"),
+    ("Glucose", "Fasting sample", "Blood - Glucose (Fasting)"),
+    ("Glucose (non-fasting)", None, "Blood - Glucose"),
+    ("Glicose", "Não em jejum", "Blood - Glucose"),
+])
+def test_cached_fasting_glucose_requires_recorded_source_condition(monkeypatch, raw_name, comments, expected):
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={raw_name: "Blood - Glucose (Fasting)"},
+        unit_map={("mg/dL", expected): "mg/dL"},
+    )
+    frame = pd.DataFrame([{
+        "raw_lab_name": raw_name, "raw_section_name": "Blood",
+        "raw_value": "90", "raw_lab_unit": "mg/dL", "raw_comments": comments,
+    }])
+    result = apply_cached_standardization(frame, LabSpecsConfig()).iloc[0]
+    assert result.lab_name_standardized == expected
+    assert result.lab_unit_standardized == "mg/dL"
+
+
+def test_cached_units_cannot_invent_calibration_or_volume_for_legacy_assays(monkeypatch):
+    scl = "Blood - Anti-Scleroderma-70 Antibody (Anti-Scl-70 Ab)"
+    ch50 = "Blood - Complement CH50"
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={"Synthetic Scl": scl, "Synthetic CH50": ch50},
+        unit_map={("U", scl): "IU/L", ("U C'H 50", ch50): "U/mL"},
+    )
+    frame = pd.DataFrame([
+        {"raw_lab_name": "Synthetic Scl", "raw_value": "9", "raw_lab_unit": "U", "raw_comments": "NR"},
+        {"raw_lab_name": "Synthetic CH50", "raw_value": "89", "raw_lab_unit": "U C'H 50", "raw_comments": None},
+    ])
+    frame["raw_reference_min"] = None
+    frame["raw_reference_max"] = None
+    standardized = apply_cached_standardization(frame, LabSpecsConfig())
+    normalized = apply_normalizations(standardized, LabSpecsConfig())
+    assert normalized.lab_unit_primary.tolist() == ["U", "U C'H 50"]
+    assert normalized.value_primary.tolist() == [9, 89]
+
+
+def test_mapped_annotation_display_matches_the_converted_unit():
+    from parselabs.review import format_mapped_value
+
+    row = pd.Series({
+        "value": .125, "value_text": "Ca. 125", "raw_value": "Ca. 125",
+        "lab_unit": "10⁹/L", "raw_lab_unit": "/mm3",
+    })
+    assert format_mapped_value(row) == "≈0.125 10⁹/L"
+    row.update(pd.Series({"value": 9, "value_text": "9= NR", "lab_unit": "U", "raw_lab_unit": "U"}))
+    assert format_mapped_value(row) == "9= NR U"
+
+
+def test_antibody_units_do_not_assume_international_calibration_or_dimensionless_scores(monkeypatch):
+    ccp = "Blood - Anti-Cyclic Citrullinated Peptide Antibody (Anti-CCP Ab)"
+    ssa = "Blood - Anti-Sjögren's-Syndrome-Related Antigen A Antibody (Anti-SSA/Ro Ab)"
+    tpo = "Blood - Anti-Thyroid Peroxidase Antibody (Anti-TPO Ab)"
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={"Synthetic CCP": ccp, "Synthetic SSA": ssa, "Synthetic TPO": tpo},
+        unit_map={("U/mL", ccp): "IU/mL", ("IU/mL", ssa): "unitless", ("KU/L", tpo): "IU/mL"},
+    )
+    frame = pd.DataFrame([
+        {"raw_lab_name": "Synthetic CCP", "raw_value": "3", "raw_lab_unit": "U/mL"},
+        {"raw_lab_name": "Synthetic SSA", "raw_value": "6", "raw_lab_unit": "IU/mL"},
+        {"raw_lab_name": "Synthetic TPO", "raw_value": "10", "raw_lab_unit": "KU/L"},
+    ])
+    result = apply_cached_standardization(frame, LabSpecsConfig())
+    assert result.lab_unit_standardized.tolist() == ["U/mL", "IU/mL", "kU/L"]
+
+
+def test_explicit_urine_strip_cell_estimates_preserve_zero_counts_and_limits(monkeypatch):
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={"Synthetic WBC": "Urine Type II - Leukocytes", "Synthetic RBC": "Urine Type II - Blood"},
+        unit_map={},
+    )
+    frame = pd.DataFrame([
+        {"raw_lab_name": "Synthetic WBC", "raw_value": "0", "raw_lab_unit": "Leu/uL",
+         "raw_reference_min": 0, "raw_reference_max": 10, "raw_comments": None},
+        {"raw_lab_name": "Synthetic RBC", "raw_value": "0", "raw_lab_unit": "Erit/uL",
+         "raw_reference_min": None, "raw_reference_max": 10, "raw_comments": None},
+        {"raw_lab_name": "Synthetic WBC", "raw_value": "250", "raw_lab_unit": "Cells/µl",
+         "raw_reference_min": None, "raw_reference_max": 10, "raw_comments": None},
+    ])
+    specs = LabSpecsConfig()
+    result = apply_normalizations(apply_cached_standardization(frame, specs), specs)
+    assert result.lab_name_standardized.tolist() == [
+        "Urine Type II - Leukocytes (Test Strip)", "Urine Type II - Erythrocytes (Test Strip)",
+        "Urine Type II - Leukocytes (Test Strip)",
+    ]
+    assert result.lab_unit_primary.tolist() == ["/µL", "/µL", "/µL"]
+    assert result.value_primary.tolist() == [0, 0, 250]
+    assert result.reference_max_primary.tolist() == [10, 10, 10]
+
+
+def test_nucleated_red_cell_ratio_is_not_deduplicated_with_absolute_count(monkeypatch):
+    from parselabs.normalization import deduplicate_results
+
+    name = "Blood - Nucleated Red Blood Cells (nRBC)"
+    ratio = name + " (/100 WBC)"
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={"Synthetic nRBC": name},
+        unit_map={("10⁹/L", name): "10⁹/L", ("/100 Leucócitos", ratio): "/100 WBC"},
+    )
+    frame = pd.DataFrame([
+        {"date": "2024-01-01", "raw_lab_name": "Synthetic nRBC", "raw_value": "0",
+         "raw_lab_unit": "10⁹/L", "raw_reference_min": None, "raw_reference_max": None},
+        {"date": "2024-01-01", "raw_lab_name": "Synthetic nRBC", "raw_value": "0",
+         "raw_lab_unit": "/100 Leucócitos", "raw_reference_min": None, "raw_reference_max": None},
+    ])
+    specs = LabSpecsConfig()
+    result = apply_normalizations(apply_cached_standardization(frame, specs), specs)
+    final = deduplicate_results(result, specs)
+    assert set(final.lab_name_standardized) == {name, ratio}
+    assert set(final.lab_unit_primary) == {"10⁹/L", "/100 WBC"}
+
+
+def test_immature_granulocyte_percentage_and_absolute_companions_stay_distinct(monkeypatch):
+    name = "Blood - Immature Granulocytes"
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={("Synthetic immature cells", "Leucogram"): name},
+        unit_map={("%", name + " (%)"): "%", ("", name): "10⁹/L"},
+    )
+    frame = pd.DataFrame([
+        {"raw_lab_name": "Synthetic immature cells", "raw_section_name": "Leucogram",
+         "raw_value": "0.2", "raw_lab_unit": "%", "raw_reference_min": None, "raw_reference_max": None},
+        {"raw_lab_name": "Synthetic immature cells", "raw_section_name": "Leucogram",
+         "raw_value": "0.01", "raw_lab_unit": None, "raw_reference_min": 0.2, "raw_reference_max": 1},
+    ])
+    result = apply_cached_standardization(frame, LabSpecsConfig())
+    normalized = apply_normalizations(result, LabSpecsConfig())
+    assert normalized.lab_name_standardized.tolist() == [name + " (%)", name]
+    assert normalized.value_primary.tolist() == [0.2, 0.01]
+    assert normalized.lab_unit_primary.tolist() == ["%", "10⁹/L"]
+
+
+def test_platelet_geometric_width_index_does_not_become_femtoliters(monkeypatch):
+    name = "Blood - Platelet Distribution Width (PDW)"
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={"Synthetic PDW": name},
+        unit_map={("10(GSD)", name): "fL"},
+    )
+    frame = pd.DataFrame([
+        {"raw_lab_name": "Synthetic PDW", "raw_value": "14.7", "raw_lab_unit": "10(GSD)",
+         "raw_reference_min": 9, "raw_reference_max": 17},
+    ])
+    result = apply_cached_standardization(frame, LabSpecsConfig())
+    normalized = apply_normalizations(result, LabSpecsConfig())
+    assert normalized.lab_unit_primary.tolist() == ["10(GSD)"]
+    assert normalized.value_primary.tolist() == [14.7]
+    assert normalized.reference_min_primary.tolist() == [9]
+    assert normalized.reference_max_primary.tolist() == [17]
 
 
 def test_apply_cached_standardization_handles_truncated_absolute_count_units(tmp_path, monkeypatch):
@@ -1741,7 +1900,7 @@ def test_apply_cached_standardization_remaps_complement_ranges_from_ch50_placeho
     assert standardized_df["lab_unit_standardized"].tolist() == ["U C'H 50", "mg/dL", "mg/dL"]
 
 
-def test_prepare_rows_skips_suspicious_range_flag_when_percentage_sibling_is_better_match(tmp_path):
+def test_prepare_rows_flags_percentage_range_on_a_concentration_observation(tmp_path):
     lab_specs = _make_protein_fraction_lab_specs(tmp_path)
     review_df = pd.DataFrame(
         [
@@ -1767,7 +1926,7 @@ def test_prepare_rows_skips_suspicious_range_flag_when_percentage_sibling_is_bet
     )
 
     assert len(prepared_df) == 1
-    assert "SUSPICIOUS_REFERENCE_RANGE" not in prepared_df.loc[0, "review_reason"]
+    assert "SUSPICIOUS_REFERENCE_RANGE" in prepared_df.loc[0, "review_reason"]
 
 
 def test_apply_cached_standardization_preserves_mm3_units_for_conversion(tmp_path, monkeypatch):
@@ -1963,7 +2122,7 @@ def test_regression_case_sync_copies_fixture_ready_documents_with_rejections(tmp
         missing_markers=[{"anchor_result_index": 0, "created_at": "2024-01-05T00:00:00Z"}],
     )
 
-    monkeypatch.setattr(regression_cases, "APPROVED_FIXTURES_DIR", approved_dir)
+    monkeypatch.setattr(regression_cases, "get_approved_fixtures_dir", lambda: approved_dir)
     monkeypatch.setattr(regression_cases, "discover_approved_cases", lambda: [])
     monkeypatch.setattr(regression_cases, "LabSpecsConfig", lambda: lab_specs)
     monkeypatch.setattr(
@@ -1972,8 +2131,13 @@ def test_regression_case_sync_copies_fixture_ready_documents_with_rejections(tmp
         lambda _: ProfileConfig(name="test", output_path=output_path),
     )
 
+    # Only an independently audited document may become golden truth.
+    regression_cases.attest_reviewed(argparse.Namespace(
+        profile="test", source_file="valid.pdf", review_note="Synthetic source and normalized export checked.",
+    ))
     regression_cases.approve_cases(argparse.Namespace(command="sync-reviewed", profile="test"))
 
+    approved_dir = approved_dir / "test"
     case_dirs = sorted(path.name for path in approved_dir.iterdir())
     expected_case_id = f"valid_{regression_cases.compute_file_hash(output_path / 'valid_deadbeef' / 'valid.pdf')}"
     assert case_dirs == [expected_case_id]
@@ -1987,6 +2151,25 @@ def test_regression_case_sync_copies_fixture_ready_documents_with_rejections(tmp
     ]
     assert not any("pending" in case_dir for case_dir in case_dirs)
     assert not any("missing" in case_dir for case_dir in case_dirs)
+
+
+def test_regression_selection_requires_hash_key_for_ambiguous_filenames(tmp_path):
+    output_path = tmp_path / "processed"
+    first = output_path / "same_12345678"
+    second = output_path / "same_87654321"
+    _write_processed_document(first, ["accepted"], stem="same")
+    _write_processed_document(second, ["accepted"], stem="same")
+    profile = ProfileConfig(name="test", output_path=output_path)
+
+    with pytest.raises(ValueError, match="ambiguous.*--document-key"):
+        regression_cases._select_documents(profile, {"same.pdf"}, set())
+
+    selected = regression_cases._select_documents(profile, set(), {first.name})
+    assert [document.doc_dir for document in selected] == [first]
+    assert len(regression_cases._select_documents(profile, set(), set())) == 2
+
+    with pytest.raises(ValueError, match="not found"):
+        regression_cases._select_documents(profile, set(), {"missing_deadbeef"})
 
 
 def test_review_corpus_report_counts_rejections_missing_rows_and_unknowns(tmp_path, monkeypatch):
@@ -2024,3 +2207,21 @@ def test_review_corpus_report_counts_rejections_missing_rows_and_unknowns(tmp_pa
     assert report.unknown_standardized_units == 0
     assert report.rejected_raw_name_counts["Mystery Lab"] == 1
     assert report.rejected_raw_unit_counts["odd-unit"] == 1
+
+
+def test_dimensionally_unsupported_blood_units_survive_stale_cache_aliases(monkeypatch):
+    mchc = "Blood - Mean Corpuscular Hemoglobin Concentration (MCHC)"
+    ret_he = "Blood - Reticulocyte Hemoglobin Content"
+    _stub_standardization_maps(
+        monkeypatch,
+        name_map={"Synthetic MCHC": mchc, "Synthetic Ret-He": ret_he},
+        unit_map={("%", mchc): "g/dL", ("pg/L", ret_he): "pg"},
+    )
+    frame = pd.DataFrame([
+        {"raw_lab_name": "Synthetic MCHC", "raw_value": "31", "raw_lab_unit": "%", "raw_reference_min": None, "raw_reference_max": None},
+        {"raw_lab_name": "Synthetic Ret-He", "raw_value": "28", "raw_lab_unit": "pg/L", "raw_reference_min": None, "raw_reference_max": None},
+    ])
+    specs = LabSpecsConfig()
+    result = apply_normalizations(apply_cached_standardization(frame, specs), specs)
+    assert result.lab_unit_primary.tolist() == ["%", "pg/L"]
+    assert result.value_primary.tolist() == [31, 28]

@@ -170,7 +170,7 @@ def test_apply_normalizations_keeps_numeric_urine_result_on_numeric_lab(tmp_path
     assert normalized_df.loc[0, "value_primary"] == 30
 
 
-def test_apply_normalizations_remaps_numeric_urine_strip_ketones_to_qualitative_variant(tmp_path):
+def test_apply_normalizations_preserves_printed_numeric_urine_strip_concentration(tmp_path):
     lab_specs = _make_lab_specs(tmp_path)
     df = pd.DataFrame(
         [
@@ -190,10 +190,10 @@ def test_apply_normalizations_remaps_numeric_urine_strip_ketones_to_qualitative_
 
     normalized_df = apply_normalizations(df, lab_specs)
 
-    assert normalized_df.loc[0, "lab_name_standardized"] == "Urine Type II - Ketones (Qualitative)"
-    assert normalized_df.loc[0, "lab_unit_standardized"] == "boolean"
-    assert normalized_df.loc[0, "lab_unit_primary"] == "boolean"
-    assert normalized_df.loc[0, "value_primary"] == 1
+    assert normalized_df.loc[0, "lab_name_standardized"] == "Urine Type II - Ketones"
+    assert normalized_df.loc[0, "lab_unit_standardized"] == "mg/dL"
+    assert normalized_df.loc[0, "lab_unit_primary"] == "mg/dL"
+    assert normalized_df.loc[0, "value_primary"] == 10
 
 
 def test_apply_normalizations_preserves_numeric_assay_with_bounded_reference_interval(tmp_path):
@@ -272,7 +272,7 @@ def test_apply_normalizations_classifies_urine_color_as_boolean(tmp_path):
     assert normalized_df.loc[0, "value_primary"] == 0
 
 
-def test_apply_normalizations_uses_midpoint_for_interval_style_microscopy_values(tmp_path):
+def test_apply_normalizations_preserves_interval_style_microscopy_text(tmp_path):
     lab_specs = _make_lab_specs(tmp_path)
     df = pd.DataFrame(
         [
@@ -292,11 +292,12 @@ def test_apply_normalizations_uses_midpoint_for_interval_style_microscopy_values
     normalized_df = apply_normalizations(df, lab_specs)
 
     assert normalized_df.loc[0, "raw_value"] == "1 a 2/campo"
-    assert normalized_df.loc[0, "value_primary"] == 1.5
+    assert pd.isna(normalized_df.loc[0, "value_primary"])
+    assert normalized_df.loc[0, "value_text"] == "1 a 2/campo"
     assert normalized_df.loc[0, "lab_unit_primary"] == "/field"
 
 
-def test_apply_normalizations_uses_midpoint_for_plain_interval_values(tmp_path):
+def test_apply_normalizations_preserves_plain_interval_text(tmp_path):
     lab_specs = _make_lab_specs(tmp_path)
     df = pd.DataFrame(
         [
@@ -315,7 +316,8 @@ def test_apply_normalizations_uses_midpoint_for_plain_interval_values(tmp_path):
 
     normalized_df = apply_normalizations(df, lab_specs)
 
-    assert normalized_df.loc[0, "value_primary"] == 1.0
+    assert pd.isna(normalized_df.loc[0, "value_primary"])
+    assert normalized_df.loc[0, "value_text"] == "0 - 2"
 
 
 def test_apply_normalizations_handles_interval_values_in_string_dtype_columns(tmp_path):
@@ -345,10 +347,11 @@ def test_apply_normalizations_handles_interval_values_in_string_dtype_columns(tm
 
     normalized_df = apply_normalizations(df, lab_specs)
 
-    assert normalized_df.loc[0, "value_primary"] == 1.5
+    assert pd.isna(normalized_df.loc[0, "value_primary"])
+    assert normalized_df.loc[0, "value_text"] == "1 a 2/campo"
 
 
-def test_apply_normalizations_remaps_field_style_sediment_rows_out_of_mislabeled_ul_units(tmp_path):
+def test_printed_volume_unit_is_retained_despite_conflicting_field_notation(tmp_path):
     lab_specs = _make_lab_specs(tmp_path)
     df = pd.DataFrame(
         [
@@ -379,10 +382,13 @@ def test_apply_normalizations_remaps_field_style_sediment_rows_out_of_mislabeled
 
     normalized_df = apply_normalizations(df, lab_specs)
 
-    assert normalized_df.loc[0, "lab_unit_standardized"] == "/campo"
-    assert normalized_df.loc[0, "lab_unit_primary"] == "/field"
-    assert normalized_df.loc[0, "value_primary"] == 3.0
+    assert normalized_df.loc[0, "lab_unit_standardized"] == "/µl"
+    assert normalized_df.loc[0, "lab_unit_primary"] == "/ul"
+    assert pd.isna(normalized_df.loc[0, "value_primary"])
+    assert normalized_df.loc[0, "value_text"] == "1-5 / campo"
 
-    assert normalized_df.loc[1, "lab_unit_standardized"] == "/campo"
-    assert normalized_df.loc[1, "lab_unit_primary"] == "/field"
+    # A rarity word supplies no field denominator and cannot replace the printed unit.
+    assert normalized_df.loc[1, "lab_unit_standardized"] == "/µl"
+    assert normalized_df.loc[1, "lab_unit_primary"] == "/ul"
     assert pd.isna(normalized_df.loc[1, "value_primary"])
+    assert normalized_df.loc[1, "value_text"] == "Raras"

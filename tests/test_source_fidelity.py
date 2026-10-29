@@ -13,6 +13,7 @@ from parselabs.pipeline import validate_patient_identity
 from parselabs.rows import (
     _flatten_page_payloads,
     _infer_explicit_conversion_unit_from_raw_unit,
+    _remap_explicit_urine_strip_counts,
     load_document_review_rows,
 )
 
@@ -30,6 +31,58 @@ def test_patient_header_rejects_another_person_and_allows_continuation_pages():
 
 def test_page_payloads_preserve_distinct_collection_dates():
     assert _flatten_page_payloads(pages())["date"].tolist() == ["2024-06-09", "2024-04-03"]
+
+
+def test_normal_urine_glucose_is_text_without_an_invented_concentration():
+    specs = LabSpecsConfig(Path(__file__).parents[1] / "config/lab_specs.json")
+    frame = pd.DataFrame([{
+        "lab_name_standardized": "Urine Type II - Glucose",
+        "lab_unit_standardized": "$UNKNOWN$", "raw_value": "Normal",
+        "raw_lab_unit": None, "raw_comments": None,
+        "raw_reference_min": None, "raw_reference_max": None,
+    }])
+    result = apply_normalizations(frame, specs).iloc[0]
+    assert pd.isna(result.value_primary)
+    assert result.value_text == "Normal"
+    assert result.lab_unit_primary == "text"
+
+
+def test_literal_per_volume_unit_restores_approximate_count_from_stale_boolean_mapping():
+    specs = LabSpecsConfig(Path(__file__).parents[1] / "config/lab_specs.json")
+    frame = pd.DataFrame([{
+        "lab_name_standardized": "Urine Type II - Leukocytes (Qualitative)",
+        "raw_value": "Ca. 125", "raw_lab_unit": "/ul",
+    }])
+    result = _remap_explicit_urine_strip_counts(frame, specs).iloc[0]
+    assert result.lab_name_standardized == "Urine Type II - Leukocytes (Test Strip)"
+
+
+@pytest.mark.parametrize("name,unit,value,expected", [
+    ("Blood - Estradiol (E2)", "pmol/L", "100", 27.2382),
+    ("Urine - Bacteriological - Colony Count", "milhares UFC/mL", "10", 10000),
+])
+def test_explicit_molar_and_thousands_scales_preserve_physical_quantity(name, unit, value, expected):
+    specs = LabSpecsConfig(Path(__file__).parents[1] / "config/lab_specs.json")
+    resolved = _infer_explicit_conversion_unit_from_raw_unit(unit, name, specs)
+    frame = pd.DataFrame([{
+        "lab_name_standardized": name, "lab_unit_standardized": resolved,
+        "raw_value": value, "raw_lab_unit": unit, "raw_comments": None,
+        "raw_reference_min": None, "raw_reference_max": None,
+    }])
+    assert apply_normalizations(frame, specs).iloc[0].value_primary == pytest.approx(expected)
+
+
+def test_individual_specimen_dates_override_page_date_and_survive_cached_rebuild(tmp_path):
+    payload = {
+        "collection_date": "2024-04-01",
+        "lab_results": [
+            {"raw_lab_name": "Sample 1", "raw_value": "Negative", "collection_date": "2024-04-02"},
+            {"raw_lab_name": "Sample 2", "raw_value": "Negative", "collection_date": "2024-04-03"},
+            {"raw_lab_name": "Other", "raw_value": "1", "collection_date": None},
+        ],
+    }
+    (tmp_path / "synthetic.001.json").write_text(json.dumps(payload))
+    assert load_document_review_rows(tmp_path)["date"].tolist() == ["2024-04-02", "2024-04-03", "2024-04-01"]
 
 
 def test_cached_json_rebuild_preserves_each_page_date(tmp_path):
@@ -161,3 +214,51 @@ def test_registration_date_is_separate_from_collection_and_report_date():
         payload["report_date"] = "2024-06-12"
     payloads[0]["registration_date"] = "2024-06-09"
     assert _flatten_page_payloads(payloads)["date"].tolist() == ["2024-06-09", "2024-06-09"]
+
+
+def test_reticulocyte_millions_per_microliter_converts_to_billions_per_liter():
+    specs = LabSpecsConfig(Path(__file__).parents[1] / "config/lab_specs.json")
+    name = "Blood - Reticulocyte Count"
+    unit = _infer_explicit_conversion_unit_from_raw_unit("10E6/uL", name, specs)
+    assert unit is not None
+    frame = pd.DataFrame([{
+        "lab_name_standardized": name, "lab_unit_standardized": unit,
+        "raw_value": "0.055", "raw_lab_unit": "10E6/uL",
+        "raw_reference_min": None, "raw_reference_max": None, "raw_comments": "",
+    }])
+    normalized = apply_normalizations(frame, specs).iloc[0]
+    assert normalized.value_primary == pytest.approx(55)
+    assert normalized.lab_unit_primary == "10⁹/L"
+
+
+def test_hepatitis_b_surface_antibody_international_unit_prefix_is_preserved():
+    specs = LabSpecsConfig()
+    name = "Blood - Anti-HBs Antibody"
+    unit = _infer_explicit_conversion_unit_from_raw_unit("UI/ml", name, specs)
+    assert unit is not None
+    frame = pd.DataFrame([{
+        "lab_name_standardized": name, "lab_unit_standardized": unit,
+        "raw_value": ">2", "raw_lab_unit": "UI/ml", "raw_comments": "",
+        "raw_reference_min": None, "raw_reference_max": None,
+    }])
+    actual = apply_normalizations(frame, specs).iloc[0]
+    assert actual.value_primary == 2000
+    assert actual.lab_unit_primary == "mIU/mL"
+    assert actual.is_above_limit
+
+
+@pytest.mark.parametrize("unit", ["/100 Leucócitos", "/100 Leucocitos", "/100\nLeucocitos"])
+def test_nrbc_ratio_count_label_survives_assay_remapping_and_explicit_conversion(tmp_path, monkeypatch, unit):
+    from parselabs.rows import build_document_review_dataframe
+
+    monkeypatch.setattr("parselabs.rows.standardize_lab_names", lambda contexts: {c: "Blood - Nucleated Red Blood Cells (nRBC)" for c in contexts})
+    monkeypatch.setattr("parselabs.rows.standardize_lab_units", lambda contexts: {c: "$UNKNOWN$" for c in contexts})
+    payload = {"registration_date": "2024-01-01", "lab_results": [{
+        "raw_lab_name": "Synthetic nRBC", "raw_value": "0.2", "raw_lab_unit": unit, "review_status": "accepted",
+    }]}
+    (tmp_path / "synthetic.001.json").write_text(json.dumps(payload))
+    row = build_document_review_dataframe(tmp_path, LabSpecsConfig()).iloc[0]
+    assert row.lab_name == "Blood - Nucleated Red Blood Cells (nRBC) (/100 WBC)"
+    assert row.lab_unit == "/100 WBC"
+    assert row.value == 0.2
+    assert row.raw_lab_unit == unit

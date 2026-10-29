@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import unicodedata
+from collections.abc import Callable
 
 from parselabs.config import UNKNOWN_VALUE
 from parselabs.paths import get_bundled_cache_dir, get_cache_dir
@@ -37,6 +38,7 @@ def _normalize_lookup_cache_key_component(value: str) -> str:
     """Fold accents and stylized spacing so lookups survive OCR/header quirks."""
 
     text = str(value).lower().strip()
+    text = re.sub(r"^[†‡]+\s*", "", text)
     text = unicodedata.normalize("NFKD", text)
     text = "".join(char for char in text if not unicodedata.combining(char))
     text = _collapse_spaced_letter_tokens(text)
@@ -100,7 +102,11 @@ def build_legacy_section_name_cache_key(raw_name, raw_section_name) -> str:
 def normalize_unit_cache_key_component(raw_unit) -> str:
     """Normalize missing and textual raw-unit values to a stable cache key token."""
 
-    normalized = str(raw_unit).lower().strip()
+    normalized = unicodedata.normalize("NFC", str(raw_unit).lower().strip())
+    normalized = re.sub(r"\s+", " ", normalized).replace("μ", "µ")
+
+    # Fold count-label spelling only; stripping all accents would conflate Å with A.
+    normalized = normalized.replace("leucócitos", "leucocitos").replace("células", "celulas")
 
     # Collapse all blank-like unit tokens onto one cache key so runtime and updater agree.
     if normalized in {"", "nan", "none", "null"}:
@@ -131,14 +137,16 @@ def _contextual_cache_values_for_name(cache: dict[str, str], normalized_name: st
     return contextual_values
 
 
-def _build_folded_cache_index(cache: dict[str, str]) -> dict[str, str]:
+def _build_folded_cache_index(
+    cache: dict[str, str], normalize_key: Callable[[str], str] = _normalize_lookup_cache_key,
+) -> dict[str, str]:
     """Build a normalized cache index for lookup-only compatibility matches."""
 
     folded_cache: dict[str, str] = {}
     ambiguous_keys: set[str] = set()
 
     for key, value in cache.items():
-        folded_key = _normalize_lookup_cache_key(key)
+        folded_key = normalize_key(key)
 
         # Guard: Once two folded keys disagree, treat that normalized form as unsafe.
         if folded_key in ambiguous_keys:
@@ -363,6 +371,13 @@ def standardize_lab_units(
         normalized_unit = normalize_unit_cache_key_component(raw_unit)
         return f"{normalized_unit}|{str(lab_name).lower().strip()}"
 
+    def normalize_key(key):
+        raw_unit, _, lab_name = key.partition("|")
+        return cache_key(raw_unit, lab_name)
+
+    # Normalize stored keys too, retaining the existing refusal of ambiguous aliases.
+    folded_cache = _build_folded_cache_index(cache, normalize_key)
+
     # Get unique (raw_unit, lab_name) pairs
     unique_pairs = list(set(unit_contexts))
 
@@ -372,8 +387,8 @@ def standardize_lab_units(
     for raw_unit, lab_name in unique_pairs:
         key = cache_key(raw_unit, lab_name)
         # Cache hit — use cached result
-        if key in cache:
-            cached_results[(raw_unit, lab_name)] = cache[key]
+        if key in folded_cache:
+            cached_results[(raw_unit, lab_name)] = folded_cache[key]
         # Cache miss — log warning and use $UNKNOWN$
         else:
             uncached_pairs.append((raw_unit, lab_name))

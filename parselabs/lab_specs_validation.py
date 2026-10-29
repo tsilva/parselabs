@@ -31,6 +31,10 @@ class LabSpecsValidator:
         "Blood - Widal (S. Paratyphi B)",
         # No applicable LOINC term exists for the legacy qualitative Weil-Felix reaction.
         "Blood - Weil-Felix Reaction",
+        # Macroscopic deposit abundance has no validated exact mapping; do not use a crystal-specific code.
+        "Urine Type II - Deposit",
+        # A bare cells observation does not identify the cell subtype required by specific terms.
+        "Urine Type II - Sediment - Cells",
     }
 
     CRITICAL_LOINC_CODES = {

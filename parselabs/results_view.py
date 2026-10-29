@@ -21,6 +21,7 @@ from parselabs.review import (  # noqa: E402
     SOURCE_BBOX_LABEL,
     build_page_image_value_for_entry,
     format_reference_text,
+    mapped_value_label,
 )
 from parselabs.review_data import load_results_dataframe  # noqa: E402
 from parselabs.review_state import (  # noqa: E402
@@ -576,6 +577,12 @@ def prepare_display_df(df: pd.DataFrame, visible_columns: list[str] | None = Non
     # Round numeric columns
     if "value" in display_df.columns:
         display_df["value"] = display_df["value"].round(2)
+
+    # Show explicit textual observations without hiding them behind numeric boolean encodings.
+    if "value_text" in df.columns:
+        text_mask = df["value_text"].notna() & df["value_text"].astype(str).str.strip().ne("")
+        display_df["value"] = display_df["value"].astype(object)
+        display_df.loc[text_mask, "value"] = df.loc[text_mask].apply(mapped_value_label, axis=1)
 
     if "page_number" in display_df.columns:
         display_df["page_number"] = display_df["page_number"].apply(

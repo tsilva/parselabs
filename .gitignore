@@ -139,3 +139,6 @@ wheels/
 # Svelte source must remain tracked despite the general Python lib/ exclusion.
 !frontend/src/lib/
 !frontend/src/lib/**
+
+# Local shortcuts to external runtime profiles
+/.config/

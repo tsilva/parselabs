@@ -3,6 +3,7 @@ export type Row = {
   date: string | null;
   lab_name: string | null;
   value: number | string | null;
+  value_text?: string | null;
   lab_unit: string | null;
   source_file: string;
   page_number: number;
@@ -43,16 +44,27 @@ export const numberLabel = (value: Row['value']) => value == null ? '—' : type
 export const calendarDate = (date: string) => new Date(`${date.slice(0, 10)}T12:00:00Z`);
 export const dateLabel = (date: string | null) => date && !Number.isNaN(calendarDate(date).getTime()) ? new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(calendarDate(date)) : 'Undated';
 export const limitLabel = (row: Row) => row.is_below_limit ? '<' : row.is_above_limit ? '>' : '';
+const mappedValueLabel = (row: Row) => {
+  const reported = row.value_text?.trim();
+  if (!reported) return numberLabel(row.value);
+  const unit = row.lab_unit?.trim().toLowerCase();
+  const rawUnit = row.raw_lab_unit?.trim().toLowerCase();
+  // Source text can replace the number only on a compatible measurement scale.
+  if (row.value == null || !rawUnit || rawUnit === unit || ['boolean', 'titer', 'text'].includes(unit || '')) return reported;
+  const approximate = /^(?:ca\.?\s|approx|cerca|[~≈])/i.test(reported) ? '≈' : '';
+  const interpretation = reported.match(/=\s*(NR|R)\s*$/i)?.[1];
+  return `${approximate}${numberLabel(row.value)}${interpretation ? ` (${interpretation})` : ''}`;
+};
 export const valueLabel = (row: Row, raw = false) => {
-  const text = numberLabel(raw ? row.raw_value : row.value);
+  const text = raw ? numberLabel(row.raw_value) : mappedValueLabel(row);
   return /^[<>≤≥]/.test(text) ? text : `${limitLabel(row)}${text}`;
 };
-export const displayRow = (row: Row): Row => row.lab_unit?.startsWith('$UNKNOWN') || row.value == null ? {
+export const displayRow = (row: Row): Row => row.lab_unit?.startsWith('$UNKNOWN') || (row.value == null && !row.value_text?.trim()) ? {
   ...row, value: row.raw_value, lab_unit: row.raw_lab_unit,
   reference_min: row.raw_reference_min ?? null, reference_max: row.raw_reference_max ?? null,
 } : row;
 export const boundsLabel = (min: number | null | undefined, max: number | null | undefined) => min != null && max != null ? `${numberLabel(min)} – ${numberLabel(max)}` : min != null ? `>${numberLabel(min)}` : max != null ? `<${numberLabel(max)}` : '—';
-export const referenceLabel = (row: Row, raw = false) => raw && row.raw_reference_range ? row.raw_reference_range : boundsLabel(raw ? row.raw_reference_min : row.reference_min, raw ? row.raw_reference_max : row.reference_max);
+export const referenceLabel = (row: Row, raw = false) => (raw || row.lab_unit === 'titer') && row.raw_reference_range ? row.raw_reference_range : boundsLabel(raw ? row.raw_reference_min : row.reference_min, raw ? row.raw_reference_max : row.reference_max);
 
 export function matchesStatus(row: Row, status: string) {
   if (status === 'pending') return !row.review_status;

@@ -173,6 +173,7 @@ class PageLabResultPayload(TypedDict, total=False):
     raw_reference_min: float | None
     raw_reference_max: float | None
     raw_comments: str | None
+    collection_date: str | None
     bbox_left: float | None
     bbox_top: float | None
     bbox_right: float | None
@@ -260,6 +261,7 @@ class ReviewRow(RowIdentity, total=False):
     lab_unit_standardized: str | None
     lab_name: str | None
     value: float | int | str | None
+    value_text: str | None
     lab_unit: str | None
     reference_min: float | None
     reference_max: float | None

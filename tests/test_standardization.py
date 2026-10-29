@@ -1,3 +1,5 @@
+import pytest
+
 from parselabs import standardization
 
 
@@ -182,3 +184,48 @@ def test_load_cache_ignores_unit_entries_with_unknown_lab_name(tmp_path, monkeyp
     cache = standardization.load_cache("unit_standardization")
 
     assert cache == {"null|urine type ii - ph": "pH"}
+
+
+@pytest.mark.parametrize("raw_unit,cached_unit,standard_unit", [
+    ("μg/g\nfezes", "µg/g fezes", "µg/g"),
+    ("/100\nLeucocitos", "/100 Leucócitos", "/100 WBC"),
+    ("  mg/dL\t", "mg/dl", "mg/dL"),
+])
+def test_unit_lookup_normalizes_wrapping_accents_and_micro_symbols(monkeypatch, raw_unit, cached_unit, standard_unit):
+    name = "Feces - Synthetic"
+    monkeypatch.setattr(standardization, "load_cache", lambda _: {f"{cached_unit}|{name.lower()}": standard_unit})
+    assert standardization.standardize_lab_units([(raw_unit, name)])[(raw_unit, name)] == standard_unit
+
+
+def test_unit_lookup_refuses_conflicting_folded_aliases_and_preserves_scale(monkeypatch):
+    name = "Blood - Synthetic"
+    monkeypatch.setattr(standardization, "load_cache", lambda _: {
+        f"µg/g\nfezes|{name.lower()}": "µg/g",
+        f"μg/g fezes|{name.lower()}": "mg/g",
+        f"10⁹/l|{name.lower()}": "10⁹/L",
+        f"10¹²/l|{name.lower()}": "10¹²/L",
+        f"å|{name.lower()}": "Å",
+        f"a|{name.lower()}": "A",
+    })
+    result = standardization.standardize_lab_units([("µg/g fezes", name), ("10⁹/L", name), ("10¹²/L", name)])
+    assert result[("µg/g fezes", name)] == "$UNKNOWN$"
+    assert result[("10⁹/L", name)] == "10⁹/L"
+    assert result[("10¹²/L", name)] == "10¹²/L"
+    symbols = standardization.standardize_lab_units([("Å", name), ("A", name)])
+    assert symbols[("Å", name)] == "Å"
+    assert symbols[("A", name)] == "A"
+
+
+def test_name_lookup_preserves_context_while_ignoring_leading_footnote_daggers(monkeypatch):
+    monkeypatch.setattr(standardization, "load_cache", lambda _: {
+        "percentagem|reticulócitos": "Blood - Reticulocyte Count (%)",
+        "percentagem|other panel": "Blood - Other (%)",
+    })
+    context = ("† Percentagem", "† RETICULÓCITOS")
+    assert standardization.standardize_lab_names([context])[context] == "Blood - Reticulocyte Count (%)"
+
+
+def test_name_lookup_refuses_ambiguous_footnote_folded_aliases(monkeypatch):
+    monkeypatch.setattr(standardization, "load_cache", lambda _: {"assay|panel": "Blood - A", "† assay|panel": "Blood - B"})
+    context = ("‡ Assay", "Panel")
+    assert standardization.standardize_lab_names([context])[context] == "$UNKNOWN$"

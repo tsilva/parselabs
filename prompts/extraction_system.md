@@ -10,6 +10,7 @@ CRITICAL RULES:
 2. COMPLETENESS: Extract ALL test results from the image
    - Process line by line
    - A prescription or examination order is not a lab result. If the page only lists requested tests, return no lab_results and page_has_lab_data=false.
+   - Extract patient results only. Rows explicitly labelled Normal PT, Normal APTT, control/controlo PT/APTT or equivalent are laboratory control specimens, not patient measurements. Exclude them while keeping the patient's PT/APTT rows. A patient's qualitative result "Normal" remains a result.
    - Don't skip any tests, including qualitative results
    - If a row has MULTIPLE numeric values with different units, extract each as a SEPARATE result
 
@@ -29,6 +30,7 @@ CRITICAL RULES:
    - For NUMERIC results: Put the exact number as a string (e.g., "5.0", "14.2", "1.74")
    - For TEXT-ONLY results: Put the exact text (e.g., "AMARELA", "NAO CONTEM", "NORMAL", "POSITIVE", "NEGATIVE")
    - For RANGE results: Put the exact text (e.g., "1 a 2", "1-5 / campo", "0-3 / campo")
+   - For TITERS: Preserve the complete printed dilution and comparison, such as "TITULO 1/40" or "<1/80". Do not turn it into a decimal fraction, an index, or a qualitative result.
 
    CRITICAL FOR TEXT VALUES - COMMON EXAMPLES YOU WILL SEE:
    Portuguese: NEGATIVO, POSITIVO, NORMAL, AMARELA, AUSENTE, PRESENTE, NAO CONTEM, RAROS, RARAS, ABUNDANTES, NEGATIVA, POSITIVA
@@ -41,6 +43,7 @@ CRITICAL RULES:
      * Copy the unit symbol or abbreviation exactly
      * If NO unit is visible or implied in the document → use null or empty string
      * Do NOT infer or normalize units - just extract what you see
+     * A unit printed beside a particular numeric result takes precedence over a shared column heading. If that inline unit conflicts with the heading, copy the inline unit literally and record the conflict in raw_comments. Never silently correct it using physiology, reference ranges, neighbouring results or a presumed report typo.
 
 5. REFERENCE RANGES - ALWAYS PARSE INTO NUMBERS:
    - `raw_reference_range`: Copy the complete reference range text EXACTLY as shown
@@ -74,7 +77,10 @@ CRITICAL RULES:
      * Result 2: value=65, unit="%", reference_min=40, reference_max=80
 
 6. CONTEXT:
+   - A result's `collection_date` is the specimen date explicitly printed for that result, in YYYY-MM-DD format. Leave it null when absent. Preserve separate specimen dates when multiple samples share a page; do not copy an issue date into this field.
    - `raw_comments`: Capture any notes, qualitative results, or text values
+   - Preserve inline numeric annotations and approximations verbatim in `raw_value`, such as `9= NR` or `Ca. 125`. Preserve printed methodology, morphology notes, and footnote explanations in the relevant rows' `raw_comments`.
+   - Do not create a separate lab result for narrative-only interpretation headings or statements such as "Interpretação de resultados: IMUNE". Attach that printed interpretation to the relevant assay's raw_comments instead. A separately printed qualitative test result such as IgG "POSITIVO" is still a result.
 
 7. BOUNDING BOXES:
    - For EVERY extracted lab result from an image, also return:
@@ -140,7 +146,7 @@ G) Tests with numeric value followed by "=" and qualitative interpretation:
    and the text after "=" is just the lab's classification (e.g., NR=Non-Reactive, R=Reactive).
    → ALWAYS extract the NUMERIC value, NOT the interpretation text.
    Example: "ANTICORPO ANTI SCL 70      9= NR       < 19 U"
-   → raw_value="9", unit="U", raw_reference_range="< 19 U", raw_comments="NR (Não reactivo)"
+   → raw_value="9= NR", unit="U", raw_reference_range="< 19 U", raw_comments="NR (Não reactivo)"
    Example: "FACTOR REUMATOIDE          84          ate 30 UI/ml"
    → raw_value="84", unit="UI/ml"
    The "=" sign separates the numeric result from its qualitative interpretation.
@@ -193,4 +199,4 @@ F) White blood cell differentials with BOTH absolute count AND percentage:
 
 Remember: Your job is to be a perfect copier, not an interpreter. Extract EVERYTHING, even qualitative results.
 
-DATE FIDELITY: Extract specimen collection dates only from explicit collection labels. Keep Data de entrada / Data Inscrição separately as registration_date. Printed report/issue/impression dates belong in report_date. Birth dates and dates in historical-result columns are not the current specimen date. Use null for dates not visible on this page.
+DATE FIDELITY: Extract specimen collection dates only from explicit collection labels. Keep Data de entrada / Data Inscrição / DT. ENTRADA separately as registration_date. Older layouts may print only "Data" in the analytical-study header, beside "Hora Inscrição"; that is the registration date even when the report's FINAL EM date is later. A laboratory episode header's "Data" beside tube/episode identifiers is also an event/registration date, not the web-page print date. Capture both event and report dates when both are visible. Printed report/issue/impression dates belong in report_date. Birth dates and dates in historical-result columns are not the current specimen date. Use null for dates not visible on this page.
