@@ -1,0 +1,22 @@
+# Copy to ~/.config/parselabs/profiles/myprofile.yaml and edit the private copy.
+name: "Example Person"
+paths:
+  input_path: "/absolute/path/to/source-pdfs"
+  output_path: "/absolute/path/to/parsed-labs"
+  input_file_regex: "*.pdf"  # Case-insensitive filename glob, not a regex.
+  # Optional convention for a folder shared with parsemedicalexams:
+  # input_file_regex: "*analises*.pdf"
+
+# Optional machine-specific concurrency override; omit to use the default.
+# processing:
+#   workers: 4
+
+# Optional patient context; populate only in the private runtime profile.
+# demographics:
+#   gender: "female"
+#   date_of_birth: "1990-01-15"
+#   height_cm: 170
+#   weight_kg: 70
+
+# Shared endpoint/model settings belong in ~/.config/parselabs/.env or the
+# environment; credentials use the existing approved credential workflow.

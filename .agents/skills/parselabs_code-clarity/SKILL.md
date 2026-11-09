@@ -1,5 +1,5 @@
 ---
-name: code-clarity
+name: parselabs_code-clarity
 description: Code quality and clarity guidelines for Python - enforces flat orchestrator patterns, explicit error handling, and mandatory comments
 ---
 

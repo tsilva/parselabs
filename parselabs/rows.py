@@ -763,6 +763,7 @@ def apply_cached_standardization(review_df: pd.DataFrame, lab_specs: LabSpecsCon
     review_df = _remap_unqualified_glucose(review_df, lab_specs)
     review_df = _remap_boolean_companion_lab_names(review_df, lab_specs)
     review_df = _remap_unit_bearing_rows_off_qualitative_variants(review_df, lab_specs)
+    review_df = _remap_tissue_measurement_variants(review_df, lab_specs)
 
     # Standardize units only for rows whose lab names mapped successfully.
     unit_contexts: list[tuple[str, str]] = []
@@ -1097,6 +1098,72 @@ def _normalize_optional_text(value: object) -> str:
         return ""
 
     return str(value).strip()
+
+
+def _remap_tissue_measurement_variants(review_df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+    """Separate explicit tissue measurements from status text sharing a raw label."""
+
+    variants = {
+        "Tissue - Excision Margins": "Tissue - Excision Margin Distance",
+        "Tissue - Tumor Regression": "Tissue - Tumor Regression (%)",
+    }
+
+    # A printed unit establishes the measurement form even without a companion row.
+    for source_name, target_name in variants.items():
+        # Custom catalogs may omit these measurement variants.
+        if lab_specs.resolve_lab_name(target_name) is None:
+            continue
+
+        source_mask = review_df["lab_name_standardized"].eq(source_name)
+        units = review_df.loc[source_mask, "raw_lab_unit"].map(_normalize_optional_text).map(
+            lambda unit: _infer_explicit_conversion_unit_from_raw_unit(unit, target_name, lab_specs)
+        )
+
+        # Unit-free statuses and unsupported scales retain their original nominal form.
+        review_df.loc[units.index[units.notna()], "lab_name_standardized"] = target_name
+
+    return _remap_tissue_margin_locations(review_df, lab_specs)
+
+
+def _explicit_tissue_margin_location(row: pd.Series) -> str:
+    """Read a margin location only from the printed label or its source comments."""
+
+    source = _normalize_section_inference_key(
+        " ".join(_normalize_optional_text(row.get(column)) for column in ("raw_lab_name", "raw_comments"))
+    )
+    tokens = re.findall(r"\b(superficial|deep|profund[ao])\b", source)
+    locations = {"superficial" if token == "superficial" else "deep" for token in tokens}
+
+    # A combined or absent location cannot establish which margin this row measures.
+    if len(locations) != 1:
+        return ""
+
+    return locations.pop()
+
+
+def _remap_tissue_margin_locations(review_df: pd.DataFrame, lab_specs: LabSpecsConfig) -> pd.DataFrame:
+    """Keep explicitly distinct margin sites out of the same duplicate group."""
+
+    mask = review_df["lab_name_standardized"].eq("Tissue - Excision Margin Distance")
+
+    # Only previously established margin distances can acquire a site-specific identity.
+    if not mask.any():
+        return review_df
+
+    locations = review_df.loc[mask].apply(_explicit_tissue_margin_location, axis=1)
+    names = {
+        "superficial": "Tissue - Excision Margin Distance (Superficial)",
+        "deep": "Tissue - Excision Margin Distance (Deep)",
+    }
+
+    # Custom catalogs may retain the generic margin observation intentionally.
+    for location, name in names.items():
+        if lab_specs.resolve_lab_name(name) is None:
+            continue
+
+        review_df.loc[locations.index[locations.eq(location)], "lab_name_standardized"] = name
+
+    return review_df
 
 
 def _normalize_conversion_unit_token(value: object) -> str:

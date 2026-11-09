@@ -48,17 +48,10 @@ EOF
 Create a profile:
 
 ```bash
-cat > ~/.config/parselabs/profiles/myname.yaml <<'EOF'
-name: "My Labs"
-paths:
-  input_path: "/path/to/lab/pdfs"
-  output_path: "/path/to/output"
-  input_file_regex: "*.pdf"
-
-processing:
-  workers: 4
-EOF
+cp profiles/template.yaml.example ~/.config/parselabs/profiles/myname.yaml
 ```
+
+Edit the copied input/output paths before running extraction.
 
 Run extraction:
 
@@ -90,6 +83,37 @@ pnpm dev -- --port auto    # prints the available preview URL
 ```
 
 Start `parselabs review --profile myname` separately to provide the API at port 7862. For an isolated synthetic preview, run `uv run python frontend/scripts/demo.py` from the repository root instead; its generated reports and caches stay outside the repository and real profiles. If the API uses another port, set `PARSELABS_API_URL` when starting the frontend. Rebuild and include `static/dashboard/` whenever the frontend changes; these assets also ship in the Python wheel.
+
+## Profile templates and private configuration
+
+Copy the tracked [profile template](profiles/template.yaml.example) to
+`~/.config/parselabs/profiles/myprofile.yaml`, then edit that private copy. The
+example records supported configuration without storing anyone's real identity,
+source paths, goals or account bindings. Keep `.config/` and live profiles ignored;
+back up the external files independently. Shared rules belong in repository code,
+documentation and synthetic tests; machine-specific settings remain runtime overrides.
+
+### Optional shared-folder routing
+
+When source folders contain both labs and medical exams, a filename convention
+can keep automatic discovery separate. Label lab PDFs `analises.pdf` or
+`YYYY-MM-DD - analises - description.pdf` and other exams with their exam name.
+Selection is case-insensitive and recursive. This is a naming convention, not
+clinical document classification; verify the filenames before adopting it.
+
+In parselabs, `paths.input_file_regex: "*analises*.pdf"` is a **glob**. In
+parsemedicalexams, `input_file_regex` is a **regular expression**:
+
+```yaml
+input_file_regex: '^(?!(?:\d{4}-\d{2}-\d{2}\s*-\s*)?analises(?:\s|[-.]|$)).*\.pdf$'
+```
+
+The exam expression excludes a leading `analises` label, optionally after an ISO
+date. The lab glob also matches that word elsewhere, so arbitrary filenames are
+not guaranteed to form a disjoint partition. Lab discovery additionally excludes
+explicitly labelled `receita`, `pedido exame` and `bula` documents. An explicit
+parsemedicalexams `--document` request bypasses its automatic filename filter.
+Keep existing profile overrides; neither parser's all-PDF default changes.
 
 ## Local profile shortcuts
 
@@ -167,6 +191,7 @@ Extraction preserves inline units even when they conflict with a shared heading;
 - ABO group and Rh type retain text results. Unqualified glucose and fasting glucose have separate definitions. Second-hour sedimentation retains its two-hour scale (`mm/(2.h)`); printed distance readings are not relabeled as hourly rates.
 - Review UI defaults to the Results Explorer on `http://127.0.0.1:7862`; `--tab review` launches the Review Queue on `http://127.0.0.1:7863`.
 - `config/lab_specs.json` contains the bundled standardized lab definitions. Writable standardization-cache overrides live in `~/.config/parselabs/cache/` and fall back to the bundled defaults.
+- Tissue/pathology findings use `Tissue - ...` names and `lab_type=tissue`. Diagnoses, immunostain grades and other descriptive findings retain their literal text without inferred normality. Explicit margin distances and regression percentages have separate numeric definitions. Printed superficial and deep margin labels keep those measurements separate during duplicate detection and export. Terms without a verified exact LOINC match remain documented catalog exceptions; no substitute specimen or method code is assigned. See [pathology terminology](docs/pipeline.md#tissue-and-pathology-terminology).
 - `parselabs admin` is the preferred entry point for maintenance, lab-spec validation, cache refreshes, reviewed fixture sync, and output migrations.
 
 ## Architecture
