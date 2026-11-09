@@ -16,7 +16,7 @@ Normalization preserves reported text, comparison signs and assay-unit calibrati
 
 Requirements:
 
-- Python 3.10+
+- Python 3.11+
 - [uv](https://docs.astral.sh/uv/)
 - Poppler for PDF conversion
 
