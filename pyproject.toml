@@ -20,14 +20,15 @@ classifiers = [
 
 dependencies = [
     "openai",
-    "pillow",
+    "pillow>=13.0.0",
     "pandas",
     "pdf2image",
     "xlsxwriter",
     "plotly",
     "pydantic",
     "tqdm",
-    "gradio>=5.0.0",
+    "gradio==7.0.0.dev0",
+    "gradio-client==2.8.0.dev0",
     "fastapi==0.134.0",
     "uvicorn==0.41.0",
     "pyyaml",
@@ -88,6 +89,8 @@ warn_unused_ignores = true
 
 [tool.uv]
 exclude-newer = "7 days"
+# Approved prereleases for the Pillow 13 security update.
+exclude-newer-package = {gradio = "2026-11-09T22:31:16Z", gradio-client = "2026-11-09T22:31:28Z"}
 constraint-dependencies = [
   "mistralai!=2.4.6",
   "guardrails-ai!=0.10.1",
