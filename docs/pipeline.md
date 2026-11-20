@@ -311,6 +311,6 @@ This rebuild preserves every pending review row and persisted JSON decision whil
 ## Profile configuration and routing
 
 Use the tracked [profile template](../profiles/template.yaml.example) for new
-private runtime profiles. See [shared-folder routing](../README.md#optional-shared-folder-routing)
+private runtime profiles. See [shared-folder routing](parselabs-guide.md#optional-shared-folder-routing)
 for the optional lab/exam filename convention and explicit-document behavior.
 Real patient bindings and source paths remain outside Git.
