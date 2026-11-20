@@ -160,10 +160,11 @@ processing:
   workers: 4
 ```
 
-**Shared runtime settings** (`~/.config/parselabs/.env`):
+For agent-operated extraction, use the command and profile declared in the root
+`.runbox.yaml`.
+
+**Optional standalone settings** (`~/.config/parselabs/.env`):
 ```bash
-AGENTBRIDGE_API_KEY=your_api_key
-# Optional:
 # AGENTBRIDGE_BASE_URL=http://127.0.0.1:8082/api/v1
 EXTRACT_MODEL_ID=google/gemini-2.5-pro
 ```
